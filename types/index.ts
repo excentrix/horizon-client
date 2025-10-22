@@ -329,9 +329,111 @@ export interface PlanCreationResponse extends ApiMetadata {
   success: boolean;
   learning_plan_id?: UUID;
   mentor_id?: UUID | null;
+  specialized_conversation_id?: UUID;
   plan_title?: string;
   task_count?: number;
   estimated_duration?: number;
   crew_execution_summary?: Record<string, unknown>;
   error?: string;
+}
+
+export interface MultiDomainDashboard {
+  user_info: Record<string, unknown>;
+  academic_overview: Record<string, unknown>;
+  career_overview: Record<string, unknown>;
+  wellness_overview: Record<string, unknown>;
+  domain_integration: Record<string, unknown>;
+  cross_domain_insights: Array<Record<string, unknown>>;
+  competency_growth: Record<string, unknown>;
+  goal_progression: Record<string, unknown>;
+  wellness_trends: Record<string, unknown>;
+  urgent_alerts: Array<Record<string, unknown>>;
+  recommendations: Array<Record<string, unknown>>;
+  overall_progress_score: number;
+  domain_balance_score: number;
+  wellness_risk_level: string;
+  generated_at: string;
+  data_completeness: Record<string, unknown>;
+}
+
+export interface WellnessMonitoring {
+  profile: Record<string, unknown> | null;
+  recent_assessments: number;
+  crisis_alerts: Array<Record<string, unknown>>;
+  wellness_trends: Record<string, unknown>;
+  support_recommendations: Array<Record<string, unknown>>;
+  intervention_priority: Record<string, unknown>;
+  assessment_history?: Array<Record<string, unknown>>;
+}
+
+export interface AcademicProgressOverview {
+  learning_trajectory: Record<string, unknown>;
+  engagement_trends: Record<string, unknown>;
+  comprehension_progression: Record<string, unknown>;
+  academic_competencies: Array<Record<string, unknown>>;
+  academic_wellness_correlation: Record<string, unknown>;
+  subject_performance?: Record<string, unknown>;
+  performance_predictions?: Record<string, unknown>;
+}
+
+export interface CareerReadinessAssessment {
+  overall_readiness_score: number;
+  competency_breakdown: Record<string, unknown>;
+  career_stage_assessment: Record<string, unknown>;
+  industry_interest_analysis: Record<string, unknown>;
+  professional_development_recommendations: Array<Record<string, unknown>>;
+  target_career_analysis?: Record<string, unknown>;
+  skill_gaps?: Array<Record<string, unknown>>;
+}
+
+export interface UniversalGoalsManagement {
+  goals: Array<Record<string, unknown>>;
+  goals_summary: Record<string, unknown>;
+  domain_distribution: Record<string, unknown>;
+  progress_analytics: Record<string, unknown>;
+  achievement_insights: Array<Record<string, unknown>>;
+  recommendations: Array<Record<string, unknown>>;
+}
+
+export interface IntelligenceInsightItem {
+  id: string;
+  title: string;
+  description: string;
+  insight_type: string;
+  urgency_level: string;
+  confidence_score: number;
+  recommended_actions: Array<string | Record<string, unknown>>;
+  generation_method?: string;
+  stakeholder_type: string;
+  is_active: boolean;
+  is_read: boolean;
+  generated_at: string;
+  expires_at?: string | null;
+  related_subjects_names?: string[];
+  related_skills_names?: string[];
+  related_goals_titles?: string[];
+  supporting_data?: Record<string, unknown>;
+}
+
+export interface InsightsFeedResponse {
+  insights: IntelligenceInsightItem[];
+  insights_summary: Record<string, unknown>;
+  domain_breakdown: Record<string, unknown>;
+  urgency_distribution: Record<string, unknown>;
+  action_items: Array<Record<string, unknown>>;
+}
+
+export interface ComprehensiveProgressReport {
+  period_start: string;
+  period_end: string;
+  executive_summary: Record<string, unknown>;
+  domain_progress: Record<string, unknown>;
+  competency_development: Record<string, unknown>;
+  goal_achievements: Record<string, unknown>;
+  cross_domain_insights: Array<Record<string, unknown>>;
+  areas_for_improvement: Array<Record<string, unknown>>;
+  strengths_and_achievements: Array<Record<string, unknown>>;
+  future_projections?: Record<string, unknown>;
+  overall_growth_rate?: number;
+  domain_growth_rates?: Record<string, unknown>;
 }

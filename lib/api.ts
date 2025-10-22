@@ -16,6 +16,13 @@ import {
   UserPreferences,
   UserProfileDetail,
   UserSummary,
+  MultiDomainDashboard,
+  WellnessMonitoring,
+  AcademicProgressOverview,
+  CareerReadinessAssessment,
+  UniversalGoalsManagement,
+  InsightsFeedResponse,
+  ComprehensiveProgressReport,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -181,18 +188,77 @@ export const planningApi = {
 
 // INTELLIGENCE ---------------------------------------------------------------
 export const intelligenceApi = {
-  getDashboard: () =>
-    extract<IntelligenceOverview>(http.get("/intelligence/dashboard/")),
-
-  getInsightsFeed: () =>
-    extract<{ insights: ToastNotification[] }>(
-      http.get("/intelligence/insights/"),
+  getMultiDomainDashboard: (params?: {
+    period?: number;
+    include_projections?: boolean;
+    stakeholder_type?: string;
+  }) =>
+    extract<MultiDomainDashboard>(
+      http.get("/intelligence/multi_domain_dashboard/", { params }),
     ),
 
-  getProgressReport: () =>
-    extract<Record<string, unknown>>(
-      http.get("/intelligence/progress-report/"),
+  getWellnessMonitoring: (params?: {
+    alert_level?: string;
+    include_history?: boolean;
+    days?: number;
+  }) =>
+    extract<WellnessMonitoring>(
+      http.get("/intelligence/wellness_monitoring/", { params }),
     ),
+
+  getAcademicProgressOverview: (params?: {
+    period?: number;
+    include_subjects?: boolean;
+    include_predictions?: boolean;
+  }) =>
+    extract<AcademicProgressOverview>(
+      http.get("/intelligence/academic_progress_overview/", { params }),
+    ),
+
+  getCareerReadinessAssessment: (params?: {
+    target_career?: string;
+    include_gaps?: boolean;
+    include_recommendations?: boolean;
+  }) =>
+    extract<CareerReadinessAssessment>(
+      http.get("/intelligence/career_readiness_assessment/", { params }),
+    ),
+
+  getUniversalGoalsManagement: (params?: {
+    status?: string;
+    priority?: string;
+    domain?: string;
+  }) =>
+    extract<UniversalGoalsManagement>(
+      http.get("/intelligence/universal_goals_management/", { params }),
+    ),
+
+  getInsightsFeed: (params?: {
+    stakeholder_type?: string;
+    urgency?: string;
+    domain?: string;
+    limit?: number;
+  }) =>
+    extract<InsightsFeedResponse>(
+      http.get("/intelligence/insights_feed/", { params }),
+    ),
+
+  getComprehensiveProgressReport: (params?: {
+    period?: number;
+    format?: string;
+    include_projections?: boolean;
+  }) =>
+    extract<ComprehensiveProgressReport>(
+      http.get("/intelligence/comprehensive_progress_report/", { params }),
+    ),
+
+  // Legacy helpers / aliases
+  getDashboard(params?: { period?: number }) {
+    return this.getMultiDomainDashboard(params);
+  },
+  getProgressReport(params?: { period?: number }) {
+    return this.getComprehensiveProgressReport(params);
+  },
 };
 
 // NOTIFICATIONS --------------------------------------------------------------
