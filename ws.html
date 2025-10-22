@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Streaming Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .message { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .user { background-color: #e3f2fd; }
+        .ai { background-color: #f5f5f5; }
+        .streaming { background-color: #fff3e0; border-left: 4px solid #ff9800; }
+        .error { background-color: #ffebee; border-left: 4px solid #f44336; }
+        .status { background-color: #e8f5e8; border-left: 4px solid #4caf50; }
+        #messages { height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; }
+        button { margin: 5px; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Streaming Test</h1>
+    
+    <div>
+        <input type="text" id="conversationId" placeholder="Conversation ID" style="width: 200px;">
+        <input type="text" id="token" placeholder="Auth Token" style="width: 300px;">
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+    </div>
+    
+    <div>
+        <input type="text" id="messageInput" placeholder="Type your message..." style="width: 400px;">
+        <button onclick="sendRegular()">Send Regular</button>
+        <button onclick="sendStreaming()">Send Streaming</button>
+    </div>
+    
+    <div id="status">Status: Disconnected</div>
+    <div id="messages"></div>
+
+    <script>
+        let ws = null;
+        let currentStreamingMessage = null;
+
+        function connect() {
+            const conversationId = document.getElementById('conversationId').value;
+            const token = document.getElementById('token').value;
+            
+            if (!conversationId || !token) {
+                alert('Please enter both Conversation ID and Token');
+                return;
+            }
+
+            ws = new WebSocket(`ws://localhost:8000/ws/chat/${conversationId}/?token=${token}`);
+
+            ws.onopen = function(event) {
+                document.getElementById('status').textContent = 'Status: Connected';
+                addMessage('status', 'WebSocket connected');
+            };
+
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            };
+
+            ws.onclose = function(event) {
+                document.getElementById('status').textContent = 'Status: Disconnected';
+                addMessage('error', `WebSocket disconnected (${event.code})`);
+            };
+
+            ws.onerror = function(error) {
+                addMessage('error', `WebSocket error: ${error}`);
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function sendRegular() {
+            const message = document.getElementById('messageInput').value.trim();
+            if (!message || !ws) return;
+
+            ws.send(JSON.stringify({
+                type: 'chat_message',
+                message: {
+                    content: message,
+                    message_type: 'text'
+                }
+            }));
+
+            document.getElementById('messageInput').value = '';
+            addMessage('user', message);
+        }
+
+        function sendStreaming() {
+            const message = document.getElementById('messageInput').value.trim();
+            if (!message || !ws) return;
+
+            ws.send(JSON.stringify({
+                type: 'streaming_message',
+                message: {
+                    content: message,
+                    message_type: 'text'
+                }
+            }));
+
+            document.getElementById('messageInput').value = '';
+            addMessage('user', message);
+        }
+
+        function handleMessage(data) {
+            switch(data.type) {
+                case 'connection_established':
+                    addMessage('status', `Connected! Streaming: ${data.streaming_enabled}`);
+                    break;
+
+                case 'chat_message':
+                    if (data.message.sender_type === 'ai') {
+                        addMessage('ai', data.message.content);
+                    }
+                    break;
+
+                case 'stream_start':
+                    currentStreamingMessage = addMessage('streaming', 'AI is thinking...');
+                    addMessage('status', `Stream started (${data.memory_count} memories)`);
+                    break;
+
+                case 'stream_chunk':
+                    if (currentStreamingMessage) {
+                        const currentText = currentStreamingMessage.textContent;
+                        if (currentText === 'AI is thinking...') {
+                            currentStreamingMessage.textContent = data.content;
+                        } else {
+                            currentStreamingMessage.textContent += data.content;
+                        }
+                    }
+                    break;
+
+                case 'stream_complete':
+                    if (currentStreamingMessage) {
+                        currentStreamingMessage.className = 'message ai';
+                    }
+                    addMessage('status', `Stream completed (${data.memory_count} memories used)`);
+                    currentStreamingMessage = null;
+                    break;
+
+                case 'stream_error':
+                    addMessage('error', `Streaming error: ${data.error}`);
+                    currentStreamingMessage = null;
+                    break;
+
+                case 'error':
+                    addMessage('error', data.message);
+                    break;
+
+                default:
+                    console.log('Unknown message type:', data);
+            }
+        }
+
+        function addMessage(type, content) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = content;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            return messageDiv;
+        }
+
+        // Allow Enter key to send streaming message
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendStreaming();
+            }
+        });
+    </script>
+</body>
+</html>

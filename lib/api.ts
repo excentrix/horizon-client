@@ -1,0 +1,204 @@
+import type { AxiosResponse } from "axios";
+import { http } from "./http-client";
+import {
+  AIPersonality,
+  ChatMessage,
+  Conversation,
+  DailyTask,
+  IntelligenceOverview,
+  LearningPlan,
+  LoginPayload,
+  LoginResponse,
+  PlanCreationResponse,
+  RegisterPayload,
+  PaginatedResponse,
+  ToastNotification,
+  UserPreferences,
+  UserProfileDetail,
+  UserSummary,
+} from "@/types";
+
+const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
+  promise.then((response) => response.data);
+
+const normalizeList = <T>(data: T[] | PaginatedResponse<T>): T[] =>
+  Array.isArray(data) ? data : data?.results ?? [];
+
+// AUTH -----------------------------------------------------------------------
+export const authApi = {
+  login: (payload: LoginPayload) =>
+    extract<LoginResponse>(http.post("/auth/login/", payload)),
+
+  register: (payload: RegisterPayload) =>
+    extract<UserSummary>(http.post("/auth/register/", payload)),
+
+  logout: () => extract<{ message: string }>(http.post("/auth/logout/")),
+
+  me: () => extract<UserSummary>(http.get("/auth/profile/")),
+
+  updateProfile: (payload: Partial<UserSummary>) =>
+    extract<UserSummary>(http.patch("/auth/profile/", payload)),
+
+  getProfileDetail: () =>
+    extract<UserProfileDetail>(http.get("/auth/profile/detail/")),
+
+  updateProfileDetail: (payload: Partial<UserProfileDetail>) =>
+    extract<UserProfileDetail>(
+      http.patch("/auth/profile/detail/", payload ?? {}),
+    ),
+
+  getPreferences: () =>
+    extract<UserPreferences>(http.get("/auth/preferences/")),
+
+  updatePreferences: (payload: Partial<UserPreferences>) =>
+    extract<UserPreferences>(http.patch("/auth/preferences/", payload)),
+
+  completeOnboarding: () =>
+    extract<{ message: string }>(http.post("/auth/onboarding/complete/")),
+};
+
+// CHAT -----------------------------------------------------------------------
+export const chatApi = {
+  listConversations: () =>
+    extract<Conversation[] | PaginatedResponse<Conversation>>(http.get("/chat/conversations/"))
+      .then(normalizeList),
+
+  getConversation: (conversationId: string) =>
+    extract<Conversation>(http.get(`/chat/conversations/${conversationId}/`)),
+
+  createConversation: (payload: Partial<Conversation>) =>
+    extract<Conversation>(http.post("/chat/conversations/", payload)),
+
+  pinConversation: (conversationId: string) =>
+    extract<{ message: string; is_pinned: boolean }>(
+      http.post(`/chat/conversations/${conversationId}/pin/`),
+    ),
+
+  fetchMessagesPage: (
+    conversationId: string,
+    params: Record<string, unknown> = {},
+  ) =>
+    extract<PaginatedResponse<ChatMessage>>(
+      http.get(`/chat/conversations/${conversationId}/messages/`, { params }),
+    ),
+
+  fetchMessages: (conversationId: string, params?: Record<string, unknown>) =>
+    extract<PaginatedResponse<ChatMessage>>(
+      http.get(`/chat/conversations/${conversationId}/messages/`, { params }),
+    ).then((response) => response.results ?? []),
+
+  sendMessage: (
+    conversationId: string,
+    payload: { content: string; message_type?: string; parent_message?: string },
+  ) =>
+    extract<ChatMessage>(
+      http.post(`/chat/conversations/${conversationId}/messages/`, payload),
+    ),
+
+  getAIPersonalities: () =>
+    extract<AIPersonality[]>(http.get("/chat/ai-personalities/")),
+
+  getConversationSummary: (conversationId: string) =>
+    extract<{ summary: string }>(
+      http.get(`/chat/conversations/${conversationId}/summary/`),
+    ),
+
+  wellnessCheck: (conversationId: string) =>
+    extract<Record<string, unknown>>(
+      http.get(`/chat/conversations/${conversationId}/wellness_check/`),
+    ),
+};
+
+// PLANNING -------------------------------------------------------------------
+export const planningApi = {
+  listPlans: () =>
+    extract<LearningPlan[] | PaginatedResponse<LearningPlan>>(http.get("/planning/plans/"))
+      .then(normalizeList),
+
+  getPlan: (planId: string) =>
+    extract<LearningPlan>(http.get(`/planning/plans/${planId}/`)),
+
+  createPlan: (payload: Record<string, unknown>) =>
+    extract<LearningPlan>(http.post("/planning/plans/", payload)),
+
+  createPlanFromConversation: (payload: {
+    conversation_id: string;
+    user_requirements?: Record<string, unknown>;
+  }) =>
+    extract<PlanCreationResponse>(
+      http.post("/planning/plans/create_from_conversation/", payload),
+    ),
+
+  startPlan: (planId: string) =>
+    extract<{ message: string; status: string; started_at?: string }>(
+      http.post(`/planning/plans/${planId}/start_plan/`),
+    ),
+
+  pausePlan: (planId: string) =>
+    extract<{ message: string; status: string }>(
+      http.post(`/planning/plans/${planId}/pause_plan/`),
+    ),
+
+  resumePlan: (planId: string) =>
+    extract<{ message: string; status: string }>(
+      http.post(`/planning/plans/${planId}/resume_plan/`),
+    ),
+
+  completePlan: (planId: string) =>
+    extract<{ message: string; status: string }>(
+      http.post(`/planning/plans/${planId}/complete_plan/`),
+    ),
+
+  updateTaskStatus: (
+    planId: string,
+    taskId: string,
+    payload: Partial<DailyTask>,
+  ) =>
+    extract<DailyTask>(
+      http.patch(
+        `/planning/plans/${planId}/tasks/${taskId}/`,
+        payload ?? {},
+      ),
+    ),
+
+  rescheduleTask: (
+    planId: string,
+    taskId: string,
+    payload: { scheduled_date: string; scheduled_time?: string | null },
+  ) =>
+    extract<DailyTask>(
+      http.post(
+        `/planning/plans/${planId}/tasks/${taskId}/reschedule/`,
+        payload,
+      ),
+    ),
+
+  mentorSwitch: (planId: string, payload: { mentor_id: string }) =>
+    extract<{ message: string; mentor_id: string }>(
+      http.post(`/planning/plans/${planId}/switch_mentor/`, payload),
+    ),
+};
+
+// INTELLIGENCE ---------------------------------------------------------------
+export const intelligenceApi = {
+  getDashboard: () =>
+    extract<IntelligenceOverview>(http.get("/intelligence/dashboard/")),
+
+  getInsightsFeed: () =>
+    extract<{ insights: ToastNotification[] }>(
+      http.get("/intelligence/insights/"),
+    ),
+
+  getProgressReport: () =>
+    extract<Record<string, unknown>>(
+      http.get("/intelligence/progress-report/"),
+    ),
+};
+
+// NOTIFICATIONS --------------------------------------------------------------
+export const notificationApi = {
+  list: () =>
+    extract<{ notifications: ToastNotification[] }>(
+      http.get("/notifications/feed/"),
+    ),
+};
