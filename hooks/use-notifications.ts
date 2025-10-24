@@ -118,7 +118,14 @@ export function useNotificationsSocket() {
       return;
     }
 
-    const token = Cookies.get("accessToken");
+    // Try multiple places for the auth token: cookie first, then localStorage, then fallback cookie names
+    const token =
+      Cookies.get("accessToken") ||
+      (typeof window !== "undefined"
+        ? window.localStorage.getItem("accessToken")
+        : null) ||
+      Cookies.get("token") ||
+      null;
     if (!token) {
       setStatus("error");
       setError("Missing authentication token");
@@ -141,9 +148,7 @@ export function useNotificationsSocket() {
         setStatus("open");
         setError(null);
         startHeartbeat();
-        socket.send(
-          JSON.stringify({ type: "get_unread_count" }),
-        );
+        socket.send(JSON.stringify({ type: "get_unread_count" }));
       };
 
       socket.onclose = () => {
@@ -170,7 +175,8 @@ export function useNotificationsSocket() {
 
       socket.onmessage = (event) => {
         try {
-          const payload: NotificationEvent = JSON.parse(event.data ?? "{}");
+          // const payload: NotificationEvent = JSON.parse(event.data ?? "{}");
+          const payload = JSON.parse(event.data ?? "{}");
           const type = payload?.type;
 
           switch (type) {
@@ -199,12 +205,22 @@ export function useNotificationsSocket() {
               }
               break;
             }
+            case "notification": {
+              console.log(payload);
+              if (payload.data) {
+                setNotifications((prev) => [payload.data!, ...prev]);
+                setUnreadCount((prev) => prev + 1);
+              }
+              break;
+            }
             default:
               telemetry.info("Unhandled notification event", { payload });
               break;
           }
         } catch (parseError) {
-          telemetry.warn("Failed to parse notification message", { parseError });
+          telemetry.warn("Failed to parse notification message", {
+            parseError,
+          });
         }
       };
     } catch (socketError) {
@@ -245,7 +261,7 @@ export function useNotificationsSocket() {
       JSON.stringify({
         type: "mark_notification_read",
         notification_id: notificationId,
-      }),
+      })
     );
 
     setNotifications((prev) => prev.filter((n) => n.id !== notificationId));

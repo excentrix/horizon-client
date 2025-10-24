@@ -23,13 +23,14 @@ import {
   UniversalGoalsManagement,
   InsightsFeedResponse,
   ComprehensiveProgressReport,
+  MemoryItem,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
   promise.then((response) => response.data);
 
 const normalizeList = <T>(data: T[] | PaginatedResponse<T>): T[] =>
-  Array.isArray(data) ? data : data?.results ?? [];
+  Array.isArray(data) ? data : (data?.results ?? []);
 
 // AUTH -----------------------------------------------------------------------
 export const authApi = {
@@ -51,7 +52,7 @@ export const authApi = {
 
   updateProfileDetail: (payload: Partial<UserProfileDetail>) =>
     extract<UserProfileDetail>(
-      http.patch("/auth/profile/detail/", payload ?? {}),
+      http.patch("/auth/profile/detail/", payload ?? {})
     ),
 
   getPreferences: () =>
@@ -67,8 +68,9 @@ export const authApi = {
 // CHAT -----------------------------------------------------------------------
 export const chatApi = {
   listConversations: () =>
-    extract<Conversation[] | PaginatedResponse<Conversation>>(http.get("/chat/conversations/"))
-      .then(normalizeList),
+    extract<Conversation[] | PaginatedResponse<Conversation>>(
+      http.get("/chat/conversations/")
+    ).then(normalizeList),
 
   getConversation: (conversationId: string) =>
     extract<Conversation>(http.get(`/chat/conversations/${conversationId}/`)),
@@ -78,28 +80,28 @@ export const chatApi = {
 
   pinConversation: (conversationId: string) =>
     extract<{ message: string; is_pinned: boolean }>(
-      http.post(`/chat/conversations/${conversationId}/pin/`),
+      http.post(`/chat/conversations/${conversationId}/pin/`)
     ),
 
   fetchMessagesPage: (
     conversationId: string,
-    params: Record<string, unknown> = {},
+    params: Record<string, unknown> = {}
   ) =>
     extract<PaginatedResponse<ChatMessage>>(
-      http.get(`/chat/conversations/${conversationId}/messages/`, { params }),
+      http.get(`/chat/conversations/${conversationId}/messages/`, { params })
     ),
 
   fetchMessages: (conversationId: string, params?: Record<string, unknown>) =>
     extract<PaginatedResponse<ChatMessage>>(
-      http.get(`/chat/conversations/${conversationId}/messages/`, { params }),
+      http.get(`/chat/conversations/${conversationId}/messages/`, { params })
     ).then((response) => response.results ?? []),
 
   sendMessage: (
     conversationId: string,
-    payload: { content: string; message_type?: string; parent_message?: string },
+    payload: { content: string; message_type?: string; parent_message?: string }
   ) =>
     extract<ChatMessage>(
-      http.post(`/chat/conversations/${conversationId}/messages/`, payload),
+      http.post(`/chat/conversations/${conversationId}/messages/`, payload)
     ),
 
   getAIPersonalities: () =>
@@ -107,20 +109,26 @@ export const chatApi = {
 
   getConversationSummary: (conversationId: string) =>
     extract<{ summary: string }>(
-      http.get(`/chat/conversations/${conversationId}/summary/`),
+      http.get(`/chat/conversations/${conversationId}/summary/`)
     ),
 
   wellnessCheck: (conversationId: string) =>
     extract<Record<string, unknown>>(
-      http.get(`/chat/conversations/${conversationId}/wellness_check/`),
+      http.get(`/chat/conversations/${conversationId}/wellness_check/`)
+    ),
+
+  getMemories: () =>
+    extract<{ memories: MemoryItem[]; count: number }>(
+      http.get("/chat/memories/")
     ),
 };
 
 // PLANNING -------------------------------------------------------------------
 export const planningApi = {
   listPlans: () =>
-    extract<LearningPlan[] | PaginatedResponse<LearningPlan>>(http.get("/planning/plans/"))
-      .then(normalizeList),
+    extract<LearningPlan[] | PaginatedResponse<LearningPlan>>(
+      http.get("/planning/plans/")
+    ).then(normalizeList),
 
   getPlan: (planId: string) =>
     extract<LearningPlan>(http.get(`/planning/plans/${planId}/`)),
@@ -133,56 +141,53 @@ export const planningApi = {
     user_requirements?: Record<string, unknown>;
   }) =>
     extract<PlanCreationResponse>(
-      http.post("/planning/plans/create_from_conversation/", payload),
+      http.post("/planning/plans/create_from_conversation/", payload)
     ),
 
   startPlan: (planId: string) =>
     extract<{ message: string; status: string; started_at?: string }>(
-      http.post(`/planning/plans/${planId}/start_plan/`),
+      http.post(`/planning/plans/${planId}/start_plan/`)
     ),
 
   pausePlan: (planId: string) =>
     extract<{ message: string; status: string }>(
-      http.post(`/planning/plans/${planId}/pause_plan/`),
+      http.post(`/planning/plans/${planId}/pause_plan/`)
     ),
 
   resumePlan: (planId: string) =>
     extract<{ message: string; status: string }>(
-      http.post(`/planning/plans/${planId}/resume_plan/`),
+      http.post(`/planning/plans/${planId}/resume_plan/`)
     ),
 
   completePlan: (planId: string) =>
     extract<{ message: string; status: string }>(
-      http.post(`/planning/plans/${planId}/complete_plan/`),
+      http.post(`/planning/plans/${planId}/complete_plan/`)
     ),
 
   updateTaskStatus: (
     planId: string,
     taskId: string,
-    payload: Partial<DailyTask>,
+    payload: Partial<DailyTask>
   ) =>
     extract<DailyTask>(
-      http.patch(
-        `/planning/plans/${planId}/tasks/${taskId}/`,
-        payload ?? {},
-      ),
+      http.patch(`/planning/plans/${planId}/tasks/${taskId}/`, payload ?? {})
     ),
 
   rescheduleTask: (
     planId: string,
     taskId: string,
-    payload: { scheduled_date: string; scheduled_time?: string | null },
+    payload: { scheduled_date: string; scheduled_time?: string | null }
   ) =>
     extract<DailyTask>(
       http.post(
         `/planning/plans/${planId}/tasks/${taskId}/reschedule/`,
-        payload,
-      ),
+        payload
+      )
     ),
 
   mentorSwitch: (planId: string, payload: { mentor_id: string }) =>
     extract<{ message: string; mentor_id: string }>(
-      http.post(`/planning/plans/${planId}/switch_mentor/`, payload),
+      http.post(`/planning/plans/${planId}/switch_mentor/`, payload)
     ),
 };
 
@@ -194,7 +199,7 @@ export const intelligenceApi = {
     stakeholder_type?: string;
   }) =>
     extract<MultiDomainDashboard>(
-      http.get("/intelligence/multi_domain_dashboard/", { params }),
+      http.get("/intelligence/multi_domain_dashboard/", { params })
     ),
 
   getWellnessMonitoring: (params?: {
@@ -203,7 +208,7 @@ export const intelligenceApi = {
     days?: number;
   }) =>
     extract<WellnessMonitoring>(
-      http.get("/intelligence/wellness_monitoring/", { params }),
+      http.get("/intelligence/wellness_monitoring/", { params })
     ),
 
   getAcademicProgressOverview: (params?: {
@@ -212,7 +217,7 @@ export const intelligenceApi = {
     include_predictions?: boolean;
   }) =>
     extract<AcademicProgressOverview>(
-      http.get("/intelligence/academic_progress_overview/", { params }),
+      http.get("/intelligence/academic_progress_overview/", { params })
     ),
 
   getCareerReadinessAssessment: (params?: {
@@ -221,7 +226,7 @@ export const intelligenceApi = {
     include_recommendations?: boolean;
   }) =>
     extract<CareerReadinessAssessment>(
-      http.get("/intelligence/career_readiness_assessment/", { params }),
+      http.get("/intelligence/career_readiness_assessment/", { params })
     ),
 
   getUniversalGoalsManagement: (params?: {
@@ -230,7 +235,7 @@ export const intelligenceApi = {
     domain?: string;
   }) =>
     extract<UniversalGoalsManagement>(
-      http.get("/intelligence/universal_goals_management/", { params }),
+      http.get("/intelligence/universal_goals_management/", { params })
     ),
 
   getInsightsFeed: (params?: {
@@ -240,7 +245,7 @@ export const intelligenceApi = {
     limit?: number;
   }) =>
     extract<InsightsFeedResponse>(
-      http.get("/intelligence/insights_feed/", { params }),
+      http.get("/intelligence/insights_feed/", { params })
     ),
 
   getComprehensiveProgressReport: (params?: {
@@ -249,7 +254,22 @@ export const intelligenceApi = {
     include_projections?: boolean;
   }) =>
     extract<ComprehensiveProgressReport>(
-      http.get("/intelligence/comprehensive_progress_report/", { params }),
+      http.get("/intelligence/comprehensive_progress_report/", { params })
+    ),
+
+  analyzeConversation: (payload: {
+    conversationId: string;
+    forceReanalysis?: boolean;
+    includeInsights?: boolean;
+    updateProgress?: boolean;
+  }) =>
+    extract<Record<string, unknown>>(
+      http.post("/intelligence/analyze-comprehensive/", {
+        conversation_id: payload.conversationId,
+        force_reanalysis: payload.forceReanalysis ?? false,
+        include_insights: payload.includeInsights ?? true,
+        update_progress: payload.updateProgress ?? true,
+      })
     ),
 
   // Legacy helpers / aliases
@@ -265,6 +285,6 @@ export const intelligenceApi = {
 export const notificationApi = {
   list: () =>
     extract<{ notifications: ToastNotification[] }>(
-      http.get("/notifications/feed/"),
+      http.get("/notifications/feed/")
     ),
 };

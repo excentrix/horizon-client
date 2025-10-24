@@ -18,6 +18,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { AnalysisProgressPanel } from "@/components/progress/AnalysisProgressPanel";
 
 const NAV_ITEMS = [
   {
@@ -73,7 +74,8 @@ export function Sidebar() {
 
         <nav className="flex-1 space-y-1 px-2 py-3 text-sm font-medium lg:px-4">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const isActive = pathname === href || pathname.startsWith(`${href}/`);
+            const isActive =
+              pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Link
                 key={href}
@@ -82,7 +84,7 @@ export function Sidebar() {
                   "flex items-center gap-3 rounded-lg px-3 py-2 transition-all",
                   isActive
                     ? "bg-primary/10 text-primary shadow-sm"
-                    : "text-muted-foreground hover:text-primary",
+                    : "text-muted-foreground hover:text-primary"
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -92,6 +94,8 @@ export function Sidebar() {
           })}
         </nav>
 
+        <AnalysisProgressPanel />
+        
         <div className="mt-auto p-4">
           <Card>
             <CardHeader className="p-2 pt-0 md:p-4">
@@ -107,6 +111,7 @@ export function Sidebar() {
             </CardContent>
           </Card>
         </div>
+        {/* Global progress panel */}
       </div>
     </aside>
   );

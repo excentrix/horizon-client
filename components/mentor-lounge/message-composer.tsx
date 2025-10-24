@@ -10,9 +10,10 @@ import { telemetry } from "@/lib/telemetry";
 interface MessageComposerProps {
   disabled?: boolean;
   onSend: (content: string) => Promise<void> | void;
+  onTypingChange?: (isTyping: boolean) => void;
 }
 
-export function MessageComposer({ disabled, onSend }: MessageComposerProps) {
+export function MessageComposer({ disabled, onSend, onTypingChange }: MessageComposerProps) {
   const selectedConversationId = useMentorLoungeStore(
     (state) => state.selectedConversationId,
   );
@@ -31,13 +32,14 @@ export function MessageComposer({ disabled, onSend }: MessageComposerProps) {
       return;
     }
 
-    setIsSubmitting(true);
-    try {
-      await onSend(trimmed);
-      setComposerDraft("");
-    } catch (error) {
-      telemetry.warn("Failed to send chat message", { error });
-      telemetry.toastError("Couldn't send that message. Try again.");
+        setIsSubmitting(true);
+        try {
+          await onSend(trimmed);
+          setComposerDraft("");
+          onTypingChange?.(false);
+        } catch (error) {
+          telemetry.warn("Failed to send chat message", { error });
+          telemetry.toastError("Couldn't send that message. Try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -48,13 +50,17 @@ export function MessageComposer({ disabled, onSend }: MessageComposerProps) {
       onSubmit={handleSubmit}
       className="flex items-center gap-3 rounded-xl border bg-card/80 px-4 py-3 shadow"
     >
-      <Input
-        value={composerDraft}
-        onChange={(event) => setComposerDraft(event.target.value)}
-        placeholder={
-          selectedConversationId
-            ? "Ask your mentor anything..."
-            : "Select a conversation to start"
+              <Input
+                value={composerDraft}
+                onChange={(event) => {
+                  setComposerDraft(event.target.value);
+                  onTypingChange?.(Boolean(event.target.value.trim()));
+                }}
+                onBlur={() => onTypingChange?.(false)}
+                placeholder={
+                  selectedConversationId
+                    ? "Ask your mentor anything..."
+                    : "Select a conversation to start"
         }
         disabled={disabled || !selectedConversationId || isSubmitting}
         className="flex-1"

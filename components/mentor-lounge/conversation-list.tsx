@@ -9,9 +9,10 @@ import { cn } from "@/lib/utils";
 interface ConversationListProps {
   conversations?: Conversation[];
   isLoading?: boolean;
+  activeAccentClass?: string;
 }
 
-export function ConversationList({ conversations = [], isLoading }: ConversationListProps) {
+export function ConversationList({ conversations = [], isLoading, activeAccentClass }: ConversationListProps) {
   const selectedConversationId = useMentorLoungeStore(
     (state) => state.selectedConversationId,
   );
@@ -55,7 +56,7 @@ export function ConversationList({ conversations = [], isLoading }: Conversation
             className={cn(
               "w-full rounded-xl border px-4 py-3 text-left transition",
               isActive
-                ? "border-primary/60 bg-primary/10 shadow"
+                ? activeAccentClass ?? "border-slate-300 bg-slate-50"
                 : "border-transparent bg-muted/40 hover:border-border",
             )}
           >

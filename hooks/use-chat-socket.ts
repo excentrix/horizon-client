@@ -479,5 +479,22 @@ export function useChatSocket(conversationId: string | null) {
     sendMessage,
     mentorTyping,
     streamingMessage,
+    setTypingStatus: useCallback((isTyping: boolean) => {
+      const socket = socketRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+
+      try {
+        socket.send(
+          JSON.stringify({
+            type: "typing_status",
+            is_typing: isTyping,
+          }),
+        );
+      } catch (err) {
+        telemetry.warn("Failed to send typing status", { err });
+      }
+    }, []),
   };
 }

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, Conversation } from "@/types";
 import type { SocketStatus } from "@/hooks/use-chat-socket";
+import type { PersonaTheme } from "@/lib/persona-theme";
 
 interface MessageFeedProps {
   conversation?: Conversation;
@@ -17,6 +18,7 @@ interface MessageFeedProps {
   isLoadingMore?: boolean;
   mentorTyping?: boolean;
   streamingMessage?: string | null;
+  theme?: PersonaTheme;
 }
 
 const statusLabels: Record<SocketStatus, string> = {
@@ -38,6 +40,7 @@ export function MessageFeed({
   isLoadingMore,
   mentorTyping,
   streamingMessage,
+  theme,
 }: MessageFeedProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const topSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -113,7 +116,12 @@ export function MessageFeed({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col space-y-4 overflow-hidden rounded-xl border bg-card/80 shadow ">
+    <div
+      className={cn(
+        "flex h-full min-h-0 flex-1 flex-col space-y-4 overflow-hidden rounded-xl border bg-card/80",
+        theme?.containerBorder,
+      )}
+    >
       <header className="border-b px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
@@ -132,12 +140,18 @@ export function MessageFeed({
                     ? "bg-amber-100 text-amber-700"
                     : connectionStatus === "error"
                       ? "bg-rose-100 text-rose-700"
-                      : "bg-muted text-muted-foreground"
+                      : `${theme?.statusBadgeBg ?? "bg-muted"} ${theme?.statusBadgeText ?? "text-muted-foreground"}`
               )}
             >
               {statusLabels[connectionStatus]}
             </span>
-            <span className="rounded-full bg-primary/10 px-3 py-1 font-medium text-primary">
+            <span
+              className={cn(
+                "rounded-full px-3 py-1 font-medium",
+                theme?.accentBadgeBg ?? "bg-primary/10",
+                theme?.accentBadgeText ?? "text-primary",
+              )}
+            >
               {conversation.ai_personality?.name ?? "Adaptive Mentor"}
             </span>
           </div>
@@ -193,7 +207,7 @@ export function MessageFeed({
                   "max-w-[70%] rounded-2xl px-4 py-3 text-sm shadow-sm",
                   message.sender_type === "user"
                     ? "bg-primary text-primary-foreground"
-                    : "bg-muted"
+                    : `${theme?.bubbleBg ?? "bg-muted"} ${theme?.bubbleText ?? "text-foreground"}`
                 )}
               >
                 {message.content}
@@ -204,7 +218,13 @@ export function MessageFeed({
 
         {streamingMessage ? (
           <div className="flex justify-start">
-            <div className="max-w-[70%] animate-pulse rounded-2xl bg-primary/10 px-4 py-3 text-sm text-primary">
+            <div
+              className={cn(
+                "max-w-[70%] animate-pulse rounded-2xl px-4 py-3 text-sm",
+                theme?.bubbleBg ?? "bg-primary/10",
+                theme?.bubbleText ?? "text-primary",
+              )}
+            >
               {streamingMessage}
             </div>
           </div>

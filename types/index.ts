@@ -437,3 +437,12 @@ export interface ComprehensiveProgressReport {
   overall_growth_rate?: number;
   domain_growth_rates?: Record<string, unknown>;
 }
+
+export interface MemoryItem {
+  id?: string;
+  memory?: string;
+  content?: string;
+  score?: number;
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+}

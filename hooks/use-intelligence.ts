@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { intelligenceApi } from "@/lib/api";
 import {
   AcademicProgressOverview,
@@ -130,3 +130,27 @@ export const useComprehensiveProgressReport = (params?: {
       }
     },
   });
+
+export const useAnalyzeConversation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: {
+      conversationId: string;
+      forceReanalysis?: boolean;
+      includeInsights?: boolean;
+      updateProgress?: boolean;
+    }) => intelligenceApi.analyzeConversation(payload),
+    onSuccess: (data) => {
+      telemetry.toastInfo("Analysis complete", "Mentor insights refreshed.");
+      queryClient.invalidateQueries({ queryKey: ["intelligence"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["memories"], exact: false });
+    },
+    onError: (error) => {
+      telemetry.toastError(
+        "Analysis failed",
+        error instanceof Error ? error.message : undefined,
+      );
+    },
+  });
+};
