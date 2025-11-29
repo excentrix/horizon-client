@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { ConversationList } from "@/components/mentor-lounge/conversation-list";
@@ -14,8 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { useCreatePlanFromConversation } from "@/hooks/use-plans";
 import { useAnalyzeConversation } from "@/hooks/use-intelligence";
 import { telemetry } from "@/lib/telemetry";
+import { CreateConversationModal } from "@/components/mentor-lounge/create-conversation-modal";
+import { PlusCircle } from 'lucide-react';
+import type { PlanCreationResponse } from "@/types";
+import { useNotifications } from "@/context/NotificationContext";
+import { IntelligenceStatus } from "@/components/mentor-lounge/intelligence-status";
 
 export default function ChatPage() {
   const { user, isLoading } = useAuth();
@@ -54,9 +61,14 @@ export default function ChatPage() {
 
   const personaTheme = getPersonaTheme(activeConversation?.ai_personality);
   const activeListClass = personaTheme.conversationActive;
-  const [analysisSummary, setAnalysisSummary] = useState<Record<string, unknown> | null>(null);
+  const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+  const [analysisByConversation, setAnalysisByConversation] = useState<Record<string, Record<string, unknown>>>({});
+  const [latestPlan, setLatestPlan] = useState<PlanCreationResponse | null>(null);
+  const processedAnalysisRef = useRef<Map<string, string>>(new Map());
 
   const analyzeConversation = useAnalyzeConversation();
+  const createPlan = useCreatePlanFromConversation();
+  const { notifications } = useNotifications();
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -67,175 +79,292 @@ export default function ChatPage() {
   useEffect(() => {
     setComposerDraft("");
     setTypingStatus(false);
+    setLatestPlan(null);
   }, [selectedConversationId, setComposerDraft, setTypingStatus]);
 
-  const handleAnalyzeConversation = () => {
+  useEffect(() => {
+    if (!notifications.length) {
+      return;
+    }
+
+    notifications.forEach((entry) => {
+      const record = entry as unknown as Record<string, unknown>;
+      const candidate = (record?.data as unknown) ?? record;
+
+      if (!candidate || typeof candidate !== "object") {
+        return;
+      }
+
+      const payload = candidate as Record<string, unknown>;
+      const conversationId =
+        (payload.conversation_id as string | undefined) ??
+        (payload.session_id as string | undefined);
+
+      if (!conversationId) {
+        return;
+      }
+
+      const hasAnalysisSummary =
+        "analysis_result" in payload ||
+        "analysis_results" in payload ||
+        "insights" in payload ||
+        "insights_generated" in payload;
+
+      const isStageUpdate = payload.event === "analysis_stage";
+
+      if (!hasAnalysisSummary && !isStageUpdate) {
+        return;
+      }
+
+      setAnalysisByConversation((previous) => {
+        // For stage updates, we just want to update the message
+        if (isStageUpdate) {
+           const stageName = (payload.stage as string).replace(/_/g, " ");
+           return {
+             ...previous,
+             [conversationId]: {
+               ...(previous[conversationId] || {}),
+               message: `Analysis in progress: ${stageName}`,
+               progress_update: { status: payload.stage }
+             }
+           };
+        }
+
+        const fingerprint = JSON.stringify(payload);
+        const previousFingerprint = processedAnalysisRef.current.get(conversationId);
+        if (previousFingerprint === fingerprint) {
+          return previous;
+        }
+
+        const snapshot = { ...payload };
+
+        processedAnalysisRef.current.set(conversationId, fingerprint);
+
+        return {
+          ...previous,
+          [conversationId]: snapshot,
+        };
+      });
+    });
+  }, [notifications]);
+
+  const analysisSummary = selectedConversationId
+    ? analysisByConversation[selectedConversationId] ?? null
+    : null;
+
+  const handleAnalyzeConversation = (force: boolean = false) => {
     if (!selectedConversationId) {
       telemetry.toastError("Select a conversation first");
       return;
     }
-
     analyzeConversation.mutate(
+      { conversationId: selectedConversationId, forceReanalysis: force },
+      {
+        onSuccess: (data) => {
+          if (selectedConversationId && data && typeof data === "object") {
+            setAnalysisByConversation((previous) => ({
+              ...previous,
+              [selectedConversationId]: data as Record<string, unknown>,
+            }));
+          }
+        },
+      }
+    );
+  };
+
+  const handleCreatePlan = () => {
+    if (!selectedConversationId) {
+      telemetry.toastError("Select a conversation first");
+      return;
+    }
+    setLatestPlan(null);
+    createPlan.mutate(
       { conversationId: selectedConversationId },
       {
         onSuccess: (data) => {
-          setAnalysisSummary(data as Record<string, unknown>);
+          if (data?.learning_plan_id) {
+            router.prefetch(`/plans?plan=${data.learning_plan_id}`);
+          }
+          setLatestPlan(data);
+        },
+        onError: (error) => {
+          telemetry.error("Plan creation request failed", { error });
         },
       },
     );
   };
 
-  const summaryAny = analysisSummary as Record<string, any> | null;
-  const analysisResult = (summaryAny?.analysis_result as Record<string, any>) ?? {};
-  const analysisCore =
-    analysisResult?.analysis_results && typeof analysisResult.analysis_results === "object"
-      ? (analysisResult.analysis_results as Record<string, any>)
-      : analysisResult;
-  const domainAnalysis = (analysisCore?.domain_analysis ?? {}) as Record<string, any>;
-  const crisisAnalysis = (analysisCore?.crisis_analysis ?? {}) as Record<string, any>;
-  const supportNeeds = (analysisCore?.support_needs ?? []) as Array<Record<string, unknown>>;
-  const insightsGenerated = summaryAny?.insights_generated as number | undefined;
-  const analysisMessage = summaryAny?.message as string | undefined;
-  const insightsList = Array.isArray(summaryAny?.insights)
-    ? (summaryAny!.insights as Array<Record<string, unknown>>)
-    : [];
-  const progressUpdate = summaryAny?.progress_update;
-
   return (
-    <div className="grid h-auto min-h-0 gap-4 lg:grid-cols-[320px_1fr]">
-      <aside className="flex min-h-0 flex-col gap-4 overflow-hidden rounded-xl border bg-card/70 p-4 shadow-sm">
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Mentor threads
-          </h2>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-          <ConversationList
-            conversations={conversations}
-            isLoading={conversationsLoading}
-            activeAccentClass={activeListClass}
-          />
-        </div>
-      </aside>
-
-      <section className="flex h-full min-h-0 flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleAnalyzeConversation}
-            disabled={!selectedConversationId || analyzeConversation.isLoading}
-          >
-            {analyzeConversation.isLoading ? "Analyzing..." : "Run Intelligence Analysis"}
-          </Button>
-        </div>
-
-        {analysisSummary ? (
-          <Card>
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle className="text-base">Latest analysis</CardTitle>
-                {domainAnalysis?.primary_domain ? (
-                  <Badge variant="secondary">{String(domainAnalysis.primary_domain)}</Badge>
-                ) : null}
-              </div>
-              <CardDescription>
-                {analysisMessage ?? "Conversation intelligence updated."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-xs text-muted-foreground">
-              <div className="flex flex-wrap items-center gap-2">
-                {crisisAnalysis?.overall_urgency ? (
-                  <Badge
-                    variant={
-                      crisisAnalysis.overall_urgency === "critical" ? "destructive" : "outline"
-                    }
-                  >
-                    Urgency: {String(crisisAnalysis.overall_urgency)}
-                  </Badge>
-                ) : null}
-                {typeof insightsGenerated === "number" ? (
-                  <Badge variant="outline">{insightsGenerated} insights</Badge>
-                ) : null}
-                {progressUpdate ? (
-                  <Badge variant="outline">Progress updated</Badge>
-                ) : null}
-              </div>
-
-              {supportNeeds && supportNeeds.length ? (
-                <div className="space-y-1">
-                  <p className="font-semibold text-foreground">Support needs</p>
-                  <ul className="list-disc space-y-1 pl-4">
-                    {supportNeeds.slice(0, 4).map((need, index) => (
-                      <li key={index}>{String(need?.description ?? JSON.stringify(need))}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {insightsList.length ? (
-                <div className="space-y-1">
-                  <p className="font-semibold text-foreground">Insights</p>
-                  <ul className="space-y-1">
-                    {insightsList.slice(0, 3).map((insight, index) => (
-                      <li key={index} className="rounded-lg border bg-muted/30 p-2">
-                        <p className="font-medium text-foreground">{String(insight.title ?? "Insight")}</p>
-                        <p>{String(insight.message ?? insight.description ?? "")}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {progressUpdate ? (
-                <div className="space-y-1">
-                  <p className="font-semibold text-foreground">Progress update</p>
-                  <pre className="overflow-x-auto rounded-lg bg-muted/40 p-2 text-[10px]">
-                    {JSON.stringify(progressUpdate, null, 2)}
-                  </pre>
-                </div>
-              ) : null}
-
-              <Separator />
-              <p className="text-[10px] text-muted-foreground">
-                Analysis payload preview:
-                <pre className="mt-1 overflow-x-auto rounded bg-muted/30 p-2">
-                  {JSON.stringify(analysisCore?.domain_analysis ?? analysisCore, null, 2)}
-                </pre>
+    <div className="flex min-h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-background">
+      <CreateConversationModal
+        isOpen={isCreateModalOpen}
+        onOpenChange={setCreateModalOpen}
+      />
+      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+        <aside className="flex h-full w-full flex-col border-b bg-card/60 backdrop-blur lg:w-80 lg:border-b-0 lg:border-r">
+          <div className="flex items-center justify-between gap-4 px-4 py-3 lg:px-5 lg:py-4">
+            <div>
+              <h2 className="text-lg font-semibold leading-tight">Conversations</h2>
+              <p className="text-xs text-muted-foreground">
+                Your general mentor adapts as you explore plans and goals.
               </p>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        <div className="min-h-0 flex-1">
-          <MessageFeed
-            conversation={activeConversation}
-            messages={messages}
-            isLoading={messagesLoading}
-            connectionStatus={socketStatus}
-            connectionError={socketError}
-            hasMore={hasNextPage}
-            onLoadMore={async () => {
-              if (hasNextPage && !isFetchingNextPage) {
-                await fetchNextPage();
-              }
-            }}
-            isLoadingMore={isFetchingNextPage}
-            mentorTyping={mentorTyping}
-            streamingMessage={streamingMessage}
-            theme={personaTheme}
-          />
-        </div>
-        <MessageComposer
-          disabled={
-            messagesLoading ||
-            !activeConversation ||
-            socketStatus !== "open"
-          }
-          onSend={sendMessage}
-          onTypingChange={setTypingStatus}
-        />
-      </section>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => setCreateModalOpen(true)}>
+              <PlusCircle className="h-6 w-6" />
+            </Button>
+          </div>
+          <Separator />
+          <div className="flex-1 overflow-y-auto px-4 py-3 lg:px-3">
+            <ConversationList
+              conversations={conversations}
+              selectedConversationId={selectedConversationId}
+              isLoading={conversationsLoading}
+              activeClass={activeListClass}
+            />
+          </div>
+        </aside>
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+          {activeConversation ? (
+            <>
+              <header className="p-4 border-b">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-lg font-semibold">{activeConversation.title}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {activeConversation.ai_personality?.name}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleAnalyzeConversation(false)}
+                      disabled={!selectedConversationId || analyzeConversation.isPending}
+                    >
+                      {analyzeConversation.isPending ? "Analyzing..." : "Run Intelligence Analysis"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleAnalyzeConversation(true)}
+                      disabled={!selectedConversationId || analyzeConversation.isPending}
+                    >
+                      Force Reanalysis
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCreatePlan}
+                      disabled={!selectedConversationId || createPlan.isPending}
+                    >
+                      {createPlan.isPending ? "Creating Plan..." : "Create Plan from Conversation"}
+                    </Button>
+                  </div>
+                </div>
+              </header>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <div className="flex h-full min-h-0 flex-col gap-4 px-4 pb-4 pt-2 lg:px-6 lg:pb-6">
+                  {latestPlan ? (
+                    <Card>
+                      <CardHeader>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <CardTitle className="text-base">Plan generated</CardTitle>
+                          {latestPlan.plan_title ? (
+                            <Badge variant="outline">{latestPlan.plan_title}</Badge>
+                          ) : null}
+                        </div>
+                        <CardDescription>
+                          {latestPlan.task_count
+                            ? `We queued ${latestPlan.task_count} tasks for you.`
+                            : "A fresh learning journey is ready."}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+                        <div className="space-y-1">
+                          {latestPlan.estimated_duration ? (
+                            <p>
+                              Estimated duration: {latestPlan.estimated_duration} hours
+                            </p>
+                          ) : null}
+                          {latestPlan.mentor_id ? (
+                            <p>
+                              Specialist mentor unlocked while the plan is active. Let&apos;s invite them when you need focused guidance.
+                            </p>
+                          ) : (
+                            <p>
+                              Your general mentor will weave this plan into upcoming chats.
+                            </p>
+                          )}
+                        </div>
+                        <Button asChild size="sm">
+                          <Link
+                            href={
+                              latestPlan.learning_plan_id
+                                ? `/plans?plan=${latestPlan.learning_plan_id}`
+                                : "/plans"
+                            }
+                          >
+                            View plan
+                          </Link>
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ) : null}
+                  {analysisSummary ? (
+                    <IntelligenceStatus analysisSummary={analysisSummary} />
+                  ) : null}
+                  <div className="min-h-0 flex-1">
+                    <MessageFeed
+                      conversation={activeConversation}
+                      messages={messages}
+                      isLoading={messagesLoading}
+                      connectionStatus={socketStatus}
+                      connectionError={socketError}
+                      hasMore={hasNextPage}
+                      onLoadMore={async () => {
+                        if (hasNextPage && !isFetchingNextPage) {
+                          await fetchNextPage();
+                        }
+                      }}
+                      isLoadingMore={isFetchingNextPage}
+                      mentorTyping={mentorTyping}
+                      streamingMessage={streamingMessage}
+                      theme={personaTheme}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="px-4 pb-4">
+                <MessageComposer
+                  disabled={
+                    messagesLoading ||
+                    !activeConversation ||
+                    socketStatus !== "open"
+                  }
+                  onSend={sendMessage}
+                  onTypingChange={setTypingStatus}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <Card className="w-96 text-center">
+                <CardHeader>
+                  <CardTitle>Welcome to the Mentor Lounge</CardTitle>
+                  <CardDescription>
+                    Select a conversation from the list on the left, or start a new one to begin.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button onClick={() => setCreateModalOpen(true)}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Start New Conversation
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { AnalysisProgressPanel } from "@/components/progress/AnalysisProgressPanel";
+import { ProfileMenu } from "@/components/layout/profile-menu";
 
 const NAV_ITEMS = [
   {
@@ -95,8 +96,8 @@ export function Sidebar() {
         </nav>
 
         <AnalysisProgressPanel />
-        
-        <div className="mt-auto p-4">
+
+        <div className="mt-auto space-y-4 p-4">
           <Card>
             <CardHeader className="p-2 pt-0 md:p-4">
               <CardTitle>Invite a friend</CardTitle>
@@ -110,6 +111,7 @@ export function Sidebar() {
               </Button>
             </CardContent>
           </Card>
+          <ProfileMenu />
         </div>
         {/* Global progress panel */}
       </div>

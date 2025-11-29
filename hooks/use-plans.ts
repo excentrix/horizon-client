@@ -43,6 +43,28 @@ export function usePlan(planId?: string) {
   });
 }
 
+export function useCreatePlanFromConversation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: { conversationId: string }) => {
+      return planningApi.createPlanFromConversation({
+        conversation_id: payload.conversationId,
+      });
+    },
+    onSuccess: (data) => {
+      telemetry.toastInfo("Plan created!", data.message);
+      queryClient.invalidateQueries({ queryKey: plansKey });
+    },
+    onError: (error) => {
+      telemetry.toastError(
+        "Unable to create plan",
+        error instanceof Error ? error.message : undefined
+      );
+    },
+  });
+}
+
 export function usePlanMutations(planId?: string) {
   const queryClient = useQueryClient();
 

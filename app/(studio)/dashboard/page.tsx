@@ -15,7 +15,7 @@ export default function DashboardPage() {
   }, [isLoading, router, user]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 p-4 lg:p-6  ">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">
           Welcome back{user?.first_name ? `, ${user.first_name}` : ""} 👋

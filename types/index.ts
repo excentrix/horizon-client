@@ -194,6 +194,7 @@ export interface ChatMessage {
   is_flagged: boolean;
   flag_reason?: string;
   attachments?: unknown[];
+  metadata?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }

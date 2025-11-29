@@ -10,13 +10,28 @@ export type NotificationSocketStatus =
   | "closed"
   | "error";
 
-interface NotificationEvent {
-  type: string;
-  notification?: ToastNotification;
-  message?: string;
-  timestamp?: string;
-  count?: number;
-}
+type NotificationEvent =
+  | {
+      type: "connection_status" | "pong";
+    }
+  | {
+      type: "toast_notification";
+      notification?: ToastNotification;
+    }
+  | {
+      type: "unread_count";
+      count?: number;
+    }
+  | {
+      type: "notification";
+      data?: {
+        message?: string;
+      } & Record<string, unknown>;
+    }
+  | {
+      type: string;
+      [key: string]: unknown;
+    };
 
 const HEARTBEAT_INTERVAL = 30000;
 const HEARTBEAT_TIMEOUT = 10000;
@@ -175,8 +190,7 @@ export function useNotificationsSocket() {
 
       socket.onmessage = (event) => {
         try {
-          // const payload: NotificationEvent = JSON.parse(event.data ?? "{}");
-          const payload = JSON.parse(event.data ?? "{}");
+          const payload = JSON.parse(event.data ?? "{}") as NotificationEvent;
           const type = payload?.type;
 
           switch (type) {
@@ -185,16 +199,16 @@ export function useNotificationsSocket() {
               break;
             }
             case "toast_notification": {
-              if (payload.notification) {
-                setNotifications((prev) => [payload.notification!, ...prev]);
+              if ("notification" in payload && payload.notification) {
+                const newNotification = payload.notification as ToastNotification;
+                setNotifications((prev) => [newNotification, ...prev]);
                 setUnreadCount((prev) => prev + 1);
               }
               break;
             }
             case "unread_count": {
-              const count = (payload as any).count;
-              if (typeof count === "number") {
-                setUnreadCount(count);
+              if ("count" in payload && typeof payload.count === "number") {
+                setUnreadCount(payload.count);
               }
               break;
             }
@@ -206,9 +220,21 @@ export function useNotificationsSocket() {
               break;
             }
             case "notification": {
-              console.log(payload);
-              if (payload.data) {
-                setNotifications((prev) => [payload.data!, ...prev]);
+              if ("data" in payload && payload.data) {
+                const data = payload.data as Record<string, unknown>;
+                if (data.message) {
+                  const isSilentUpdate = 
+                    data.event === "analysis_stage" || 
+                    data.event === "analysis_started";
+                  
+                  if (!isSilentUpdate) {
+                    telemetry.toastInfo(String(data.message));
+                  }
+                }
+              }
+              if ("data" in payload && payload.data) {
+                const notificationLike = payload.data as ToastNotification;
+                setNotifications((prev) => [notificationLike, ...prev]);
                 setUnreadCount((prev) => prev + 1);
               }
               break;

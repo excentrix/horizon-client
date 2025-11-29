@@ -109,6 +109,15 @@ export default function LoginPage() {
             )}
           />
 
+          <div className="flex justify-end text-xs">
+            <Link
+              href="/forgot-password"
+              className="text-primary underline-offset-4 hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
+
           <FormField
             control={form.control}
             name="remember_me"

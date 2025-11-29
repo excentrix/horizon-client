@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, Conversation } from "@/types";
@@ -45,6 +45,19 @@ export function MessageFeed({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const topSentinelRef = useRef<HTMLDivElement | null>(null);
   const loadingMoreRef = useRef(false);
+  const initialScrollRef = useRef(true);
+  const lastConversationIdRef = useRef<string | null>(null);
+  const [showScrollToLatest, setShowScrollToLatest] = useState(false);
+
+  const scrollToLatest = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    setShowScrollToLatest(false);
+  }, []);
 
   const triggerLoadMore = useCallback(() => {
     if (!onLoadMore || loadingMoreRef.current || !hasMore) {
@@ -99,13 +112,47 @@ export function MessageFeed({
       return;
     }
 
-    const isNearBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight < 160;
+    const conversationId = conversation?.id ?? null;
+    const conversationChanged =
+      conversationId !== lastConversationIdRef.current;
 
-    if (isNearBottom) {
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    const isNearBottom = distanceFromBottom < 160;
+
+    if (initialScrollRef.current || conversationChanged) {
       container.scrollTop = container.scrollHeight;
+      initialScrollRef.current = false;
+      setShowScrollToLatest(false);
+    } else if (isNearBottom) {
+      container.scrollTop = container.scrollHeight;
+      setShowScrollToLatest(false);
+    } else {
+      setShowScrollToLatest(distanceFromBottom > 240);
     }
-  }, [messages.length, streamingMessage]);
+
+    lastConversationIdRef.current = conversationId;
+  }, [conversation?.id, messages.length, streamingMessage]);
+
+  useEffect(() => {
+    initialScrollRef.current = true;
+  }, [conversation?.id]);
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const handleScroll = () => {
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      setShowScrollToLatest(distanceFromBottom > 240);
+    };
+
+    container.addEventListener("scroll", handleScroll);
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [conversation?.id]);
 
   if (!conversation) {
     return (
@@ -118,7 +165,7 @@ export function MessageFeed({
   return (
     <div
       className={cn(
-        "flex h-full min-h-0 flex-1 flex-col space-y-4 overflow-hidden rounded-xl border bg-card/80",
+        "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background",
         theme?.containerBorder,
       )}
     >
@@ -244,6 +291,16 @@ export function MessageFeed({
           </div>
         ) : null}
       </div>
+
+      {showScrollToLatest ? (
+        <button
+          type="button"
+          onClick={scrollToLatest}
+          className="absolute bottom-6 right-6 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-medium text-primary-foreground shadow-lg transition hover:bg-primary/90"
+        >
+          Jump to latest
+        </button>
+      ) : null}
     </div>
   );
 }

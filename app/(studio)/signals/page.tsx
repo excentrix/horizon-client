@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { useNotificationsSocket } from "@/hooks/use-notifications";
+import { useNotifications } from "@/context/NotificationContext";
 import { useInsightsFeed, useWellnessMonitoring } from "@/hooks/use-intelligence";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,13 +24,7 @@ export default function SignalsPage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
 
-  const {
-    status,
-    error,
-    notifications,
-    unreadCount,
-    markNotificationRead,
-  } = useNotificationsSocket();
+const { status, error, notifications, unreadCount, markNotificationRead } = useNotifications();
 
   const {
     data: insightsFeed,

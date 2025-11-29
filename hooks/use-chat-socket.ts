@@ -57,32 +57,37 @@ const appendMessageToCache = (
   >(
     ["conversations", conversationId, "messages"],
     (previous) => {
+      // If the cache is empty, initialize it with the new message.
       if (!previous) {
+        return {
+          pages: [
+            {
+              results: [message],
+              count: 1,
+              next: null,
+              previous: null,
+            },
+          ],
+          pageParams: [null],
+        };
+      }
+
+      // Otherwise, add the new message to the first page.
+      const newPages = [...previous.pages];
+      const firstPage = { ...newPages[0] };
+
+      // Avoid adding duplicates if the message is already in the cache
+      if (firstPage.results.some((existing) => existing.id === message.id)) {
         return previous;
       }
 
-      const pages = previous.pages.map((page, index) => {
-        if (index !== 0) {
-          return page;
-        }
-
-        const results = page.results ?? [];
-        if (results.some((existing) => existing.id === message.id)) {
-          return page;
-        }
-
-        const updatedResults = sortMessages([...results, message]);
-
-        return {
-          ...page,
-          count: page.count ?? updatedResults.length,
-          results: updatedResults,
-        };
-      });
+      firstPage.results = sortMessages([...firstPage.results, message]);
+      firstPage.count = firstPage.results.length;
+      newPages[0] = firstPage;
 
       return {
         ...previous,
-        pages,
+        pages: newPages,
       };
     },
   );
@@ -339,10 +344,42 @@ export function useChatSocket(conversationId: string | null) {
             case "chat_message":
             case "ai_response_broadcast": {
               const message = payload?.message as ChatMessage | undefined;
+              const tempId = payload?.temp_id as string | undefined;
+
               if (message) {
                 message.conversation ??= conversationId;
-                appendMessageToCache(queryClient, conversationId, message);
-                updateConversationSnapshot(queryClient, conversationId, message);
+
+                if (tempId && conversationId) {
+                  // This is a confirmed user message, replace the optimistic one.
+                  queryClient.setQueryData<
+                    InfiniteData<PaginatedResponse<ChatMessage>> | undefined
+                  >(
+                    ["conversations", conversationId, "messages"],
+                    (previous) => {
+                      if (!previous) return previous;
+
+                      const newPages = previous.pages.map((page) => ({
+                        ...page,
+                        results: page.results.map((m) =>
+                          m.id === tempId ? message : m,
+                        ),
+                      }));
+
+                      return { ...previous, pages: newPages };
+                    },
+                  );
+                } else if (conversationId) {
+                  // This is a new message from AI or another user.
+                  appendMessageToCache(queryClient, conversationId, message);
+                }
+
+                if (conversationId) {
+                  updateConversationSnapshot(
+                    queryClient,
+                    conversationId,
+                    message,
+                  );
+                }
                 updateMentorTyping(false);
               }
               break;
@@ -376,8 +413,14 @@ export function useChatSocket(conversationId: string | null) {
               const message = payload?.message as ChatMessage | undefined;
               if (message) {
                 message.conversation ??= conversationId;
-                appendMessageToCache(queryClient, conversationId, message);
-                updateConversationSnapshot(queryClient, conversationId, message);
+                if (conversationId) {
+                  appendMessageToCache(queryClient, conversationId, message);
+                  updateConversationSnapshot(
+                    queryClient,
+                    conversationId,
+                    message,
+                  );
+                }
               }
               setStreamState({ messageId: undefined, content: null });
               updateMentorTyping(false);
@@ -399,17 +442,17 @@ export function useChatSocket(conversationId: string | null) {
             default:
               telemetry.info("Unhandled chat socket event", { type });
               break;
+          }
+        } catch (parseError) {
+          telemetry.warn("Failed to parse chat socket message", { parseError });
         }
-      } catch (parseError) {
-        telemetry.warn("Failed to parse chat socket message", { parseError });
-      }
-    };
-  } catch (socketError) {
-    telemetry.error("Unable to open chat WebSocket", { socketError });
-    setStatus("error");
-    setError("Unable to open chat connection");
-    scheduleReconnect();
-  }
+      };
+    } catch (socketError) {
+      telemetry.error("Unable to open chat WebSocket", { socketError });
+      setStatus("error");
+      setError("Unable to open chat connection");
+      scheduleReconnect();
+    }
   }, [conversationId, queryClient, resetSocket, scheduleReconnect, startHeartbeat, stopHeartbeat, updateMentorTyping]);
 
   connectRef.current = connect;
@@ -427,16 +470,49 @@ export function useChatSocket(conversationId: string | null) {
         return;
       }
 
+      // Optimistic update
+      const tempId = `temp-${Date.now()}`;
+      const isoTimestamp = new Date().toISOString();
+      const optimisticMessage: ChatMessage = {
+        id: tempId,
+        conversation: conversationId!,
+        message_type: "text",
+        sender_type: "user",
+        content: trimmed,
+        sequence_number: Date.now(),
+        ai_model_used: undefined,
+        tokens_used: undefined,
+        processing_time: undefined,
+        is_edited: false,
+        is_flagged: false,
+        created_at: isoTimestamp,
+        updated_at: isoTimestamp,
+        metadata: null,
+        attachments: [],
+        flag_reason: undefined,
+      };
+
+      if (conversationId) {
+        try {
+          appendMessageToCache(queryClient, conversationId, optimisticMessage);
+          updateConversationSnapshot(queryClient, conversationId, optimisticMessage);
+        } catch (error) {
+            telemetry.error("Failed to add optimistic message to cache", { error });
+            telemetry.toastError("Could not send message. Please try again.");
+            return;
+        }
+      }
+
       socket.send(
         JSON.stringify({
-          type: "chat_message",
-          message: { content: trimmed },
+          type: "streaming_message",
+          message: { content: trimmed, temp_id: tempId }, // send temp_id to backend
         }),
       );
 
       updateMentorTyping(false);
     },
-    [updateMentorTyping],
+    [queryClient, conversationId, updateMentorTyping],
   );
 
   useEffect(() => {

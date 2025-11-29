@@ -5,7 +5,6 @@ import {
   ChatMessage,
   Conversation,
   DailyTask,
-  IntelligenceOverview,
   LearningPlan,
   LoginPayload,
   LoginResponse,
@@ -63,6 +62,20 @@ export const authApi = {
 
   completeOnboarding: () =>
     extract<{ message: string }>(http.post("/auth/onboarding/complete/")),
+
+  requestPasswordReset: (email: string) =>
+    extract<{ message: string }>(
+      http.post("/auth/password/reset/", { email })
+    ),
+
+  changePassword: (payload: {
+    old_password: string;
+    new_password: string;
+    new_password_confirm: string;
+  }) =>
+    extract<{ message: string }>(
+      http.post("/auth/password/change/", payload)
+    ),
 };
 
 // CHAT -----------------------------------------------------------------------

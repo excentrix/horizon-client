@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
+import { useAuth } from "@/context/AuthContext";
 import { chatApi } from "@/lib/api";
-import { MOCK_CONVERSATIONS, MOCK_MESSAGES } from "@/lib/mocks/chat";
-import { telemetry } from "@/lib/telemetry";
 import type {
   ChatMessage,
   Conversation,
@@ -20,53 +19,42 @@ const getPageFromUrl = (url?: string | null) => {
   return Number(match[1]);
 };
 
-const emptyPaginatedResponse = (
-  results: ChatMessage[],
-): PaginatedResponse<ChatMessage> => ({
-  count: results.length,
+const emptyPaginatedResponse = (): PaginatedResponse<ChatMessage> => ({
+  count: 0,
   next: null,
   previous: null,
-  results,
+  results: [],
 });
 
 export function useConversations() {
+  const { user, isLoading: authLoading } = useAuth();
+
   return useQuery<Conversation[]>({
     queryKey: ["conversations"],
-    queryFn: async () => {
-      try {
-        return await chatApi.listConversations();
-      } catch (error) {
-        telemetry.warn("Falling back to mock conversations", { error });
-        return MOCK_CONVERSATIONS;
-      }
-    },
-    placeholderData: () => MOCK_CONVERSATIONS,
-    retry: false,
+    queryFn: async () => chatApi.listConversations(),
+    enabled: Boolean(!authLoading && user),
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    retry: 1,
+    placeholderData: () => [] as Conversation[],
   });
 }
 
 export function useConversationMessages(conversationId: string | null) {
+  const { user, isLoading: authLoading } = useAuth();
   const result = useInfiniteQuery<PaginatedResponse<ChatMessage>, Error>({
     queryKey: ["conversations", conversationId, "messages"],
-    enabled: Boolean(conversationId),
+    enabled: Boolean(conversationId && !authLoading && user),
     initialPageParam: 1,
     queryFn: async ({ pageParam }) => {
       if (!conversationId) {
-        return emptyPaginatedResponse([]);
+        return emptyPaginatedResponse();
       }
 
-      try {
-        return await chatApi.fetchMessagesPage(conversationId, {
-          page: pageParam,
-        });
-      } catch (error) {
-        telemetry.warn("Falling back to mock messages", { error });
-        const mock = MOCK_MESSAGES[conversationId];
-        if (pageParam === 1 && mock) {
-          return emptyPaginatedResponse(mock);
-        }
-        throw error;
-      }
+      return chatApi.fetchMessagesPage(conversationId, {
+        page: pageParam,
+        ordering: "-sequence_number",
+      });
     },
     getNextPageParam: (lastPage) => getPageFromUrl(lastPage.next),
     retry: false,

@@ -35,9 +35,17 @@ export const telemetry = {
   error(message: unknown, meta?: Record<string, unknown>) {
     this.log("error", message, meta);
   },
+  toast(message: string, description?: string) {
+    toast(message, description ? { description } : undefined);
+    this.info(message, description ? { description } : undefined);
+  },
   toastError(message: string, description?: string) {
     toast.error(message, description ? { description } : undefined);
     this.error(message, description ? { description } : undefined);
+  },
+  toastSuccess(message: string, description?: string) {
+    toast.success(message, description ? { description } : undefined);
+    this.info(message, description ? { description } : undefined);
   },
   toastInfo(message: string, description?: string) {
     toast.info(message, description ? { description } : undefined);

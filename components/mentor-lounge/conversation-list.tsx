@@ -9,22 +9,32 @@ import { cn } from "@/lib/utils";
 interface ConversationListProps {
   conversations?: Conversation[];
   isLoading?: boolean;
-  activeAccentClass?: string;
+  selectedConversationId?: string | null;
+  onSelectConversation?: (conversationId: string) => void;
+  activeClass?: string;
 }
 
-export function ConversationList({ conversations = [], isLoading, activeAccentClass }: ConversationListProps) {
-  const selectedConversationId = useMentorLoungeStore(
+export function ConversationList({
+  conversations = [],
+  isLoading,
+  selectedConversationId,
+  onSelectConversation,
+  activeClass,
+}: ConversationListProps) {
+  const storeSelectedConversationId = useMentorLoungeStore(
     (state) => state.selectedConversationId,
   );
   const setSelectedConversationId = useMentorLoungeStore(
     (state) => state.setSelectedConversationId,
   );
+  const activeConversationId = selectedConversationId ?? storeSelectedConversationId;
+  const selectConversation = onSelectConversation ?? setSelectedConversationId;
 
   useEffect(() => {
-    if (!selectedConversationId && conversations.length > 0) {
+    if (!storeSelectedConversationId && conversations.length > 0) {
       setSelectedConversationId(conversations[0].id);
     }
-  }, [conversations, selectedConversationId, setSelectedConversationId]);
+  }, [conversations, storeSelectedConversationId, setSelectedConversationId]);
 
   if (isLoading && conversations.length === 0) {
     return (
@@ -47,16 +57,16 @@ export function ConversationList({ conversations = [], isLoading, activeAccentCl
   return (
     <div className="space-y-2">
       {conversations.map((conversation) => {
-        const isActive = selectedConversationId === conversation.id;
+        const isActive = activeConversationId === conversation.id;
         return (
           <button
             key={conversation.id}
             type="button"
-            onClick={() => setSelectedConversationId(conversation.id)}
+            onClick={() => selectConversation(conversation.id)}
             className={cn(
               "w-full rounded-xl border px-4 py-3 text-left transition",
               isActive
-                ? activeAccentClass ?? "border-slate-300 bg-slate-50"
+                ? activeClass ?? "border-slate-300 bg-slate-50"
                 : "border-transparent bg-muted/40 hover:border-border",
             )}
           >
@@ -64,9 +74,11 @@ export function ConversationList({ conversations = [], isLoading, activeAccentCl
               <span>{conversation.title}</span>
               {conversation.is_pinned ? <Pin className="h-4 w-4" /> : null}
             </div>
-            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-              {conversation.topic} · {conversation.message_count} messages
-            </p>
+            {conversation.topic ? (
+              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                {conversation.topic}
+              </p>
+            ) : null}
           </button>
         );
       })}

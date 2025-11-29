@@ -31,10 +31,15 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-function setSessionTokens(access?: string, refresh?: string) {
+function setSessionTokens(
+  access?: string,
+  refresh?: string,
+  remember = false
+) {
   const cookieOptions = {
     sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
+    ...(remember ? { expires: 14 } : {}),
   };
 
   if (access) {
@@ -90,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const response = await authApi.login(payload);
         const { access_token, refresh_token } = response.session;
-        setSessionTokens(access_token, refresh_token);
+        setSessionTokens(access_token, refresh_token, Boolean(payload.remember_me));
         setUser(response.user);
         toast.success("Welcome back!", {
           description: response.user.full_name ?? response.user.email,
