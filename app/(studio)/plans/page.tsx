@@ -9,7 +9,9 @@ import { PlanIntelligencePanel } from "@/components/plans/plan-intelligence-pane
 import { TaskList } from "@/components/plans/task-list";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function PlansPage() {
+import { Suspense } from "react";
+
+function PlansContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: plans = [], isLoading: plansLoading } = usePlans();
@@ -33,18 +35,18 @@ export default function PlansPage() {
 
   const actionStatus = useMemo(
     () => ({
-      starting: startPlan.isLoading,
-      pausing: pausePlan.isLoading,
-      resuming: resumePlan.isLoading,
-      completing: completePlan.isLoading,
-      switchingMentor: switchMentor.isLoading,
+      starting: startPlan.isPending,
+      pausing: pausePlan.isPending,
+      resuming: resumePlan.isPending,
+      completing: completePlan.isPending,
+      switchingMentor: switchMentor.isPending,
     }),
     [
-      startPlan.isLoading,
-      pausePlan.isLoading,
-      resumePlan.isLoading,
-      completePlan.isLoading,
-      switchMentor.isLoading,
+      startPlan.isPending,
+      pausePlan.isPending,
+      resumePlan.isPending,
+      completePlan.isPending,
+      switchMentor.isPending,
     ],
   );
 
@@ -106,12 +108,20 @@ export default function PlansPage() {
               <TaskList
                 tasks={tasks}
                 onToggleStatus={(task) => handleToggleTask(task.id, task.status)}
-                isUpdating={updateTaskStatus.isLoading}
+                isUpdating={updateTaskStatus.isPending}
               />
             </div>
           </div>
         )}
       </section>
     </div>
+  );
+}
+
+export default function PlansPage() {
+  return (
+    <Suspense fallback={<div className="p-4">Loading plans...</div>}>
+      <PlansContent />
+    </Suspense>
   );
 }

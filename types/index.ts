@@ -122,7 +122,7 @@ export type ConversationPriority = "low" | "normal" | "high" | "urgent";
 export interface AIPersonality {
   id: UUID;
   name: string;
-  type: "supportive" | "analytical" | "creative" | "practical" | "socratic" | "motivational" | "specialized";
+  type: "general" | "supportive" | "analytical" | "creative" | "practical" | "socratic" | "motivational" | "specialized";
   description: string;
   system_prompt?: string;
   avatar_url?: string;
@@ -150,6 +150,7 @@ export interface Conversation {
   id: UUID;
   title: string;
   topic: string;
+  description?: string;
   status: ConversationStatus;
   priority: ConversationPriority;
   is_pinned: boolean;
@@ -168,6 +169,24 @@ export interface Conversation {
     sender_type: SenderType;
     created_at: string;
   } | null;
+}
+
+export interface ConversationAnalysis {
+  id: UUID;
+  conversation_id: UUID;
+  conversation_title?: string;
+  user_name?: string;
+  primary_domain?: UUID | null;
+  primary_domain_name?: string | null;
+  secondary_domains_names?: string[];
+  urgency_level?: string | null;
+  engagement_score?: number | null;
+  overall_sentiment?: string | null;
+  key_insights?: string[];
+  analysis_metadata?: Record<string, unknown> | null;
+  analysis_results?: Record<string, unknown> | null;
+  analyzed_at?: string | null;
+  analysis_version?: string | null;
 }
 
 export type MessageType =

@@ -117,8 +117,9 @@ http.interceptors.response.use(
         }
 
         Cookies.set("accessToken", newAccessToken);
-        if (data.refresh_token ?? data.refresh) {
-          Cookies.set("refreshToken", data.refresh_token ?? data.refresh);
+        const nextRefreshToken = data.refresh_token ?? data.refresh;
+        if (nextRefreshToken) {
+          Cookies.set("refreshToken", nextRefreshToken);
         }
 
         if (originalRequest.headers) {

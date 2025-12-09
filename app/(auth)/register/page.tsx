@@ -27,11 +27,11 @@ const registerSchema = z
     password_confirm: z.string().min(8),
     first_name: z.string().optional(),
     last_name: z.string().optional(),
-    terms_accepted: z.literal(true, {
-      errorMap: () => ({ message: "You must accept the terms." }),
+    terms_accepted: z.boolean().refine((val) => val === true, {
+      message: "You must accept the terms.",
     }),
-    privacy_policy_accepted: z.literal(true, {
-      errorMap: () => ({ message: "You must accept the privacy policy." }),
+    privacy_policy_accepted: z.boolean().refine((val) => val === true, {
+      message: "You must accept the privacy policy.",
     }),
   })
   .refine((data) => data.password === data.password_confirm, {

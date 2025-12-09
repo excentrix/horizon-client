@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, Conversation } from "@/types";
@@ -18,6 +18,7 @@ interface MessageFeedProps {
   isLoadingMore?: boolean;
   mentorTyping?: boolean;
   streamingMessage?: string | null;
+  streamingMessageId?: string;
   theme?: PersonaTheme;
 }
 
@@ -40,6 +41,7 @@ export function MessageFeed({
   isLoadingMore,
   mentorTyping,
   streamingMessage,
+  streamingMessageId,
   theme,
 }: MessageFeedProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -58,6 +60,33 @@ export function MessageFeed({
     container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
     setShowScrollToLatest(false);
   }, []);
+
+  // Merge streaming message into the list to prevent blinking
+  const displayMessages = useMemo<ChatMessage[]>(() => {
+    if (!streamingMessage || !streamingMessageId) return messages;
+
+    // Create a temporary message object for the streaming content
+    const streamingObj: ChatMessage = {
+      id: streamingMessageId,
+      conversation: conversation?.id ?? "",
+      content: streamingMessage,
+      sender_type: "ai",
+      message_type: "text",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      sequence_number: Number.MAX_SAFE_INTEGER, // Ensure it's at the end
+      is_edited: false,
+      is_flagged: false,
+      attachments: [],
+    };
+
+    // If the message is already in the list (e.g. race condition), don't add it
+    if (messages.some(m => m.id === streamingMessageId)) {
+      return messages;
+    }
+
+    return [...messages, streamingObj];
+  }, [messages, streamingMessage, streamingMessageId, conversation?.id]);
 
   const triggerLoadMore = useCallback(() => {
     if (!onLoadMore || loadingMoreRef.current || !hasMore) {
@@ -132,7 +161,7 @@ export function MessageFeed({
     }
 
     lastConversationIdRef.current = conversationId;
-  }, [conversation?.id, messages.length, streamingMessage]);
+  }, [conversation?.id, displayMessages.length, streamingMessage]);
 
   useEffect(() => {
     initialScrollRef.current = true;
@@ -237,7 +266,7 @@ export function MessageFeed({
         ) : null}
 
         <AnimatePresence initial={false}>
-          {messages.map((message) => (
+          {displayMessages.map((message) => (
             <motion.div
               key={message.id}
               initial={{ opacity: 0, y: 12 }}
@@ -263,19 +292,7 @@ export function MessageFeed({
           ))}
         </AnimatePresence>
 
-        {streamingMessage ? (
-          <div className="flex justify-start">
-            <div
-              className={cn(
-                "max-w-[70%] animate-pulse rounded-2xl px-4 py-3 text-sm",
-                theme?.bubbleBg ?? "bg-primary/10",
-                theme?.bubbleText ?? "text-primary",
-              )}
-            >
-              {streamingMessage}
-            </div>
-          </div>
-        ) : null}
+
 
         {mentorTyping && !streamingMessage ? (
           <div className="flex justify-start">

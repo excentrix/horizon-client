@@ -56,11 +56,13 @@ export function useCreatePlanFromConversation() {
       telemetry.toastInfo("Plan created!", data.message);
       queryClient.invalidateQueries({ queryKey: plansKey });
     },
-    onError: (error) => {
-      telemetry.toastError(
-        "Unable to create plan",
-        error instanceof Error ? error.message : undefined
-      );
+    onError: (error: unknown) => {
+      const message =
+        (error as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error ||
+        (error instanceof Error ? error.message : undefined) ||
+        "Unknown error";
+      telemetry.toastError("Unable to create plan", message);
     },
   });
 }

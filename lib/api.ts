@@ -23,6 +23,7 @@ import {
   InsightsFeedResponse,
   ComprehensiveProgressReport,
   MemoryItem,
+  ConversationAnalysis,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -282,6 +283,13 @@ export const intelligenceApi = {
         force_reanalysis: payload.forceReanalysis ?? false,
         include_insights: payload.includeInsights ?? true,
         update_progress: payload.updateProgress ?? true,
+      })
+    ),
+
+  getConversationAnalysis: (conversationId: string) =>
+    extract<ConversationAnalysis>(
+      http.get("/intelligence/conversation_analysis/", {
+        params: { conversation_id: conversationId },
       })
     ),
 

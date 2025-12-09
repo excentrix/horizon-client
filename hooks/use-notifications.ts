@@ -2,6 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Cookies from "js-cookie";
 import type { ToastNotification } from "@/types";
 import { telemetry } from "@/lib/telemetry";
+import {
+  describeStageEvent,
+  isStageEventType,
+  type StageStreamEvent,
+  type StageEventPayload,
+} from "@/lib/analysis-stage";
 
 export type NotificationSocketStatus =
   | "idle"
@@ -55,13 +61,18 @@ export function useNotificationsSocket() {
   const [status, setStatus] = useState<NotificationSocketStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
+  const [analysisEvents, setAnalysisEvents] = useState<StageStreamEvent[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [latestEvent, setLatestEvent] = useState<Record<string, unknown> | null>(
+    null,
+  );
 
   const socketRef = useRef<WebSocket | null>(null);
   const heartbeatIntervalRef = useRef<number | null>(null);
   const heartbeatTimeoutRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const manualCloseRef = useRef(false);
+  const stageEventSeqRef = useRef(0);
 
   const stopHeartbeat = useCallback(() => {
     if (heartbeatIntervalRef.current) {
@@ -221,21 +232,73 @@ export function useNotificationsSocket() {
             }
             case "notification": {
               if ("data" in payload && payload.data) {
-                const data = payload.data as Record<string, unknown>;
-                if (data.message) {
-                  const isSilentUpdate = 
-                    data.event === "analysis_stage" || 
-                    data.event === "analysis_started";
-                  
-                  if (!isSilentUpdate) {
-                    telemetry.toastInfo(String(data.message));
+                const data = payload.data as StageEventPayload;
+                const eventType =
+                  typeof data.event === "string" ? data.event : undefined;
+                const stageEvent = isStageEventType(eventType);
+                let descriptor = stageEvent ? describeStageEvent(data) : null;
+
+                if (stageEvent) {
+                  const nextSeq = stageEventSeqRef.current + 1;
+                  stageEventSeqRef.current = nextSeq;
+                  const enrichedEvent: StageStreamEvent = {
+                    __seq: nextSeq,
+                    ...data,
+                  };
+                  descriptor = describeStageEvent(enrichedEvent);
+                  setAnalysisEvents((previous) => {
+                    const next = [enrichedEvent, ...previous];
+                    return next.slice(0, 120);
+                  });
+                  setLatestEvent(enrichedEvent);
+                } else {
+                  setLatestEvent(data);
+                }
+
+                let toastMessage =
+                  typeof data.message === "string" && data.message.length > 0
+                    ? data.message
+                    : undefined;
+
+                if (descriptor && (!toastMessage || stageEvent)) {
+                  toastMessage = descriptor.message;
+                }
+
+                if (toastMessage) {
+                  const severity =
+                    descriptor?.severity ??
+                    (eventType === "analysis_error"
+                      ? "error"
+                      : eventType === "analysis_complete" ||
+                          eventType === "analysis_completed"
+                        ? "success"
+                        : "info");
+
+                  if (severity === "error") {
+                    telemetry.toastError(toastMessage);
+                  } else if (severity === "success") {
+                    telemetry.toastSuccess(toastMessage);
+                  } else {
+                    telemetry.toastInfo(toastMessage);
+                  }
+                } else if (!stageEvent) {
+                  telemetry.info("Unhandled notification event", { payload: data });
+                }
+
+                if (!stageEvent) {
+                  const notificationCandidate = data as Partial<ToastNotification>;
+                  if (
+                    typeof notificationCandidate.id === "string" &&
+                    typeof notificationCandidate.title === "string" &&
+                    typeof notificationCandidate.message === "string"
+                  ) {
+                    setNotifications((prev) => [
+                      notificationCandidate as ToastNotification,
+                      ...prev,
+                    ]);
+                    setUnreadCount((prev) => prev + 1);
                   }
                 }
-              }
-              if ("data" in payload && payload.data) {
-                const notificationLike = payload.data as ToastNotification;
-                setNotifications((prev) => [notificationLike, ...prev]);
-                setUnreadCount((prev) => prev + 1);
               }
               break;
             }
@@ -298,7 +361,9 @@ export function useNotificationsSocket() {
     status,
     error,
     notifications,
+    analysisEvents,
     unreadCount,
+    latestEvent,
     markNotificationRead,
   };
 }

@@ -23,6 +23,16 @@ const DEFAULT_THEME: PersonaTheme = {
 };
 
 const THEMES: Record<AIPersonality["type"] | "specialized", PersonaTheme> = {
+  general: {
+    containerBorder: "border-slate-200",
+    accentBadgeBg: "bg-slate-100",
+    accentBadgeText: "text-slate-700",
+    bubbleBg: "bg-slate-100",
+    bubbleText: "text-slate-900",
+    conversationActive: "bg-slate-50 border-l-slate-500",
+    statusBadgeBg: "bg-slate-100",
+    statusBadgeText: "text-slate-600",
+  },
   supportive: {
     containerBorder: "border-rose-200",
     accentBadgeBg: "bg-rose-100",

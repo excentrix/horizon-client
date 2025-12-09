@@ -555,6 +555,7 @@ export function useChatSocket(conversationId: string | null) {
     sendMessage,
     mentorTyping,
     streamingMessage,
+    streamingMessageId: streamState.messageId,
     setTypingStatus: useCallback((isTyping: boolean) => {
       const socket = socketRef.current;
       if (!socket || socket.readyState !== WebSocket.OPEN) {

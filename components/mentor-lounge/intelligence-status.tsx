@@ -3,34 +3,45 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Brain, Activity, BookOpen, Briefcase, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { Brain, Activity, BookOpen, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface IntelligenceStatusProps {
   analysisSummary: Record<string, unknown> | null;
   className?: string;
+  onViewReport?: () => void;
 }
 
-export function IntelligenceStatus({ analysisSummary, className }: IntelligenceStatusProps) {
-  if (!analysisSummary) return null;
+type StageHistoryEntry = {
+  stage: string;
+  message: string;
+  timestamp: string;
+};
+
+export function IntelligenceStatus({ analysisSummary, className, onViewReport }: IntelligenceStatusProps) {
+  const summaryRecord: Record<string, unknown> =
+    analysisSummary ?? { message: "Run an analysis to unlock deeper insights." };
 
   const asRecord = (value: unknown): Record<string, unknown> | null =>
     value !== null && typeof value === "object" && !Array.isArray(value)
       ? (value as Record<string, unknown>)
       : null;
 
-  const analysisResult = asRecord(analysisSummary["analysis_result"]) ?? asRecord(analysisSummary["analysis_results"]) ?? {};
+  const analysisResult = asRecord(summaryRecord["analysis_result"]) ?? asRecord(summaryRecord["analysis_results"]) ?? {};
   const analysisCore = asRecord(analysisResult["analysis_results"]) ?? analysisResult;
   
   const domainAnalysis = asRecord(analysisCore["domain_analysis"]) ?? {};
   const wellnessAnalysis = asRecord(analysisCore["wellness_analysis"]) ?? {};
   const crisisAnalysis = asRecord(analysisCore["crisis_analysis"]) ?? {};
   
-  const progressUpdate = asRecord(analysisSummary["progress_update"]);
-  const message = typeof analysisSummary["message"] === "string" ? analysisSummary["message"] : "";
+  const progressUpdate = asRecord(summaryRecord["progress_update"]);
+  const message = typeof summaryRecord["message"] === "string" ? summaryRecord["message"] : "";
+  const stageHistory = Array.isArray(summaryRecord["stage_history"])
+    ? (summaryRecord["stage_history"] as StageHistoryEntry[])
+    : [];
   
-  const insights = Array.isArray(analysisSummary["insights"]) 
-    ? (analysisSummary["insights"] as Array<Record<string, unknown>>)
+  const insights = Array.isArray(summaryRecord["insights"]) 
+    ? (summaryRecord["insights"] as Array<Record<string, unknown>>)
     : [];
 
   const isAnalyzing = message.toLowerCase().includes("analysis in progress") || 
@@ -42,6 +53,10 @@ export function IntelligenceStatus({ analysisSummary, className }: IntelligenceS
       case "analysis_started": return 10;
       case "core_analysis_completed": return 40;
       case "context_extraction_completed": return 70;
+      case "analysis_saved":
+      case "analysis_successful":
+      case "analysis_complete":
+      case "analysis_completed":
       case "comprehensive_analysis_completed": return 100;
       default: return isAnalyzing ? 30 : 100;
     }
@@ -52,26 +67,82 @@ export function IntelligenceStatus({ analysisSummary, className }: IntelligenceS
     : (isAnalyzing ? 30 : 100);
 
   return (
-    <Card className={cn("w-full transition-all duration-300", className)}>
+    <Card className={cn("w-full transition-all duration-300 border-l-4", 
+      isAnalyzing ? "border-l-primary shadow-md" : "border-l-transparent",
+      className
+    )}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Brain className="h-5 w-5 text-primary" />
-            <CardTitle className="text-base">Intelligence Analysis</CardTitle>
+            <div className={cn("relative flex h-5 w-5 items-center justify-center rounded-full", isAnalyzing ? "bg-primary/10" : "")}>
+              <Brain className={cn("h-4 w-4 transition-colors", isAnalyzing ? "text-primary animate-pulse" : "text-muted-foreground")} />
+              {isAnalyzing && (
+                <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col">
+                <CardTitle className="text-sm font-medium leading-none">
+                    {isAnalyzing ? "Brain Active" : "Brain Idle"}
+                </CardTitle>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mt-0.5">
+                    {isAnalyzing ? "Analyzing Context" : "Monitoring"}
+                </span>
+            </div>
           </div>
-          {isAnalyzing && (
-            <Badge variant="outline" className="animate-pulse gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" />
+          {isAnalyzing ? (
+            <Badge variant="secondary" className="gap-1.5 text-xs font-normal">
+              <Loader2 className="h-3 w-3 animate-spin text-primary" />
               Processing
             </Badge>
-          )}
+          ) : onViewReport && Object.keys(analysisCore).length > 0 ? (
+            <button 
+              onClick={onViewReport}
+              className="text-[10px] font-medium text-primary hover:underline"
+            >
+              View Report
+            </button>
+          ) : null}
         </div>
-        <CardDescription className="flex flex-col gap-2">
-          <span>{message || "Ready for analysis"}</span>
+        <CardDescription className="flex flex-col gap-2 pt-2">
+          <div className="flex items-center gap-2 text-xs">
+            <Activity className="h-3 w-3" />
+            <span>{message || "Waiting for session activity..."}</span>
+          </div>
           {isAnalyzing && (
-            <Progress value={progressValue} className="h-1" />
+            <Progress value={progressValue} className="h-1 mt-1" />
           )}
         </CardDescription>
+
+        {stageHistory.length > 0 && (
+          <div className="mt-3 rounded-lg border bg-muted/30 p-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Analysis timeline
+            </p>
+            <div className="mt-1 space-y-1.5">
+              {stageHistory.slice(-4).reverse().map((entry) => {
+                const parsedTime = new Date(entry.timestamp);
+                const timeDisplay = Number.isNaN(parsedTime.getTime())
+                  ? entry.timestamp
+                  : parsedTime.toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    });
+                return (
+                  <div
+                    key={`${entry.stage}-${entry.timestamp}`}
+                    className="flex items-center justify-between text-[11px] text-muted-foreground"
+                  >
+                    <span className="font-medium text-foreground">{entry.message}</span>
+                    <span>{timeDisplay}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </CardHeader>
       
       {!isAnalyzing && Object.keys(analysisCore).length > 0 && (

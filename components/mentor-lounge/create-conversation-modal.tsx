@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
@@ -12,7 +12,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Bot } from "lucide-react";
 import type { AIPersonality, Conversation } from "@/types";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
@@ -24,10 +23,26 @@ interface CreateConversationModalProps {
   onOpenChange: (isOpen: boolean) => void;
 }
 
+interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 async function fetchPersonalities(): Promise<AIPersonality[]> {
-  const response = await http.get<AIPersonality[]>("/chat/ai-personalities/");
-  // Ensure we return an array
-  return Array.isArray(response.data) ? response.data : [];
+  const response = await http.get<PaginatedResponse<AIPersonality> | AIPersonality[]>("/chat/ai-personalities/");
+  
+  if (Array.isArray(response.data)) {
+    return response.data;
+  }
+  
+  // Handle paginated response
+  if (response.data && 'results' in response.data && Array.isArray(response.data.results)) {
+    return response.data.results;
+  }
+  
+  return [];
 }
 
 async function createConversation(
@@ -50,10 +65,8 @@ export function CreateConversationModal({
   const setSelectedConversationId = useMentorLoungeStore(
     (state) => state.setSelectedConversationId
   );
-  const [selectedPersonality, setSelectedPersonality] = useState<string | null>(
-    null
-  );
-
+  
+  // Fetch personalities to find the General Mentor
   const { data: personalities = [], isLoading: personalitiesLoading } =
     useQuery<AIPersonality[]>({
       queryKey: ["ai-personalities"],
@@ -66,7 +79,6 @@ export function CreateConversationModal({
     onSuccess: (newConversation) => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       setSelectedConversationId(newConversation.id);
-      setSelectedPersonality(null);
       telemetry.toastSuccess("New mentor thread ready!");
       onOpenChange(false);
       router.push("/chat");
@@ -80,67 +92,47 @@ export function CreateConversationModal({
   });
 
   const handleCreate = () => {
-    if (selectedPersonality) {
-      createConversationMutation.mutate(selectedPersonality);
+    // Find General Mentor or default to first available
+    const personalitiesArray = Array.isArray(personalities) ? personalities : [];
+    // Use type assertion or check name since 'general' might not be in the strict type definition yet
+    const generalMentor = personalitiesArray.find(p => p.type === "general" || p.name.toLowerCase().includes("general")) || personalitiesArray[0];
+
+    if (generalMentor) {
+      createConversationMutation.mutate(generalMentor.id);
+    } else {
+        telemetry.toastError("No mentor personalities available.");
     }
   };
 
-  // Ensure personalities is always an array
-  const personalitiesArray = Array.isArray(personalities) ? personalities : [];
-
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[625px]">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Start a New Conversation</DialogTitle>
           <DialogDescription>
-            Choose a mentor personality to begin your new chat.
+            Start a fresh session with your General Adaptive Mentor.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          {personalitiesLoading ? (
-            <div className="flex items-center justify-center h-40">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        
+        <div className="py-6 flex flex-col items-center justify-center text-center space-y-4">
+            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <Bot className="h-8 w-8 text-primary" />
             </div>
-          ) : personalitiesArray.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-muted-foreground">
-              No personalities available
+            <div>
+                <h3 className="font-medium">General Adaptive Mentor</h3>
+                <p className="text-sm text-muted-foreground mt-1 max-w-[260px] mx-auto">
+                    Your primary guide for exploring goals, creating plans, and navigating your learning journey.
+                </p>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto p-1">
-              {personalitiesArray.map((p) => (
-                <Card
-                  key={p.id}
-                  onClick={() => setSelectedPersonality(p.id)}
-                  className={`cursor-pointer transition-all ${
-                    selectedPersonality === p.id
-                      ? "border-primary ring-2 ring-primary"
-                      : "hover:border-muted-foreground"
-                  }`}
-                >
-                  <CardContent className="p-4 flex items-start gap-4">
-                    <Bot className="h-6 w-6 text-muted-foreground mt-1" />
-                    <div>
-                      <h3 className="font-semibold">{p.name}</h3>
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {p.description}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
             onClick={handleCreate}
-            disabled={
-              !selectedPersonality || createConversationMutation.isPending
-            }
+            disabled={personalitiesLoading || createConversationMutation.isPending}
           >
             {createConversationMutation.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

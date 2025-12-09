@@ -1,85 +1,76 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { useNotifications } from "@/context/NotificationContext";
-
-type AnalysisEventPayload = Record<string, unknown> & {
-  event?: string;
-  stage?: string;
-  session_id?: string;
-  conversation_id?: string;
-  domain?: string;
-  summary?: {
-    domains_processed?: string;
-    insights_generated?: string | number;
-  };
-};
+import { describeStageEvent, type StageStreamEvent } from "@/lib/analysis-stage";
 
 interface AnalysisStage {
-  stage: string;
-  payload: AnalysisEventPayload;
+  label: string;
+  message: string;
+  timestamp: string;
+  severity: "info" | "success" | "warning" | "error";
 }
 
 interface AnalysisSession {
   id: string;
   stages: AnalysisStage[];
   lastEvent?: string;
-  lastPayload?: AnalysisEventPayload;
+  lastUpdated?: string;
 }
 
-const isAnalysisPayload = (value: unknown): value is AnalysisEventPayload => {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  return "event" in value || "stage" in value || "session_id" in value;
+const severityColors: Record<AnalysisStage["severity"], string> = {
+  info: "bg-primary/80",
+  success: "bg-emerald-500",
+  warning: "bg-amber-500",
+  error: "bg-destructive",
 };
 
 export function AnalysisProgressPanel() {
-  const { notifications } = useNotifications();
-  const [sessions, setSessions] = useState<Record<string, AnalysisSession>>({});
+  const { analysisEvents } = useNotifications();
 
-  useEffect(() => {
-    if (!notifications || notifications.length === 0) {
-      return;
+  const sessionList = useMemo(() => {
+    if (!analysisEvents.length) {
+      return [];
     }
 
-    const latest = notifications[0] as Record<string, unknown>;
-    const candidate = (latest?.data as unknown) ?? latest;
+    const ordered = [...analysisEvents].sort(
+      (a, b) => a.__seq - b.__seq,
+    );
 
-    if (!isAnalysisPayload(candidate) || !candidate.event) {
-      return;
-    }
+    const sessionMap = new Map<string, AnalysisSession>();
 
-    const sessionId =
-      (candidate.session_id as string | undefined) ??
-      (candidate.conversation_id as string | undefined) ??
-      "global";
+    ordered.forEach((event: StageStreamEvent) => {
+      const sessionId =
+        (event.session_id as string | undefined) ??
+        (event.conversation_id as string | undefined) ??
+        "global";
 
-    setSessions((previous) => {
-      const next: Record<string, AnalysisSession> = { ...previous };
-      const existing = next[sessionId] ?? { id: sessionId, stages: [] };
+      const descriptor = describeStageEvent(event);
+      const timestamp =
+        typeof event.timestamp === "string"
+          ? event.timestamp
+          : new Date().toISOString();
 
-      const stageLabel = candidate.stage ?? candidate.event ?? "Stage";
-
-      const updatedStages =
-        candidate.event === "analysis_stage" ||
-        candidate.event === "progress_stage"
-          ? [...existing.stages, { stage: stageLabel, payload: candidate }]
-          : existing.stages;
-
-      next[sessionId] = {
-        ...existing,
-        stages: updatedStages,
-        lastEvent: candidate.event,
-        lastPayload: candidate,
+      const stageEntry: AnalysisStage = {
+        label: descriptor?.label ?? "Analysis update",
+        message: descriptor?.message ?? descriptor?.label ?? "Brain update",
+        timestamp,
+        severity: descriptor?.severity ?? "info",
       };
 
-      return next;
-    });
-  }, [notifications]);
+      const existing = sessionMap.get(sessionId) ?? {
+        id: sessionId,
+        stages: [],
+      };
 
-  const sessionList = useMemo(
-    () => Object.values(sessions),
-    [sessions],
-  );
+      existing.stages = [...existing.stages, stageEntry];
+      existing.lastEvent = descriptor?.label ?? event.event ?? "update";
+      existing.lastUpdated = timestamp;
+      sessionMap.set(sessionId, existing);
+    });
+
+    return Array.from(sessionMap.values()).sort((a, b) =>
+      (b.lastUpdated ?? "").localeCompare(a.lastUpdated ?? ""),
+    );
+  }, [analysisEvents]);
 
   if (!sessionList.length) {
     return null;
@@ -95,17 +86,18 @@ export function AnalysisProgressPanel() {
           </div>
           <div className="mt-2 text-xs">
             {session.stages.slice(-6).map((stage, index) => (
-              <div key={`${stage.stage}-${index}`} className="mt-1 flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-primary" />
+              <div key={`${stage.label}-${index}`} className="mt-1 flex items-center gap-2">
+                <div
+                  className={`h-2 w-2 rounded-full ${severityColors[stage.severity]}`}
+                />
                 <div>
-                  <div className="font-medium">{stage.stage}</div>
-                  <div className="text-muted-foreground">
-                    {String(
-                      stage.payload.domain ??
-                        stage.payload.summary?.domains_processed ??
-                        stage.payload.summary?.insights_generated ??
-                        "",
-                    )}
+                  <div className="font-medium">{stage.label}</div>
+                  <div className="text-muted-foreground">{stage.message}</div>
+                  <div className="text-[10px] text-muted-foreground/70">
+                    {new Date(stage.timestamp).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </div>
                 </div>
               </div>
