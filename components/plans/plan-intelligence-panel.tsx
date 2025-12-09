@@ -40,7 +40,7 @@ export function PlanIntelligencePanel({ plan }: PlanIntelligencePanelProps) {
           Auto-generated context the mentor uses to personalize guidance.
         </CardDescription>
         <div className="flex flex-wrap gap-2 text-xs">
-          <Badge variant="secondary">{plan.plan_type.replace(/_/g, " ")}</Badge>
+          <Badge variant="secondary">{(plan.plan_type || "Standard").replace(/_/g, " ")}</Badge>
           <Badge variant="outline">
             Confidence {formatPercent(plan.ai_confidence_score ?? 0.0, 0)}
           </Badge>
