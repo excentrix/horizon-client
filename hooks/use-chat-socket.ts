@@ -130,6 +130,10 @@ const updateConversationSnapshot = (
 export function useChatSocket(conversationId: string | null) {
   const queryClient = useQueryClient();
   const pushPlanUpdate = useMentorLoungeStore((state) => state.pushPlanUpdate);
+  const setActiveAgent = useMentorLoungeStore((state) => state.setActiveAgent);
+  const pushRoutingDecision = useMentorLoungeStore(
+    (state) => state.pushRoutingDecision,
+  );
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const heartbeatIntervalRef = useRef<number | null>(null);
@@ -281,6 +285,7 @@ export function useChatSocket(conversationId: string | null) {
       setError(null);
       setStreamState({ content: null });
       updateMentorTyping(false);
+      setActiveAgent(null);
 
       socket.onopen = () => {
         if (activeConversationRef.current !== conversationId) {
@@ -426,13 +431,34 @@ export function useChatSocket(conversationId: string | null) {
               }
               setStreamState({ messageId: undefined, content: null });
               updateMentorTyping(false);
+              setActiveAgent(null);
               break;
             }
             case "stream_error": {
               setStreamState({ messageId: undefined, content: null });
               updateMentorTyping(false);
+              setActiveAgent(null);
               if (payload?.error) {
                 telemetry.toastError(payload.error);
+              }
+              break;
+            }
+            case "agent_start": {
+              const agentName = (payload?.agent as string) || "General Mentor";
+              const reason = (payload?.reason as string) || "Routing...";
+              // "confidence" might be in payload if the backend sends it early, otherwise optional.
+              
+              setActiveAgent({ name: agentName });
+              updateMentorTyping(true);
+
+              // Log routing decision if present
+              if (payload?.agent) {
+                 pushRoutingDecision({
+                     agent: agentName,
+                     reason: reason,
+                     confidence: (payload?.confidence as number) ?? 1.0, 
+                     timestamp: new Date().toISOString(),
+                 });
               }
               break;
             }
@@ -503,7 +529,18 @@ export function useChatSocket(conversationId: string | null) {
       setError("Unable to open chat connection");
       scheduleReconnect();
     }
-  }, [conversationId, pushPlanUpdate, queryClient, resetSocket, scheduleReconnect, startHeartbeat, stopHeartbeat, updateMentorTyping]);
+  }, [
+    conversationId,
+    pushPlanUpdate,
+    pushRoutingDecision,
+    setActiveAgent,
+    queryClient,
+    resetSocket,
+    scheduleReconnect,
+    startHeartbeat,
+    stopHeartbeat,
+    updateMentorTyping,
+  ]);
 
   connectRef.current = connect;
 
@@ -569,6 +606,7 @@ export function useChatSocket(conversationId: string | null) {
     reconnectAttemptsRef.current = 0;
     setStreamState({ content: null });
     updateMentorTyping(false);
+    setActiveAgent(null);
 
     if (!conversationId) {
       resetSocket();

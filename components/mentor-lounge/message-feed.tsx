@@ -7,6 +7,8 @@ import type { ChatMessage, Conversation, MentorAction } from "@/types";
 import type { SocketStatus } from "@/hooks/use-chat-socket";
 import type { PersonaTheme } from "@/lib/persona-theme";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Bot } from "lucide-react";
 
 interface MessageFeedProps {
   conversation?: Conversation;
@@ -315,6 +317,24 @@ export function MessageFeed({
                 )}
               >
                 {message.content}
+                {message.cortex ? (
+                  <div className="mt-2 flex justify-end">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                           <div className="inline-flex items-center gap-1 rounded-full bg-background/50 px-2 py-0.5 text-[10px] font-medium text-foreground/70 mix-blend-multiply dark:mix-blend-screen">
+                            <Bot className="h-3 w-3" />
+                            {message.cortex.agent}
+                           </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="text-xs">
+                          <p>{message.cortex.reason}</p>
+                          <p className="opacity-70">Confidence: {(message.cortex.confidence * 100).toFixed(0)}%</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                ) : null}
               </div>
             </motion.div>
           ))}

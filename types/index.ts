@@ -214,6 +214,12 @@ export interface ChatMessage {
   flag_reason?: string;
   attachments?: unknown[];
   metadata?: Record<string, unknown> | null;
+  cortex?: {
+    agent: string;
+    confidence: number;
+    reason: string;
+    suggested_actions?: MentorAction[];
+  };
   created_at: string;
   updated_at: string;
 }

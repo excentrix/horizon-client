@@ -293,6 +293,18 @@ export const intelligenceApi = {
       })
     ),
 
+  previewCortexRouting: (conversationId: string, message: string) =>
+    extract<{
+      agent: string;
+      confidence: number;
+      reason: string;
+      suggested_actions?: unknown[];
+    }>(
+      http.post(`/chat/conversations/${conversationId}/cortex-preview/`, {
+        message,
+      })
+    ),
+
   // Legacy helpers / aliases
   getDashboard(params?: { period?: number }) {
     return this.getMultiDomainDashboard(params);

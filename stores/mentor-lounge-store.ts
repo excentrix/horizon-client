@@ -13,6 +13,17 @@ interface MentorLoungeState {
   planUpdates: PlanUpdateEvent[];
   pushPlanUpdate: (update: PlanUpdateEvent) => void;
   clearPlanUpdates: () => void;
+  activeAgent: { name: string; icon?: string } | null;
+  setActiveAgent: (agent: { name: string; icon?: string } | null) => void;
+  cortexRoutingHistory: RoutingDecision[];
+  pushRoutingDecision: (decision: RoutingDecision) => void;
+}
+
+export interface RoutingDecision {
+  agent: string;
+  confidence: number;
+  reason: string;
+  timestamp: string;
 }
 
 export const useMentorLoungeStore = create<MentorLoungeState>((set) => ({
@@ -28,4 +39,11 @@ export const useMentorLoungeStore = create<MentorLoungeState>((set) => ({
       planUpdates: [...state.planUpdates, update].slice(-8),
     })),
   clearPlanUpdates: () => set({ planUpdates: [] }),
+  activeAgent: null,
+  setActiveAgent: (activeAgent) => set({ activeAgent }),
+  cortexRoutingHistory: [],
+  pushRoutingDecision: (decision) =>
+    set((state) => ({
+      cortexRoutingHistory: [decision, ...state.cortexRoutingHistory].slice(0, 50),
+    })),
 }));

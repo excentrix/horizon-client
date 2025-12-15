@@ -29,6 +29,8 @@ import { IntelligenceReportModal } from "@/components/mentor-lounge/intelligence
 import { PersonalitySelector } from "@/components/mentor-lounge/personality-selector";
 import { MentorActionShelf } from "@/components/mentor-lounge/mentor-action-shelf";
 import { PlanProgressTimeline } from "@/components/mentor-lounge/plan-progress-timeline";
+import { AgentIndicator } from "@/components/mentor-lounge/agent-indicator";
+import { CortexDebugDrawer } from "@/components/mentor-lounge/cortex-debug-drawer";
 import { intelligenceApi } from "@/lib/api";
 import { describeStageEvent } from "@/lib/analysis-stage";
 
@@ -414,7 +416,7 @@ useEffect(() => {
     | Record<string, unknown>
     | undefined;
   const hasAnalysisResults =
-    Boolean(analysisResults) && Object.keys(analysisResults).length > 0;
+    Boolean(analysisResults) && Object.keys(analysisResults ?? {}).length > 0;
   const disablePlanButton =
     !selectedConversationId || createPlan.isPending;
 
@@ -723,6 +725,7 @@ useEffect(() => {
                 </div>
               </div>
               <div className="space-y-3 px-4 pb-4">
+                <AgentIndicator />
                 <MentorActionShelf
                   actions={mentorActions}
                   onSendQuickReply={(message) => sendMessage(message)}
@@ -762,6 +765,7 @@ useEffect(() => {
           )}
         </section>
       </div>
+      <CortexDebugDrawer />
     </div>
   );
 }

@@ -1,11 +1,12 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { Send } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { Send, ScanSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
 import { telemetry } from "@/lib/telemetry";
+import { intelligenceApi } from "@/lib/api";
 
 interface MessageComposerProps {
   disabled?: boolean;
@@ -19,7 +20,14 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
   );
   const composerDraft = useMentorLoungeStore((state) => state.composerDraft);
   const setComposerDraft = useMentorLoungeStore((state) => state.setComposerDraft);
+  const pushRoutingDecision = useMentorLoungeStore((state) => state.pushRoutingDecision);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+
+  useEffect(() => {
+    setShowDebug(process.env.NEXT_PUBLIC_SHOW_CORTEX_DEBUG === "true");
+  }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -45,11 +53,49 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
     }
   };
 
+  const handlePreviewRouting = async () => {
+    if (!selectedConversationId || !composerDraft.trim()) return;
+
+    setIsPreviewing(true);
+    try {
+      const result = await intelligenceApi.previewCortexRouting(
+        selectedConversationId,
+        composerDraft.trim()
+      );
+      
+      pushRoutingDecision({
+        agent: result.agent,
+        confidence: result.confidence,
+        reason: `[PREVIEW] ${result.reason}`,
+        timestamp: new Date().toISOString(),
+      });
+      
+      telemetry.toastInfo(`Preview: Routed to ${result.agent} (${(result.confidence * 100).toFixed(0)}%)`);
+    } catch (error) {
+      telemetry.warn("Failed to preview routing", { error });
+      telemetry.toastError("Preview failed");
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
   return (
     <form
       onSubmit={handleSubmit}
       className="flex items-center gap-3 rounded-xl border bg-card/80 px-4 py-3 shadow"
     >
+        {showDebug ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handlePreviewRouting}
+            disabled={disabled || !selectedConversationId || isPreviewing || !composerDraft.trim()}
+            title="Preview Cortex Routing"
+          >
+             <ScanSearch className="h-4 w-4 text-muted-foreground" />
+          </Button>
+      ) : null}
               <Input
                 value={composerDraft}
                 onChange={(event) => {
