@@ -213,7 +213,12 @@ export interface ChatMessage {
   is_flagged: boolean;
   flag_reason?: string;
   attachments?: unknown[];
-  metadata?: Record<string, unknown> | null;
+  metadata?: {
+    graph_learning_snapshot?: GraphLearningSnapshot;
+    graph_career_snapshot?: GraphCareerSnapshot;
+    guardrails?: GuardrailsMetadata;
+    [key: string]: unknown;
+  } | null;
   cortex?: {
     agent: string;
     confidence: number;
@@ -222,6 +227,41 @@ export interface ChatMessage {
   };
   created_at: string;
   updated_at: string;
+}
+
+export interface GraphLearningSnapshot {
+  focus_concepts: Array<{
+    name: string;
+    type: string;
+    domain?: string;
+  }>;
+  mastery_map: Record<
+    string,
+    {
+      level: string;
+      confidence: number;
+      updated_at: string;
+    }
+  >;
+  missing_prerequisites: Record<string, string[]>;
+}
+
+export interface GraphCareerSnapshot {
+  goals: Array<{
+    id: string;
+    title: string;
+    status: string;
+    type: string;
+    domains: string[];
+    competencies: string[];
+  }>;
+}
+
+export interface GuardrailsMetadata {
+  enforced: boolean;
+  risk_level: string;
+  notes?: string;
+  triggered_categories?: string[];
 }
 
 export interface MentorAction {

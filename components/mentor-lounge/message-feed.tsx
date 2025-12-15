@@ -9,6 +9,9 @@ import type { PersonaTheme } from "@/lib/persona-theme";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Bot } from "lucide-react";
+import { LearningGraphPill } from "./learning-graph-pill";
+import { CareerGoalsPill } from "./career-goals-pill";
+import { SafetyPill } from "./safety-pill";
 
 interface MessageFeedProps {
   conversation?: Conversation;
@@ -317,6 +320,17 @@ export function MessageFeed({
                 )}
               >
                 {message.content}
+                
+                {message.metadata?.graph_learning_snapshot && (
+                  <LearningGraphPill snapshot={message.metadata.graph_learning_snapshot} />
+                )}
+                {message.metadata?.graph_career_snapshot && (
+                  <CareerGoalsPill snapshot={message.metadata.graph_career_snapshot} />
+                )}
+                {message.metadata?.guardrails && (
+                  <SafetyPill metadata={message.metadata.guardrails} />
+                )}
+
                 {message.cortex ? (
                   <div className="mt-2 flex justify-end">
                     <TooltipProvider>
