@@ -20,6 +20,7 @@ import { SafetyPill } from "./safety-pill";
 interface AgentInsightsCardProps {
   agentTools?: string[];
   toolInvocations?: ToolInvocation[];
+  toolRuntimeInvocations?: ToolInvocation[];
   guardrails?: GuardrailsMetadata;
   agentName?: string;
 }
@@ -27,16 +28,20 @@ interface AgentInsightsCardProps {
 export function AgentInsightsCard({ 
   agentTools = [], 
   toolInvocations = [], 
+  toolRuntimeInvocations = [],
   guardrails,
   agentName = "Agent"
 }: AgentInsightsCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   
-  // Don't render if there's nothing interesting to show
-  if (!agentTools.length && !toolInvocations.length && !guardrails) return null;
+  const runtime = toolRuntimeInvocations || [];
+  const activeInvocations = runtime.length > 0 ? runtime : (toolInvocations || []);
 
-  const hasMemoryProbe = toolInvocations.some(t => t.tool === "semantic_memory_probe");
-  const uniqueToolsUsed = Array.from(new Set(toolInvocations.map(t => t.tool)));
+  // Don't render if there's nothing interesting to show
+  if (!agentTools.length && !activeInvocations.length && !guardrails) return null;
+
+  const hasMemoryProbe = activeInvocations.some(t => t.tool === "semantic_memory_probe");
+  const uniqueToolsUsed = Array.from(new Set(activeInvocations.filter(t => t && t.tool).map(t => t.tool)));
 
   return (
     <div className="mt-4 border-t border-border pt-2 w-full">
@@ -92,13 +97,13 @@ export function AgentInsightsCard({
           </div>
 
           {/* Tools Trace */}
-          {toolInvocations.length > 0 && (
+          {activeInvocations.length > 0 && (
             <div className="space-y-2">
               <p className="font-semibold text-muted-foreground flex items-center gap-1">
-                <Terminal className="h-3 w-3" /> Execution Trace
+                <Terminal className="h-3 w-3" /> Mentor Cited Sources
               </p>
               <div className="space-y-2">
-                {toolInvocations.map((tool, idx) => (
+                {activeInvocations.map((tool, idx) => (
                   <div key={idx} className={cn(
                     "rounded border p-2 bg-background font-mono",
                     tool.tool === "semantic_memory_probe" && "border-purple-200 shadow-sm"
@@ -124,11 +129,15 @@ export function AgentInsightsCard({
                     <div className="grid gap-1 pl-4 border-l-2 border-muted">
                       <div>
                         <span className="text-[10px] uppercase text-muted-foreground select-none">In: </span>
-                        <span className="text-foreground/80 break-words">{tool.input}</span>
+                        <span className="text-foreground/80 break-words">
+                          {typeof tool.input === 'object' ? JSON.stringify(tool.input) : tool.input}
+                        </span>
                       </div>
                       <div>
                         <span className="text-[10px] uppercase text-muted-foreground select-none">Out: </span>
-                        <span className="text-muted-foreground break-words">{tool.output}</span>
+                        <span className="text-muted-foreground break-words">
+                          {typeof tool.output === 'object' ? JSON.stringify(tool.output) : tool.output}
+                        </span>
                       </div>
                     </div>
                   </div>

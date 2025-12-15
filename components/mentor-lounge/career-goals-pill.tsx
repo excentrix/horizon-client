@@ -26,7 +26,7 @@ export function CareerGoalsPill({ snapshot }: CareerGoalsPillProps) {
               <div>
                 <span className="font-semibold">{goal.title}</span>
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {goal.domains.map(d => (
+                  {goal.domains?.filter(d => typeof d === 'string').map(d => (
                     <span key={d} className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] bg-background text-muted-foreground border">
                       <Briefcase className="h-2 w-2" /> {d}
                     </span>

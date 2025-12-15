@@ -418,8 +418,19 @@ export function useChatSocket(conversationId: string | null) {
             }
             case "stream_complete": {
               const message = payload?.message as ChatMessage | undefined;
+              const toolRuntime = payload?.tool_runtime_invocations || payload?.tool_invocations;
+
               if (message) {
                 message.conversation ??= conversationId;
+                
+                // Merge tool runtime logs if provided separately in the event
+                if (toolRuntime && Array.isArray(toolRuntime)) {
+                  message.metadata = {
+                    ...message.metadata,
+                    tool_runtime_invocations: toolRuntime,
+                  };
+                }
+
                 if (conversationId) {
                   appendMessageToCache(queryClient, conversationId, message);
                   updateConversationSnapshot(

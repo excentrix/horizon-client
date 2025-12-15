@@ -219,6 +219,7 @@ export interface ChatMessage {
     guardrails?: GuardrailsMetadata;
     agent_tools?: string[];
     tool_invocations?: ToolInvocation[];
+    tool_runtime_invocations?: ToolInvocation[];
     [key: string]: unknown;
   } | null;
   cortex?: {

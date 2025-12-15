@@ -331,6 +331,7 @@ export function MessageFeed({
                 <AgentInsightsCard 
                   agentTools={message.metadata?.agent_tools} 
                   toolInvocations={message.metadata?.tool_invocations} 
+                  toolRuntimeInvocations={message.metadata?.tool_runtime_invocations}
                   guardrails={message.metadata?.guardrails}
                   agentName={message.cortex?.agent}
                 />
