@@ -333,6 +333,7 @@ export function MessageFeed({
                   toolInvocations={message.metadata?.tool_invocations} 
                   toolRuntimeInvocations={message.metadata?.tool_runtime_invocations}
                   guardrails={message.metadata?.guardrails}
+                  safety={message.metadata?.safety}
                   agentName={message.cortex?.agent}
                 />
 

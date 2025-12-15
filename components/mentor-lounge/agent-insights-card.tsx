@@ -8,11 +8,14 @@ import {
   Cpu, 
   Database, 
   Terminal, 
-  Zap,
-  BrainCircuit
+  Shield, 
+  CheckCircle2, 
+  Clock,
+  BrainCircuit,
+  Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ToolInvocation, GuardrailsMetadata } from "@/types";
+import type { ToolInvocation, GuardrailsMetadata, SafetyMetadata } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SafetyPill } from "./safety-pill";
@@ -22,7 +25,9 @@ interface AgentInsightsCardProps {
   toolInvocations?: ToolInvocation[];
   toolRuntimeInvocations?: ToolInvocation[];
   guardrails?: GuardrailsMetadata;
+  safety?: SafetyMetadata;
   agentName?: string;
+  className?: string;
 }
 
 export function AgentInsightsCard({ 
@@ -30,7 +35,9 @@ export function AgentInsightsCard({
   toolInvocations = [], 
   toolRuntimeInvocations = [],
   guardrails,
-  agentName = "Agent"
+  safety,
+  agentName = "Agent",
+  className
 }: AgentInsightsCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   
@@ -66,16 +73,9 @@ export function AgentInsightsCard({
                  ))}
                </span>
              )}
-             
-             {/* Safety Pill Inline if collapsed */}
-             {guardrails && !isOpen && (
-                <>
-                  <span className="text-muted-foreground/50">•</span>
-                  <SafetyPill metadata={guardrails} />
-                </>
-             )}
+
           </div>
-          
+
           <CollapsibleTrigger asChild>
             <button className="rounded hover:bg-muted p-1 text-muted-foreground transition-colors">
               {isOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}

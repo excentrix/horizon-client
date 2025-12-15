@@ -217,6 +217,7 @@ export interface ChatMessage {
     graph_learning_snapshot?: GraphLearningSnapshot;
     graph_career_snapshot?: GraphCareerSnapshot;
     guardrails?: GuardrailsMetadata;
+    safety?: SafetyMetadata;
     agent_tools?: string[];
     tool_invocations?: ToolInvocation[];
     tool_runtime_invocations?: ToolInvocation[];
@@ -265,6 +266,14 @@ export interface GuardrailsMetadata {
   risk_level: string;
   notes?: string;
   triggered_categories?: string[];
+}
+
+export interface SafetyMetadata {
+  score: number;
+  flagged: boolean;
+  label: string;
+  categories?: string[];
+  block_reason?: string;
 }
 
 export interface ToolInvocation {
