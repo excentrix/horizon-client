@@ -27,6 +27,8 @@ import { SessionGoal } from "@/components/mentor-lounge/session-goal";
 import { SafetyAlert } from "@/components/mentor-lounge/safety-alert";
 import { IntelligenceReportModal } from "@/components/mentor-lounge/intelligence-report-modal";
 import { PersonalitySelector } from "@/components/mentor-lounge/personality-selector";
+import { MentorActionShelf } from "@/components/mentor-lounge/mentor-action-shelf";
+import { PlanProgressTimeline } from "@/components/mentor-lounge/plan-progress-timeline";
 import { intelligenceApi } from "@/lib/api";
 import { describeStageEvent } from "@/lib/analysis-stage";
 
@@ -44,6 +46,14 @@ export default function ChatPage() {
   );
   const setComposerDraft = useMentorLoungeStore(
     (state) => state.setComposerDraft,
+  );
+  const mentorActions = useMentorLoungeStore((state) => state.mentorActions);
+  const setMentorActions = useMentorLoungeStore(
+    (state) => state.setMentorActions,
+  );
+  const planUpdates = useMentorLoungeStore((state) => state.planUpdates);
+  const clearPlanUpdates = useMentorLoungeStore(
+    (state) => state.clearPlanUpdates,
   );
   const {
     data: conversations = [],
@@ -105,42 +115,45 @@ export default function ChatPage() {
           (response.analysis_metadata ??
             response.analysis_results ??
             {}) as Record<string, unknown>;
-        setAnalysisByConversation((previous) => {
-          const prior = previous[conversationId] || {};
-          const history = Array.isArray(prior.stage_history)
-            ? (prior.stage_history as StageHistoryEntry[])
-            : [];
-          const completionEntry: StageHistoryEntry | null = response.analyzed_at
-            ? {
-                stage: "analysis_complete",
-                message: "Analysis synchronized",
-                timestamp: response.analyzed_at,
-              }
-            : null;
 
-          const mergedHistory =
-            completionEntry &&
-            !history.some(
-              (entry) => entry.timestamp === completionEntry.timestamp
-            )
-              ? [...history, completionEntry].slice(-stageHistoryLimit)
-              : history;
+        if (!options?.silent) {
+          setAnalysisByConversation((previous) => {
+            const prior = previous[conversationId] || {};
+            const history = Array.isArray(prior.stage_history)
+              ? (prior.stage_history as StageHistoryEntry[])
+              : [];
+            const completionEntry: StageHistoryEntry | null = response.analyzed_at
+              ? {
+                  stage: "analysis_complete",
+                  message: "Analysis synchronized",
+                  timestamp: response.analyzed_at,
+                }
+              : null;
 
-          return {
-            ...previous,
-            [conversationId]: {
-              ...prior,
-              analysis_results: metadata,
-              analysis_record: response,
-              message:
-                response.urgency_level && typeof response.urgency_level === "string"
-                  ? `Urgency level: ${response.urgency_level}`
-                  : "Latest intelligence ready",
-              progress_update: { status: "analysis_complete" },
-              stage_history: mergedHistory,
-            },
-          };
-        });
+            const mergedHistory =
+              completionEntry &&
+              !history.some(
+                (entry) => entry.timestamp === completionEntry.timestamp
+              )
+                ? [...history, completionEntry].slice(-stageHistoryLimit)
+                : history;
+
+            return {
+              ...previous,
+              [conversationId]: {
+                ...prior,
+                analysis_results: metadata,
+                analysis_record: response,
+                message:
+                  response.urgency_level && typeof response.urgency_level === "string"
+                    ? `Urgency level: ${response.urgency_level}`
+                    : "Latest intelligence ready",
+                progress_update: { status: "analysis_complete" },
+                stage_history: mergedHistory,
+              },
+            };
+          });
+        }
         if (response.analyzed_at) {
           analyzedAtRef.current.set(conversationId, response.analyzed_at);
         }
@@ -172,6 +185,7 @@ export default function ChatPage() {
         const latest =
           result?.analyzed_at || analyzedAtRef.current.get(conversationId) || null;
         if (latest && latest !== before) {
+          await fetchLatestAnalysis(conversationId);
           clearAnalysisPolling();
           return;
         }
@@ -188,11 +202,19 @@ export default function ChatPage() {
     }
   }, [isLoading, router, user]);
 
-  useEffect(() => {
-    setComposerDraft("");
-    setTypingStatus(false);
-    setLatestPlan(null);
-  }, [selectedConversationId, setComposerDraft, setTypingStatus]);
+useEffect(() => {
+  setComposerDraft("");
+  setTypingStatus(false);
+  setLatestPlan(null);
+  setMentorActions([]);
+  clearPlanUpdates();
+}, [
+  selectedConversationId,
+  setComposerDraft,
+  setTypingStatus,
+  setMentorActions,
+  clearPlanUpdates,
+]);
 
   useEffect(() => {
     if (!selectedConversationId) {
@@ -396,21 +418,22 @@ export default function ChatPage() {
   const disablePlanButton =
     !selectedConversationId || createPlan.isPending;
 
-  const handleAnalyzeConversation = (force: boolean = false) => {
+  const handleAnalyzeConversation = (forceOverride?: boolean) => {
     if (!selectedConversationId) {
       telemetry.toastError("Select a conversation first");
       return;
     }
 
+    const shouldForce = forceOverride ?? hasAnalysisResults;
+
     stageTrackerRef.current.set(selectedConversationId, new Set());
     processedAnalysisRef.current.delete(selectedConversationId);
-    analyzedAtRef.current.delete(selectedConversationId);
 
     setAnalysisByConversation((previous) => ({
       ...previous,
       [selectedConversationId]: {
         ...previous[selectedConversationId],
-        message: force
+        message: shouldForce
           ? "Force reanalysis requested..."
           : "Brain is warming up...",
         progress_update: { status: "analysis_started" },
@@ -421,7 +444,10 @@ export default function ChatPage() {
     }));
 
     analyzeConversation.mutate(
-      { conversationId: selectedConversationId, forceReanalysis: force },
+      {
+        conversationId: selectedConversationId,
+        forceReanalysis: shouldForce,
+      },
       {
         onSuccess: (data) => {
           if (selectedConversationId && data && typeof data === "object") {
@@ -560,7 +586,7 @@ export default function ChatPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleAnalyzeConversation(false)}
+                        onClick={() => handleAnalyzeConversation()}
                         disabled={!selectedConversationId || analyzeConversation.isPending}
                       >
                         {analyzeConversation.isPending ? "Analyzing..." : "Run Intelligence Analysis"}
@@ -667,6 +693,14 @@ export default function ChatPage() {
                     </Card>
                   ) : null}
                   {/* IntelligenceStatus moved to header */}
+                  {planUpdates.length ? (
+                    <div className="mb-4">
+                      <PlanProgressTimeline
+                        updates={planUpdates}
+                        onDismiss={clearPlanUpdates}
+                      />
+                    </div>
+                  ) : null}
                   <div className="min-h-0 flex-1">
                     <MessageFeed
                       conversation={activeConversation}
@@ -688,7 +722,16 @@ export default function ChatPage() {
                   </div>
                 </div>
               </div>
-              <div className="px-4 pb-4">
+              <div className="space-y-3 px-4 pb-4">
+                <MentorActionShelf
+                  actions={mentorActions}
+                  onSendQuickReply={(message) => sendMessage(message)}
+                  disabled={
+                    messagesLoading ||
+                    !activeConversation ||
+                    socketStatus !== "open"
+                  }
+                />
                 <MessageComposer
                   disabled={
                     messagesLoading ||

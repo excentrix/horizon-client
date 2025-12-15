@@ -218,6 +218,29 @@ export interface ChatMessage {
   updated_at: string;
 }
 
+export interface MentorAction {
+  type: "view_plan" | "open_plan_task" | "confirm_plan_intent" | "open_link";
+  label: string;
+  description?: string;
+  plan_id?: UUID | string | null;
+  task_id?: UUID | string | null;
+  task_title?: string;
+  href?: string;
+  message_template?: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface PlanUpdateEvent {
+  id: string;
+  status: string;
+  message: string;
+  timestamp: string;
+  agent?: string;
+  conversationId?: UUID | null;
+  step_type?: string;
+  tool?: string;
+}
+
 export type TaskStatus =
   | "scheduled"
   | "in_progress"

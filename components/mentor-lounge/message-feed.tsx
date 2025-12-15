@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
-import type { ChatMessage, Conversation } from "@/types";
+import type { ChatMessage, Conversation, MentorAction } from "@/types";
 import type { SocketStatus } from "@/hooks/use-chat-socket";
 import type { PersonaTheme } from "@/lib/persona-theme";
+import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
 
 interface MessageFeedProps {
   conversation?: Conversation;
@@ -50,6 +51,7 @@ export function MessageFeed({
   const initialScrollRef = useRef(true);
   const lastConversationIdRef = useRef<string | null>(null);
   const [showScrollToLatest, setShowScrollToLatest] = useState(false);
+  const setMentorActions = useMentorLoungeStore((state) => state.setMentorActions);
 
   const scrollToLatest = useCallback(() => {
     const container = scrollRef.current;
@@ -134,6 +136,32 @@ export function MessageFeed({
 
     return () => observer.disconnect();
   }, [hasMore, isLoadingMore, triggerLoadMore, messages.length]);
+
+  useEffect(() => {
+    const latestWithActions = [...messages]
+      .reverse()
+      .find((message) => {
+        const metadata = message.metadata as { ui_actions?: unknown[] } | null | undefined;
+        return (
+          message.sender_type === "ai" &&
+          Array.isArray(metadata?.ui_actions) &&
+          (metadata?.ui_actions?.length ?? 0) > 0
+        );
+      });
+
+    if (latestWithActions && latestWithActions.metadata) {
+      const metadata = latestWithActions.metadata as { ui_actions?: MentorAction[] };
+      setMentorActions(metadata.ui_actions ?? []);
+    } else if (!streamingMessage) {
+      setMentorActions([]);
+    }
+  }, [messages, setMentorActions, streamingMessage]);
+
+  useEffect(() => {
+    if (!conversation) {
+      setMentorActions([]);
+    }
+  }, [conversation, setMentorActions]);
 
   useEffect(() => {
     const container = scrollRef.current;

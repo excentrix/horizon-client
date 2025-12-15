@@ -13,6 +13,7 @@ import type {
   PaginatedResponse,
 } from "@/types";
 import { telemetry } from "@/lib/telemetry";
+import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
 
 export type SocketStatus = "idle" | "connecting" | "open" | "closed" | "error";
 
@@ -128,6 +129,7 @@ const updateConversationSnapshot = (
 
 export function useChatSocket(conversationId: string | null) {
   const queryClient = useQueryClient();
+  const pushPlanUpdate = useMentorLoungeStore((state) => state.pushPlanUpdate);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const heartbeatIntervalRef = useRef<number | null>(null);
@@ -439,6 +441,54 @@ export function useChatSocket(conversationId: string | null) {
               updateMentorTyping(isTyping);
               break;
             }
+            case "plan_update": {
+              const data = payload?.data as
+                | (Record<string, unknown> & {
+                    status?: string;
+                    message?: string;
+                    timestamp?: string;
+                    agent?: string;
+                    event_id?: string;
+                    conversation_id?: string;
+                    step_type?: string;
+                    tool?: string;
+                  })
+                | undefined;
+
+              const targetConversation =
+                (data?.conversation_id as string | undefined) ?? conversationId;
+              if (
+                targetConversation &&
+                conversationId &&
+                targetConversation !== conversationId
+              ) {
+                break;
+              }
+
+              const eventId =
+                data?.event_id ??
+                (typeof crypto !== "undefined" && crypto.randomUUID
+                  ? crypto.randomUUID()
+                  : `plan-update-${Date.now()}`);
+
+              pushPlanUpdate({
+                id: eventId,
+                status: (data?.status as string) ?? "processing",
+                message: (data?.message as string) ?? "Working on your plan...",
+                timestamp: data?.timestamp
+                  ? (data.timestamp as string)
+                  : new Date().toISOString(),
+                agent: data?.agent as string | undefined,
+                conversationId: targetConversation ?? null,
+                step_type: data?.step_type as string | undefined,
+                tool: data?.tool as string | undefined,
+              });
+
+              if (data?.status === "error" && data?.message) {
+                telemetry.toastError(String(data.message));
+              }
+              break;
+            }
             default:
               telemetry.info("Unhandled chat socket event", { type });
               break;
@@ -453,7 +503,7 @@ export function useChatSocket(conversationId: string | null) {
       setError("Unable to open chat connection");
       scheduleReconnect();
     }
-  }, [conversationId, queryClient, resetSocket, scheduleReconnect, startHeartbeat, stopHeartbeat, updateMentorTyping]);
+  }, [conversationId, pushPlanUpdate, queryClient, resetSocket, scheduleReconnect, startHeartbeat, stopHeartbeat, updateMentorTyping]);
 
   connectRef.current = connect;
 
