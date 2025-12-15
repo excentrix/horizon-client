@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Bot } from "lucide-react";
 import { LearningGraphPill } from "./learning-graph-pill";
 import { CareerGoalsPill } from "./career-goals-pill";
-import { SafetyPill } from "./safety-pill";
+import { AgentInsightsCard } from "./agent-insights-card";
 
 interface MessageFeedProps {
   conversation?: Conversation;
@@ -327,9 +327,13 @@ export function MessageFeed({
                 {message.metadata?.graph_career_snapshot && (
                   <CareerGoalsPill snapshot={message.metadata.graph_career_snapshot} />
                 )}
-                {message.metadata?.guardrails && (
-                  <SafetyPill metadata={message.metadata.guardrails} />
-                )}
+
+                <AgentInsightsCard 
+                  agentTools={message.metadata?.agent_tools} 
+                  toolInvocations={message.metadata?.tool_invocations} 
+                  guardrails={message.metadata?.guardrails}
+                  agentName={message.cortex?.agent}
+                />
 
                 {message.cortex ? (
                   <div className="mt-2 flex justify-end">

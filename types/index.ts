@@ -217,6 +217,8 @@ export interface ChatMessage {
     graph_learning_snapshot?: GraphLearningSnapshot;
     graph_career_snapshot?: GraphCareerSnapshot;
     guardrails?: GuardrailsMetadata;
+    agent_tools?: string[];
+    tool_invocations?: ToolInvocation[];
     [key: string]: unknown;
   } | null;
   cortex?: {
@@ -262,6 +264,14 @@ export interface GuardrailsMetadata {
   risk_level: string;
   notes?: string;
   triggered_categories?: string[];
+}
+
+export interface ToolInvocation {
+  tool: string;
+  input: string;
+  output: string;
+  status: "success" | "error";
+  timestamp: string;
 }
 
 export interface MentorAction {
