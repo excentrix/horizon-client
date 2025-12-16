@@ -129,12 +129,13 @@ const updateConversationSnapshot = (
 
 export function useChatSocket(conversationId: string | null) {
   const queryClient = useQueryClient();
-  const pushPlanUpdate = useMentorLoungeStore((state) => state.pushPlanUpdate);
-  const setActiveAgent = useMentorLoungeStore((state) => state.setActiveAgent);
-  const pushRoutingDecision = useMentorLoungeStore(
-    (state) => state.pushRoutingDecision,
-  );
-  const setPlanBuildStatus = useMentorLoungeStore((state) => state.setPlanBuildStatus);
+  const {
+    pushPlanUpdate,
+    setActiveAgent,
+    pushRoutingDecision,
+    setPlanBuildStatus,
+    updateLastPlanActivity,
+  } = useMentorLoungeStore();
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const heartbeatIntervalRef = useRef<number | null>(null);
@@ -533,6 +534,7 @@ export function useChatSocket(conversationId: string | null) {
                   (data.plan_id as string) ?? undefined,
                   (data.plan_title as string) ?? undefined,
                 );
+                updateLastPlanActivity();
               }
 
               if (data?.status === "error" && data?.message) {

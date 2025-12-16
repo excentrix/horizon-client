@@ -19,11 +19,15 @@ interface MentorLoungeState {
   pushRoutingDecision: (decision: RoutingDecision) => void;
 
   // Plan Build Status
-  planBuildStatus: "idle" | "queued" | "in_progress" | "completed" | "failed";
+  planBuildStatus: "idle" | "queued" | "in_progress" | "warning" | "completed" | "failed";
   planBuildMessage: string | null;
-  planBuildId: string | null;
+  planBuildId: string | null; // The resulting Plan ID
   planBuildTitle: string | null;
+  planSessionId: string | null; // The tracking Session ID
+  lastPlanActivityAt: number | null; // Timestamp of last WS update
   setPlanBuildStatus: (status: "idle" | "queued" | "in_progress" | "completed" | "failed", message?: string, planId?: string, planTitle?: string) => void;
+  setPlanSessionId: (sessionId: string | null) => void;
+  updateLastPlanActivity: () => void;
   resetPlanBuild: () => void;
 }
 
@@ -61,18 +65,25 @@ export const useMentorLoungeStore = create<MentorLoungeState>((set) => ({
   planBuildMessage: null,
   planBuildId: null,
   planBuildTitle: null,
-  setPlanBuildStatus: (status, message, planId, planTitle) =>
+  planSessionId: null,
+  lastPlanActivityAt: null,
+  setPlanBuildStatus: (status: "idle" | "queued" | "in_progress" | "warning" | "completed" | "failed", message?: string, planId?: string, planTitle?: string) =>
     set({
       planBuildStatus: status,
       planBuildMessage: message ?? null,
       planBuildId: planId ?? null,
       planBuildTitle: planTitle ?? null,
+      lastPlanActivityAt: Date.now(),
     }),
+  setPlanSessionId: (sessionId) => set({ planSessionId: sessionId, lastPlanActivityAt: Date.now() }),
+  updateLastPlanActivity: () => set({ lastPlanActivityAt: Date.now() }),
   resetPlanBuild: () =>
     set({
       planBuildStatus: "idle",
       planBuildMessage: null,
       planBuildId: null,
       planBuildTitle: null,
+      planSessionId: null,
+      lastPlanActivityAt: null,
     }),
 }));

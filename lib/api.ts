@@ -203,6 +203,15 @@ export const planningApi = {
     extract<{ message: string; mentor_id: string }>(
       http.post(`/planning/plans/${planId}/switch_mentor/`, payload)
     ),
+
+  getPlanSession: (sessionId: string) =>
+    extract<{
+      id: string;
+      crew_status: string;
+      task_id: string;
+      resulting_plan?: string;
+      requirements_gathered?: Record<string, unknown>;
+    }>(http.get(`/planning/plan-sessions/${sessionId}/`)),
 };
 
 // INTELLIGENCE ---------------------------------------------------------------

@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useCreatePlanFromConversation } from "@/hooks/use-plans";
 import { useAnalyzeConversation } from "@/hooks/use-intelligence";
+import { usePlanSessionPoller } from "@/hooks/use-plan-poller";
 import { telemetry } from "@/lib/telemetry";
 import { CreateConversationModal } from "@/components/mentor-lounge/create-conversation-modal";
 import { PlusCircle } from 'lucide-react';
@@ -230,6 +231,9 @@ useEffect(() => {
   const queryClient = useQueryClient();
   const planBuildStatus = useMentorLoungeStore(state => state.planBuildStatus);
 
+  // Activate polling for plan status fallback
+  usePlanSessionPoller();
+
   useEffect(() => {
     if (planBuildStatus === "completed") {
       void queryClient.invalidateQueries({ queryKey: ["learning-plans"] });
@@ -428,8 +432,11 @@ useEffect(() => {
     | undefined;
   const hasAnalysisResults =
     Boolean(analysisResults) && Object.keys(analysisResults ?? {}).length > 0;
+  
+  // Disable if pending, or if we have an active plan build in progress
+  const isPlanBuilding = ["queued", "in_progress", "warning"].includes(planBuildStatus);
   const disablePlanButton =
-    !selectedConversationId || createPlan.isPending;
+    !selectedConversationId || createPlan.isPending || isPlanBuilding;
 
   const handleAnalyzeConversation = (forceOverride?: boolean) => {
     if (!selectedConversationId) {

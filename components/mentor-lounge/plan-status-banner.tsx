@@ -107,6 +107,23 @@ export function PlanStatusBanner({ className }: PlanStatusBannerProps) {
                   </a>
                 </Button>
               )}
+
+              {isError && (
+                 <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-7 text-xs border-rose-200 hover:bg-rose-100 hover:text-rose-900 dark:border-rose-800 dark:hover:bg-rose-900/50"
+                  onClick={() => {
+                     // We need to re-trigger. 
+                     // Since we don't have the context here easily, we might need a dedicated retry callback or store action.
+                     // For now, let's just close and let them try again from the UI.
+                     // Or better, let's just show "Try Again" which dismisses.
+                     handleClose();
+                  }}
+                >
+                  Dismiss
+                </Button>
+              )}
               
               <button 
                 onClick={handleClose}

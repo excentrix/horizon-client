@@ -297,7 +297,7 @@ export interface MentorAction {
   payload?: Record<string, unknown>;
 }
 
-export type PlanBuildStatus = "idle" | "queued" | "in_progress" | "completed" | "failed";
+export type PlanBuildStatus = "idle" | "queued" | "in_progress" | "warning" | "completed" | "failed";
 
 export interface PlanUpdateEvent {
   type: "plan_update";

@@ -7,6 +7,8 @@ import {
 import { planningApi } from "@/lib/api";
 import type { DailyTask, LearningPlan } from "@/types";
 import { telemetry } from "@/lib/telemetry";
+import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
+import { useEffect } from "react";
 
 const plansKey = ["learning-plans"];
 const planKey = (planId: string) => [...plansKey, planId];
@@ -45,6 +47,7 @@ export function usePlan(planId?: string) {
 
 export function useCreatePlanFromConversation() {
   const queryClient = useQueryClient();
+  const { setPlanBuildStatus, setPlanSessionId } = useMentorLoungeStore();
 
   return useMutation({
     mutationFn: (payload: { conversationId: string }) => {
@@ -53,7 +56,17 @@ export function useCreatePlanFromConversation() {
       });
     },
     onSuccess: (data) => {
-      telemetry.toastInfo("Plan created!", data.message);
+      telemetry.toastInfo("Plan started", data.message);
+      
+      // Store session details
+      if ((data as any).session_id) {
+        setPlanSessionId((data as any).session_id);
+      }
+      
+      // Set status to queued/processing
+      setPlanBuildStatus("queued", "Plan creation request accepted");
+      
+      // Invalidate queries just in case
       queryClient.invalidateQueries({ queryKey: plansKey });
     },
     onError: (error: unknown) => {
@@ -63,6 +76,7 @@ export function useCreatePlanFromConversation() {
         (error instanceof Error ? error.message : undefined) ||
         "Unknown error";
       telemetry.toastError("Unable to create plan", message);
+      setPlanBuildStatus("failed", message);
     },
   });
 }
