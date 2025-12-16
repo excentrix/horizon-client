@@ -288,6 +288,7 @@ export interface MentorAction {
   type: "view_plan" | "open_plan_task" | "confirm_plan_intent" | "open_link";
   label: string;
   description?: string;
+  data?: Record<string, unknown>;
   plan_id?: UUID | string | null;
   task_id?: UUID | string | null;
   task_title?: string;
@@ -296,15 +297,20 @@ export interface MentorAction {
   payload?: Record<string, unknown>;
 }
 
+export type PlanBuildStatus = "idle" | "queued" | "in_progress" | "completed" | "failed";
+
 export interface PlanUpdateEvent {
-  id: string;
-  status: string;
-  message: string;
-  timestamp: string;
-  agent?: string;
-  conversationId?: UUID | null;
-  step_type?: string;
-  tool?: string;
+  type: "plan_update";
+  data: {
+    id: string;
+    conversation_id?: string;
+    status: PlanBuildStatus;
+    message: string;
+    plan_id?: string;
+    plan_title?: string;
+    task_count?: number;
+    timestamp?: string;
+  };
 }
 
 export type TaskStatus =

@@ -12,6 +12,8 @@ import { Bot } from "lucide-react";
 import { LearningGraphPill } from "./learning-graph-pill";
 import { CareerGoalsPill } from "./career-goals-pill";
 import { AgentInsightsCard } from "./agent-insights-card";
+import { PlanStatusBanner } from "./plan-status-banner";
+import { PlanBuildHeaderBadge } from "./plan-build-header-badge";
 
 interface MessageFeedProps {
   conversation?: Conversation;
@@ -263,6 +265,8 @@ export function MessageFeed({
             >
               {conversation.ai_personality?.name ?? "Adaptive Mentor"}
             </span>
+            {/* Plan Build Indicator */}
+            <PlanBuildHeaderBadge />
           </div>
         </div>
         {connectionError ? (
@@ -386,6 +390,8 @@ export function MessageFeed({
           Jump to latest
         </button>
       ) : null}
+
+      <PlanStatusBanner />
     </div>
   );
 }

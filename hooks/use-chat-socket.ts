@@ -134,6 +134,7 @@ export function useChatSocket(conversationId: string | null) {
   const pushRoutingDecision = useMentorLoungeStore(
     (state) => state.pushRoutingDecision,
   );
+  const setPlanBuildStatus = useMentorLoungeStore((state) => state.setPlanBuildStatus);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const heartbeatIntervalRef = useRef<number | null>(null);
@@ -509,17 +510,30 @@ export function useChatSocket(conversationId: string | null) {
                   : `plan-update-${Date.now()}`);
 
               pushPlanUpdate({
-                id: eventId,
-                status: (data?.status as string) ?? "processing",
-                message: (data?.message as string) ?? "Working on your plan...",
-                timestamp: data?.timestamp
-                  ? (data.timestamp as string)
-                  : new Date().toISOString(),
-                agent: data?.agent as string | undefined,
-                conversationId: targetConversation ?? null,
-                step_type: data?.step_type as string | undefined,
-                tool: data?.tool as string | undefined,
+                type: "plan_update",
+                data: {
+                  id: eventId,
+                  conversation_id: targetConversation ?? undefined,
+                  status: (data?.status as any) ?? "processing",
+                  message: (data?.message as string) ?? "Working on your plan...",
+                  plan_id: data?.plan_id as string | undefined,
+                  plan_title: data?.plan_title as string | undefined,
+                  task_count: data?.task_count as number | undefined,
+                  timestamp: data?.timestamp ? (data.timestamp as string) : new Date().toISOString(),
+                }
               });
+
+              // Update global plan build status in store
+              if (data?.status) {
+                // Cast to specific PlanBuildStatus to avoid type errors, defaulting to "in_progress" if unknown
+                const status = (data.status as any) || "in_progress";
+                setPlanBuildStatus(
+                  status,
+                  (data.message as string) ?? undefined,
+                  (data.plan_id as string) ?? undefined,
+                  (data.plan_title as string) ?? undefined,
+                );
+              }
 
               if (data?.status === "error" && data?.message) {
                 telemetry.toastError(String(data.message));

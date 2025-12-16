@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { ConversationList } from "@/components/mentor-lounge/conversation-list";
 import { MessageFeed } from "@/components/mentor-lounge/message-feed";
@@ -225,6 +226,16 @@ useEffect(() => {
     }
     fetchLatestAnalysis(selectedConversationId, { silent: true });
   }, [selectedConversationId, fetchLatestAnalysis, clearAnalysisPolling]);
+
+  const queryClient = useQueryClient();
+  const planBuildStatus = useMentorLoungeStore(state => state.planBuildStatus);
+
+  useEffect(() => {
+    if (planBuildStatus === "completed") {
+      void queryClient.invalidateQueries({ queryKey: ["learning-plans"] });
+      // If there are other "workbench" queries, invalidate them here too.
+    }
+  }, [planBuildStatus, queryClient]);
 
   useEffect(() => {
     return () => {

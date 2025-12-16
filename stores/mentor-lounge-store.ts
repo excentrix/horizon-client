@@ -17,6 +17,14 @@ interface MentorLoungeState {
   setActiveAgent: (agent: { name: string; icon?: string } | null) => void;
   cortexRoutingHistory: RoutingDecision[];
   pushRoutingDecision: (decision: RoutingDecision) => void;
+
+  // Plan Build Status
+  planBuildStatus: "idle" | "queued" | "in_progress" | "completed" | "failed";
+  planBuildMessage: string | null;
+  planBuildId: string | null;
+  planBuildTitle: string | null;
+  setPlanBuildStatus: (status: "idle" | "queued" | "in_progress" | "completed" | "failed", message?: string, planId?: string, planTitle?: string) => void;
+  resetPlanBuild: () => void;
 }
 
 export interface RoutingDecision {
@@ -26,6 +34,7 @@ export interface RoutingDecision {
   timestamp: string;
 }
 
+// Store implementation
 export const useMentorLoungeStore = create<MentorLoungeState>((set) => ({
   selectedConversationId: null,
   setSelectedConversationId: (id) => set({ selectedConversationId: id }),
@@ -46,4 +55,24 @@ export const useMentorLoungeStore = create<MentorLoungeState>((set) => ({
     set((state) => ({
       cortexRoutingHistory: [decision, ...state.cortexRoutingHistory].slice(0, 50),
     })),
+
+  // Plan Build Status
+  planBuildStatus: "idle",
+  planBuildMessage: null,
+  planBuildId: null,
+  planBuildTitle: null,
+  setPlanBuildStatus: (status, message, planId, planTitle) =>
+    set({
+      planBuildStatus: status,
+      planBuildMessage: message ?? null,
+      planBuildId: planId ?? null,
+      planBuildTitle: planTitle ?? null,
+    }),
+  resetPlanBuild: () =>
+    set({
+      planBuildStatus: "idle",
+      planBuildMessage: null,
+      planBuildId: null,
+      planBuildTitle: null,
+    }),
 }));
