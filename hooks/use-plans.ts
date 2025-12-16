@@ -59,12 +59,15 @@ export function useCreatePlanFromConversation() {
       telemetry.toastInfo("Plan started", data.message);
       
       // Store session details
-      if ((data as any).session_id) {
-        setPlanSessionId((data as any).session_id);
+      if (data.session_id) {
+        setPlanSessionId(data.session_id);
       }
       
-      // Set status to queued/processing
-      setPlanBuildStatus("queued", "Plan creation request accepted");
+      // Set status to queued/in_progress based on response
+      setPlanBuildStatus(
+        (data.status as any) || "queued",
+        data.message || "Plan creation request accepted"
+      );
       
       // Invalidate queries just in case
       queryClient.invalidateQueries({ queryKey: plansKey });

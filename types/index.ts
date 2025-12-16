@@ -442,6 +442,9 @@ export interface IntelligenceOverview {
 
 export interface PlanCreationResponse extends ApiMetadata {
   success: boolean;
+  status?: string;
+  session_id?: string;
+  task_id?: string;
   learning_plan_id?: UUID;
   mentor_id?: UUID | null;
   specialized_conversation_id?: UUID;

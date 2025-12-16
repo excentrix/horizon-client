@@ -515,7 +515,7 @@ export function useChatSocket(conversationId: string | null) {
                 data: {
                   id: eventId,
                   conversation_id: targetConversation ?? undefined,
-                  status: (data?.status as any) ?? "processing",
+                  status: (data?.status as any) ?? "in_progress",
                   message: (data?.message as string) ?? "Working on your plan...",
                   plan_id: data?.plan_id as string | undefined,
                   plan_title: data?.plan_title as string | undefined,
@@ -537,7 +537,7 @@ export function useChatSocket(conversationId: string | null) {
                 updateLastPlanActivity();
               }
 
-              if (data?.status === "error" && data?.message) {
+              if (data?.status === "failed" && data?.message) {
                 telemetry.toastError(String(data.message));
               }
               break;
