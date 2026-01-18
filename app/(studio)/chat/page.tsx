@@ -35,7 +35,6 @@ import { AgentIndicator } from "@/components/mentor-lounge/agent-indicator";
 import { CortexDebugDrawer } from "@/components/mentor-lounge/cortex-debug-drawer";
 import { intelligenceApi } from "@/lib/api";
 import { describeStageEvent } from "@/lib/analysis-stage";
-import { AgentRuntimeTimeline } from "@/components/mentor-lounge/agent-runtime-timeline";
 import { LearnerProfilePanel } from "@/components/mentor-lounge/learner-profile-panel";
 import { PlanWorkbench } from "@/components/mentor-lounge/plan-workbench";
 import { MissingInfoForm } from "@/components/mentor-lounge/missing-info-form";
@@ -106,6 +105,8 @@ export default function ChatPage() {
   const analyzedAtRef = useRef<Map<string, string>>(new Map());
   const processedStageEventSeqRef = useRef<number>(-1);
   const stageHistoryLimit = 8;
+  const analysisTimeoutRef = useRef<number | null>(null);
+  const [analysisTimedOut, setAnalysisTimedOut] = useState<string | null>(null);
 
   const analyzeConversation = useAnalyzeConversation();
   const createPlan = useCreatePlanFromConversation();
@@ -418,6 +419,17 @@ useEffect(() => {
       if (isFinalEvent || isErrorEvent) {
         if (selectedConversationId && conversationId === selectedConversationId) {
           clearAnalysisPolling();
+          // Clear the timeout since analysis completed
+          if (analysisTimeoutRef.current) {
+            window.clearTimeout(analysisTimeoutRef.current);
+            analysisTimeoutRef.current = null;
+          }
+          setAnalysisTimedOut(null);
+          
+          // AUTO-REFRESH: Fetch latest analysis results to update UI
+          setTimeout(() => {
+            fetchLatestAnalysis(conversationId, { silent: false });
+          }, 500); // Small delay to ensure backend has saved results
         }
         void fetchLatestAnalysis(conversationId, { silent: true });
       }
@@ -457,6 +469,13 @@ useEffect(() => {
 
     stageTrackerRef.current.set(selectedConversationId, new Set());
     processedAnalysisRef.current.delete(selectedConversationId);
+    
+    // Clear any existing timeout and reset timeout state
+    if (analysisTimeoutRef.current) {
+      window.clearTimeout(analysisTimeoutRef.current);
+      analysisTimeoutRef.current = null;
+    }
+    setAnalysisTimedOut(null);
 
     setAnalysisByConversation((previous) => ({
       ...previous,
@@ -471,6 +490,17 @@ useEffect(() => {
         analysis_record: undefined,
       },
     }));
+    
+    // Start 2-minute timeout
+    analysisTimeoutRef.current = window.setTimeout(() => {
+      if (selectedConversationId) {
+        setAnalysisTimedOut(selectedConversationId);
+        telemetry.toastInfo(
+          "⚠️ Analysis is taking longer than expected",
+          "This may indicate a problem with the AI service. You can retry the analysis if needed."
+        );
+      }
+    }, 120000); // 2 minutes
 
     analyzeConversation.mutate(
       {
@@ -660,10 +690,11 @@ useEffect(() => {
                         />
                      </div>
                      <div className="w-1/3 min-w-[300px]">
-                        <IntelligenceStatus 
-                          analysisSummary={analysisSummary} 
-                          onViewReport={hasAnalysisResults ? () => setReportModalOpen(true) : undefined}
-                        />
+                     <IntelligenceStatus 
+                      analysisSummary={analysisSummary} 
+                      onViewReport={hasAnalysisResults ? () => setReportModalOpen(true) : undefined}
+                      agentRuntime={agentRuntime}
+                    />
                      </div>
                   </div>
                 </div>
@@ -778,14 +809,15 @@ useEffect(() => {
                         </div>
                     )}
                     
-                    {agentRuntime.length > 0 ? (
-                       <AgentRuntimeTimeline steps={agentRuntime} />
-                    ) : (
+                    {/* Agent Runtime now shown in IntelligenceStatus Runtime tab */}
+                    {agentRuntime.length === 0 && (
                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8 text-center space-y-2">
                           <Zap className="w-8 h-8 opacity-20" />
                           <p className="text-xs">Agents are dormant.</p>
+                          <p className="text-[10px] opacity-70">View runtime details in Intelligence Status</p>
                        </div>
                     )}
+
                 </TabsContent>
                 
                 <TabsContent value="profile" className="flex-1 min-h-0 m-0">

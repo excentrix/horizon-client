@@ -10,6 +10,14 @@ interface IntelligenceStatusProps {
   analysisSummary: Record<string, unknown> | null;
   className?: string;
   onViewReport?: () => void;
+  agentRuntime?: Array<{
+    id: string; 
+    agent: string; 
+    step: string;  // Matches AgentRuntimeStep.step
+    status: string; 
+    confidence?: number;
+    details?: string;
+  }>;
 }
 
 type StageHistoryEntry = {
@@ -18,7 +26,7 @@ type StageHistoryEntry = {
   timestamp: string;
 };
 
-export function IntelligenceStatus({ analysisSummary, className, onViewReport }: IntelligenceStatusProps) {
+export function IntelligenceStatus({ analysisSummary, className, onViewReport, agentRuntime = [] }: IntelligenceStatusProps) {
   const summaryRecord: Record<string, unknown> =
     analysisSummary ?? { message: "Run an analysis to unlock deeper insights." };
 
@@ -48,11 +56,23 @@ export function IntelligenceStatus({ analysisSummary, className, onViewReport }:
                       message.toLowerCase().includes("started") ||
                       (progressUpdate && progressUpdate.status !== "completed");
 
-  const getProgressValue = (status: string) => {
-    switch (status) {
+  // Enhanced progress mapping with better stage detection
+  const getProgressValue = (status: string, message: string) => {
+    const statusLower = status.toLowerCase();
+    const messageLower = message.toLowerCase();
+    
+    // Map status to progress
+    if (statusLower.includes("started") || statusLower.includes("pending")) return 10;
+    if (statusLower.includes("analyzing") || messageLower.includes("analyzing context")) return 25;
+    if (statusLower.includes("extracting") || messageLower.includes("extracting priorities")) return 50;
+    if (statusLower.includes("assessing") || messageLower.includes("assessing wellness")) return 75;
+    if (statusLower.includes("finalizing") || messageLower.includes("finalizing")) return 90;
+    
+    // Standard progress stages
+    switch (statusLower) {
       case "analysis_started": return 10;
-      case "core_analysis_completed": return 40;
-      case "context_extraction_completed": return 70;
+      case "core_analysis_completed": return 60;
+      case "context_extraction_completed": return 85;
       case "analysis_saved":
       case "analysis_successful":
       case "analysis_complete":
@@ -63,8 +83,17 @@ export function IntelligenceStatus({ analysisSummary, className, onViewReport }:
   };
 
   const progressValue = progressUpdate?.status 
-    ? getProgressValue(progressUpdate.status as string) 
+    ? getProgressValue(progressUpdate.status as string, message) 
     : (isAnalyzing ? 30 : 100);
+  
+  // Estimate remaining time based on progress
+  const getEstimatedTime = (progress: number) => {
+    if (progress >= 90) return "Almost done...";
+    if (progress >= 75) return "~15-30 seconds remaining";
+    if (progress >= 50) return "~30-60 seconds remaining";
+    if (progress >= 25) return "~60-90 seconds remaining";
+    return "Usually takes 60-120 seconds";
+  };
 
   return (
     <Card className={cn("w-full transition-all duration-300 border-l-4", 
@@ -112,7 +141,13 @@ export function IntelligenceStatus({ analysisSummary, className, onViewReport }:
             <span>{message || "Waiting for session activity..."}</span>
           </div>
           {isAnalyzing && (
-            <Progress value={progressValue} className="h-1 mt-1" />
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>{getEstimatedTime(progressValue)}</span>
+                <span className="font-medium">{progressValue}%</span>
+              </div>
+              <Progress value={progressValue} className="h-1.5" />
+            </div>
           )}
         </CardDescription>
 
@@ -148,11 +183,12 @@ export function IntelligenceStatus({ analysisSummary, className, onViewReport }:
       {!isAnalyzing && Object.keys(analysisCore).length > 0 && (
         <CardContent>
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 mb-4">
+            <TabsList className={cn("grid w-full mb-4", agentRuntime.length > 0 ? "grid-cols-5" : "grid-cols-4")}>
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="insights">Insights</TabsTrigger>
               <TabsTrigger value="wellness">Wellness</TabsTrigger>
               <TabsTrigger value="domain">Domain</TabsTrigger>
+              {agentRuntime.length > 0 && <TabsTrigger value="runtime">Runtime</TabsTrigger>}
             </TabsList>
 
             <TabsContent value="overview" className="space-y-4">
@@ -251,6 +287,31 @@ export function IntelligenceStatus({ analysisSummary, className, onViewReport }:
                  </div>
                )}
             </TabsContent>
+             {agentRuntime.length > 0 && (
+              <TabsContent value="runtime" className="space-y-4">
+                <ScrollArea className="h-[200px] pr-4">
+                  <div className="space-y-2">
+                    {agentRuntime.slice(0, 10).map((runtimeStep) => (
+                      <div key={runtimeStep.id} className="rounded-lg border bg-muted/30 p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium capitalize">{runtimeStep.agent}</span>
+                          <Badge variant={
+                           runtimeStep.status === 'completed' ? 'default' :
+                            runtimeStep.status === 'failed' ? 'destructive' : 'secondary'
+                          }>{runtimeStep.status}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{runtimeStep.step}</p>
+                        {runtimeStep.confidence !== undefined && (
+                          <div className="mt-2">
+                            <Progress value={runtimeStep.confidence * 100} className="h-1" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            )}
           </Tabs>
         </CardContent>
       )}
