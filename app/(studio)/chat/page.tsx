@@ -35,6 +35,12 @@ import { AgentIndicator } from "@/components/mentor-lounge/agent-indicator";
 import { CortexDebugDrawer } from "@/components/mentor-lounge/cortex-debug-drawer";
 import { intelligenceApi } from "@/lib/api";
 import { describeStageEvent } from "@/lib/analysis-stage";
+import { AgentRuntimeTimeline } from "@/components/mentor-lounge/agent-runtime-timeline";
+import { LearnerProfilePanel } from "@/components/mentor-lounge/learner-profile-panel";
+import { PlanWorkbench } from "@/components/mentor-lounge/plan-workbench";
+import { MissingInfoForm } from "@/components/mentor-lounge/missing-info-form";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Brain, User, Zap } from "lucide-react";
 
 interface StageHistoryEntry {
   stage: string;
@@ -59,6 +65,9 @@ export default function ChatPage() {
   const clearPlanUpdates = useMentorLoungeStore(
     (state) => state.clearPlanUpdates,
   );
+  const agentRuntime = useMentorLoungeStore((state) => state.agentRuntime);
+  const insights = useMentorLoungeStore((state) => state.insights);
+  const missingInformation = useMentorLoungeStore((state) => state.missingInformation);
   const {
     data: conversations = [],
     isLoading: conversationsLoading,
@@ -667,50 +676,12 @@ useEffect(() => {
               <div className="min-h-0 flex-1 overflow-hidden">
                 <div className="flex h-full min-h-0 flex-col gap-4 px-4 pb-4 pt-2 lg:px-6 lg:pb-6">
                   {latestPlan ? (
-                    <Card>
-                      <CardHeader>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <CardTitle className="text-base">Plan generated</CardTitle>
-                          {latestPlan.plan_title ? (
-                            <Badge variant="outline">{latestPlan.plan_title}</Badge>
-                          ) : null}
-                        </div>
-                        <CardDescription>
-                          {latestPlan.task_count
-                            ? `We queued ${latestPlan.task_count} tasks for you.`
-                            : "A fresh learning journey is ready."}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-                        <div className="space-y-1">
-                          {latestPlan.estimated_duration ? (
-                            <p>
-                              Estimated duration: {latestPlan.estimated_duration} hours
-                            </p>
-                          ) : null}
-                          {latestPlan.mentor_id ? (
-                            <p>
-                              Specialist mentor unlocked while the plan is active. Let&apos;s invite them when you need focused guidance.
-                            </p>
-                          ) : (
-                            <p>
-                              Your general mentor will weave this plan into upcoming chats.
-                            </p>
-                          )}
-                        </div>
-                        <Button asChild size="sm">
-                          <Link
-                            href={
-                              latestPlan.learning_plan_id
-                                ? `/plans?plan=${latestPlan.learning_plan_id}`
-                                : "/plans"
-                            }
-                          >
-                            View plan
-                          </Link>
-                        </Button>
-                      </CardContent>
-                    </Card>
+                    <PlanWorkbench
+                      planData={latestPlan}
+                      insights={insights}
+                      status={planBuildStatus}
+                      progress={0} // TODO: Calculate progress based on task updates
+                    />
                   ) : null}
                   {/* IntelligenceStatus moved to header */}
                   {planUpdates.length ? (
@@ -782,6 +753,52 @@ useEffect(() => {
             </div>
           )}
         </section>
+        {/* Right Sidebar for Intelligence/Context */}
+        {activeConversation ? (
+          <aside className="hidden w-80 border-l bg-card/40 backdrop-blur xl:flex xl:flex-col">
+             <Tabs defaultValue="runtime" className="flex-1 flex flex-col">
+                <div className="px-4 py-3 border-b">
+                   <TabsList className="w-full grid grid-cols-2">
+                      <TabsTrigger value="runtime" className="text-xs gap-2">
+                        <Brain className="w-3.5 h-3.5" /> Runtime
+                      </TabsTrigger>
+                      <TabsTrigger value="profile" className="text-xs gap-2">
+                        <User className="w-3.5 h-3.5" /> Profile
+                      </TabsTrigger>
+                   </TabsList>
+                </div>
+                
+                <TabsContent value="runtime" className="flex-1 min-h-0 m-0 overflow-y-auto">
+                    {/* Missing Information Forms */}
+                    {missingInformation.length > 0 && (
+                        <div className="px-4 pt-4">
+                           {missingInformation.filter(i => i.status === 'pending').map(item => (
+                               <MissingInfoForm key={item.id} item={item} />
+                           ))}
+                        </div>
+                    )}
+                    
+                    {agentRuntime.length > 0 ? (
+                       <AgentRuntimeTimeline steps={agentRuntime} />
+                    ) : (
+                       <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8 text-center space-y-2">
+                          <Zap className="w-8 h-8 opacity-20" />
+                          <p className="text-xs">Agents are dormant.</p>
+                       </div>
+                    )}
+                </TabsContent>
+                
+                <TabsContent value="profile" className="flex-1 min-h-0 m-0">
+                    <LearnerProfilePanel 
+                       // In a real scenario, we'd fetch these from a hook or the store
+                       academicSnapshot={analysisSummary?.analysis_results as Record<string, unknown>}
+                       careerSnapshot={undefined} 
+                       wellnessSnapshot={undefined}
+                    />
+                </TabsContent>
+             </Tabs>
+          </aside>
+        ) : null}
       </div>
       <CortexDebugDrawer />
     </div>

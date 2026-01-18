@@ -564,3 +564,34 @@ export interface MemoryItem {
   metadata?: Record<string, unknown>;
   created_at?: string;
 }
+
+export interface AgentRuntimeStep {
+  id: string;
+  agent: string;
+  step: string;
+  status: "running" | "completed" | "failed" | "waiting_for_input";
+  timestamp: string;
+  details?: string;
+  input?: unknown;
+  output?: unknown;
+  confidence?: number;
+}
+
+export interface InsightEvent {
+  id: string;
+  type: "crisis" | "trend" | "milestone" | "recommendation";
+  title: string;
+  message: string;
+  data?: Record<string, unknown>;
+  timestamp: string;
+  is_read: boolean;
+}
+
+export interface MissingInformationItem {
+  id: string;
+  field: string;
+  question: string;
+  context?: string;
+  status: "pending" | "resolved" | "skipped";
+  timestamp: string;
+}

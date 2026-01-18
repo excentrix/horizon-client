@@ -135,6 +135,9 @@ export function useChatSocket(conversationId: string | null) {
     pushRoutingDecision,
     setPlanBuildStatus,
     updateLastPlanActivity,
+    pushRuntimeStep,
+    pushInsight,
+    pushMissingInfo,
   } = useMentorLoungeStore();
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -541,6 +544,61 @@ export function useChatSocket(conversationId: string | null) {
                 telemetry.toastError(String(data.message));
               }
               break;
+            }
+            case "agent_runtime": {
+              const step = payload?.data;
+              if (step) {
+                 pushRuntimeStep({
+                     id: step.id ?? crypto.randomUUID(),
+                     agent: step.agent ?? "System",
+                     step: step.step ?? "Processing",
+                     status: step.status ?? "running",
+                     timestamp: step.timestamp ?? new Date().toISOString(),
+                     details: step.details,
+                     input: step.input,
+                     output: step.output,
+                     confidence: step.confidence
+                 });
+                 // Also set active agent/typing if running
+                 if (step.status === "running") {
+                    setActiveAgent({ name: step.agent });
+                    updateMentorTyping(true);
+                 } else if (step.status === "completed" || step.status === "failed") {
+                    // Don't clear immediately, let UI linger
+                    updateMentorTyping(false);
+                 }
+              }
+              break;
+            }
+            case "insight_generated": {
+               const insight = payload?.data;
+               if (insight) {
+                  pushInsight({
+                      id: insight.id ?? crypto.randomUUID(),
+                      type: insight.type ?? "recommendation",
+                      title: insight.title ?? "New Insight",
+                      message: insight.message ?? "",
+                      data: insight.data,
+                      timestamp: insight.timestamp ?? new Date().toISOString(),
+                      is_read: false
+                  });
+                  telemetry.toastInfo(insight.title, insight.message);
+               }
+               break;
+            }
+            case "missing_information": {
+               const info = payload?.data;
+               if (info) {
+                  pushMissingInfo({
+                      id: info.id ?? crypto.randomUUID(),
+                      field: info.field,
+                      question: info.question,
+                      context: info.context,
+                      status: "pending",
+                      timestamp: new Date().toISOString()
+                  });
+               }
+               break;
             }
             default:
               telemetry.info("Unhandled chat socket event", { type });
