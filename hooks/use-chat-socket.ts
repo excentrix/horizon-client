@@ -267,7 +267,13 @@ export function useChatSocket(conversationId: string | null) {
       return;
     }
 
-    const token = Cookies.get("accessToken");
+    const token =
+      Cookies.get("accessToken") ||
+      (typeof window !== "undefined"
+        ? window.localStorage.getItem("accessToken")
+        : null) ||
+      Cookies.get("token") ||
+      null;
     if (!token) {
       setStatus("error");
       setError("Missing authentication token");
@@ -523,6 +529,9 @@ export function useChatSocket(conversationId: string | null) {
                   plan_id: data?.plan_id as string | undefined,
                   plan_title: data?.plan_title as string | undefined,
                   task_count: data?.task_count as number | undefined,
+                  agent: data?.agent as string | undefined,
+                  tool: data?.tool as string | undefined,
+                  step_type: data?.step_type as string | undefined,
                   timestamp: data?.timestamp ? (data.timestamp as string) : new Date().toISOString(),
                 }
               });
@@ -567,6 +576,22 @@ export function useChatSocket(conversationId: string | null) {
                     // Don't clear immediately, let UI linger
                     updateMentorTyping(false);
                  }
+
+                 if (step.status) {
+                    const mapped =
+                      step.status === "initializing" || step.status === "queued"
+                        ? "queued"
+                        : step.status === "completed"
+                          ? "completed"
+                          : step.status === "error" || step.status === "failed"
+                            ? "failed"
+                            : "in_progress";
+                    setPlanBuildStatus(
+                      mapped,
+                      step.step ?? "Working on your plan...",
+                    );
+                    updateLastPlanActivity();
+                 }
               }
               break;
             }
@@ -589,13 +614,43 @@ export function useChatSocket(conversationId: string | null) {
             case "missing_information": {
                const info = payload?.data;
                if (info) {
+                  const messageId = info.id ?? crypto.randomUUID();
                   pushMissingInfo({
-                      id: info.id ?? crypto.randomUUID(),
+                      id: messageId,
                       field: info.field,
                       question: info.question,
                       context: info.context,
                       status: "pending",
                       timestamp: new Date().toISOString()
+                  });
+                  if (conversationId) {
+                    const isoTimestamp = new Date().toISOString();
+                    const missingInfoMessage: ChatMessage = {
+                      id: `missing-info-${messageId}`,
+                      conversation: conversationId,
+                      message_type: "text",
+                      sender_type: "ai",
+                      content: info.question ?? "I need a bit more information to continue.",
+                      sequence_number: Date.now(),
+                      ai_model_used: undefined,
+                      tokens_used: undefined,
+                      processing_time: undefined,
+                      is_edited: false,
+                      is_flagged: false,
+                      created_at: isoTimestamp,
+                      updated_at: isoTimestamp,
+                    };
+                    appendMessageToCache(queryClient, conversationId, missingInfoMessage);
+                    updateConversationSnapshot(queryClient, conversationId, missingInfoMessage);
+                  }
+                  pushPlanUpdate({
+                    type: "plan_update",
+                    data: {
+                      id: `missing-info-${messageId}`,
+                      status: "warning",
+                      message: info.question ?? "Additional info needed to continue.",
+                      timestamp: new Date().toISOString(),
+                    },
                   });
                }
                break;

@@ -211,7 +211,15 @@ export const planningApi = {
       task_id: string;
       resulting_plan?: string;
       requirements_gathered?: Record<string, unknown>;
+      crew_results?: Record<string, unknown>;
     }>(http.get(`/planning/plan-sessions/${sessionId}/`)),
+  submitMissingInfo: (
+    sessionId: string,
+    payload: { field?: string; value?: string; updates?: Record<string, unknown> }
+  ) =>
+    extract<{ success: boolean; requirements_gathered?: Record<string, unknown> }>(
+      http.post(`/planning/plan-sessions/${sessionId}/missing-info/`, payload)
+    ),
 };
 
 // INTELLIGENCE ---------------------------------------------------------------

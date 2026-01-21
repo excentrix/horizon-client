@@ -31,6 +31,26 @@ export function PlanIntelligencePanel({ plan }: PlanIntelligencePanelProps) {
   const competencies = asStringArray(plan.target_competencies_data) ?? [];
   const dailySummary = asRecord(plan.daily_tasks_summary);
   const progressSummary = asRecord(plan.progress_summary);
+  const displayWeeks = (() => {
+    const tasks = plan.daily_tasks ?? [];
+    if (!tasks.length) {
+      return plan.estimated_duration_weeks;
+    }
+    const timestamps = tasks
+      .map((task) => new Date(task.scheduled_date).getTime())
+      .filter((time) => Number.isFinite(time));
+    if (!timestamps.length) {
+      return plan.estimated_duration_weeks;
+    }
+    const min = Math.min(...timestamps);
+    const max = Math.max(...timestamps);
+    const days = Math.max(1, Math.ceil((max - min) / (1000 * 60 * 60 * 24)) + 1);
+    const derivedWeeks = Math.max(1, Math.ceil(days / 7));
+    if (Math.abs(derivedWeeks - plan.estimated_duration_weeks) >= 2) {
+      return derivedWeeks;
+    }
+    return plan.estimated_duration_weeks;
+  })();
 
   return (
     <Card className="h-full">
@@ -63,7 +83,7 @@ export function PlanIntelligencePanel({ plan }: PlanIntelligencePanelProps) {
             <li>
               Duration:{" "}
               <span className="text-foreground">
-                {plan.estimated_duration_weeks} weeks · {plan.total_estimated_hours} hrs
+                {displayWeeks} weeks · {plan.total_estimated_hours} hrs
               </span>
             </li>
             <li>

@@ -304,12 +304,15 @@ export interface PlanUpdateEvent {
   data: {
     id: string;
     conversation_id?: string;
-    status: PlanBuildStatus;
+    status: string;
     message: string;
     plan_id?: string;
     plan_title?: string;
     task_count?: number;
     timestamp?: string;
+    agent?: string;
+    tool?: string;
+    step_type?: string;
   };
 }
 

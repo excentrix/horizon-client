@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { MissingInformationItem } from "@/types";
 import { telemetry } from "@/lib/telemetry";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
+import { planningApi } from "@/lib/api";
 
 interface MissingInfoFormProps {
   item: MissingInformationItem;
@@ -18,6 +19,7 @@ export function MissingInfoForm({ item }: MissingInfoFormProps) {
   const [value, setValue] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const resolveMissingInfo = useMentorLoungeStore(state => state.resolveMissingInfo);
+  const planSessionId = useMentorLoungeStore(state => state.planSessionId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,11 +27,15 @@ export function MissingInfoForm({ item }: MissingInfoFormProps) {
 
     setIsSubmitting(true);
     try {
-      // In a real implementation, this would call an API endpoint
-      // e.g. await planningApi.submitMissingInfo(item.id, { [item.field]: value });
-      
-      // Mocking network delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!planSessionId) {
+        telemetry.toastError("Unable to submit info", "Missing plan session.");
+        return;
+      }
+
+      await planningApi.submitMissingInfo(planSessionId, {
+        field: item.field,
+        value: value.trim(),
+      });
       
       resolveMissingInfo(item.id);
       telemetry.toastInfo("Information updated", "Thanks! We've updated your profile.");

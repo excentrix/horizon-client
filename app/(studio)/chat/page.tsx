@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { ConversationList } from "@/components/mentor-lounge/conversation-list";
 import { MessageFeed } from "@/components/mentor-lounge/message-feed";
@@ -14,11 +12,9 @@ import { useChatSocket } from "@/hooks/use-chat-socket";
 import { getPersonaTheme } from "@/lib/persona-theme";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { useCreatePlanFromConversation } from "@/hooks/use-plans";
+import { useCreatePlanFromConversation, usePlan } from "@/hooks/use-plans";
 import { useAnalyzeConversation } from "@/hooks/use-intelligence";
-import { usePlanSessionPoller } from "@/hooks/use-plan-poller";
 import { telemetry } from "@/lib/telemetry";
 import { CreateConversationModal } from "@/components/mentor-lounge/create-conversation-modal";
 import { PlusCircle } from 'lucide-react';
@@ -35,11 +31,38 @@ import { AgentIndicator } from "@/components/mentor-lounge/agent-indicator";
 import { CortexDebugDrawer } from "@/components/mentor-lounge/cortex-debug-drawer";
 import { intelligenceApi } from "@/lib/api";
 import { describeStageEvent } from "@/lib/analysis-stage";
+import { MissingInfoForm } from "@/components/mentor-lounge/missing-info-form";
+import { AnalysisHistory } from "@/components/mentor-lounge/analysis-history";
 import { LearnerProfilePanel } from "@/components/mentor-lounge/learner-profile-panel";
 import { PlanWorkbench } from "@/components/mentor-lounge/plan-workbench";
-import { MissingInfoForm } from "@/components/mentor-lounge/missing-info-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Brain, User, Zap } from "lucide-react";
+import { Brain, User } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { usePlanSessionPoller } from "@/hooks/use-plan-poller";
+
+// Stage to progress percentage mapping
+const STAGE_PROGRESS_MAP: Record<string, number> = {
+  'analysis_started': 5,
+  'core_analysis_started': 20,
+  'core_analysis_completed': 40,
+  'wellness_analysis_started': 50,
+  'wellness_analysis_completed': 50,
+  'crisis_analysis_started': 60,
+  'crisis_analysis_completed': 60,
+  'support_analysis_started': 70,
+  'support_analysis_completed': 70,
+  'saving_analysis': 75,
+  'analysis_saved': 75,
+  'extract_start': 80,
+  'domain_extracted': 82,
+  'extract_complete': 85,
+  'tracking_start': 90,
+  'domain_tracked': 92,
+  'tracking_complete': 95,
+  'analysis_successful': 100,
+  'analysis_complete': 100,
+  'analysis_completed': 100,
+};
 
 interface StageHistoryEntry {
   stage: string;
@@ -97,6 +120,21 @@ export default function ChatPage() {
   const activeListClass = personaTheme.conversationActive;
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [isReportModalOpen, setReportModalOpen] = useState(false);
+  const [analysisTimedOut, setAnalysisTimedOut] = useState<string | null>(null);
+  
+  // Analysis history state
+  const [analysisHistory, setAnalysisHistory] = useState<Array<{
+    id: string;
+    conversation_id: string;
+    conversation_title: string;
+    status: 'running' | 'completed' | 'failed';
+    started_at: string;
+    completed_at?: string;
+    progress?: number;
+    current_stage?: string;
+    stage_messages?: Array<{stage: string; message: string; timestamp: string}>;
+    results?: Record<string, unknown>;
+  }>>([]);
   const [analysisByConversation, setAnalysisByConversation] = useState<Record<string, Record<string, unknown>>>({});
   const [latestPlan, setLatestPlan] = useState<PlanCreationResponse | null>(null);
   const processedAnalysisRef = useRef<Map<string, string>>(new Map());
@@ -106,7 +144,6 @@ export default function ChatPage() {
   const processedStageEventSeqRef = useRef<number>(-1);
   const stageHistoryLimit = 8;
   const analysisTimeoutRef = useRef<number | null>(null);
-  const [analysisTimedOut, setAnalysisTimedOut] = useState<string | null>(null);
 
   const analyzeConversation = useAnalyzeConversation();
   const createPlan = useCreatePlanFromConversation();
@@ -216,6 +253,34 @@ export default function ChatPage() {
     }
   }, [isLoading, router, user]);
 
+  // Fetch analysis history on mount
+  useEffect(() => {
+    const fetchAnalysisHistory = async () => {
+      if (!user) return;
+      
+      try {
+        const Cookies = (await import('js-cookie')).default;
+        const token = Cookies.get('accessToken');
+        if (!token) return;
+        
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/intelligence/my-analyses/`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setAnalysisHistory(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch analysis history:', error);
+      }
+    };
+    
+    fetchAnalysisHistory();
+  }, [user]);
+
 useEffect(() => {
   setComposerDraft("");
   setTypingStatus(false);
@@ -240,6 +305,9 @@ useEffect(() => {
 
   const queryClient = useQueryClient();
   const planBuildStatus = useMentorLoungeStore(state => state.planBuildStatus);
+  const planBuildId = useMentorLoungeStore(state => state.planBuildId);
+  const planBuildTitle = useMentorLoungeStore(state => state.planBuildTitle);
+  const { data: planRecord } = usePlan(planBuildId ?? undefined);
 
   // Activate polling for plan status fallback
   usePlanSessionPoller();
@@ -398,6 +466,38 @@ useEffect(() => {
         }
       }
 
+      // UPDATE ANALYSIS HISTORY with current stage message
+      if (stage) {
+        const stageDescriptor = describeStageEvent(payload);
+        const description = stageDescriptor?.message;
+        
+        if (description && typeof description === 'string') {
+          // Map stage to progress percentage
+          const mappedProgress = STAGE_PROGRESS_MAP[stage];
+          const currentProgress = typeof payload.progress === 'number' ? payload.progress : mappedProgress;
+          
+          // Update analysis history with new stage message
+          setAnalysisHistory(prev => prev.map(analysis => {
+            if (analysis.conversation_id === conversationId && analysis.status === 'running') {
+              return {
+                ...analysis,
+                current_stage: stage,
+                stage_messages: [
+                  ...(analysis.stage_messages || []),
+                  {
+                    stage,
+                    message: description,
+                    timestamp: new Date().toISOString()
+                  }
+                ],
+                progress: currentProgress ?? analysis.progress ?? 0,
+              };
+            }
+            return analysis;
+          }));
+        }
+      }
+
       const progressUpdate = payload.progress_update as
         | Record<string, unknown>
         | undefined;
@@ -409,7 +509,7 @@ useEffect(() => {
       const normalizedEvent = eventType?.toLowerCase();
       const isErrorEvent =
         normalizedEvent === "analysis_error" || stage === "analysis_failed";
-      const isFinalEvent =
+       const isFinalEvent =
         normalizedEvent === "analysis_complete" ||
         normalizedEvent === "analysis_completed" ||
         progressStatus === "completed" ||
@@ -417,6 +517,20 @@ useEffect(() => {
         stage === "analysis_successful";
 
       if (isFinalEvent || isErrorEvent) {
+        // UPDATE ANALYSIS HISTORY to mark as complete/failed
+        setAnalysisHistory(prev => prev.map(analysis => {
+          if (analysis.conversation_id === conversationId && analysis.status === 'running') {
+            return {
+              ...analysis,
+              status: isErrorEvent ? 'failed' as const : 'completed' as const,
+              completed_at: new Date().toISOString(),
+              progress: 100,
+              results: hasAnalysisSummary ? payload as Record<string, unknown> : analysis.results,
+            };
+          }
+          return analysis;
+        }));
+        
         if (selectedConversationId && conversationId === selectedConversationId) {
           clearAnalysisPolling();
           // Clear the timeout since analysis completed
@@ -499,8 +613,33 @@ useEffect(() => {
           "⚠️ Analysis is taking longer than expected",
           "This may indicate a problem with the AI service. You can retry the analysis if needed."
         );
+        
+        // Mark analysis as failed in history so it doesn't spin forever
+        setAnalysisHistory(prev => prev.map(a => {
+          if (a.conversation_id === selectedConversationId && a.status === 'running') {
+            return {
+              ...a,
+              status: 'failed',
+              results: { error: 'Analysis timed out' }
+            };
+          }
+          return a;
+        }));
       }
     }, 120000); // 2 minutes
+
+    // CREATE ANALYSIS HISTORY ENTRY
+    const newAnalysis = {
+      id: `analysis-${Date.now()}`,
+      conversation_id: selectedConversationId,
+      conversation_title: activeConversation?.title || "Unknown conversation",
+      status: 'running' as const,
+      started_at: new Date().toISOString(),
+      progress: 0,
+      stage_messages: [],
+    };
+    
+    setAnalysisHistory(prev => [newAnalysis, ...prev]);
 
     analyzeConversation.mutate(
       {
@@ -560,6 +699,63 @@ useEffect(() => {
       },
     );
   };
+
+  const planWorkbenchData = useMemo(() => {
+    if (planRecord) {
+      return {
+        learning_plan_id: planRecord.id,
+        plan_title: planRecord.title,
+        task_count: planRecord.daily_tasks?.length,
+        estimated_duration: planRecord.total_estimated_hours,
+        mentor_id:
+          planRecord.specialized_mentor?.id ?? planRecord.specialized_mentor_data?.id,
+      };
+    }
+    if (latestPlan) {
+      return latestPlan;
+    }
+    if (planBuildTitle || planBuildId) {
+      return {
+        learning_plan_id: planBuildId ?? undefined,
+        plan_title: planBuildTitle ?? "Drafting your plan",
+      };
+    }
+    return null;
+  }, [latestPlan, planRecord, planBuildId, planBuildTitle]);
+
+  const latestPlanUpdate = useMemo(() => {
+    if (!planUpdates.length) {
+      return null;
+    }
+    return [...planUpdates].sort((a, b) => {
+      const aTime = new Date(a.data.timestamp ?? 0).getTime();
+      const bTime = new Date(b.data.timestamp ?? 0).getTime();
+      return bTime - aTime;
+    })[0];
+  }, [planUpdates]);
+
+  const planProgress = useMemo(() => {
+    if (planBuildStatus === "completed") {
+      return 100;
+    }
+    if (planBuildStatus === "failed") {
+      return 0;
+    }
+    if (planBuildStatus === "queued") {
+      return 10;
+    }
+    if (planBuildStatus === "warning") {
+      return 75;
+    }
+    if (planUpdates.length) {
+      const capped = Math.min(90, 20 + planUpdates.length * 8);
+      return capped;
+    }
+    if (planBuildStatus === "in_progress") {
+      return 40;
+    }
+    return 0;
+  }, [planBuildStatus, planUpdates.length]);
 
   return (
     <div className="flex min-h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-background">
@@ -681,21 +877,12 @@ useEffect(() => {
                     ) : null}
                   </div>
                   
-                  {/* Session Goal & Brain State Area */}
-                  <div className="flex items-start gap-4">
-                     <div className="flex-1">
-                        <SessionGoal 
-                            goal={activeConversation.description || "General exploration"} 
-                            planTitle={latestPlan?.plan_title} 
-                        />
-                     </div>
-                     <div className="w-1/3 min-w-[300px]">
-                     <IntelligenceStatus 
-                      analysisSummary={analysisSummary} 
-                      onViewReport={hasAnalysisResults ? () => setReportModalOpen(true) : undefined}
-                      agentRuntime={agentRuntime}
-                    />
-                     </div>
+                  {/* Session Goal Area - Full Width */}
+                  <div className="w-full">
+                     <SessionGoal 
+                        goal={activeConversation.description || "General exploration"} 
+                        planTitle={latestPlan?.plan_title} 
+                     />
                   </div>
                 </div>
               </header>
@@ -706,12 +893,18 @@ useEffect(() => {
               />
               <div className="min-h-0 flex-1 overflow-hidden">
                 <div className="flex h-full min-h-0 flex-col gap-4 px-4 pb-4 pt-2 lg:px-6 lg:pb-6">
-                  {latestPlan ? (
+                  {planWorkbenchData ? (
                     <PlanWorkbench
-                      planData={latestPlan}
+                      planData={planWorkbenchData}
                       insights={insights}
                       status={planBuildStatus}
-                      progress={0} // TODO: Calculate progress based on task updates
+                      progress={planProgress}
+                      statusMessage={latestPlanUpdate?.data.message}
+                      statusMeta={{
+                        agent: latestPlanUpdate?.data.agent,
+                        tool: latestPlanUpdate?.data.tool,
+                        stepType: latestPlanUpdate?.data.step_type,
+                      }}
                     />
                   ) : null}
                   {/* IntelligenceStatus moved to header */}
@@ -801,7 +994,7 @@ useEffect(() => {
                 
                 <TabsContent value="runtime" className="flex-1 min-h-0 m-0 overflow-y-auto">
                     {/* Missing Information Forms */}
-                    {missingInformation.length > 0 && (
+                     {missingInformation.length > 0 && (
                         <div className="px-4 pt-4">
                            {missingInformation.filter(i => i.status === 'pending').map(item => (
                                <MissingInfoForm key={item.id} item={item} />
@@ -809,25 +1002,27 @@ useEffect(() => {
                         </div>
                     )}
                     
-                    {/* Agent Runtime now shown in IntelligenceStatus Runtime tab */}
-                    {agentRuntime.length === 0 && (
-                       <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8 text-center space-y-2">
-                          <Zap className="w-8 h-8 opacity-20" />
-                          <p className="text-xs">Agents are dormant.</p>
-                          <p className="text-[10px] opacity-70">View runtime details in Intelligence Status</p>
-                       </div>
-                    )}
-
+                    {/* Analysis History with Real-time Updates */}
+                    <AnalysisHistory analyses={analysisHistory} className="flex-1" />
                 </TabsContent>
                 
-                <TabsContent value="profile" className="flex-1 min-h-0 m-0">
-                    <LearnerProfilePanel 
-                       // In a real scenario, we'd fetch these from a hook or the store
-                       academicSnapshot={analysisSummary?.analysis_results as Record<string, unknown>}
-                       careerSnapshot={undefined} 
-                       wellnessSnapshot={undefined}
-                    />
-                </TabsContent>
+                        <TabsContent value="profile" className="flex-1 min-h-0 m-0">
+                          {(() => {
+                            const latestCompletedAnalysis = analysisHistory
+                              .filter(a => a.conversation_id === selectedConversationId && a.status === 'completed')
+                              .sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime())
+                              [0];
+                            
+                            return (
+                              <LearnerProfilePanel
+                                academicSnapshot={analysisSummary?.analysis_results as Record<string, unknown>}
+                                careerSnapshot={undefined}
+                                wellnessSnapshot={undefined}
+                                latestAnalysis={latestCompletedAnalysis?.results}
+                              />
+                            );
+                          })()}
+                        </TabsContent>
              </Tabs>
           </aside>
         ) : null}

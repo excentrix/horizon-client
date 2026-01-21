@@ -4,6 +4,7 @@ import {
   GraduationCap, 
   Briefcase, 
   HeartPulse, 
+  Brain,
   Sparkles,
   History
 } from "lucide-react";
@@ -23,12 +24,21 @@ interface LearnerProfilePanelProps {
   academicSnapshot?: Record<string, unknown>;
   careerSnapshot?: Record<string, unknown>;
   wellnessSnapshot?: Record<string, unknown>;
+  latestAnalysis?: {
+    domain?: string;
+    career_stage?: string;
+    wellness_level?: string;
+    urgency_level?: string;
+    key_insights?: string[];
+    analyzed_at?: string;
+  };
 }
 
 export function LearnerProfilePanel({
   academicSnapshot,
   careerSnapshot,
   wellnessSnapshot,
+  latestAnalysis,
 }: LearnerProfilePanelProps) {
   
   if (!academicSnapshot && !careerSnapshot && !wellnessSnapshot) {
@@ -106,6 +116,62 @@ export function LearnerProfilePanel({
             </h3>
             {renderSection("Academic", <GraduationCap className="w-4 h-4 text-blue-500" />, academicSnapshot)}
             {renderSection("Career", <Briefcase className="w-4 h-4 text-emerald-500" />, careerSnapshot)}
+
+            {/* Latest Analysis Section */}
+            {latestAnalysis && (
+              <div className="mt-6">
+                <h3 className="text-sm font-medium mb-3 text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                  <Brain className="w-4 h-4" />
+                  Latest Intelligence Analysis
+                </h3>
+                <Card className="bg-card/50">
+                  <CardContent className="p-3 text-xs space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      {latestAnalysis.domain && (
+                        <div>
+                          <span className="text-muted-foreground block">Domain</span>
+                          <Badge variant="outline" className="text-xs mt-1">{latestAnalysis.domain}</Badge>
+                        </div>
+                      )}
+                      {latestAnalysis.career_stage && (
+                        <div>
+                          <span className="text-muted-foreground block">Career</span>
+                          <span className="font-medium">{latestAnalysis.career_stage}</span>
+                        </div>
+                      )}
+                      {latestAnalysis.wellness_level && (
+                        <div>
+                          <span className="text-muted-foreground block">Wellness</span>
+                          <Badge variant="secondary" className="text-xs mt-1">
+                            {latestAnalysis.wellness_level}
+                          </Badge>
+                        </div>
+                      )}
+                      {latestAnalysis.urgency_level && (
+                        <div>
+                          <span className="text-muted-foreground block">Urgency</span>
+                          <Badge variant="secondary" className="text-xs mt-1">{latestAnalysis.urgency_level}</Badge>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {latestAnalysis.key_insights && latestAnalysis.key_insights.length > 0 && (
+                      <div className="pt-2 border-t">
+                        <span className="text-muted-foreground block mb-2">Key Insights</span>
+                        <ul className="space-y-1.5">
+                          {latestAnalysis.key_insights.map((insight, i) => (
+                            <li key={i} className="flex gap-2">
+                              <span className="text-muted-foreground shrink-0">•</span>
+                              <span>{insight}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
             {renderSection("Wellness", <HeartPulse className="w-4 h-4 text-rose-500" />, wellnessSnapshot)}
         </div>
       </div>

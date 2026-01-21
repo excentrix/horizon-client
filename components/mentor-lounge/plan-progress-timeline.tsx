@@ -13,22 +13,30 @@ interface PlanProgressTimelineProps {
 
 const statusVariant: Record<string, "default" | "secondary" | "outline" | "destructive"> =
   {
+    queued: "outline",
     initializing: "outline",
     started: "secondary",
+    running: "secondary",
+    in_progress: "secondary",
     processing: "secondary",
     warning: "outline",
     completed: "default",
     success: "default",
+    failed: "destructive",
     error: "destructive",
   };
 
 const statusLabel: Record<string, string> = {
+  queued: "Queued",
   initializing: "Initializing",
   started: "Crew started",
+  running: "In progress",
+  in_progress: "In progress",
   processing: "In progress",
-  warning: "Warning",
+  warning: "Needs input",
   completed: "Finished",
   success: "Success",
+  failed: "Failed",
   error: "Error",
 };
 
@@ -98,24 +106,9 @@ export function PlanProgressTimeline({
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                     <span>{formatTime(data.timestamp ?? new Date().toISOString())}</span>
-                    {/* Accessing agent/tool might need them to be in data or top level? 
-                        The type definition only put them in data for PlanUpdateEvent? 
-                        Let's check the type definition I just edited. 
-                        I didn't add agent/tool to data in types/index.ts. 
-                        But use-chat-socket.ts puts them in... wait? 
-                        No, use-chat-socket.ts creates `data` object with specific fields.
-                        It does NOT put `agent` or `tool` in `data`.
-                        
-                        Wait, `types/index.ts` definition:
-                        data: {
-                            id: string; conversation_id, status, message, plan_id, plan_title, task_count, timestamp
-                        }
-                        It does NOT have agent or tool.
-                        
-                        So I should remove agent/tool display or add them to the type.
-                        The timeline previously showed them.
-                        Let's add them to the type if we want them.
-                     */}
+                    {data.agent ? <span>Agent: {data.agent}</span> : null}
+                    {data.tool ? <span>Tool: {data.tool}</span> : null}
+                    {data.step_type ? <span>Step: {data.step_type}</span> : null}
                   </div>
                 </div>
               </li>

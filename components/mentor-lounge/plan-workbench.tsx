@@ -19,20 +19,40 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { PlanCreationResponse, InsightEvent } from "@/types";
 
 interface PlanWorkbenchProps {
-  planData: PlanCreationResponse;
+  planData: Partial<PlanCreationResponse>;
   insights: InsightEvent[];
   progress?: number; 
   status: "idle" | "queued" | "in_progress" | "warning" | "completed" | "failed";
+  statusMessage?: string;
+  statusMeta?: { agent?: string; tool?: string; stepType?: string };
 }
 
 export function PlanWorkbench({ 
   planData, 
   insights, 
   progress = 0,
-  status 
+  status,
+  statusMessage,
+  statusMeta
 }: PlanWorkbenchProps) {
   
   const latestInsight = insights[0]; // Assuming sorted by recency
+  const hint = (() => {
+    switch (status) {
+      case "queued":
+        return "Queueing your plan and loading your context.";
+      case "in_progress":
+        return "Drafting milestones and daily tasks.";
+      case "warning":
+        return "Waiting on your answers to continue.";
+      case "completed":
+        return "Plan is ready. You can start now.";
+      case "failed":
+        return "Something went wrong. Try again in a moment.";
+      default:
+        return "Ready when you are.";
+    }
+  })();
 
   return (
     <Card className="border-l-4 border-l-primary shadow-sm bg-card/60 backdrop-blur-sm">
@@ -66,6 +86,18 @@ export function PlanWorkbench({
              <span>{progress}%</span>
            </div>
            <Progress value={progress} className="h-2" />
+        </div>
+        <div className="rounded-md border bg-muted/40 px-2 py-2 text-xs">
+          <p className="text-foreground/90">
+            {statusMessage ?? hint}
+          </p>
+          {statusMeta && (statusMeta.agent || statusMeta.tool || statusMeta.stepType) ? (
+            <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
+              {statusMeta.agent ? <span>Agent: {statusMeta.agent}</span> : null}
+              {statusMeta.tool ? <span>Tool: {statusMeta.tool}</span> : null}
+              {statusMeta.stepType ? <span>Step: {statusMeta.stepType}</span> : null}
+            </div>
+          ) : null}
         </div>
 
         {/* Insight Ticker */}

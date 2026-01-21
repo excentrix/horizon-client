@@ -35,6 +35,26 @@ export function PlanDetail({
   const mentorName =
     plan.specialized_mentor?.name ?? plan.specialized_mentor_data?.name ?? "Specialist Mentor";
   const mentorAvailable = Boolean(mentorId);
+  const displayWeeks = (() => {
+    const tasks = plan.daily_tasks ?? [];
+    if (!tasks.length) {
+      return plan.estimated_duration_weeks;
+    }
+    const timestamps = tasks
+      .map((task) => new Date(task.scheduled_date).getTime())
+      .filter((time) => Number.isFinite(time));
+    if (!timestamps.length) {
+      return plan.estimated_duration_weeks;
+    }
+    const min = Math.min(...timestamps);
+    const max = Math.max(...timestamps);
+    const days = Math.max(1, Math.ceil((max - min) / (1000 * 60 * 60 * 24)) + 1);
+    const derivedWeeks = Math.max(1, Math.ceil(days / 7));
+    if (Math.abs(derivedWeeks - plan.estimated_duration_weeks) >= 2) {
+      return derivedWeeks;
+    }
+    return plan.estimated_duration_weeks;
+  })();
 
   const renderControls = () => {
     switch (plan.status) {
@@ -73,7 +93,7 @@ export function PlanDetail({
         <CardDescription className="space-y-1 text-xs text-muted-foreground">
           <p>{plan.description}</p>
           <p>
-            {plan.plan_type} · {plan.estimated_duration_weeks} weeks · {plan.total_estimated_hours} hrs total ·
+            {plan.plan_type} · {displayWeeks} weeks · {plan.total_estimated_hours} hrs total ·
             Difficulty: {plan.difficulty_level}
           </p>
         </CardDescription>
