@@ -361,6 +361,8 @@ export interface DailyTask {
   effectiveness_rating?: number | null;
   difficulty_rating?: number | null;
   completion_notes?: string;
+  milestone_id?: string | null;
+  milestone_title?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -400,6 +402,14 @@ export interface LearningPlan {
   started_at?: string | null;
   completed_at?: string | null;
   daily_tasks?: DailyTask[];
+  milestones?: {
+    id: UUID;
+    milestone_id: string;
+    week: number;
+    title: string;
+    description?: string | null;
+    objectives?: string[];
+  }[];
   specialized_mentor?: AIPersonality | null;
   specialized_mentor_data?: (AIPersonality & { created_at?: string }) | null;
   primary_domain_name?: string | null;

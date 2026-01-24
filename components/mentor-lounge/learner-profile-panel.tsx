@@ -24,14 +24,7 @@ interface LearnerProfilePanelProps {
   academicSnapshot?: Record<string, unknown>;
   careerSnapshot?: Record<string, unknown>;
   wellnessSnapshot?: Record<string, unknown>;
-  latestAnalysis?: {
-    domain?: string;
-    career_stage?: string;
-    wellness_level?: string;
-    urgency_level?: string;
-    key_insights?: string[];
-    analyzed_at?: string;
-  };
+  latestAnalysis?: Record<string, unknown>;
 }
 
 export function LearnerProfilePanel({
@@ -41,7 +34,7 @@ export function LearnerProfilePanel({
   latestAnalysis,
 }: LearnerProfilePanelProps) {
   
-  if (!academicSnapshot && !careerSnapshot && !wellnessSnapshot) {
+  if (!academicSnapshot && !careerSnapshot && !wellnessSnapshot && !latestAnalysis) {
     return (
         <div className="text-center p-4 text-muted-foreground text-sm">
             <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -50,16 +43,30 @@ export function LearnerProfilePanel({
     );
   }
 
-  const renderSection = (
-    title: string, 
-    icon: React.ReactNode, 
-    data?: Record<string, unknown>
-  ) => {
-    if (!data) return null;
+  return (
+    <ScrollArea className="h-full">
+      <div className="p-4 space-y-6">
+        <div>
+            <h3 className="text-sm font-medium mb-3 text-muted-foreground uppercase tracking-wider">
+                Current Learner Model
+            </h3>
+            <Section title="Academic" icon={<GraduationCap className="w-4 h-4 text-blue-500" />} data={academicSnapshot} />
+            <Section title="Career" icon={<Briefcase className="w-4 h-4 text-emerald-500" />} data={careerSnapshot} />
+            <Section title="Latest Analysis" icon={<Brain className="w-4 h-4 text-purple-500" />} data={latestAnalysis} />
+            <Section title="Wellness" icon={<HeartPulse className="w-4 h-4 text-rose-500" />} data={wellnessSnapshot} />
+        </div>
+      </div>
+    </ScrollArea>
+  );
+}
+
+// Helper components for recursive rendering
+
+function Section({ title, icon, data }: { title: string, icon: React.ReactNode, data?: Record<string, unknown> }) {
+    if (!data || Object.keys(data).length === 0) return null;
     
-    // Check if this data is AI inferred (mock logic: check for 'confidence' field)
-    const isAiInferred = typeof data.confidence === 'number';
-    const updatedAt = data.generated_at as string;
+    const isAiInferred = typeof data.confidence === 'number' || typeof data.confidence_score === 'number';
+    const updatedAt = (data.generated_at || data.analyzed_at) as string;
 
     return (
       <div className="mb-4 last:mb-0">
@@ -79,22 +86,9 @@ export function LearnerProfilePanel({
         </div>
         
         <Card className="bg-card/50">
-            <CardContent className="p-3 text-xs space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                    {Object.entries(data).slice(0, 6).map(([key, value]) => {
-                        if (typeof value === 'object' || key === 'generated_at') return null;
-                        return (
-                            <div key={key}>
-                                <span className="text-muted-foreground capitalize block truncate">
-                                    {key.replace(/_/g, ' ')}
-                                </span>
-                                <span className="font-medium truncate block">
-                                    {String(value)}
-                                </span>
-                            </div>
-                        )
-                    })}
-                </div>
+            <CardContent className="p-3 text-xs space-y-3">
+                <RecursiveObject data={data} />
+                
                 {updatedAt && (
                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-2 pt-2 border-t">
                       <History className="w-3 h-3" />
@@ -105,76 +99,73 @@ export function LearnerProfilePanel({
         </Card>
       </div>
     );
-  };
+}
 
-  return (
-    <ScrollArea className="h-full">
-      <div className="p-4 space-y-6">
-        <div>
-            <h3 className="text-sm font-medium mb-3 text-muted-foreground uppercase tracking-wider">
-                Current Learner Model
-            </h3>
-            {renderSection("Academic", <GraduationCap className="w-4 h-4 text-blue-500" />, academicSnapshot)}
-            {renderSection("Career", <Briefcase className="w-4 h-4 text-emerald-500" />, careerSnapshot)}
-
-            {/* Latest Analysis Section */}
-            {latestAnalysis && (
-              <div className="mt-6">
-                <h3 className="text-sm font-medium mb-3 text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                  <Brain className="w-4 h-4" />
-                  Latest Intelligence Analysis
-                </h3>
-                <Card className="bg-card/50">
-                  <CardContent className="p-3 text-xs space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      {latestAnalysis.domain && (
-                        <div>
-                          <span className="text-muted-foreground block">Domain</span>
-                          <Badge variant="outline" className="text-xs mt-1">{latestAnalysis.domain}</Badge>
+function RecursiveObject({ data, level = 0 }: { data: Record<string, unknown>, level?: number }) {
+    return (
+        <div className="grid grid-cols-1 gap-2">
+            {Object.entries(data).map(([key, value]) => {
+                if (['generated_at', 'analyzed_at', 'confidence', 'confidence_score'].includes(key)) return null;
+                
+                return (
+                    <div key={key} className="group">
+                        <span className="text-muted-foreground capitalize block text-[10px] mb-0.5">
+                            {key.replace(/_/g, ' ')}
+                        </span>
+                        <div className="font-medium break-words">
+                            <RecursiveValue value={value} level={level} />
                         </div>
-                      )}
-                      {latestAnalysis.career_stage && (
-                        <div>
-                          <span className="text-muted-foreground block">Career</span>
-                          <span className="font-medium">{latestAnalysis.career_stage}</span>
-                        </div>
-                      )}
-                      {latestAnalysis.wellness_level && (
-                        <div>
-                          <span className="text-muted-foreground block">Wellness</span>
-                          <Badge variant="secondary" className="text-xs mt-1">
-                            {latestAnalysis.wellness_level}
-                          </Badge>
-                        </div>
-                      )}
-                      {latestAnalysis.urgency_level && (
-                        <div>
-                          <span className="text-muted-foreground block">Urgency</span>
-                          <Badge variant="secondary" className="text-xs mt-1">{latestAnalysis.urgency_level}</Badge>
-                        </div>
-                      )}
                     </div>
-                    
-                    {latestAnalysis.key_insights && latestAnalysis.key_insights.length > 0 && (
-                      <div className="pt-2 border-t">
-                        <span className="text-muted-foreground block mb-2">Key Insights</span>
-                        <ul className="space-y-1.5">
-                          {latestAnalysis.key_insights.map((insight, i) => (
-                            <li key={i} className="flex gap-2">
-                              <span className="text-muted-foreground shrink-0">•</span>
-                              <span>{insight}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-            {renderSection("Wellness", <HeartPulse className="w-4 h-4 text-rose-500" />, wellnessSnapshot)}
+                )
+            })}
         </div>
-      </div>
-    </ScrollArea>
-  );
+    );
+}
+
+function RecursiveValue({ value, level }: { value: unknown, level: number }) {
+    if (value === null || value === undefined) return <span className="text-muted-foreground italic">None</span>;
+    
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        return <span>{String(value)}</span>;
+    }
+
+    if (Array.isArray(value)) {
+        if (value.length === 0) return <span className="text-muted-foreground italic">Empty list</span>;
+        
+        // Check if array contains primitives or complex objects
+        const isPrimitiveArray = value.every(item => typeof item !== 'object' || item === null);
+
+        if (isPrimitiveArray) {
+            return (
+                <div className="flex flex-wrap gap-1">
+                    {value.map((item, i) => (
+                         <Badge key={i} variant="outline" className="text-[10px] py-0 h-auto min-h-[1.25rem] whitespace-normal text-left">
+                            {String(item)}
+                        </Badge>
+                    ))}
+                </div>
+            );
+        }
+
+        return (
+            <div className="pl-2 mt-1 space-y-2 border-l-2 border-muted/50">
+                {value.map((item, i) => (
+                    <div key={i} className="text-xs">
+                        <RecursiveValue value={item} level={level + 1} />
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    if (typeof value === 'object') {
+        // It's a nested object
+        return (
+             <div className="pl-2 mt-1 border-l-2 border-muted/50">
+                 <RecursiveObject data={value as Record<string, unknown>} level={level + 1} />
+             </div>
+        );
+    }
+
+    return <span>{String(value)}</span>;
 }

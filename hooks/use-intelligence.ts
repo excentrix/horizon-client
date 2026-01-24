@@ -108,6 +108,18 @@ export const useInsightsFeed = (params?: {
       try {
         return await intelligenceApi.getInsightsFeed(params);
       } catch (error) {
+        const status =
+          (error as { response?: { status?: number } })?.response?.status;
+        if (status === 404) {
+          telemetry.warn("Insights feed unavailable", { params });
+          return {
+            insights: [],
+            insights_summary: {},
+            domain_breakdown: {},
+            urgency_distribution: {},
+            action_items: [],
+          };
+        }
         telemetry.error("Failed to load insights feed", { error, params });
         throw error;
       }

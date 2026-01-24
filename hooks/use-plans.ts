@@ -24,6 +24,17 @@ export function usePlans() {
         throw error;
       }
     },
+    staleTime: 120_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: (failureCount, error) => {
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
+      if (status === 429) {
+        return false;
+      }
+      return failureCount < 1;
+    },
   });
 }
 
@@ -42,6 +53,17 @@ export function usePlan(planId?: string) {
       }
     },
     enabled: Boolean(planId),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
+      if (status === 429) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
   });
 }
 

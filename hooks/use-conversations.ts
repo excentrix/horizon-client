@@ -33,9 +33,18 @@ export function useConversations() {
     queryKey: ["conversations"],
     queryFn: async () => chatApi.listConversations(),
     enabled: Boolean(!authLoading && user),
-    staleTime: 30_000,
+    staleTime: 120_000,
     gcTime: 5 * 60_000,
-    retry: 1,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: (failureCount, error) => {
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
+      if (status === 429) {
+        return false;
+      }
+      return failureCount < 1;
+    },
     placeholderData: () => [] as Conversation[],
   });
 }

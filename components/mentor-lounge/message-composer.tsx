@@ -1,9 +1,18 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Send, ScanSearch } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  PromptInput,
+  PromptInputBody,
+  PromptInputFooter,
+  PromptInputProvider,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputTools,
+  PromptInputButton,
+  usePromptInputController,
+} from "@/components/ai-elements/prompt-input";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
 import { telemetry } from "@/lib/telemetry";
 import { intelligenceApi } from "@/lib/api";
@@ -12,6 +21,26 @@ interface MessageComposerProps {
   disabled?: boolean;
   onSend: (content: string) => Promise<void> | void;
   onTypingChange?: (isTyping: boolean) => void;
+}
+
+function PromptInputDraftSync({ draft, onTypingChange }: { draft: string; onTypingChange?: (isTyping: boolean) => void }) {
+  const { textInput } = usePromptInputController();
+  const setComposerDraft = useMentorLoungeStore((state) => state.setComposerDraft);
+
+  useEffect(() => {
+    if (textInput.value !== draft) {
+      textInput.setInput(draft);
+    }
+  }, [draft, textInput]);
+
+  useEffect(() => {
+    if (textInput.value !== draft) {
+      setComposerDraft(textInput.value);
+    }
+    onTypingChange?.(Boolean(textInput.value.trim()));
+  }, [draft, onTypingChange, setComposerDraft, textInput.value]);
+
+  return null;
 }
 
 export function MessageComposer({ disabled, onSend, onTypingChange }: MessageComposerProps) {
@@ -29,25 +58,24 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
     setShowDebug(process.env.NEXT_PUBLIC_SHOW_CORTEX_DEBUG === "true");
   }, []);
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const sendMessage = async (content: string) => {
     if (!selectedConversationId || disabled) {
       return;
     }
 
-    const trimmed = composerDraft.trim();
+    const trimmed = content.trim();
     if (!trimmed) {
       return;
     }
 
-        setIsSubmitting(true);
-        try {
-          await onSend(trimmed);
-          setComposerDraft("");
-          onTypingChange?.(false);
-        } catch (error) {
-          telemetry.warn("Failed to send chat message", { error });
-          telemetry.toastError("Couldn't send that message. Try again.");
+    setIsSubmitting(true);
+    try {
+      await onSend(trimmed);
+      setComposerDraft("");
+      onTypingChange?.(false);
+    } catch (error) {
+      telemetry.warn("Failed to send chat message", { error });
+      telemetry.toastError("Couldn't send that message. Try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -80,50 +108,72 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="flex items-center gap-3 rounded-xl border bg-card/80 px-4 py-3 shadow"
-    >
-        {showDebug ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={handlePreviewRouting}
-            disabled={disabled || !selectedConversationId || isPreviewing || !composerDraft.trim()}
-            title="Preview Cortex Routing"
-          >
-             <ScanSearch className="h-4 w-4 text-muted-foreground" />
-          </Button>
-      ) : null}
-              <Input
-                value={composerDraft}
-                onChange={(event) => {
-                  setComposerDraft(event.target.value);
-                  onTypingChange?.(Boolean(event.target.value.trim()));
-                }}
-                onBlur={() => onTypingChange?.(false)}
-                placeholder={
-                  selectedConversationId
-                    ? "Ask your mentor anything..."
-                    : "Select a conversation to start"
-        }
-        disabled={disabled || !selectedConversationId || isSubmitting}
-        className="flex-1"
-      />
-      <Button
-        type="submit"
-        size="icon"
-        disabled={
-          disabled ||
-          !selectedConversationId ||
-          isSubmitting ||
-          !composerDraft.trim()
-        }
+    <PromptInputProvider initialInput={composerDraft}>
+      <PromptInput
+        onSubmit={async (message) => {
+          if (!selectedConversationId || disabled) {
+            return;
+          }
+
+          const trimmed = message.text.trim();
+          if (!trimmed) {
+            return;
+          }
+
+          await sendMessage(trimmed);
+        }}
+        className="rounded-2xl border bg-card/90 shadow-sm"
       >
-        <Send className="h-4 w-4" />
-        <span className="sr-only">Send message</span>
-      </Button>
-    </form>
+        <PromptInputDraftSync draft={composerDraft} onTypingChange={onTypingChange} />
+        <PromptInputBody>
+          <PromptInputTextarea
+            placeholder={
+              selectedConversationId
+                ? "Ask your mentor anything..."
+                : "Select a conversation to start"
+            }
+            disabled={disabled || !selectedConversationId || isSubmitting}
+            onChange={(event) => {
+              setComposerDraft(event.target.value);
+              const nextTyping = Boolean(event.target.value.trim());
+              onTypingChange?.(nextTyping);
+            }}
+            onBlur={() => {
+              onTypingChange?.(false);
+            }}
+            className="border-none bg-transparent px-4 py-4 text-base leading-6"
+          />
+        </PromptInputBody>
+        <PromptInputFooter className="border-t px-3 py-2">
+          <PromptInputTools>
+            {showDebug ? (
+              <PromptInputButton
+                onClick={handlePreviewRouting}
+                disabled={
+                  disabled ||
+                  !selectedConversationId ||
+                  isPreviewing ||
+                  !composerDraft.trim()
+                }
+                title="Preview Cortex Routing"
+              >
+                <ScanSearch className="h-4 w-4 text-muted-foreground" />
+              </PromptInputButton>
+            ) : null}
+          </PromptInputTools>
+          <PromptInputSubmit
+            disabled={
+              disabled ||
+              !selectedConversationId ||
+              isSubmitting ||
+              !composerDraft.trim()
+            }
+            status={isSubmitting ? "submitted" : undefined}
+          >
+            <Send className="h-4 w-4" />
+          </PromptInputSubmit>
+        </PromptInputFooter>
+      </PromptInput>
+    </PromptInputProvider>
   );
 }

@@ -66,10 +66,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const profile = await authApi.me();
       setUser(profile);
     } catch (error) {
-      clearSessionTokens();
-      setUser(null);
-      if (pathname && !pathname.startsWith("/login")) {
-        router.replace("/login");
+      const status =
+        (error as { response?: { status?: number } })?.response?.status;
+      if (status === 401 || status === 403) {
+        clearSessionTokens();
+        setUser(null);
+        if (pathname && !pathname.startsWith("/login")) {
+          router.replace("/login");
+        }
+      } else {
+        telemetry.warn("Profile fetch failed; keeping session", { error });
       }
       throw error;
     } finally {
@@ -94,8 +100,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       try {
         const response = await authApi.login(payload);
-        const { access_token, refresh_token } = response.session;
-        setSessionTokens(access_token, refresh_token, Boolean(payload.remember_me));
+        const access =
+          response.session.access_token ?? response.session.access ?? undefined;
+        const refresh =
+          response.session.refresh_token ?? response.session.refresh ?? undefined;
+        setSessionTokens(access, refresh, Boolean(payload.remember_me));
         setUser(response.user);
         toast.success("Welcome back!", {
           description: response.user.full_name ?? response.user.email,

@@ -1,19 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, Conversation, MentorAction } from "@/types";
 import type { SocketStatus } from "@/hooks/use-chat-socket";
 import type { PersonaTheme } from "@/lib/persona-theme";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Bot } from "lucide-react";
+import {
+  Conversation as ConversationContainer,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
+import { Loader } from "@/components/ai-elements/loader";
 import { LearningGraphPill } from "./learning-graph-pill";
 import { CareerGoalsPill } from "./career-goals-pill";
 import { AgentInsightsCard } from "./agent-insights-card";
 import { PlanStatusBanner } from "./plan-status-banner";
 import { PlanBuildHeaderBadge } from "./plan-build-header-badge";
+import { useStickToBottomContext } from "use-stick-to-bottom";
 
 interface MessageFeedProps {
   conversation?: Conversation;
@@ -21,6 +33,7 @@ interface MessageFeedProps {
   isLoading?: boolean;
   connectionStatus?: SocketStatus;
   connectionError?: string | null;
+  showHeader?: boolean;
   hasMore?: boolean;
   onLoadMore?: () => Promise<void> | void;
   isLoadingMore?: boolean;
@@ -44,6 +57,7 @@ export function MessageFeed({
   isLoading,
   connectionStatus = "idle",
   connectionError,
+  showHeader = true,
   hasMore,
   onLoadMore,
   isLoadingMore,
@@ -52,23 +66,15 @@ export function MessageFeed({
   streamingMessageId,
   theme,
 }: MessageFeedProps) {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const topSentinelRef = useRef<HTMLDivElement | null>(null);
-  const loadingMoreRef = useRef(false);
-  const initialScrollRef = useRef(true);
-  const lastConversationIdRef = useRef<string | null>(null);
-  const [showScrollToLatest, setShowScrollToLatest] = useState(false);
   const setMentorActions = useMentorLoungeStore((state) => state.setMentorActions);
+  const streamingTimestampRef = useRef<string>(new Date().toISOString());
 
-  const scrollToLatest = useCallback(() => {
-    const container = scrollRef.current;
-    if (!container) {
-      return;
+  // Update timestamp ref only when streaming message ID changes
+  useEffect(() => {
+    if (streamingMessageId) {
+      streamingTimestampRef.current = new Date().toISOString();
     }
-
-    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-    setShowScrollToLatest(false);
-  }, []);
+  }, [streamingMessageId]);
 
   // Merge streaming message into the list to prevent blinking
   const displayMessages = useMemo<ChatMessage[]>(() => {
@@ -81,8 +87,8 @@ export function MessageFeed({
       content: streamingMessage,
       sender_type: "ai",
       message_type: "text",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: streamingTimestampRef.current,
+      updated_at: streamingTimestampRef.current,
       sequence_number: Number.MAX_SAFE_INTEGER, // Ensure it's at the end
       is_edited: false,
       is_flagged: false,
@@ -96,53 +102,6 @@ export function MessageFeed({
 
     return [...messages, streamingObj];
   }, [messages, streamingMessage, streamingMessageId, conversation?.id]);
-
-  const triggerLoadMore = useCallback(() => {
-    if (!onLoadMore || loadingMoreRef.current || !hasMore) {
-      return;
-    }
-
-    const container = scrollRef.current;
-    const previousHeight = container?.scrollHeight ?? 0;
-    const previousTop = container?.scrollTop ?? 0;
-
-    loadingMoreRef.current = true;
-
-    Promise.resolve(onLoadMore()).finally(() => {
-      loadingMoreRef.current = false;
-      if (container) {
-        const heightDelta = container.scrollHeight - previousHeight;
-        container.scrollTop = previousTop + heightDelta;
-      }
-    });
-  }, [hasMore, onLoadMore]);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    const sentinel = topSentinelRef.current;
-
-    if (!container || !sentinel || !hasMore) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting && hasMore && !isLoadingMore) {
-            triggerLoadMore();
-          }
-        });
-      },
-      {
-        root: container,
-        threshold: 0.1,
-      },
-    );
-
-    observer.observe(sentinel);
-
-    return () => observer.disconnect();
-  }, [hasMore, isLoadingMore, triggerLoadMore, messages.length]);
 
   useEffect(() => {
     const latestWithActions = [...messages]
@@ -170,54 +129,6 @@ export function MessageFeed({
     }
   }, [conversation, setMentorActions]);
 
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (!container) {
-      return;
-    }
-
-    const conversationId = conversation?.id ?? null;
-    const conversationChanged =
-      conversationId !== lastConversationIdRef.current;
-
-    const distanceFromBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
-    const isNearBottom = distanceFromBottom < 160;
-
-    if (initialScrollRef.current || conversationChanged) {
-      container.scrollTop = container.scrollHeight;
-      initialScrollRef.current = false;
-      setShowScrollToLatest(false);
-    } else if (isNearBottom) {
-      container.scrollTop = container.scrollHeight;
-      setShowScrollToLatest(false);
-    } else {
-      setShowScrollToLatest(distanceFromBottom > 240);
-    }
-
-    lastConversationIdRef.current = conversationId;
-  }, [conversation?.id, displayMessages.length, streamingMessage]);
-
-  useEffect(() => {
-    initialScrollRef.current = true;
-  }, [conversation?.id]);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (!container) {
-      return;
-    }
-
-    const handleScroll = () => {
-      const distanceFromBottom =
-        container.scrollHeight - container.scrollTop - container.clientHeight;
-      setShowScrollToLatest(distanceFromBottom > 240);
-    };
-
-    container.addEventListener("scroll", handleScroll);
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [conversation?.id]);
-
   if (!conversation) {
     return (
       <div className="grid flex-1 place-items-center rounded-xl border border-dashed bg-muted/30 p-8 text-sm text-muted-foreground">
@@ -233,165 +144,245 @@ export function MessageFeed({
         theme?.containerBorder,
       )}
     >
-      <header className="border-b px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">{conversation.title}</h2>
-            <p className="text-xs text-muted-foreground">
-              {conversation.topic}
+      {showHeader ? (
+        <header className="border-b px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">{conversation.title}</h2>
+              <p className="text-xs text-muted-foreground">
+                {conversation.topic}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <span
+                className={cn(
+                  "rounded-full px-3 py-1 font-medium",
+                  connectionStatus === "open"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : connectionStatus === "connecting"
+                      ? "bg-amber-100 text-amber-700"
+                      : connectionStatus === "error"
+                        ? "bg-rose-100 text-rose-700"
+                        : `${theme?.statusBadgeBg ?? "bg-muted"} ${theme?.statusBadgeText ?? "text-muted-foreground"}`
+                )}
+              >
+                {statusLabels[connectionStatus]}
+              </span>
+              <span
+                className={cn(
+                  "rounded-full px-3 py-1 font-medium",
+                  theme?.accentBadgeBg ?? "bg-primary/10",
+                  theme?.accentBadgeText ?? "text-primary",
+                )}
+              >
+                {conversation.ai_personality?.name ?? "Adaptive Mentor"}
+              </span>
+              <PlanBuildHeaderBadge />
+            </div>
+          </div>
+          {connectionError ? (
+            <p className="mt-2 rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              {connectionError}
             </p>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span
-              className={cn(
-                "rounded-full px-3 py-1 font-medium",
-                connectionStatus === "open"
-                  ? "bg-emerald-100 text-emerald-700"
-                  : connectionStatus === "connecting"
-                    ? "bg-amber-100 text-amber-700"
-                    : connectionStatus === "error"
-                      ? "bg-rose-100 text-rose-700"
-                      : `${theme?.statusBadgeBg ?? "bg-muted"} ${theme?.statusBadgeText ?? "text-muted-foreground"}`
-              )}
-            >
-              {statusLabels[connectionStatus]}
-            </span>
-            <span
-              className={cn(
-                "rounded-full px-3 py-1 font-medium",
-                theme?.accentBadgeBg ?? "bg-primary/10",
-                theme?.accentBadgeText ?? "text-primary",
-              )}
-            >
-              {conversation.ai_personality?.name ?? "Adaptive Mentor"}
-            </span>
-            {/* Plan Build Indicator */}
-            <PlanBuildHeaderBadge />
-          </div>
-        </div>
-        {connectionError ? (
-          <p className="mt-2 rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">
-            {connectionError}
-          </p>
-        ) : null}
-      </header>
+          ) : null}
+        </header>
+      ) : null}
 
-      <div
-        ref={scrollRef}
-        className="flex-1 space-y-3 overflow-y-auto px-6 py-4 scrollbar"
+      <ConversationContainer
+        className="flex-1 overflow-hidden"
+        key={conversation.id}
       >
-        <div ref={topSentinelRef} />
-        {hasMore ? (
-          <div className="mb-2 flex items-center justify-center">
-            <button
-              type="button"
-              onClick={triggerLoadMore}
-              className="rounded-full border px-4 py-1 text-xs text-muted-foreground transition hover:border-foreground"
-              disabled={isLoadingMore}
-            >
-              {isLoadingMore
-                ? "Loading earlier messages..."
-                : "Load previous messages"}
-            </button>
-          </div>
-        ) : null}
+        <ConversationContent className="gap-4 px-5 py-4">
+          <MessageFeedContent
+            displayMessages={displayMessages}
+            hasMore={hasMore}
+            isLoading={isLoading}
+            isLoadingMore={isLoadingMore}
+            mentorTyping={mentorTyping}
+            messages={messages}
+            onLoadMore={onLoadMore}
+            streamingMessage={streamingMessage}
+            theme={theme}
+          />
+        </ConversationContent>
+        <ConversationScrollButton className="bottom-6" />
+      </ConversationContainer>
 
-        {isLoading && !messages.length ? (
-          <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            Syncing latest messages with your mentor...
-          </div>
-        ) : null}
+      <PlanStatusBanner />
+    </div>
+  );
+}
 
-        <AnimatePresence initial={false}>
-          {displayMessages.map((message) => (
+function MessageFeedContent({
+  displayMessages,
+  hasMore,
+  isLoading,
+  isLoadingMore,
+  mentorTyping,
+  messages,
+  onLoadMore,
+  streamingMessage,
+  theme,
+}: {
+  displayMessages: ChatMessage[];
+  hasMore?: boolean;
+  isLoading?: boolean;
+  isLoadingMore?: boolean;
+  mentorTyping?: boolean;
+  messages: ChatMessage[];
+  onLoadMore?: () => Promise<void> | void;
+  streamingMessage?: string | null;
+  theme?: PersonaTheme;
+}) {
+  const { scrollRef } = useStickToBottomContext();
+  const topSentinelRef = useRef<HTMLDivElement | null>(null);
+  const loadingMoreRef = useRef(false);
+
+  const triggerLoadMore = useCallback(() => {
+    if (!onLoadMore || loadingMoreRef.current || !hasMore) {
+      return;
+    }
+
+    const container = scrollRef.current;
+    const previousHeight = container?.scrollHeight ?? 0;
+    const previousTop = container?.scrollTop ?? 0;
+
+    loadingMoreRef.current = true;
+
+    Promise.resolve(onLoadMore()).finally(() => {
+      loadingMoreRef.current = false;
+      if (container) {
+        const heightDelta = container.scrollHeight - previousHeight;
+        container.scrollTop = previousTop + heightDelta;
+      }
+    });
+  }, [hasMore, onLoadMore, scrollRef]);
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    const sentinel = topSentinelRef.current;
+
+    if (!container || !sentinel || !hasMore) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && hasMore && !isLoadingMore) {
+            triggerLoadMore();
+          }
+        });
+      },
+      {
+        root: container,
+        threshold: 0.1,
+      },
+    );
+
+    observer.observe(sentinel);
+
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, triggerLoadMore, messages.length, scrollRef]);
+
+  return (
+    <>
+      <div ref={topSentinelRef} />
+      {hasMore ? (
+        <div className="flex items-center justify-center">
+          <button
+            type="button"
+            onClick={triggerLoadMore}
+            className="rounded-full border px-4 py-1 text-xs text-muted-foreground transition hover:border-foreground"
+            disabled={isLoadingMore}
+          >
+            {isLoadingMore
+              ? "Loading earlier messages..."
+              : "Load previous messages"}
+          </button>
+        </div>
+      ) : null}
+
+      {isLoading && !messages.length ? (
+        <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+          Syncing latest messages with your mentor...
+        </div>
+      ) : null}
+
+      <AnimatePresence initial={false}>
+        {displayMessages.map((message) => {
+          const isUser = message.sender_type === "user";
+          return (
             <motion.div
               key={message.id}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 12 }}
               transition={{ duration: 0.18 }}
-              className={cn("flex", {
-                "justify-end": message.sender_type === "user",
-                "justify-start": message.sender_type !== "user",
-              })}
             >
-              <div
-                className={cn(
-                  "max-w-[70%] rounded-2xl px-4 py-3 text-sm shadow-sm",
-                  message.sender_type === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : `${theme?.bubbleBg ?? "bg-muted"} ${theme?.bubbleText ?? "text-foreground"}`
-                )}
-              >
-                {message.content}
-                
-                {message.metadata?.graph_learning_snapshot && (
-                  <LearningGraphPill snapshot={message.metadata.graph_learning_snapshot} />
-                )}
-                {message.metadata?.graph_career_snapshot && (
-                  <CareerGoalsPill snapshot={message.metadata.graph_career_snapshot} />
-                )}
+              <Message from={isUser ? "user" : "assistant"}>
+                <MessageContent
+                  className={cn(
+                    "max-w-[70%] rounded-2xl px-4 py-3 shadow-sm",
+                    "group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground",
+                    !isUser && `${theme?.bubbleBg ?? "bg-muted/60"} ${theme?.bubbleText ?? "text-foreground"}`,
+                  )}
+                >
+                  <MessageResponse>{message.content}</MessageResponse>
 
-                <AgentInsightsCard 
-                  agentTools={message.metadata?.agent_tools} 
-                  toolInvocations={message.metadata?.tool_invocations} 
-                  toolRuntimeInvocations={message.metadata?.tool_runtime_invocations}
-                  guardrails={message.metadata?.guardrails}
-                  safety={message.metadata?.safety}
-                  agentName={message.cortex?.agent}
-                />
+                  {message.metadata?.graph_learning_snapshot && (
+                    <LearningGraphPill snapshot={message.metadata.graph_learning_snapshot} />
+                  )}
+                  {message.metadata?.graph_career_snapshot && (
+                    <CareerGoalsPill snapshot={message.metadata.graph_career_snapshot} />
+                  )}
 
-                {message.cortex ? (
-                  <div className="mt-2 flex justify-end">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                           <div className="inline-flex items-center gap-1 rounded-full bg-background/50 px-2 py-0.5 text-[10px] font-medium text-foreground/70 mix-blend-multiply dark:mix-blend-screen">
-                            <Bot className="h-3 w-3" />
-                            {message.cortex.agent}
-                           </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" className="text-xs">
-                          <p>{message.cortex.reason}</p>
-                          <p className="opacity-70">Confidence: {(message.cortex.confidence * 100).toFixed(0)}%</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                ) : null}
-              </div>
+                  <AgentInsightsCard
+                    agentTools={message.metadata?.agent_tools}
+                    toolInvocations={message.metadata?.tool_invocations}
+                    toolRuntimeInvocations={message.metadata?.tool_runtime_invocations}
+                    guardrails={message.metadata?.guardrails}
+                    safety={message.metadata?.safety}
+                    agentName={message.cortex?.agent}
+                  />
+
+                  {message.cortex ? (
+                    <div className="mt-2 flex justify-end">
+                      <div
+                        className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2 py-0.5 text-[10px] font-medium text-foreground/70"
+                        title={`${message.cortex.reason} • Confidence: ${(
+                          message.cortex.confidence * 100
+                        ).toFixed(0)}%`}
+                      >
+                        <Bot className="h-3 w-3" />
+                        {message.cortex.agent}
+                      </div>
+                    </div>
+                  ) : null}
+                </MessageContent>
+              </Message>
             </motion.div>
-          ))}
-        </AnimatePresence>
+          );
+        })}
+      </AnimatePresence>
 
-
-
-        {mentorTyping && !streamingMessage ? (
-          <div className="flex justify-start">
-            <div className="rounded-2xl bg-muted px-4 py-3 text-xs text-muted-foreground">
+      {mentorTyping && !streamingMessage ? (
+        <Message from="assistant">
+          <MessageContent className="rounded-2xl border border-dashed bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-2">
+              <Loader size={14} />
               Mentor is typing...
-            </div>
-          </div>
-        ) : null}
-
-        {!messages.length && !isLoading ? (
-          <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            No messages yet — break the ice!
-          </div>
-        ) : null}
-      </div>
-
-      {showScrollToLatest ? (
-        <button
-          type="button"
-          onClick={scrollToLatest}
-          className="absolute bottom-6 right-6 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-medium text-primary-foreground shadow-lg transition hover:bg-primary/90"
-        >
-          Jump to latest
-        </button>
+            </span>
+          </MessageContent>
+        </Message>
       ) : null}
 
-      <PlanStatusBanner />
-    </div>
+      {!displayMessages.length && !isLoading ? (
+        <ConversationEmptyState
+          title="No messages yet"
+          description="Break the ice and ask your mentor anything."
+        />
+      ) : null}
+    </>
   );
 }

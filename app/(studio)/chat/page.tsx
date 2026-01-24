@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { ConversationList } from "@/components/mentor-lounge/conversation-list";
 import { MessageFeed } from "@/components/mentor-lounge/message-feed";
@@ -10,9 +10,11 @@ import { useConversations, useConversationMessages } from "@/hooks/use-conversat
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { getPersonaTheme } from "@/lib/persona-theme";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { useCreatePlanFromConversation, usePlan } from "@/hooks/use-plans";
 import { useAnalyzeConversation } from "@/hooks/use-intelligence";
 import { telemetry } from "@/lib/telemetry";
@@ -26,7 +28,6 @@ import { SafetyAlert } from "@/components/mentor-lounge/safety-alert";
 import { IntelligenceReportModal } from "@/components/mentor-lounge/intelligence-report-modal";
 import { PersonalitySelector } from "@/components/mentor-lounge/personality-selector";
 import { MentorActionShelf } from "@/components/mentor-lounge/mentor-action-shelf";
-import { PlanProgressTimeline } from "@/components/mentor-lounge/plan-progress-timeline";
 import { AgentIndicator } from "@/components/mentor-lounge/agent-indicator";
 import { CortexDebugDrawer } from "@/components/mentor-lounge/cortex-debug-drawer";
 import { intelligenceApi } from "@/lib/api";
@@ -35,8 +36,9 @@ import { MissingInfoForm } from "@/components/mentor-lounge/missing-info-form";
 import { AnalysisHistory } from "@/components/mentor-lounge/analysis-history";
 import { LearnerProfilePanel } from "@/components/mentor-lounge/learner-profile-panel";
 import { PlanWorkbench } from "@/components/mentor-lounge/plan-workbench";
+import { PlanBuildHeaderBadge } from "@/components/mentor-lounge/plan-build-header-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Brain, User } from "lucide-react";
+import { Brain, User, PanelRightOpen } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlanSessionPoller } from "@/hooks/use-plan-poller";
 
@@ -73,8 +75,13 @@ interface StageHistoryEntry {
 export default function ChatPage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const selectedConversationId = useMentorLoungeStore(
     (state) => state.selectedConversationId,
+  );
+  const setSelectedConversationId = useMentorLoungeStore(
+    (state) => state.setSelectedConversationId,
   );
   const setComposerDraft = useMentorLoungeStore(
     (state) => state.setComposerDraft,
@@ -84,9 +91,6 @@ export default function ChatPage() {
     (state) => state.setMentorActions,
   );
   const planUpdates = useMentorLoungeStore((state) => state.planUpdates);
-  const clearPlanUpdates = useMentorLoungeStore(
-    (state) => state.clearPlanUpdates,
-  );
   const agentRuntime = useMentorLoungeStore((state) => state.agentRuntime);
   const insights = useMentorLoungeStore((state) => state.insights);
   const missingInformation = useMentorLoungeStore((state) => state.missingInformation);
@@ -121,6 +125,7 @@ export default function ChatPage() {
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [isReportModalOpen, setReportModalOpen] = useState(false);
   const [analysisTimedOut, setAnalysisTimedOut] = useState<string | null>(null);
+  const [isInsightsOpen, setInsightsOpen] = useState(false);
   
   // Analysis history state
   const [analysisHistory, setAnalysisHistory] = useState<Array<{
@@ -154,6 +159,51 @@ export default function ChatPage() {
       analysisPollTimeoutRef.current = null;
     }
   }, []);
+
+  useEffect(() => {
+    if (selectedConversationId) {
+      return;
+    }
+    const queryConversation = searchParams.get("conversation");
+    if (!queryConversation) {
+      return;
+    }
+    const exists = conversations.some((conversation) => conversation.id === queryConversation);
+    if (exists) {
+      setSelectedConversationId(queryConversation);
+    }
+  }, [conversations, searchParams, selectedConversationId, setSelectedConversationId]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (selectedConversationId) {
+      params.set("conversation", selectedConversationId);
+    } else {
+      params.delete("conversation");
+    }
+    const desiredPlanId =
+      planBuildId ?? latestPlan?.learning_plan_id ?? planIdFromQuery ?? null;
+    if (desiredPlanId) {
+      params.set("plan", desiredPlanId);
+    } else {
+      params.delete("plan");
+    }
+    const next = params.toString();
+    const current = searchParams.toString();
+    if (next === current) {
+      return;
+    }
+    const url = next ? `${pathname}?${next}` : pathname;
+    router.replace(url, { scroll: false });
+  }, [
+    latestPlan?.learning_plan_id,
+    pathname,
+    // planBuildId,
+    // planIdFromQuery,
+    router,
+    searchParams,
+    selectedConversationId,
+  ]);
 
   const fetchLatestAnalysis = useCallback(
     async (conversationId: string, options?: { silent?: boolean }) => {
@@ -286,13 +336,11 @@ useEffect(() => {
   setTypingStatus(false);
   setLatestPlan(null);
   setMentorActions([]);
-  clearPlanUpdates();
 }, [
   selectedConversationId,
   setComposerDraft,
   setTypingStatus,
   setMentorActions,
-  clearPlanUpdates,
 ]);
 
   useEffect(() => {
@@ -307,7 +355,10 @@ useEffect(() => {
   const planBuildStatus = useMentorLoungeStore(state => state.planBuildStatus);
   const planBuildId = useMentorLoungeStore(state => state.planBuildId);
   const planBuildTitle = useMentorLoungeStore(state => state.planBuildTitle);
-  const { data: planRecord } = usePlan(planBuildId ?? undefined);
+  const planIdFromQuery = searchParams.get("plan");
+  const effectivePlanId =
+    planBuildId ?? planIdFromQuery ?? latestPlan?.learning_plan_id ?? undefined;
+  const { data: planRecord } = usePlan(effectivePlanId ?? undefined);
 
   // Activate polling for plan status fallback
   usePlanSessionPoller();
@@ -734,28 +785,31 @@ useEffect(() => {
     })[0];
   }, [planUpdates]);
 
+  const planDisplayStatus =
+    planRecord && planBuildStatus === "idle" ? "completed" : planBuildStatus;
+
   const planProgress = useMemo(() => {
-    if (planBuildStatus === "completed") {
+    if (planDisplayStatus === "completed") {
       return 100;
     }
-    if (planBuildStatus === "failed") {
+    if (planDisplayStatus === "failed") {
       return 0;
     }
-    if (planBuildStatus === "queued") {
+    if (planDisplayStatus === "queued") {
       return 10;
     }
-    if (planBuildStatus === "warning") {
+    if (planDisplayStatus === "warning") {
       return 75;
     }
     if (planUpdates.length) {
       const capped = Math.min(90, 20 + planUpdates.length * 8);
       return capped;
     }
-    if (planBuildStatus === "in_progress") {
+    if (planDisplayStatus === "in_progress") {
       return 40;
     }
     return 0;
-  }, [planBuildStatus, planUpdates.length]);
+  }, [planDisplayStatus, planUpdates.length]);
 
   return (
     <div className="flex min-h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-background">
@@ -772,8 +826,8 @@ useEffect(() => {
           
           Let's place the SessionGoal first.
       */}
-      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
-        <aside className="flex h-full w-full flex-col border-b bg-card/60 backdrop-blur lg:w-80 lg:border-b-0 lg:border-r">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
+        <aside className="flex h-full w-full flex-col border-b bg-card/60 backdrop-blur lg:w-72 lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between gap-4 px-4 py-3 lg:px-5 lg:py-4">
             <div>
               <h2 className="text-lg font-semibold leading-tight">Conversations</h2>
@@ -786,7 +840,7 @@ useEffect(() => {
             </Button>
           </div>
           <Separator />
-          <div className="flex-1 overflow-y-auto px-4 py-3 lg:px-3">
+          <div className="flex-1 overflow-y-auto px-3 py-3">
             <ConversationList
               conversations={conversations}
               selectedConversationId={selectedConversationId}
@@ -795,14 +849,13 @@ useEffect(() => {
             />
           </div>
         </aside>
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
           {activeConversation ? (
             <>
-              <header className="p-4 border-b bg-card/30">
-                <div className="flex flex-col gap-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-lg font-semibold">{activeConversation.title}</h3>
+              <header className="border-b bg-card/30">
+                <div className="flex flex-wrap items-start justify-between gap-3 px-4 pb-2 pt-3">
+                  <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-base font-semibold">{activeConversation.title}</h3>
                       {/* Show selector if plan is active (mocked logic for now as 'specialized' check) 
                           In a real scenario, we'd check if user has an active plan that unlocks this.
                           For now, we allow switching if the current personality is NOT general, 
@@ -832,58 +885,172 @@ useEffect(() => {
                             />
                           </div>
                       ) : (
-                        <p className="text-sm text-muted-foreground">
-                            {activeConversation.ai_personality?.name}
+                        <p className="text-xs text-muted-foreground">
+                          {activeConversation.ai_personality?.name}
                         </p>
                       )}
-                    </div>
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleAnalyzeConversation()}
-                        disabled={!selectedConversationId || analyzeConversation.isPending}
-                      >
-                        {analyzeConversation.isPending ? "Analyzing..." : "Run Intelligence Analysis"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleAnalyzeConversation(true)}
-                        disabled={!selectedConversationId || analyzeConversation.isPending}
-                      >
-                        Force Reanalysis
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          void handleCreatePlan();
-                        }}
-                        disabled={disablePlanButton}
-                        title={
-                          !hasAnalysisResults
-                            ? "Run analysis to unlock plan creation"
-                            : undefined
-                        }
-                      >
-                        {createPlan.isPending ? "Creating Plan..." : "Create Plan from Conversation"}
-                      </Button>
-                    </div>
-                    {!hasAnalysisResults && selectedConversationId ? (
-                      <p className="text-[11px] text-muted-foreground">
-                        Run an intelligence analysis to unlock plan creation and reports.
-                      </p>
-                    ) : null}
                   </div>
-                  
-                  {/* Session Goal Area - Full Width */}
-                  <div className="w-full">
-                     <SessionGoal 
-                        goal={activeConversation.description || "General exploration"} 
-                        planTitle={latestPlan?.plan_title} 
-                     />
+                  <div className="flex items-center gap-2 text-xs">
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-1 font-medium",
+                        socketStatus === "open"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : socketStatus === "connecting"
+                            ? "bg-amber-100 text-amber-700"
+                            : socketStatus === "error"
+                              ? "bg-rose-100 text-rose-700"
+                              : "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {socketStatus === "open"
+                        ? "Live"
+                        : socketStatus === "connecting"
+                          ? "Connecting"
+                          : socketStatus === "error"
+                            ? "Offline"
+                            : "Idle"}
+                    </span>
+                    <span className="rounded-full bg-primary/10 px-2 py-1 font-medium text-primary">
+                      {activeConversation.ai_personality?.name ?? "Adaptive Mentor"}
+                    </span>
+                    <PlanBuildHeaderBadge />
+                    <Sheet open={isInsightsOpen} onOpenChange={setInsightsOpen}>
+                      <SheetTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-7 gap-2 text-xs">
+                          <PanelRightOpen className="h-3.5 w-3.5" />
+                          Insights
+                        </Button>
+                      </SheetTrigger>
+                      <SheetContent side="right" className="flex w-[360px] flex-col p-0 sm:w-[420px]">
+                        <SheetHeader className="border-b px-4 py-3">
+                          <SheetTitle>Mentor insights</SheetTitle>
+                          <SheetDescription className="text-xs">
+                            Runtime updates and learner profile, in one place.
+                          </SheetDescription>
+                        </SheetHeader>
+                        <div className="flex min-h-0 flex-1 flex-col">
+                          <Tabs defaultValue="runtime" className="flex min-h-0 flex-1 flex-col">
+                            <div className="px-4 py-3 border-b">
+                              <TabsList className="w-full grid grid-cols-2">
+                                <TabsTrigger value="runtime" className="text-xs gap-2">
+                                  <Brain className="w-3.5 h-3.5" /> Runtime
+                                </TabsTrigger>
+                                <TabsTrigger value="profile" className="text-xs gap-2">
+                                  <User className="w-3.5 h-3.5" /> Profile
+                                </TabsTrigger>
+                              </TabsList>
+                            </div>
+                            <TabsContent value="runtime" className="flex-1 min-h-0 m-0 overflow-y-auto">
+                              {missingInformation.length > 0 && (
+                                <div className="px-4 pt-4">
+                                  {missingInformation.filter(i => i.status === 'pending').map(item => (
+                                    <MissingInfoForm key={item.id} item={item} />
+                                  ))}
+                                </div>
+                              )}
+                              <AnalysisHistory analyses={analysisHistory} className="flex-1" />
+                            </TabsContent>
+                            <TabsContent value="profile" className="flex-1 min-h-0 m-0">
+                              {(() => {
+                                const latestCompletedAnalysis = analysisHistory
+                                  .filter(a => a.conversation_id === selectedConversationId && a.status === 'completed')
+                                  .sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime())
+                                  [0];
+                                
+                                const record = analysisSummary?.analysis_record as Record<string, any> | undefined;
+                                
+                                const academicData = record ? {
+                                  domain: record.primary_domain_name,
+                                  topic: record.primary_topic_name,
+                                  difficulty: record.academic_difficulty_level,
+                                  comprehension: record.comprehension_level,
+                                  engagement: record.engagement_score,
+                                  ...analysisSummary?.analysis_results as Record<string, unknown>
+                                } : analysisSummary?.analysis_results as Record<string, unknown>;
+
+                                const careerData = record?.career_stage_indicators ? {
+                                  ...record.career_stage_indicators,
+                                  interests: record.career_interests?.join(", ")
+                                } : undefined;
+
+                                const wellnessData = record?.wellness_indicators ? {
+                                  ...record.wellness_indicators,
+                                  stress_indicators: record.stress_indicators?.join(", "),
+                                  support_needs: record.support_needs?.join(", ")
+                                } : undefined;
+
+                                return (
+                                  <LearnerProfilePanel
+                                    academicSnapshot={academicData}
+                                    careerSnapshot={careerData}
+                                    wellnessSnapshot={wellnessData}
+                                    latestAnalysis={latestCompletedAnalysis?.results}
+                                  />
+                                );
+                              })()}
+                            </TabsContent>
+                          </Tabs>
+                        </div>
+                      </SheetContent>
+                    </Sheet>
                   </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 px-4 pb-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => handleAnalyzeConversation()}
+                      disabled={!selectedConversationId || analyzeConversation.isPending}
+                    >
+                      {analyzeConversation.isPending ? "Analyzing..." : "Run analysis"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => handleAnalyzeConversation(true)}
+                      disabled={!selectedConversationId || analyzeConversation.isPending}
+                    >
+                      Force reanalysis
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => {
+                        void handleCreatePlan();
+                      }}
+                      disabled={disablePlanButton}
+                      title={
+                        !hasAnalysisResults
+                          ? "Run analysis to unlock plan creation"
+                          : undefined
+                      }
+                    >
+                      {createPlan.isPending ? "Creating plan..." : "Create plan"}
+                    </Button>
+                  </div>
+                  {!hasAnalysisResults && selectedConversationId ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      Run analysis to unlock plans and reports.
+                    </p>
+                  ) : null}
+                </div>
+                {socketError ? (
+                  <div className="px-4 pb-3">
+                    <p className="rounded-md bg-rose-50 px-3 py-2 text-[11px] text-rose-700">
+                      {socketError}
+                    </p>
+                  </div>
+                ) : null}
+                <div className="px-4 pb-3">
+                  <SessionGoal 
+                    goal={activeConversation.description || "General exploration"} 
+                    planTitle={latestPlan?.plan_title} 
+                  />
                 </div>
               </header>
               <IntelligenceReportModal 
@@ -892,12 +1059,11 @@ useEffect(() => {
                 analysisSummary={analysisSummary}
               />
               <div className="min-h-0 flex-1 overflow-hidden">
-                <div className="flex h-full min-h-0 flex-col gap-4 px-4 pb-4 pt-2 lg:px-6 lg:pb-6">
+                <div className="flex h-full min-h-0 flex-col gap-4 px-4 pb-4 pt-2 lg:px-5 lg:pb-6">
                   {planWorkbenchData ? (
                     <PlanWorkbench
                       planData={planWorkbenchData}
-                      insights={insights}
-                      status={planBuildStatus}
+                      status={planDisplayStatus}
                       progress={planProgress}
                       statusMessage={latestPlanUpdate?.data.message}
                       statusMeta={{
@@ -909,11 +1075,8 @@ useEffect(() => {
                   ) : null}
                   {/* IntelligenceStatus moved to header */}
                   {planUpdates.length ? (
-                    <div className="mb-4">
-                      <PlanProgressTimeline
-                        updates={planUpdates}
-                        onDismiss={clearPlanUpdates}
-                      />
+                    <div className="mb-2 text-[11px] text-muted-foreground">
+                      Plan status: {latestPlanUpdate?.data.message ?? "Working on your plan..."}
                     </div>
                   ) : null}
                   <div className="min-h-0 flex-1">
@@ -923,6 +1086,7 @@ useEffect(() => {
                       isLoading={messagesLoading}
                       connectionStatus={socketStatus}
                       connectionError={socketError}
+                      showHeader={false}
                       hasMore={hasNextPage}
                       onLoadMore={async () => {
                         if (hasNextPage && !isFetchingNextPage) {
@@ -978,54 +1142,6 @@ useEffect(() => {
           )}
         </section>
         {/* Right Sidebar for Intelligence/Context */}
-        {activeConversation ? (
-          <aside className="hidden w-80 border-l bg-card/40 backdrop-blur xl:flex xl:flex-col">
-             <Tabs defaultValue="runtime" className="flex-1 flex flex-col">
-                <div className="px-4 py-3 border-b">
-                   <TabsList className="w-full grid grid-cols-2">
-                      <TabsTrigger value="runtime" className="text-xs gap-2">
-                        <Brain className="w-3.5 h-3.5" /> Runtime
-                      </TabsTrigger>
-                      <TabsTrigger value="profile" className="text-xs gap-2">
-                        <User className="w-3.5 h-3.5" /> Profile
-                      </TabsTrigger>
-                   </TabsList>
-                </div>
-                
-                <TabsContent value="runtime" className="flex-1 min-h-0 m-0 overflow-y-auto">
-                    {/* Missing Information Forms */}
-                     {missingInformation.length > 0 && (
-                        <div className="px-4 pt-4">
-                           {missingInformation.filter(i => i.status === 'pending').map(item => (
-                               <MissingInfoForm key={item.id} item={item} />
-                           ))}
-                        </div>
-                    )}
-                    
-                    {/* Analysis History with Real-time Updates */}
-                    <AnalysisHistory analyses={analysisHistory} className="flex-1" />
-                </TabsContent>
-                
-                        <TabsContent value="profile" className="flex-1 min-h-0 m-0">
-                          {(() => {
-                            const latestCompletedAnalysis = analysisHistory
-                              .filter(a => a.conversation_id === selectedConversationId && a.status === 'completed')
-                              .sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime())
-                              [0];
-                            
-                            return (
-                              <LearnerProfilePanel
-                                academicSnapshot={analysisSummary?.analysis_results as Record<string, unknown>}
-                                careerSnapshot={undefined}
-                                wellnessSnapshot={undefined}
-                                latestAnalysis={latestCompletedAnalysis?.results}
-                              />
-                            );
-                          })()}
-                        </TabsContent>
-             </Tabs>
-          </aside>
-        ) : null}
       </div>
       <CortexDebugDrawer />
     </div>

@@ -1,27 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
-import { 
-  ArrowRight, 
-  Map, 
-  Zap, 
-  AlertTriangle, 
-  Target,
-  Trophy,
-  Activity
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { PlanCreationResponse, InsightEvent } from "@/types";
+import { PlanCreationResponse } from "@/types";
+import {
+  Plan,
+  PlanAction,
+  PlanContent,
+  PlanDescription,
+  PlanFooter,
+  PlanHeader,
+  PlanTitle,
+  PlanTrigger,
+} from "@/components/ai-elements/plan";
+import { Loader } from "@/components/ai-elements/loader";
+import {
+  Checkpoint,
+  CheckpointIcon,
+  CheckpointTrigger,
+} from "@/components/ai-elements/checkpoint";
 
 interface PlanWorkbenchProps {
   planData: Partial<PlanCreationResponse>;
-  insights: InsightEvent[];
-  progress?: number; 
+  progress?: number;
   status: "idle" | "queued" | "in_progress" | "warning" | "completed" | "failed";
   statusMessage?: string;
   statusMeta?: { agent?: string; tool?: string; stepType?: string };
@@ -29,14 +34,12 @@ interface PlanWorkbenchProps {
 
 export function PlanWorkbench({ 
   planData, 
-  insights, 
   progress = 0,
   status,
   statusMessage,
   statusMeta
 }: PlanWorkbenchProps) {
   
-  const latestInsight = insights[0]; // Assuming sorted by recency
   const hint = (() => {
     switch (status) {
       case "queued":
@@ -54,87 +57,97 @@ export function PlanWorkbench({
     }
   })();
 
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (status === "completed") {
+      setIsOpen(false);
+    }
+  }, [status]);
+
   return (
-    <Card className="border-l-4 border-l-primary shadow-sm bg-card/60 backdrop-blur-sm">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <CardTitle className="text-base font-bold flex items-center gap-2">
-              <Map className="w-4 h-4 text-primary" />
-              {planData.plan_title || "New Learning Plan"}
-            </CardTitle>
-            <CardDescription className="text-xs">
-              {planData.task_count 
-                 ? `${planData.task_count} tasks queued • Est. ${planData.estimated_duration || 0} hours`
-                 : "Plan structure generated"}
-            </CardDescription>
-          </div>
-          {status === "in_progress" && (
-            <Badge variant="secondary" className="animate-pulse">Building...</Badge>
-          )}
-          {status === "completed" && (
-            <Badge className="bg-green-500 hover:bg-green-600">Ready</Badge>
-          )}
-        </div>
-      </CardHeader>
-      
-      <CardContent className="pb-3 space-y-4">
-        {/* Progress Section */}
-        <div className="space-y-1.5">
-           <div className="flex justify-between text-xs text-muted-foreground">
-             <span>Completion</span>
-             <span>{progress}%</span>
-           </div>
-           <Progress value={progress} className="h-2" />
-        </div>
-        <div className="rounded-md border bg-muted/40 px-2 py-2 text-xs">
-          <p className="text-foreground/90">
-            {statusMessage ?? hint}
-          </p>
-          {statusMeta && (statusMeta.agent || statusMeta.tool || statusMeta.stepType) ? (
-            <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
-              {statusMeta.agent ? <span>Agent: {statusMeta.agent}</span> : null}
-              {statusMeta.tool ? <span>Tool: {statusMeta.tool}</span> : null}
-              {statusMeta.stepType ? <span>Step: {statusMeta.stepType}</span> : null}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Insight Ticker */}
-        {latestInsight && (
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-2 flex items-start gap-2">
-                <Zap className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
-                <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
-                        Latest Insight
-                    </span>
-                    <p className="text-xs text-foreground/90 truncate">
-                        {latestInsight.message}
-                    </p>
-                </div>
-            </div>
-        )}
-      </CardContent>
-
-      <CardFooter className="pt-0 flex justify-between items-center gap-3">
-         <div className="flex -space-x-2">
-            {/* Mock avatars for now, could be mentors or peers */}
-            <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 border-2 border-background flex items-center justify-center text-[10px] font-bold text-blue-700 dark:text-blue-300">
-               AI
-            </div>
-            {planData.mentor_id && (
-               <div className="w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-900 border-2 border-background flex items-center justify-center text-[10px] font-bold text-purple-700 dark:text-purple-300">
-                  <Target className="w-3 h-3" />
-               </div>
+    <Plan
+      isStreaming={status === "in_progress" || status === "queued"}
+      open={isOpen}
+      onOpenChange={setIsOpen}
+      className="border border-muted bg-card/70 backdrop-blur-sm"
+    >
+      <PlanHeader className="flex-col gap-2 pb-2">
+        <div className="flex w-full items-center gap-3">
+          <div className="flex items-center gap-2">
+            {status === "in_progress" || status === "queued" ? (
+              <Loader size={14} />
+            ) : (
+              <Sparkles className="size-4 text-primary" />
             )}
-         </div>
+            <div className="space-y-0.5">
+              <PlanTitle className="text-sm">
+                {planData.plan_title || "New Learning Plan"}
+              </PlanTitle>
+              <PlanDescription className="text-xs">
+                {statusMessage ?? hint}
+              </PlanDescription>
+            </div>
+          </div>
+          <PlanAction className="ml-auto">
+            <Badge
+              variant={status === "completed" ? "default" : "secondary"}
+              className="text-[11px]"
+            >
+              {status === "completed" ? "Ready" : status.replace("_", " ")}
+            </Badge>
+          </PlanAction>
+        </div>
+        <div className="space-y-2">
+          <Progress value={progress} className="h-1.5" />
+        </div>
+      </PlanHeader>
 
-         <Button asChild size="sm" className="gap-2">
-           <Link href={planData.learning_plan_id ? `/plans?plan=${planData.learning_plan_id}` : "/plans"}>
-             Start Journey <ArrowRight className="w-3.5 h-3.5" />
-           </Link>
-         </Button>
-      </CardFooter>
-    </Card>
+      <PlanContent className="pt-0">
+        <div className="space-y-2">
+          <Checkpoint className="text-[11px]">
+            <CheckpointIcon className="text-muted-foreground" />
+            <CheckpointTrigger
+              tooltip={statusMeta?.stepType || "Live plan status"}
+              className="px-2"
+            >
+              {statusMeta?.tool
+                ? `Using ${statusMeta.tool}`
+                : statusMeta?.agent
+                  ? `Agent: ${statusMeta.agent}`
+                  : "Working on your plan"}
+            </CheckpointTrigger>
+          </Checkpoint>
+          <div className="text-[11px] text-muted-foreground">
+            {statusMessage ?? hint}
+          </div>
+        </div>
+      </PlanContent>
+
+      <PlanFooter className="flex items-center justify-between pt-2">
+        <span className="text-[11px] text-muted-foreground">
+          {planData.task_count
+            ? `${planData.task_count} tasks`
+            : "Drafting tasks"}
+        </span>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <PlanTrigger />
+            <span>Details</span>
+          </div>
+          <Button asChild size="sm" className="gap-2">
+            <Link
+              href={
+                planData.learning_plan_id
+                  ? `/plans?plan=${planData.learning_plan_id}`
+                  : "/plans"
+              }
+            >
+              Start <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </Button>
+        </div>
+      </PlanFooter>
+    </Plan>
   );
 }
