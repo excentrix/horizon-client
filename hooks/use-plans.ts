@@ -173,9 +173,12 @@ export function usePlanMutations(planId?: string) {
   });
 
   const updateTaskStatus = useMutation({
-    mutationFn: ({ taskId, status }: { taskId: string; status: DailyTask["status"] }) => {
+    mutationFn: ({
+      taskId,
+      ...payload
+    }: { taskId: string } & Partial<DailyTask>) => {
       if (!planId) throw new Error("Missing plan id");
-      return planningApi.updateTaskStatus(planId, taskId, { status });
+      return planningApi.updateTaskStatus(planId, taskId, payload);
     },
     onSuccess: () => {
       invalidate();

@@ -182,6 +182,58 @@ export function PlanDetail({
     }
   };
 
+  const normalizeResource = (resource: unknown) => {
+    if (typeof resource === "string") {
+      return { label: resource, href: resource.startsWith("http") ? resource : undefined };
+    }
+    if (resource && typeof resource === "object") {
+      const record = resource as Record<string, unknown>;
+      const label =
+        (record.title as string | undefined) ||
+        (record.name as string | undefined) ||
+        (record.label as string | undefined) ||
+        "Resource";
+      const href =
+        (record.url as string | undefined) ||
+        (record.link as string | undefined) ||
+        (record.href as string | undefined);
+      return { label, href };
+    }
+    return { label: "Resource", href: undefined };
+  };
+
+  const renderTaskResources = (task?: DailyTask) => {
+    if (!task) return null;
+    const resources = (task.online_resources ?? []).map(normalizeResource);
+    if (!resources.length) {
+      return null;
+    }
+    return (
+      <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+        {resources.slice(0, 3).map((resource, idx) =>
+          resource.href ? (
+            <a
+              key={`focus-resource-${idx}`}
+              href={resource.href}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border bg-background px-2 py-1 font-medium text-primary"
+            >
+              {resource.label}
+            </a>
+          ) : (
+            <span
+              key={`focus-resource-${idx}`}
+              className="rounded-full border bg-background px-2 py-1 text-muted-foreground"
+            >
+              {resource.label}
+            </span>
+          )
+        )}
+      </div>
+    );
+  };
+
   return (
     <Card className="h-auto min-h-0">
       <CardHeader className="space-y-3">
@@ -321,6 +373,7 @@ export function PlanDetail({
                   <p className="text-xs text-muted-foreground">
                     {task.description}
                   </p>
+                  {renderTaskResources(task)}
                 </div>
               ))
             ) : nextTask ? (
@@ -334,6 +387,7 @@ export function PlanDetail({
                 <p className="text-xs text-muted-foreground">
                   {nextTask.description}
                 </p>
+                {renderTaskResources(nextTask)}
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">

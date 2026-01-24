@@ -353,6 +353,8 @@ export interface DailyTask {
   ai_generated_examples: unknown[];
   online_resources: unknown[];
   current_tools_versions: Record<string, unknown>;
+  kpis?: Array<{ metric?: string; target?: string }>;
+  verification?: { method?: string; criteria?: string };
   adaptive_difficulty: boolean;
   status: TaskStatus;
   started_at?: string | null;

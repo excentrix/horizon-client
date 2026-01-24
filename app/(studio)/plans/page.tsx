@@ -71,13 +71,11 @@ function PlansContent() {
 
   const tasks = plan?.daily_tasks ?? [];
 
-  const handleToggleTask = (
+  const handleUpdateTask = (
     taskId: string,
-    currentStatus: (typeof tasks)[number]["status"],
+    payload: Partial<(typeof tasks)[number]>,
   ) => {
-    const nextStatus =
-      currentStatus === "completed" ? "scheduled" : "completed";
-    updateTaskStatus.mutate({ taskId, status: nextStatus });
+    updateTaskStatus.mutate({ taskId, ...payload });
   };
 
   const handleSelectPlan = (planId: string) => {
@@ -166,7 +164,21 @@ function PlansContent() {
                   />
                 </div>
                 <div className="h-full self-start overflow-hidden lg:sticky lg:top-4">
-                  <PlanIntelligencePanel plan={plan} />
+                  <PlanIntelligencePanel
+                    plan={plan}
+                    onSessionComplete={(durationMinutes) => {
+                      const firstActiveTask =
+                        tasks.find((task) => task.status === "in_progress") ??
+                        tasks.find((task) => task.status === "scheduled");
+                      if (!firstActiveTask) {
+                        return;
+                      }
+                      updateTaskStatus.mutate({
+                        taskId: firstActiveTask.id,
+                        actual_duration_minutes: durationMinutes,
+                      });
+                    }}
+                  />
                 </div>
               </div>
             </TabsContent>
@@ -181,9 +193,7 @@ function PlansContent() {
                 <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                   <TaskList
                     tasks={tasks}
-                    onToggleStatus={(task) =>
-                      handleToggleTask(task.id, task.status)
-                    }
+                    onUpdateTask={handleUpdateTask}
                     isUpdating={updateTaskStatus.isPending}
                   />
                 </div>

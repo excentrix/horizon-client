@@ -13,9 +13,13 @@ import type { LearningPlan } from "@/types";
 
 interface PlanIntelligencePanelProps {
   plan: LearningPlan;
+  onSessionComplete?: (durationMinutes: number) => void;
 }
 
-export function PlanIntelligencePanel({ plan }: PlanIntelligencePanelProps) {
+export function PlanIntelligencePanel({
+  plan,
+  onSessionComplete,
+}: PlanIntelligencePanelProps) {
   const [isTimerRunning, setTimerRunning] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
@@ -49,6 +53,15 @@ export function PlanIntelligencePanel({ plan }: PlanIntelligencePanelProps) {
   const ringStyle = {
     background: `conic-gradient(from 180deg, #111827 ${progressRatio * 360}deg, #e5e7eb 0deg)`,
   } as const;
+  const totalTasks =
+    plan.daily_tasks_summary?.total ?? plan.daily_tasks?.length ?? 0;
+  const completedTasks = plan.daily_tasks_summary?.completed ?? 0;
+  const currentStreak = plan.progress_summary?.current_streak ?? 0;
+  const bestStreak = plan.progress_summary?.best_streak ?? currentStreak;
+  const timeInvestedMinutes = plan.progress_summary?.time_invested_minutes ?? 0;
+  const hasRealProgress = Boolean(
+    plan.progress_summary || plan.daily_tasks_summary,
+  );
 
   return (
     <Card className="h-fit">
@@ -68,7 +81,7 @@ export function PlanIntelligencePanel({ plan }: PlanIntelligencePanelProps) {
             <span className="uppercase tracking-wide">{mode}</span>
           </div>
           <div className="mt-5 flex items-center gap-3">
-            <div className="relative h-30 w-30 shrink-0">
+            <div className="relative h-24 w-24 shrink-0">
               <div
                 className="absolute inset-0 rounded-full p-1 shadow-inner"
                 style={ringStyle}
@@ -99,7 +112,12 @@ export function PlanIntelligencePanel({ plan }: PlanIntelligencePanelProps) {
               // size=""
               variant={isTimerRunning ? "secondary" : "default"}
               className="w-1/2"
-              onClick={() => setTimerRunning((prev) => !prev)}
+              onClick={() => {
+                if (isTimerRunning && elapsedSeconds >= 60) {
+                  onSessionComplete?.(Math.round(elapsedSeconds / 60));
+                }
+                setTimerRunning((prev) => !prev);
+              }}
             >
               {isTimerRunning ? "Pause" : "Start"}
             </Button>
@@ -166,29 +184,52 @@ export function PlanIntelligencePanel({ plan }: PlanIntelligencePanelProps) {
             <span>Streak tracker</span>
             <span className="uppercase tracking-wide">Gamify</span>
           </div>
-          <div className="mt-12 flex items-center justify-between">
+          <div className="mt-6 flex items-center justify-between">
             <div>
-              <p className="text-xl font-semibold text-slate-900">0 days</p>
+              <p className="text-xl font-semibold text-slate-900">
+                {currentStreak} days
+              </p>
               <p className="text-xs text-muted-foreground">Current streak</p>
             </div>
             <div className="text-right">
-              <p className="text-lg font-semibold text-slate-900">0 days</p>
+              <p className="text-lg font-semibold text-slate-900">
+                {bestStreak} days
+              </p>
               <p className="text-xs text-muted-foreground">Best streak</p>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+            <div className="rounded-lg border bg-white px-2 py-2">
+              <p className="text-[10px] uppercase tracking-wide">Tasks</p>
+              <p className="text-sm font-semibold text-foreground">
+                {completedTasks}/{totalTasks}
+              </p>
+            </div>
+            <div className="rounded-lg border bg-white px-2 py-2">
+              <p className="text-[10px] uppercase tracking-wide">Time</p>
+              <p className="text-sm font-semibold text-foreground">
+                {timeInvestedMinutes} min
+              </p>
             </div>
           </div>
           <div className="mt-4 grid grid-cols-7 gap-2">
             {Array.from({ length: 7 }).map((_, index) => (
               <div
                 key={`streak-${index}`}
-                className="flex h-7 items-center justify-center rounded-lg border bg-white text-[10px] font-medium text-muted-foreground shadow-sm"
+                className={`flex h-7 items-center justify-center rounded-lg border text-[10px] font-medium shadow-sm ${
+                  index < currentStreak
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-white text-muted-foreground"
+                }`}
               >
                 Day {index + 1}
               </div>
             ))}
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            Finish one task per day to keep the streak glowing. Future badges
-            will live here.
+            {hasRealProgress
+              ? "Keep a daily task streak to level up."
+              : "Finish one task per day to keep the streak glowing. Future badges will live here."}
           </p>
         </section>
 
