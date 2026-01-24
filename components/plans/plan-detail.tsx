@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -91,6 +92,9 @@ export function PlanDetail({
     todayTasks.find((task) => task.status !== "completed") ??
     upcomingTasks.find((task) => task.status !== "completed") ??
     sortedTasks[0];
+  const playgroundHref = `/plans/${plan.id}/playground${
+    nextTask?.id ? `?task=${nextTask.id}` : ""
+  }`;
   const displayWeeks = (() => {
     const tasks = plan.daily_tasks ?? [];
     if (!tasks.length) {
@@ -396,6 +400,9 @@ export function PlanDetail({
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
           {renderControls()}
+          <Button asChild variant="outline">
+            <Link href={playgroundHref}>Enter playground</Link>
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">

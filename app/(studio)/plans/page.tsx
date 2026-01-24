@@ -195,6 +195,7 @@ function PlansContent() {
                     tasks={tasks}
                     onUpdateTask={handleUpdateTask}
                     isUpdating={updateTaskStatus.isPending}
+                    planId={plan.id}
                   />
                 </div>
               </div>

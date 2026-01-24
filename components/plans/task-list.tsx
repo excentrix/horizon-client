@@ -20,6 +20,7 @@ interface TaskListProps {
   tasks: DailyTask[];
   onUpdateTask: (taskId: string, payload: Partial<DailyTask>) => void;
   isUpdating: boolean;
+  planId?: string;
 }
 
 const statusLabels: Record<DailyTask["status"], string> = {
@@ -31,7 +32,7 @@ const statusLabels: Record<DailyTask["status"], string> = {
   overdue: "Overdue",
 };
 
-export function TaskList({ tasks, onUpdateTask, isUpdating }: TaskListProps) {
+export function TaskList({ tasks, onUpdateTask, isUpdating, planId }: TaskListProps) {
   const [completionTaskId, setCompletionTaskId] = useState<string | null>(null);
   const [completionData, setCompletionData] = useState<Record<string, string>>({});
   const normalizeResource = (resource: unknown) => {
@@ -176,6 +177,16 @@ export function TaskList({ tasks, onUpdateTask, isUpdating }: TaskListProps) {
                           : "Mark complete"}
                       </Button>
                     </div>
+                    {planId ? (
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        <a
+                          href={`/plans/${planId}/playground?task=${task.id}`}
+                          className="font-medium text-primary underline-offset-4 hover:underline"
+                        >
+                          Open in playground
+                        </a>
+                      </div>
+                    ) : null}
                     {completionTaskId === task.id && !isCompleted ? (
                       <div className="mt-3 rounded-lg border bg-background px-3 py-3">
                         <div className="grid gap-3 text-xs text-muted-foreground">
