@@ -52,6 +52,20 @@ export function PlanDetail({
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [showAllMilestones, setShowAllMilestones] = useState(false);
   const description = plan.description?.trim() ?? "";
+  const preferences = plan.user_preferences_snapshot as
+    | Record<string, unknown>
+    | undefined;
+  const scheduleSnapshot = plan.user_schedule_snapshot as
+    | Record<string, unknown>
+    | undefined;
+  const motivationPatterns = Array.isArray(preferences?.motivation_patterns)
+    ? (preferences?.motivation_patterns as string[])
+    : [];
+  const learningApproach = preferences?.learning_approach as string | undefined;
+  const primaryStyle =
+    (preferences?.primary_style as string | undefined) ??
+    (preferences?.primary_learning_style as string | undefined);
+  const maxDailyHours = scheduleSnapshot?.max_daily_hours as number | undefined;
   const shortDescription = useMemo(() => {
     if (!description) {
       return "";
@@ -348,6 +362,38 @@ export function PlanDetail({
             </div>
           ) : null}
         </div>
+        {(learningApproach || primaryStyle || maxDailyHours || motivationPatterns.length) ? (
+          <div className="rounded-xl border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+            <p className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
+              Why this plan fits you
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {learningApproach ? (
+                <span className="rounded-full border bg-background px-2 py-1">
+                  Approach: {learningApproach}
+                </span>
+              ) : null}
+              {primaryStyle ? (
+                <span className="rounded-full border bg-background px-2 py-1">
+                  Style: {primaryStyle}
+                </span>
+              ) : null}
+              {maxDailyHours ? (
+                <span className="rounded-full border bg-background px-2 py-1">
+                  Pace: {maxDailyHours}h/day
+                </span>
+              ) : null}
+              {motivationPatterns.slice(0, 2).map((pattern) => (
+                <span
+                  key={pattern}
+                  className="rounded-full border bg-background px-2 py-1"
+                >
+                  Motivation: {pattern}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           {renderControls()}
         </div>

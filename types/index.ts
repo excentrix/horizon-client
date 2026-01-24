@@ -355,6 +355,8 @@ export interface DailyTask {
   current_tools_versions: Record<string, unknown>;
   kpis?: Array<{ metric?: string; target?: string }>;
   verification?: { method?: string; criteria?: string };
+  check_in_question?: string;
+  check_in_response?: string;
   adaptive_difficulty: boolean;
   status: TaskStatus;
   started_at?: string | null;

@@ -615,6 +615,7 @@ export function useChatSocket(conversationId: string | null) {
                const info = payload?.data;
                if (info) {
                   const messageId = info.id ?? crypto.randomUUID();
+                  const context = info.context ? `\n\nWhy I'm asking: ${info.context}` : "";
                   pushMissingInfo({
                       id: messageId,
                       field: info.field,
@@ -630,7 +631,9 @@ export function useChatSocket(conversationId: string | null) {
                       conversation: conversationId,
                       message_type: "text",
                       sender_type: "ai",
-                      content: info.question ?? "I need a bit more information to continue.",
+                      content:
+                        (info.question ??
+                          "I need a bit more information to continue.") + context,
                       sequence_number: Date.now(),
                       ai_model_used: undefined,
                       tokens_used: undefined,
@@ -639,6 +642,11 @@ export function useChatSocket(conversationId: string | null) {
                       is_flagged: false,
                       created_at: isoTimestamp,
                       updated_at: isoTimestamp,
+                      metadata: {
+                        missing_info_id: messageId,
+                        missing_info_field: info.field,
+                        missing_info_context: info.context,
+                      },
                     };
                     appendMessageToCache(queryClient, conversationId, missingInfoMessage);
                     updateConversationSnapshot(queryClient, conversationId, missingInfoMessage);

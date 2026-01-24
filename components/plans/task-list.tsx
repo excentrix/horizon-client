@@ -248,6 +248,27 @@ export function TaskList({ tasks, onUpdateTask, isUpdating }: TaskListProps) {
                               className="mt-1 min-h-[72px] text-xs"
                             />
                           </div>
+                          {task.check_in_question ? (
+                            <div>
+                              <label className="text-[11px] font-semibold uppercase tracking-wide">
+                                Quick check
+                              </label>
+                              <p className="mt-1 text-[11px] text-muted-foreground">
+                                {task.check_in_question}
+                              </p>
+                              <Textarea
+                                value={completionData[`${task.id}-checkin`] ?? ""}
+                                onChange={(event) =>
+                                  setCompletionData((prev) => ({
+                                    ...prev,
+                                    [`${task.id}-checkin`]: event.target.value,
+                                  }))
+                                }
+                                placeholder="Your short reflection..."
+                                className="mt-2 min-h-[72px] text-xs"
+                              />
+                            </div>
+                          ) : null}
                           <div className="flex flex-wrap gap-2">
                             <Button
                               size="sm"
@@ -274,6 +295,8 @@ export function TaskList({ tasks, onUpdateTask, isUpdating }: TaskListProps) {
                                     : undefined,
                                   completion_notes:
                                     completionData[`${task.id}-notes`] ?? "",
+                                  check_in_response:
+                                    completionData[`${task.id}-checkin`] ?? "",
                                 });
                                 setCompletionTaskId(null);
                               }}

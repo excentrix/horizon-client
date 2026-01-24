@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, Conversation, MentorAction } from "@/types";
 import type { SocketStatus } from "@/hooks/use-chat-socket";
 import type { PersonaTheme } from "@/lib/persona-theme";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
-import { Bot } from "lucide-react";
+import { Bot, Send } from "lucide-react";
+import { planningApi } from "@/lib/api";
+import { telemetry } from "@/lib/telemetry";
 import {
   Conversation as ConversationContainer,
   ConversationContent,
@@ -20,6 +22,8 @@ import {
   MessageResponse,
 } from "@/components/ai-elements/message";
 import { Loader } from "@/components/ai-elements/loader";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { LearningGraphPill } from "./learning-graph-pill";
 import { CareerGoalsPill } from "./career-goals-pill";
 import { AgentInsightsCard } from "./agent-insights-card";
@@ -235,6 +239,10 @@ function MessageFeedContent({
   theme?: PersonaTheme;
 }) {
   const { scrollRef } = useStickToBottomContext();
+  const planSessionId = useMentorLoungeStore((state) => state.planSessionId);
+  const resolveMissingInfo = useMentorLoungeStore((state) => state.resolveMissingInfo);
+  const [quickReplies, setQuickReplies] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState<Record<string, boolean>>({});
   const topSentinelRef = useRef<HTMLDivElement | null>(null);
   const loadingMoreRef = useRef(false);
 
@@ -312,6 +320,12 @@ function MessageFeedContent({
       <AnimatePresence initial={false}>
         {displayMessages.map((message) => {
           const isUser = message.sender_type === "user";
+          const metadata = message.metadata as
+            | { missing_info_id?: string; missing_info_field?: string; missing_info_context?: string }
+            | undefined;
+          const missingInfoId = metadata?.missing_info_id;
+          const missingInfoField = metadata?.missing_info_field;
+          const missingInfoContext = metadata?.missing_info_context;
           return (
             <motion.div
               key={message.id}
@@ -357,6 +371,70 @@ function MessageFeedContent({
                         <Bot className="h-3 w-3" />
                         {message.cortex.agent}
                       </div>
+                    </div>
+                  ) : null}
+
+                  {!isUser && missingInfoId && missingInfoField ? (
+                    <div className="mt-3 rounded-xl border bg-background/70 p-3 text-xs">
+                      {missingInfoContext ? (
+                        <p className="mb-2 text-[11px] text-muted-foreground">
+                          {missingInfoContext}
+                        </p>
+                      ) : null}
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={quickReplies[missingInfoId] ?? ""}
+                          onChange={(event) =>
+                            setQuickReplies((prev) => ({
+                              ...prev,
+                              [missingInfoId]: event.target.value,
+                            }))
+                          }
+                          placeholder="Type your answer…"
+                          className="h-8 text-xs"
+                        />
+                        <Button
+                          size="sm"
+                          className="h-8 px-3"
+                          disabled={
+                            !planSessionId ||
+                            !quickReplies[missingInfoId]?.trim() ||
+                            submitting[missingInfoId]
+                          }
+                          onClick={async () => {
+                            if (!planSessionId) {
+                              telemetry.toastError(
+                                "Unable to submit info",
+                                "Missing plan session."
+                              );
+                              return;
+                            }
+                            const reply = quickReplies[missingInfoId]?.trim();
+                            if (!reply) return;
+                            setSubmitting((prev) => ({ ...prev, [missingInfoId]: true }));
+                            try {
+                              await planningApi.submitMissingInfo(planSessionId, {
+                                field: missingInfoField,
+                                value: reply,
+                              });
+                              resolveMissingInfo(missingInfoId);
+                              setQuickReplies((prev) => ({ ...prev, [missingInfoId]: "" }));
+                              telemetry.toastInfo("Information updated", "Thanks! Updated.");
+                            } catch (error) {
+                              telemetry.toastError("Failed to update information.");
+                            } finally {
+                              setSubmitting((prev) => ({ ...prev, [missingInfoId]: false }));
+                            }
+                          }}
+                        >
+                          <Send className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      {!planSessionId ? (
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          Open the plan builder to submit this info.
+                        </p>
+                      ) : null}
                     </div>
                   ) : null}
                 </MessageContent>
