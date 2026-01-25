@@ -417,6 +417,8 @@ export interface LearningPlan {
   }[];
   specialized_mentor?: AIPersonality | null;
   specialized_mentor_data?: (AIPersonality & { created_at?: string }) | null;
+  specialized_conversation_id?: string | null;
+  conversation_id?: string | null;
   primary_domain_name?: string | null;
   user_schedule_snapshot?: Record<string, unknown> | null;
   user_preferences_snapshot?: Record<string, unknown> | null;
