@@ -112,10 +112,24 @@ export const chatApi = {
 
   sendMessage: (
     conversationId: string,
-    payload: { content: string; message_type?: string; parent_message?: string }
+    payload: {
+      content: string;
+      message_type?: string;
+      parent_message?: string;
+      context?: string;
+      metadata?: Record<string, unknown>;
+    }
   ) =>
     extract<ChatMessage>(
       http.post(`/chat/conversations/${conversationId}/messages/`, payload)
+    ),
+  recordPlaygroundEvent: (payload: {
+    conversation_id: string;
+    event_type: string;
+    payload?: Record<string, unknown>;
+  }) =>
+    extract<{ status: string }>(
+      http.post("/chat/mentor-sessions/playground-event/", payload)
     ),
 
   getAIPersonalities: () =>
@@ -176,6 +190,10 @@ export const planningApi = {
   completePlan: (planId: string) =>
     extract<{ message: string; status: string }>(
       http.post(`/planning/plans/${planId}/complete_plan/`)
+    ),
+  recheckPlanResources: (planId: string) =>
+    extract<{ message: string; plan_id: string }>(
+      http.post(`/planning/plans/${planId}/recheck-resources/`)
     ),
 
   updateTaskStatus: (

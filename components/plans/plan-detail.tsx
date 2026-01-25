@@ -12,6 +12,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import type { DailyTask, LearningPlan } from "@/types";
+import { planningApi } from "@/lib/api";
+import { telemetry } from "@/lib/telemetry";
 import { format, isAfter, isSameDay, parseISO, startOfDay } from "date-fns";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -95,6 +97,22 @@ export function PlanDetail({
   const playgroundHref = `/plans/${plan.id}/playground${
     nextTask?.id ? `?task=${nextTask.id}` : ""
   }`;
+  const [resourceRefreshing, setResourceRefreshing] = useState(false);
+
+  const handleRecheckResources = async () => {
+    setResourceRefreshing(true);
+    try {
+      const response = await planningApi.recheckPlanResources(plan.id);
+      telemetry.toastInfo(response.message ?? "Resource verification queued");
+    } catch (error) {
+      telemetry.toastError(
+        "Unable to recheck resources",
+        error instanceof Error ? error.message : undefined,
+      );
+    } finally {
+      setResourceRefreshing(false);
+    }
+  };
   const displayWeeks = (() => {
     const tasks = plan.daily_tasks ?? [];
     if (!tasks.length) {
@@ -400,6 +418,13 @@ export function PlanDetail({
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
           {renderControls()}
+          <Button
+            variant="outline"
+            onClick={handleRecheckResources}
+            disabled={resourceRefreshing}
+          >
+            {resourceRefreshing ? "Refreshing resources…" : "Recheck resources"}
+          </Button>
           <Button asChild variant="outline">
             <Link href={playgroundHref}>Enter playground</Link>
           </Button>

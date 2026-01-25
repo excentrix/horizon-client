@@ -693,7 +693,13 @@ export function useChatSocket(conversationId: string | null) {
   connectRef.current = connect;
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (
+      content: string,
+      options?: {
+        context?: string;
+        metadata?: Record<string, unknown>;
+      },
+    ) => {
       const socket = socketRef.current;
       if (!socket || socket.readyState !== WebSocket.OPEN) {
         telemetry.toastError("Chat connection is not ready yet.");
@@ -741,7 +747,12 @@ export function useChatSocket(conversationId: string | null) {
       socket.send(
         JSON.stringify({
           type: "streaming_message",
-          message: { content: trimmed, temp_id: tempId }, // send temp_id to backend
+          message: {
+            content: trimmed,
+            temp_id: tempId,
+            context: options?.context,
+            metadata: options?.metadata,
+          },
         }),
       );
 

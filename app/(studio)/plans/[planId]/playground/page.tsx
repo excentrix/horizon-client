@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { usePlan, usePlanMutations } from "@/hooks/use-plans";
@@ -77,6 +77,25 @@ export default function PlanPlaygroundPage() {
     const match = conversations.find((conversation) => conversation.id === mentorConversationId);
     return match?.title ? `Mentor chat · ${match.title}` : "Mentor chat";
   }, [conversations, mentorConversationId]);
+  const lastContextSentRef = useRef<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const lastTaskFocusRef = useRef<string | null>(null);
+  const lastEventSentRef = useRef<Record<string, number>>({});
+  const mentorSuggestions = [
+    { id: "explain", label: "Explain" },
+    { id: "example", label: "Example" },
+    { id: "quiz", label: "Quiz me" },
+  ] as const;
+  const emitPlaygroundEvent = (eventType: string, payload: Record<string, unknown>) => {
+    telemetry.info("playground_event", { eventType, ...payload });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("playground:event", {
+          detail: { eventType, ...payload },
+        }),
+      );
+    }
+  };
   const mentorConversationKey = mentorConversationId ?? null;
   const {
     messages: mentorMessages,
@@ -84,6 +103,32 @@ export default function PlanPlaygroundPage() {
   } = useConversationMessages(mentorConversationKey);
   const { sendMessage, mentorTyping, streamingMessage, status: mentorSocketStatus } =
     useChatSocket(mentorConversationKey);
+
+  useEffect(() => {
+    if (!chatEndRef.current) return;
+    chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [mentorMessages, streamingMessage]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as
+        | { eventType?: string; [key: string]: unknown }
+        | undefined;
+      if (!detail?.eventType || !mentorConversationKey) return;
+      const now = Date.now();
+      const lastSent = lastEventSentRef.current[detail.eventType] ?? 0;
+      if (now - lastSent < 800) return;
+      lastEventSentRef.current[detail.eventType] = now;
+      void chatApi.recordPlaygroundEvent({
+        conversation_id: mentorConversationKey,
+        event_type: detail.eventType,
+        payload: detail,
+      });
+    };
+    window.addEventListener("playground:event", handler);
+    return () => window.removeEventListener("playground:event", handler);
+  }, [mentorConversationKey]);
 
   const tasks = plan?.daily_tasks ?? [];
   const selectedTaskId = searchParams.get("task");
@@ -102,6 +147,18 @@ export default function PlanPlaygroundPage() {
       )[0]
     );
   }, [selectedTaskId, tasks]);
+
+  useEffect(() => {
+    if (!activeTask?.id) return;
+    if (lastTaskFocusRef.current === activeTask.id) return;
+    lastTaskFocusRef.current = activeTask.id;
+    lastContextSentRef.current = null;
+    emitPlaygroundEvent("task_focus", {
+      planId,
+      taskId: activeTask.id,
+      taskTitle: activeTask.title,
+    });
+  }, [activeTask?.id, activeTask?.title, planId]);
 
   const milestoneCelebration = useMemo(() => {
     if (!activeTask?.milestone_id) return null;
@@ -145,6 +202,12 @@ export default function PlanPlaygroundPage() {
       }
       const next = [...existing];
       next[index] = !next[index];
+      emitPlaygroundEvent("step_toggle", {
+        planId,
+        taskId: activeTask.id,
+        stepIndex: index,
+        completed: next[index],
+      });
       return { ...prev, [activeTask.id]: next };
     });
   };
@@ -152,6 +215,10 @@ export default function PlanPlaygroundPage() {
   const handleStartSession = () => {
     setSessionStarted(true);
     setSessionStartTime(Date.now());
+    emitPlaygroundEvent("session_start", {
+      planId,
+      taskId: activeTask?.id,
+    });
     if (activeTask) {
       updateTaskStatus.mutate({
         taskId: activeTask.id,
@@ -172,44 +239,98 @@ export default function PlanPlaygroundPage() {
     });
   };
 
+  const buildMentorContext = () => {
+    const stepProgress = stepState.length
+      ? `${stepState.filter(Boolean).length}/${stepState.length} steps complete`
+      : "No steps yet";
+    const resourceLabel = resources[0]
+      ? typeof resources[0] === "string"
+        ? resources[0]
+        : (resources[0].title as string) ||
+          (resources[0].name as string) ||
+          "Primary resource"
+      : "No resource yet";
+    const noteSnippet = notes.trim()
+      ? `Notes: ${notes.trim().slice(0, 140)}`
+      : "Notes: none";
+    const reflectionSnippet = reflection.trim()
+      ? `Reflection: ${reflection.trim().slice(0, 140)}`
+      : "Reflection: none";
+    return [
+      `Plan: ${plan?.title ?? "Learning plan"}`,
+      `Current task: ${activeTask?.title ?? "Unknown task"}`,
+      activeTask?.description ? `Task details: ${activeTask.description}` : null,
+      activeTask?.task_type ? `Task type: ${activeTask.task_type}` : null,
+      `Progress: ${stepProgress}`,
+      `Resource: ${resourceLabel}`,
+      noteSnippet,
+      reflectionSnippet,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  };
+  const buildMentorContextShort = () => {
+    const stepSummary = stepState.length
+      ? `${stepState.filter(Boolean).length}/${stepState.length} steps complete`
+      : "No steps yet";
+    return `Current task: ${activeTask?.title ?? "Unknown"} · ${stepSummary}`;
+  };
+
   const handleMentorAction = (action: "explain" | "example" | "quiz") => {
+    if (mentorSocketStatus !== "open") {
+      telemetry.toastError("Mentor is reconnecting. Try again in a moment.");
+      return;
+    }
     const actionMap = {
       explain: "Explain this task in simpler terms.",
       example: "Show me an example for this task.",
       quiz: "Quiz me on this task with 2 quick questions.",
     };
-    const taskContext = activeTask
-      ? [
-          `Plan: ${plan?.title ?? "Learning plan"}`,
-          `Current task: ${activeTask.title}`,
-          activeTask.description ? `Task details: ${activeTask.description}` : null,
-          activeTask.task_type ? `Task type: ${activeTask.task_type}` : null,
-          activeTask.check_in_question
-            ? `Reflection prompt: ${activeTask.check_in_question}`
-            : null,
-        ]
-          .filter(Boolean)
-          .join("\n")
-      : `Plan: ${plan?.title ?? "Learning plan"}`;
-    const prompt = `${actionMap[action]}\n\nContext:\n${taskContext}`;
+    const prompt = actionMap[action];
     setMentorResponse(`Sent to mentor: ${prompt}`);
     setMentorPrompt(prompt);
-    void handleMentorSend(prompt);
+    void handleMentorSend(prompt, buildMentorContext(), `mentor_action_${action}`);
   };
 
-  const handleMentorSend = async (overridePrompt?: string) => {
+  const handleMentorSend = async (
+    overridePrompt?: string,
+    contextOverride?: string,
+    actionType: string = "mentor_chat",
+  ) => {
     if (!mentorConversationKey) {
       telemetry.toastError("Mentor chat is not ready for this plan yet.");
       return;
     }
-    const nextMessage = (overridePrompt ?? mentorInput).trim();
-    if (!nextMessage) return;
+    const rawMessage = (overridePrompt ?? mentorInput).trim();
+    if (!rawMessage) return;
+    const fullContext = contextOverride ?? buildMentorContext();
+    const shouldSendFullContext =
+      Boolean(overridePrompt) ||
+      lastContextSentRef.current !== fullContext ||
+      rawMessage.length > 120;
+    const contextToSend = shouldSendFullContext
+      ? fullContext
+      : buildMentorContextShort();
     try {
+      if (shouldSendFullContext) {
+        lastContextSentRef.current = fullContext;
+      }
       if (mentorSocketStatus === "open") {
-        await sendMessage(nextMessage);
+        await sendMessage(rawMessage, {
+          context: contextToSend,
+          metadata: {
+            skip_intelligence: true,
+            action_type: actionType,
+          },
+        });
       } else {
         await chatApi.sendMessage(mentorConversationKey, {
-          content: nextMessage,
+          content: rawMessage,
+          context: contextToSend,
+          metadata: {
+            skip_intelligence: true,
+            action_type: actionType,
+          },
         });
         await refetchMentorMessages();
       }
@@ -237,6 +358,14 @@ export default function PlanPlaygroundPage() {
       completion_notes: notes,
       check_in_response: reflection,
     });
+    emitPlaygroundEvent("task_complete", {
+      planId,
+      taskId: activeTask.id,
+      durationMinutes,
+      effort,
+      understanding,
+      confidence,
+    });
     setSessionStarted(false);
     setSessionStartTime(null);
   };
@@ -244,6 +373,7 @@ export default function PlanPlaygroundPage() {
   const resources = (activeTask?.online_resources ?? []) as Array<
     string | Record<string, unknown>
   >;
+  const resourceMetadata = activeTask?.resource_metadata ?? {};
   const primaryResource = resources[0];
   const primaryResourceHref =
     typeof primaryResource === "string"
@@ -268,6 +398,12 @@ export default function PlanPlaygroundPage() {
     updateTaskStatus.mutate({
       taskId: activeTask.id,
       resource_engagement: engagement,
+    });
+    emitPlaygroundEvent("resource_update", {
+      planId,
+      taskId: activeTask.id,
+      resourceKey,
+      state,
     });
   };
 
@@ -526,6 +662,11 @@ export default function PlanPlaygroundPage() {
                               (primaryResource as Record<string, unknown>)?.name ??
                               "Resource"}
                         </span>
+                        {resourceMetadata["resource-0"]?.verified ? (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            Verified
+                          </span>
+                        ) : null}
                         <Button
                           size="sm"
                           variant="outline"
@@ -534,6 +675,11 @@ export default function PlanPlaygroundPage() {
                           Open full
                         </Button>
                       </div>
+                      {resourceMetadata["resource-0"]?.excerpt ? (
+                        <div className="border-b px-3 py-2 text-xs text-muted-foreground">
+                          {resourceMetadata["resource-0"].excerpt}
+                        </div>
+                      ) : null}
                       <iframe
                         title="resource-viewer"
                         src={String(primaryResourceHref)}
@@ -567,6 +713,7 @@ export default function PlanPlaygroundPage() {
                             undefined;
                       const resourceKey = `resource-${index}`;
                       const engagement = activeTask.resource_engagement?.[resourceKey];
+                      const meta = resourceMetadata[resourceKey];
                       return (
                         <div
                           key={`resource-${index}`}
@@ -574,6 +721,11 @@ export default function PlanPlaygroundPage() {
                         >
                           <div className="flex items-center justify-between gap-3">
                             <span className="truncate">{label}</span>
+                            {meta?.verified ? (
+                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                Verified
+                              </span>
+                            ) : null}
                             {href ? (
                               <Button
                                 size="sm"
@@ -591,6 +743,16 @@ export default function PlanPlaygroundPage() {
                               </span>
                             )}
                           </div>
+                          {meta?.content_type ? (
+                            <div className="text-[11px] text-muted-foreground">
+                              Type: {meta.content_type}
+                            </div>
+                          ) : null}
+                          {meta?.excerpt ? (
+                            <div className="text-[11px] text-muted-foreground">
+                              {meta.excerpt}
+                            </div>
+                          ) : null}
                           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                             <Button
                               size="sm"
@@ -621,19 +783,59 @@ export default function PlanPlaygroundPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">{mentorConversationLabel}</CardTitle>
-                  <CardDescription>Live guidance tied to your current task.</CardDescription>
+                  <CardDescription className="flex flex-wrap items-center gap-2">
+                    <span>Live guidance tied to your current task.</span>
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                        mentorSocketStatus === "open"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : mentorSocketStatus === "connecting"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {mentorSocketStatus === "open"
+                        ? "Live"
+                        : mentorSocketStatus === "connecting"
+                          ? "Reconnecting"
+                          : "Offline"}
+                    </span>
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm text-muted-foreground">
+                  <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Mentor intro
+                    </p>
+                    <p className="mt-1 text-sm text-foreground">
+                      I’m already tracking your current task and progress. Ask for a walkthrough,
+                      a worked example, or a quick quiz anytime.
+                    </p>
+                  </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => handleMentorAction("explain")}>
-                      Explain
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => handleMentorAction("example")}>
-                      Example
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => handleMentorAction("quiz")}>
-                      Quiz me
-                    </Button>
+                    {mentorSuggestions.map((suggestion) => (
+                      <Button
+                        key={suggestion.id}
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleMentorAction(suggestion.id)}
+                      >
+                        {suggestion.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Current task focus
+                    </p>
+                    <p className="mt-1 text-sm text-foreground">
+                      {activeTask.title}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {stepState.filter(Boolean).length} of {stepState.length} steps complete
+                      {sessionStarted ? " · Mentor is focusing on your task" : ""}
+                    </p>
                   </div>
                   {mentorPrompt ? (
                     <p className="text-[11px] text-muted-foreground">
@@ -660,10 +862,16 @@ export default function PlanPlaygroundPage() {
                       </p>
                     ) : null}
                     {mentorTyping && !streamingMessage ? (
-                      <p className="mt-2 text-[11px] text-muted-foreground">
+                      <p className="mt-2 text-[11px] text-muted-foreground animate-pulse">
                         Mentor is typing...
                       </p>
                     ) : null}
+                    {mentorSocketStatus === "open" && sessionStarted ? (
+                      <p className="mt-2 text-[11px] text-emerald-600 animate-pulse">
+                        Mentor is focusing on your current step.
+                      </p>
+                    ) : null}
+                    <div ref={chatEndRef} />
                   </div>
                   <Input
                     value={mentorInput}

@@ -353,6 +353,17 @@ export interface DailyTask {
   ai_generated_examples: unknown[];
   online_resources: unknown[];
   resource_engagement?: Record<string, { opened_at?: string; completed_at?: string }>;
+  resource_metadata?: Record<
+    string,
+    {
+      url?: string;
+      title?: string;
+      content_type?: string;
+      excerpt?: string | null;
+      verified?: boolean;
+      status?: string;
+    }
+  >;
   current_tools_versions: Record<string, unknown>;
   kpis?: Array<{ metric?: string; target?: string }>;
   verification?: { method?: string; criteria?: string };
