@@ -369,6 +369,20 @@ export interface DailyTask {
   verification?: { method?: string; criteria?: string };
   check_in_question?: string;
   check_in_response?: string;
+  quiz_payload?: {
+    questions?: Array<{
+      id: string;
+      question: string;
+      options: string[];
+      answer_index?: number;
+      rationale?: string;
+    }>;
+  };
+  quiz_response?: {
+    answers?: Record<string, number>;
+    score?: number;
+    completed_at?: string;
+  };
   adaptive_difficulty: boolean;
   status: TaskStatus;
   started_at?: string | null;

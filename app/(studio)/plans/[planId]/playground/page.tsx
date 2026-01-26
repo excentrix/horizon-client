@@ -43,6 +43,16 @@ export default function PlanPlaygroundPage() {
   const [mentorPrompt, setMentorPrompt] = useState<string>("");
   const [showRubric, setShowRubric] = useState(false);
   const [mentorInput, setMentorInput] = useState("");
+  const [practiceMode, setPracticeMode] = useState<"code" | "scratch">("code");
+  const [practiceNotes, setPracticeNotes] = useState("");
+  const [learningMode, setLearningMode] = useState<"video" | "practice" | "quiz">("practice");
+  const [showTryIt, setShowTryIt] = useState(true);
+  const [showPracticeLab, setShowPracticeLab] = useState(true);
+  const [showResourceDock, setShowResourceDock] = useState(true);
+  const [resourceViewMode, setResourceViewMode] = useState<"embedded" | "curated">("embedded");
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
+  const [showQuizFeedback, setShowQuizFeedback] = useState(false);
+  const [generatedActivities, setGeneratedActivities] = useState<GeneratedActivities | null>(null);
   const { data: conversations = [] } = useConversations();
   const fallbackConversationId = useMemo(() => {
     if (!conversations.length) return undefined;
@@ -153,6 +163,9 @@ export default function PlanPlaygroundPage() {
     if (lastTaskFocusRef.current === activeTask.id) return;
     lastTaskFocusRef.current = activeTask.id;
     lastContextSentRef.current = null;
+    setPracticeMode(suggestedPracticeMode);
+    setPracticeNotes("");
+    setGeneratedActivities(null);
     emitPlaygroundEvent("task_focus", {
       planId,
       taskId: activeTask.id,
@@ -189,6 +202,42 @@ export default function PlanPlaygroundPage() {
     }
     return defaultSteps;
   }, [activeTask]);
+
+  const suggestedPracticeMode = useMemo(() => {
+    if (!activeTask) return "code";
+    const text = `${activeTask.title} ${activeTask.description}`.toLowerCase();
+    if (activeTask.task_type === "hands_on" || activeTask.task_type === "practice") {
+      if (text.includes("math") || text.includes("equation") || text.includes("formula")) {
+        return "scratch";
+      }
+      return "code";
+    }
+    if (text.includes("proof") || text.includes("derive") || text.includes("calculate")) {
+      return "scratch";
+    }
+    if (text.includes("code") || text.includes("python") || text.includes("algorithm")) {
+      return "code";
+    }
+    return "code";
+  }, [activeTask]);
+
+  useEffect(() => {
+    if (learningMode === "video") {
+      setShowResourceDock(true);
+      setShowTryIt(true);
+      setShowPracticeLab(false);
+      return;
+    }
+    if (learningMode === "quiz") {
+      setShowResourceDock(false);
+      setShowTryIt(true);
+      setShowPracticeLab(false);
+      return;
+    }
+    setShowResourceDock(false);
+    setShowTryIt(false);
+    setShowPracticeLab(true);
+  }, [learningMode]);
 
   const stepState = stepStates[activeTask?.id ?? ""] ?? activeSteps.map(() => false);
 
@@ -357,6 +406,11 @@ export default function PlanPlaygroundPage() {
       effectiveness_rating: understanding ?? undefined,
       completion_notes: notes,
       check_in_response: reflection,
+      quiz_response: {
+        answers: quizAnswers,
+        score: calculateQuizScore(activeTask, quizAnswers),
+        completed_at: new Date().toISOString(),
+      },
     });
     emitPlaygroundEvent("task_complete", {
       planId,
@@ -381,6 +435,25 @@ export default function PlanPlaygroundPage() {
       : (primaryResource as Record<string, unknown>)?.url ??
         (primaryResource as Record<string, unknown>)?.link ??
         (primaryResource as Record<string, unknown>)?.href;
+  const primaryVideoEmbed = primaryResourceHref
+    ? getVideoEmbedUrl(String(primaryResourceHref))
+    : null;
+  const primaryAudioEmbed = primaryResourceHref
+    ? getAudioEmbedUrl(String(primaryResourceHref))
+    : null;
+
+  useEffect(() => {
+    if (!activeTask) return;
+    if (primaryVideoEmbed) {
+      setLearningMode("video");
+      return;
+    }
+    if (activeTask.task_type === "assessment") {
+      setLearningMode("quiz");
+      return;
+    }
+    setLearningMode("practice");
+  }, [activeTask, primaryVideoEmbed]);
 
   const markResource = (resourceKey: string, state: "opened" | "completed") => {
     if (!activeTask) return;
@@ -405,6 +478,28 @@ export default function PlanPlaygroundPage() {
       resourceKey,
       state,
     });
+  };
+
+  const handleGenerateActivities = () => {
+    const excerpt = resourceMetadata["resource-0"]?.excerpt;
+    if (!excerpt) {
+      telemetry.toastError("No resource excerpt available yet.");
+      return;
+    }
+    const activities = buildActivitiesFromExcerpt(
+      excerpt,
+      getResourceLabel(primaryResource),
+    );
+    setGeneratedActivities(activities);
+  };
+
+  const handleSaveQuiz = () => {
+    if (!generatedActivities || !activeTask) return;
+    updateTaskStatus.mutate({
+      taskId: activeTask.id,
+      quiz_payload: { questions: generatedActivities.quiz },
+    });
+    telemetry.toastInfo("Quiz saved to this task");
   };
 
   return (
@@ -538,6 +633,39 @@ export default function PlanPlaygroundPage() {
                 </div>
 
                 <div className="rounded-lg border bg-background p-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Learning mode
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Choose how you want to learn this task right now.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant={learningMode === "video" ? "default" : "outline"}
+                        onClick={() => setLearningMode("video")}
+                      >
+                        Video-first
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={learningMode === "practice" ? "default" : "outline"}
+                        onClick={() => setLearningMode("practice")}
+                      >
+                        Practice-first
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={learningMode === "quiz" ? "default" : "outline"}
+                        onClick={() => setLearningMode("quiz")}
+                      >
+                        Quiz-first
+                      </Button>
+                    </div>
+                  </div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Micro-steps
                   </p>
@@ -559,7 +687,8 @@ export default function PlanPlaygroundPage() {
                   </p>
                 </div>
 
-                <div className="grid gap-4 lg:grid-cols-2">
+                {showTryIt ? (
+                  <div className="grid gap-4 lg:grid-cols-2">
                   <div className="rounded-lg border bg-background p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Try it
@@ -591,8 +720,82 @@ export default function PlanPlaygroundPage() {
                           <li>Mentions one practical implication</li>
                           <li>Uses the correct terminology</li>
                         </ul>
+                  </div>
+                ) : null}
+
+                {learningMode === "quiz" ? (
+                  <div className="rounded-lg border bg-background p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Quick quiz
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Check your understanding before moving on.
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setShowQuizFeedback(true)}
+                      >
+                        Check answers
+                      </Button>
+                    </div>
+                    <div className="mt-3 space-y-4 text-sm">
+                      {getQuizQuestions(activeTask).map((question) => (
+                        <div key={question.id} className="rounded-lg border bg-muted/20 p-3">
+                          <p className="text-sm font-medium">{question.question}</p>
+                          <div className="mt-2 space-y-2">
+                            {question.options.map((option, idx) => {
+                              const selected = quizAnswers[question.id] === idx;
+                              const correct = question.answer_index === idx;
+                              const showFeedback = showQuizFeedback && question.answer_index !== undefined;
+                              return (
+                                <button
+                                  key={`${question.id}-${idx}`}
+                                  type="button"
+                                  onClick={() =>
+                                    setQuizAnswers((prev) => ({
+                                      ...prev,
+                                      [question.id]: idx,
+                                    }))
+                                  }
+                                  className={cn(
+                                    "flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm",
+                                    selected ? "border-primary bg-primary/10" : "bg-background",
+                                    showFeedback && correct ? "border-emerald-500 bg-emerald-50" : "",
+                                    showFeedback && selected && !correct
+                                      ? "border-rose-400 bg-rose-50"
+                                      : "",
+                                  )}
+                                >
+                                  <span>{option}</span>
+                                  {selected ? (
+                                    <span className="text-xs font-semibold text-primary">
+                                      Selected
+                                    </span>
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {showQuizFeedback && question.rationale ? (
+                            <p className="mt-2 text-[11px] text-muted-foreground">
+                              {question.rationale}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                    {showQuizFeedback ? (
+                      <div className="mt-3 rounded-lg border bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                        Score: {calculateQuizScore(activeTask, quizAnswers)} /{" "}
+                        {getQuizQuestions(activeTask).length}
                       </div>
                     ) : null}
+                  </div>
+                ) : null}
                   </div>
                   <div className="rounded-lg border bg-background p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -606,6 +809,129 @@ export default function PlanPlaygroundPage() {
                     />
                   </div>
                 </div>
+                ) : null}
+
+                {showPracticeLab ? (
+                  <div className="rounded-lg border bg-background p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Practice lab
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Work through an example without leaving the playground.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant={practiceMode === "code" ? "default" : "outline"}
+                        onClick={() => setPracticeMode("code")}
+                      >
+                        Code pad
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={practiceMode === "scratch" ? "default" : "outline"}
+                        onClick={() => setPracticeMode("scratch")}
+                      >
+                        Scratchpad
+                      </Button>
+                    </div>
+                  </div>
+                  <div
+                    className={cn(
+                      "mt-3 overflow-hidden rounded-xl border",
+                      practiceMode === "code"
+                        ? "bg-slate-950/90 text-slate-100"
+                        : "bg-amber-50 text-slate-800",
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex items-center justify-between border-b px-3 py-2 text-[11px]",
+                        practiceMode === "code"
+                          ? "border-slate-800 text-slate-300"
+                          : "border-amber-200 text-amber-700",
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                        <span>
+                          {practiceMode === "code" ? "Live code pad" : "Scratchpad notes"}
+                        </span>
+                      </div>
+                      <span className="uppercase tracking-wide">
+                        {practiceMode === "code" ? "sandbox" : "workbench"}
+                      </span>
+                    </div>
+                    <div className="flex">
+                      <div
+                        className={cn(
+                          "select-none px-3 py-3 text-[11px] leading-6",
+                          practiceMode === "code"
+                            ? "text-slate-500"
+                            : "text-amber-400",
+                        )}
+                      >
+                        {Array.from({ length: 10 }).map((_, idx) => (
+                          <div key={`line-${idx}`}>{idx + 1}</div>
+                        ))}
+                      </div>
+                      <Textarea
+                        value={practiceNotes}
+                        onChange={(event) => setPracticeNotes(event.target.value)}
+                        placeholder={
+                          practiceMode === "code"
+                            ? "Draft a solution or outline your logic..."
+                            : "Sketch steps, formulas, or reasoning..."
+                        }
+                        className={cn(
+                          "min-h-[180px] resize-none border-0 bg-transparent px-3 py-3 text-xs shadow-none focus-visible:ring-0",
+                          practiceMode === "code" ? "font-mono text-slate-100" : "text-sm",
+                        )}
+                      />
+                    </div>
+                    <div
+                      className={cn(
+                        "flex flex-wrap items-center gap-2 border-t px-3 py-2 text-[11px]",
+                        practiceMode === "code"
+                          ? "border-slate-800 text-slate-300"
+                          : "border-amber-200 text-amber-700",
+                      )}
+                    >
+                      <span className="rounded-full border px-2 py-0.5">
+                        {practiceMode === "code" ? "No execution yet" : "Freeform notes"}
+                      </span>
+                      <span className="rounded-full border px-2 py-0.5">
+                        {practiceMode === "code" ? "Pseudocode OK" : "Show your steps"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() =>
+                        setNotes((prev) =>
+                          prev
+                            ? `${prev}\n\nLab notes:\n${practiceNotes}`
+                            : `Lab notes:\n${practiceNotes}`,
+                        )
+                      }
+                    >
+                      Save to notes
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setPracticeNotes("")}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+                ) : null}
 
                 <div className="rounded-lg border bg-muted/20 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -645,7 +971,7 @@ export default function PlanPlaygroundPage() {
               </CardContent>
             </Card>
 
-            {!focusMode ? (
+            {!focusMode && showResourceDock ? (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Resource Dock</CardTitle>
@@ -656,11 +982,7 @@ export default function PlanPlaygroundPage() {
                     <div className="overflow-hidden rounded-lg border bg-background">
                       <div className="flex items-center justify-between border-b px-3 py-2 text-xs">
                         <span className="truncate">
-                          {typeof primaryResource === "string"
-                            ? primaryResource
-                            : (primaryResource as Record<string, unknown>)?.title ??
-                              (primaryResource as Record<string, unknown>)?.name ??
-                              "Resource"}
+                          {getResourceLabel(primaryResource)}
                         </span>
                         {resourceMetadata["resource-0"]?.verified ? (
                           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
@@ -675,16 +997,165 @@ export default function PlanPlaygroundPage() {
                           Open full
                         </Button>
                       </div>
+                      <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2 text-[11px] text-muted-foreground">
+                        <span className="rounded-full border px-2 py-0.5">
+                          {primaryVideoEmbed ? "Video" : primaryAudioEmbed ? "Audio" : "Doc"}
+                        </span>
+                        <span className="rounded-full border px-2 py-0.5">
+                          {resourceMetadata["resource-0"]?.verified ? "Verified source" : "External source"}
+                        </span>
+                        <div className="ml-auto flex gap-2">
+                          <Button
+                            size="sm"
+                            variant={resourceViewMode === "embedded" ? "default" : "outline"}
+                            onClick={() => setResourceViewMode("embedded")}
+                          >
+                            Embedded
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={resourceViewMode === "curated" ? "default" : "outline"}
+                            onClick={() => setResourceViewMode("curated")}
+                          >
+                            Curated view
+                          </Button>
+                        </div>
+                      </div>
                       {resourceMetadata["resource-0"]?.excerpt ? (
                         <div className="border-b px-3 py-2 text-xs text-muted-foreground">
                           {resourceMetadata["resource-0"].excerpt}
                         </div>
                       ) : null}
-                      <iframe
-                        title="resource-viewer"
-                        src={String(primaryResourceHref)}
-                        className="h-[260px] w-full"
-                      />
+                      {resourceViewMode === "curated" ? (
+                        <div className="space-y-3 px-3 py-4 text-sm">
+                          <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                            <p className="font-semibold text-foreground">Curated highlights</p>
+                            <p className="mt-1">
+                              Avoid scrolling. Focus on the highlighted excerpt and summarize it in your own words.
+                            </p>
+                            {resourceMetadata["resource-0"]?.excerpt ? (
+                              <p className="mt-2 text-[11px] text-muted-foreground">
+                                <mark className="rounded bg-amber-100 px-1">
+                                  {resourceMetadata["resource-0"].excerpt.split(".")[0]}.
+                                </mark>
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Source: seen in the Resource Dock (Open full for the complete material).
+                          </div>
+                          <div className="rounded-lg border bg-background px-3 py-2 text-xs text-muted-foreground">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-semibold text-foreground">
+                                Activity generator
+                              </span>
+                              <Button size="sm" variant="secondary" onClick={handleGenerateActivities}>
+                                Generate activities
+                              </Button>
+                            </div>
+                            <p className="mt-2 text-[11px] text-muted-foreground">
+                              Creates flashcards + a quick quiz from the highlighted excerpt.
+                            </p>
+                          </div>
+                          {generatedActivities ? (
+                            <div className="space-y-3">
+                              <div className="rounded-lg border bg-muted/10 px-3 py-2 text-xs">
+                                <p className="font-semibold text-foreground">Flashcards</p>
+                                <div className="mt-2 space-y-2">
+                                  {generatedActivities.flashcards.map((card) => (
+                                    <div key={card.id} className="rounded-md border bg-background px-3 py-2">
+                                      <p className="text-[11px] uppercase text-muted-foreground">Q</p>
+                                      <p className="text-sm">{card.question}</p>
+                                      <p className="mt-2 text-[11px] uppercase text-muted-foreground">A</p>
+                                      <p className="text-sm text-muted-foreground">{card.answer}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="rounded-lg border bg-muted/10 px-3 py-2 text-xs">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="font-semibold text-foreground">Quiz draft</p>
+                                  <Button size="sm" onClick={handleSaveQuiz}>
+                                    Use as quiz
+                                  </Button>
+                                </div>
+                                <div className="mt-2 space-y-2">
+                                  {generatedActivities.quiz.map((item) => (
+                                    <div key={item.id} className="rounded-md border bg-background px-3 py-2">
+                                      <p className="text-sm">{item.question}</p>
+                                      <ul className="mt-1 list-disc pl-4 text-[11px] text-muted-foreground">
+                                        {item.options.map((option) => (
+                                          <li key={option}>{option}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : primaryVideoEmbed ? (
+                        <div className="space-y-3 p-3">
+                          <div className="aspect-video w-full overflow-hidden rounded-lg border bg-black">
+                            <iframe
+                              title="resource-video"
+                              src={primaryVideoEmbed}
+                              className="h-full w-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
+                          </div>
+                          <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                            <p className="font-semibold text-foreground">Video quick check</p>
+                            <p className="mt-1">
+                              Capture one key idea and one question while the video is fresh.
+                            </p>
+                            <Button
+                              size="sm"
+                              className="mt-2"
+                              variant="secondary"
+                              onClick={() =>
+                                setReflection(
+                                  "Key idea: \\nQuestion I still have: ",
+                                )
+                              }
+                            >
+                              Add quick check
+                            </Button>
+                          </div>
+                        </div>
+                      ) : primaryAudioEmbed ? (
+                        <div className="space-y-3 p-3">
+                          <audio controls className="w-full">
+                            <source src={primaryAudioEmbed} />
+                          </audio>
+                          <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                            <p className="font-semibold text-foreground">Listening notes</p>
+                            <p className="mt-1">
+                              Jot down one insight and one example you can apply.
+                            </p>
+                            <Button
+                              size="sm"
+                              className="mt-2"
+                              variant="secondary"
+                              onClick={() =>
+                                setNotes(
+                                  "Insight: \\nExample I can apply: ",
+                                )
+                              }
+                            >
+                              Add listening notes
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <iframe
+                          title="resource-viewer"
+                          src={String(primaryResourceHref)}
+                          className="h-[260px] w-full"
+                        />
+                      )}
                       <div className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground">
                         <span>Embedded preview</span>
                         <Button
@@ -699,12 +1170,7 @@ export default function PlanPlaygroundPage() {
                   ) : null}
                   {resources.length ? (
                     resources.slice(0, 5).map((resource, index) => {
-                      const label =
-                        typeof resource === "string"
-                          ? resource
-                          : (resource.title as string) ||
-                            (resource.name as string) ||
-                            "Resource";
+                      const label = getResourceLabel(resource);
                       const href =
                         typeof resource === "string"
                           ? resource
@@ -933,4 +1399,166 @@ function RatingRow({
       </div>
     </div>
   );
+}
+
+function getVideoEmbedUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace("www.", "");
+    if (host === "youtu.be") {
+      const videoId = parsed.pathname.replace("/", "");
+      return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+    }
+    if (host.includes("youtube.com")) {
+      const videoId = parsed.searchParams.get("v");
+      return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+    }
+    if (host.includes("vimeo.com")) {
+      const videoId = parsed.pathname.split("/").filter(Boolean).at(-1);
+      return videoId ? `https://player.vimeo.com/video/${videoId}` : null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function getAudioEmbedUrl(url: string) {
+  const lower = url.toLowerCase();
+  if (lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".m4a")) {
+    return url;
+  }
+  return null;
+}
+
+function getResourceLabel(resource: string | Record<string, unknown> | undefined) {
+  if (!resource) return "Resource";
+  if (typeof resource === "string") return resource;
+  const title = resource.title;
+  if (typeof title === "string" && title.trim()) return title;
+  const name = resource.name;
+  if (typeof name === "string" && name.trim()) return name;
+  return "Resource";
+}
+
+interface GeneratedActivities {
+  flashcards: Array<{ id: string; question: string; answer: string }>;
+  quiz: Array<{
+    id: string;
+    question: string;
+    options: string[];
+    answer_index?: number;
+    rationale?: string;
+  }>;
+}
+
+function getQuizQuestions(task: DailyTask) {
+  const payload = task.quiz_payload;
+  if (payload?.questions?.length) {
+    return payload.questions.map((question, index) => ({
+      id: question.id ?? `q-${index}`,
+      question: question.question,
+      options: question.options ?? [],
+      answer_index: question.answer_index,
+      rationale: question.rationale,
+    }));
+  }
+  return [
+    {
+      id: "q-1",
+      question: "Which statement best summarizes the core idea?",
+      options: [
+        "It focuses on identifying key terms only.",
+        "It explains the main concept and its application.",
+        "It ignores context to keep things simple.",
+        "It repeats the task without adding insights.",
+      ],
+      answer_index: 1,
+      rationale: "Strong answers connect the concept to its real-world use.",
+    },
+    {
+      id: "q-2",
+      question: "What should you do right after this task?",
+      options: [
+        "Skip the reflection and move on immediately.",
+        "Capture one takeaway and one open question.",
+        "Wait for the mentor to provide the answer.",
+        "Restart the task from scratch.",
+      ],
+      answer_index: 1,
+      rationale: "Short reflections help lock in understanding.",
+    },
+  ];
+}
+
+function calculateQuizScore(task: DailyTask, answers: Record<string, number>) {
+  const questions = getQuizQuestions(task);
+  let score = 0;
+  questions.forEach((question) => {
+    if (
+      question.answer_index !== undefined &&
+      answers[question.id] === question.answer_index
+    ) {
+      score += 1;
+    }
+  });
+  return score;
+}
+
+function buildActivitiesFromExcerpt(excerpt: string, title: string): GeneratedActivities {
+  const sentences = excerpt
+    .split(/[.!?]+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  const keyLine = sentences[0] ?? excerpt.trim();
+  const secondary = sentences[1] ?? "Identify a supporting detail.";
+  const flashcards = [
+    {
+      id: "fc-1",
+      question: `What is the main takeaway from ${title}?`,
+      answer: keyLine,
+    },
+    {
+      id: "fc-2",
+      question: "Which detail supports the main idea?",
+      answer: secondary,
+    },
+  ];
+  const distractors = [
+    "It focuses on background context only.",
+    "It ignores practical implications.",
+    "It repeats terminology without explaining it.",
+  ];
+  const options = shuffle([keyLine, ...distractors]).slice(0, 4);
+  const quiz = [
+    {
+      id: "qg-1",
+      question: "Which statement best captures the excerpt?",
+      options,
+      answer_index: options.indexOf(keyLine),
+      rationale: "Choose the option that reflects the excerpt's core idea.",
+    },
+    {
+      id: "qg-2",
+      question: "What should you do next after reading this?",
+      options: [
+        "Summarize the key idea in your own words.",
+        "Skip reflection and move on immediately.",
+        "Wait for the mentor to answer for you.",
+        "Ignore the resource until later.",
+      ],
+      answer_index: 0,
+      rationale: "A short recap helps retention and reveals gaps.",
+    },
+  ];
+  return { flashcards, quiz };
+}
+
+function shuffle<T>(items: T[]) {
+  const array = [...items];
+  for (let i = array.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
 }
