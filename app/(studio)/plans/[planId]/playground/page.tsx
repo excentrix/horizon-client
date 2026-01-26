@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import type { DailyTask } from "@/types";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
-import { chatApi } from "@/lib/api";
+import { chatApi, planningApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
 
 const defaultSteps = [
@@ -42,6 +42,10 @@ export default function PlanPlaygroundPage() {
   const [mentorResponse, setMentorResponse] = useState<string | null>(null);
   const [mentorPrompt, setMentorPrompt] = useState<string>("");
   const [showRubric, setShowRubric] = useState(false);
+  const [proofType, setProofType] = useState<"link" | "text" | "file">("link");
+  const [proofLink, setProofLink] = useState("");
+  const [proofText, setProofText] = useState("");
+  const [proofFile, setProofFile] = useState<File | null>(null);
   const [mentorInput, setMentorInput] = useState("");
   const [practiceMode, setPracticeMode] = useState<"code" | "scratch">("code");
   const [practiceNotes, setPracticeNotes] = useState("");
@@ -89,6 +93,7 @@ export default function PlanPlaygroundPage() {
   }, [conversations, mentorConversationId]);
   const lastContextSentRef = useRef<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const proofRef = useRef<HTMLDivElement | null>(null);
   const lastTaskFocusRef = useRef<string | null>(null);
   const lastEventSentRef = useRef<Record<string, number>>({});
   const mentorSuggestions = [
@@ -288,6 +293,52 @@ export default function PlanPlaygroundPage() {
     });
   };
 
+  const handleSaveProof = async () => {
+    if (!activeTask) {
+      telemetry.toastError("Select a task before submitting proof.");
+      return;
+    }
+    let content = "";
+    const metadata: Record<string, unknown> = {
+      source: "playground",
+      task_id: activeTask.id,
+    };
+    if (proofType === "link") {
+      content = proofLink.trim();
+    } else if (proofType === "text") {
+      content = proofText.trim();
+      if (content) {
+        metadata.word_count = content.split(/\s+/).length;
+      }
+    } else if (proofType === "file") {
+      content = proofFile?.name ?? "";
+      if (proofFile) {
+        metadata.file_name = proofFile.name;
+        metadata.file_size = proofFile.size;
+      }
+    }
+    if (!content) {
+      telemetry.toastError("Add a proof link, summary, or file name first.");
+      return;
+    }
+    try {
+      await planningApi.submitTaskProof(activeTask.id, {
+        submission_type: proofType,
+        content,
+        metadata,
+      });
+      const summary =
+        proofType === "text" ? `Proof summary:\n${content}` : `Proof ${proofType}: ${content}`;
+      setNotes((prev) => (prev ? `${prev}\n\n${summary}` : summary));
+      telemetry.toastSuccess("Proof saved to your task.");
+      setProofLink("");
+      setProofText("");
+      setProofFile(null);
+    } catch {
+      telemetry.toastError("Unable to save proof right now.");
+    }
+  };
+
   const buildMentorContext = () => {
     const stepProgress = stepState.length
       ? `${stepState.filter(Boolean).length}/${stepState.length} steps complete`
@@ -300,8 +351,8 @@ export default function PlanPlaygroundPage() {
           "Primary resource"
       : "No resource yet";
     const noteSnippet = notes.trim()
-      ? `Notes: ${notes.trim().slice(0, 140)}`
-      : "Notes: none";
+    ? `Field notes: ${notes.trim().slice(0, 140)}`
+    : "Field notes: none";
     const reflectionSnippet = reflection.trim()
       ? `Reflection: ${reflection.trim().slice(0, 140)}`
       : "Reflection: none";
@@ -324,6 +375,23 @@ export default function PlanPlaygroundPage() {
       : "No steps yet";
     return `Current task: ${activeTask?.title ?? "Unknown"} · ${stepSummary}`;
   };
+
+  const challengeRequirement =
+    activeTask?.verification?.criteria ||
+    activeTask?.verification?.method ||
+    (activeTask?.kpis?.length
+      ? activeTask.kpis
+          .map((kpi) => kpi.target || kpi.metric)
+          .filter(Boolean)
+          .slice(0, 2)
+          .join(" · ")
+      : null) ||
+    "Show one concrete takeaway from this task.";
+
+  const challengeReward =
+    activeTask?.milestone_title
+      ? `Progress toward ${activeTask.milestone_title}`
+      : "Progress the journey + unlock the next step.";
 
   const handleMentorAction = (action: "explain" | "example" | "quiz") => {
     if (mentorSocketStatus !== "open") {
@@ -667,7 +735,7 @@ export default function PlanPlaygroundPage() {
                     </div>
                   </div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Micro-steps
+                    Challenge steps
                   </p>
                   <div className="mt-2 space-y-2 text-sm">
                     {activeSteps.map((step, idx) => (
@@ -691,7 +759,7 @@ export default function PlanPlaygroundPage() {
                   <div className="grid gap-4 lg:grid-cols-2">
                   <div className="rounded-lg border bg-background p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Try it
+                      Challenge check
                     </p>
                     <p className="mt-2 text-[11px] text-muted-foreground">
                       Prompt: Summarize the main idea in 2 sentences, then add one real-world implication.
@@ -728,19 +796,31 @@ export default function PlanPlaygroundPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Quick quiz
+                          Checkpoint quiz
                         </p>
                         <p className="text-[11px] text-muted-foreground">
                           Check your understanding before moving on.
                         </p>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => setShowQuizFeedback(true)}
-                      >
-                        Check answers
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setShowQuizFeedback(true)}
+                        >
+                          Check answers
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setQuizAnswers({});
+                            setShowQuizFeedback(false);
+                          }}
+                        >
+                          {showQuizFeedback ? "Try again" : "Reset"}
+                        </Button>
+                      </div>
                     </div>
                     <div className="mt-3 space-y-4 text-sm">
                       {getQuizQuestions(activeTask).map((question) => (
@@ -799,12 +879,12 @@ export default function PlanPlaygroundPage() {
                   </div>
                   <div className="rounded-lg border bg-background p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Notes
+                      Field notes
                     </p>
                     <Textarea
                       value={notes}
                       onChange={(event) => setNotes(event.target.value)}
-                      placeholder="Capture your notes here..."
+                      placeholder="Capture your field notes here..."
                       className="mt-2 min-h-[120px]"
                     />
                   </div>
@@ -915,8 +995,8 @@ export default function PlanPlaygroundPage() {
                       onClick={() =>
                         setNotes((prev) =>
                           prev
-                            ? `${prev}\n\nLab notes:\n${practiceNotes}`
-                            : `Lab notes:\n${practiceNotes}`,
+                            ? `${prev}\n\nField notes:\n${practiceNotes}`
+                            : `Field notes:\n${practiceNotes}`,
                         )
                       }
                     >
@@ -933,9 +1013,100 @@ export default function PlanPlaygroundPage() {
                 </div>
                 ) : null}
 
+                <div ref={proofRef} className="rounded-lg border bg-background p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Proof of work
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Capture a link, a short summary, or a file name tied to this task.
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                      Optional
+                    </Badge>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant={proofType === "link" ? "default" : "outline"}
+                      onClick={() => setProofType("link")}
+                    >
+                      Link
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={proofType === "text" ? "default" : "outline"}
+                      onClick={() => setProofType("text")}
+                    >
+                      Summary
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={proofType === "file" ? "default" : "outline"}
+                      onClick={() => setProofType("file")}
+                    >
+                      File
+                    </Button>
+                  </div>
+                  <div className="mt-3">
+                    {proofType === "link" ? (
+                      <Input
+                        type="url"
+                        value={proofLink}
+                        onChange={(event) => setProofLink(event.target.value)}
+                        placeholder="Paste a link to your proof (doc, repo, submission)"
+                      />
+                    ) : null}
+                    {proofType === "text" ? (
+                      <Textarea
+                        value={proofText}
+                        onChange={(event) => setProofText(event.target.value)}
+                        placeholder="Write a short summary of what you produced."
+                        className="min-h-[120px]"
+                      />
+                    ) : null}
+                    {proofType === "file" ? (
+                      <div className="space-y-2">
+                        <Input
+                          type="file"
+                          onChange={(event) =>
+                            setProofFile(event.target.files?.[0] ?? null)
+                          }
+                        />
+                        {proofFile ? (
+                          <p className="text-xs text-muted-foreground">
+                            Selected: {proofFile.name}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button size="sm" variant="secondary" onClick={handleSaveProof}>
+                      Save to field notes
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setProofLink("");
+                        setProofText("");
+                        setProofFile(null);
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Proof is stored in your field notes until uploads are enabled.
+                  </p>
+                </div>
+
                 <div className="rounded-lg border bg-muted/20 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Session ritual
+                    Checkpoint
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button onClick={handleStartSession} disabled={sessionStarted}>
@@ -974,7 +1145,7 @@ export default function PlanPlaygroundPage() {
             {!focusMode && showResourceDock ? (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Resource Dock</CardTitle>
+                  <CardTitle className="text-base">Verified resources</CardTitle>
                   <CardDescription>Open learning material without leaving the playground.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -1042,7 +1213,7 @@ export default function PlanPlaygroundPage() {
                             ) : null}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            Source: seen in the Resource Dock (Open full for the complete material).
+                            Source: seen in Verified resources (Open full for the complete material).
                           </div>
                           <div className="rounded-lg border bg-background px-3 py-2 text-xs text-muted-foreground">
                             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1163,7 +1334,7 @@ export default function PlanPlaygroundPage() {
                           variant="secondary"
                           onClick={() => markResource("resource-0", "completed")}
                         >
-                          Mark viewed
+                          Mark explored
                         </Button>
                       </div>
                     </div>
@@ -1225,7 +1396,7 @@ export default function PlanPlaygroundPage() {
                               variant={engagement?.completed_at ? "secondary" : "outline"}
                               onClick={() => markResource(resourceKey, "completed")}
                             >
-                              {engagement?.completed_at ? "Viewed" : "Mark viewed"}
+                              {engagement?.completed_at ? "Explored" : "Mark explored"}
                             </Button>
                             {engagement?.opened_at ? (
                               <span>Opened</span>
@@ -1246,6 +1417,56 @@ export default function PlanPlaygroundPage() {
 
           {!focusMode ? (
             <aside className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Challenge</CardTitle>
+                  <CardDescription>Complete this to move the journey forward.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm text-muted-foreground">
+                  <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Current challenge
+                    </p>
+                    <p className="mt-1 text-sm text-foreground">
+                      {activeTask.title}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-background px-3 py-2 text-xs">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Proof required
+                    </p>
+                    <p className="mt-1 text-sm text-foreground">{challengeRequirement}</p>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Reward preview
+                    </p>
+                    <p className="mt-1 text-sm text-foreground">{challengeReward}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={handleStartStep}
+                    >
+                      Start challenge
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setProofType("link");
+                        proofRef.current?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "center",
+                        });
+                      }}
+                    >
+                      Add proof
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">{mentorConversationLabel}</CardTitle>
@@ -1463,10 +1684,11 @@ function getQuizQuestions(task: DailyTask) {
       rationale: question.rationale,
     }));
   }
+  const taskLabel = task.title ? `"${task.title}"` : "this task";
   return [
     {
       id: "q-1",
-      question: "Which statement best summarizes the core idea?",
+      question: `Which statement best summarizes the core idea of ${taskLabel}?`,
       options: [
         "It focuses on identifying key terms only.",
         "It explains the main concept and its application.",
@@ -1478,7 +1700,7 @@ function getQuizQuestions(task: DailyTask) {
     },
     {
       id: "q-2",
-      question: "What should you do right after this task?",
+      question: `What should you do right after ${taskLabel}?`,
       options: [
         "Skip the reflection and move on immediately.",
         "Capture one takeaway and one open question.",

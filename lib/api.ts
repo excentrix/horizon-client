@@ -221,6 +221,17 @@ export const planningApi = {
     extract<{ message: string; mentor_id: string }>(
       http.post(`/planning/plans/${planId}/switch_mentor/`, payload)
     ),
+  submitTaskProof: (
+    taskId: string,
+    payload: {
+      submission_type: "link" | "text" | "file";
+      content: string;
+      metadata?: Record<string, unknown>;
+    }
+  ) =>
+    extract<{ message: string; proof: Record<string, unknown> }>(
+      http.post(`/planning/tasks/${taskId}/submit-proof/`, payload)
+    ),
 
   getPlanSession: (sessionId: string) =>
     extract<{
