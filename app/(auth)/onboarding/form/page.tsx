@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, ArrowRight, BrainCircuit, Target, Clock, Trophy, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { authApi } from "@/lib/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
@@ -32,6 +33,12 @@ export default function OnboardingFormPage() {
   });
   const [skillInput, setSkillInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [toneOverride, setToneOverride] = useState<string | null>(null);
+  const [savingTone, setSavingTone] = useState(false);
+  const toneOverrideEnabled = useMemo(
+    () => process.env.NEXT_PUBLIC_TONE_OVERRIDE_ENABLED === "true",
+    []
+  );
 
   // Pre-fill data if available
   useEffect(() => {
@@ -60,6 +67,20 @@ export default function OnboardingFormPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
+  useEffect(() => {
+    if (!toneOverrideEnabled) return;
+    authApi
+      .getProfileDetail()
+      .then((profile) => {
+        const prefs = profile.mentor_preferences ?? {};
+        const override = prefs.tone_override ?? null;
+        setToneOverride(override);
+      })
+      .catch(() => {
+        // Non-blocking: tone override is optional
+      });
+  }, [toneOverrideEnabled]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionKey) return;
@@ -86,6 +107,22 @@ export default function OnboardingFormPage() {
       // Show error toast?
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleToneSelect = async (tone: string) => {
+    if (!toneOverrideEnabled) return;
+    setSavingTone(true);
+    try {
+      const profile = await authApi.getProfileDetail();
+      const prefs = profile.mentor_preferences ?? {};
+      const nextPrefs = { ...prefs, tone_override: tone };
+      await authApi.updateProfileDetail({ mentor_preferences: nextPrefs });
+      setToneOverride(tone);
+    } catch (err) {
+      console.error("Failed to save tone override", err);
+    } finally {
+      setSavingTone(false);
     }
   };
 
@@ -200,23 +237,36 @@ export default function OnboardingFormPage() {
                   We automatically adapt your mentor's tone based on your progress and mood. You'll soon be able to
                   override it manually.
                 </p>
-                <div className="grid grid-cols-3 gap-3 opacity-60">
-                  {["Supportive", "Direct", "Hard love"].map((tone) => (
-                    <button
-                      key={tone}
-                      type="button"
-                      disabled
-                      className="flex items-center justify-center rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm font-medium text-violet-700 dark:border-violet-800 dark:bg-gray-900 dark:text-violet-200"
-                    >
-                      {tone}
-                    </button>
-                  ))}
+                <div className={cn("grid grid-cols-3 gap-3", !toneOverrideEnabled && "opacity-60")}>
+                  {["Supportive", "Direct", "Hard love"].map((tone) => {
+                    const toneValue = tone.toLowerCase().replace(" ", "-");
+                    const isActive = toneOverride === toneValue;
+                    return (
+                      <button
+                        key={tone}
+                        type="button"
+                        onClick={() => handleToneSelect(toneValue)}
+                        disabled={!toneOverrideEnabled || savingTone}
+                        className={cn(
+                          "flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-medium transition",
+                          isActive
+                            ? "border-violet-600 bg-white text-violet-700 shadow-sm dark:bg-gray-900 dark:text-violet-200"
+                            : "border-violet-200 bg-white text-violet-700 dark:border-violet-800 dark:bg-gray-900 dark:text-violet-200",
+                          (!toneOverrideEnabled || savingTone) && "cursor-not-allowed"
+                        )}
+                      >
+                        {tone}
+                      </button>
+                    );
+                  })}
                 </div>
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <span className="rounded-full bg-white/80 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-violet-600 shadow-sm dark:bg-gray-900/80">
-                    Coming Soon
-                  </span>
-                </div>
+                {!toneOverrideEnabled && (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <span className="rounded-full bg-white/80 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-violet-600 shadow-sm dark:bg-gray-900/80">
+                      Coming Soon
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Time Commitment */}

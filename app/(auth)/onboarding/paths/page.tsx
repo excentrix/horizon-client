@@ -57,12 +57,31 @@ export default function PathSelectionPage() {
     setInitializing(true);
     
     const key = localStorage.getItem("onboarding_session_key");
-    
-    // Simulate Plan Generation for now
-    setTimeout(() => {
-        alert("Phase 3 (AI Personalization) logic goes here!");
+    if (!key) return;
+
+    try {
+        const response = await fetch(`${API_URL}/onboarding/personalize-path/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                session_key: key,
+                path_slug: pathSlug
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error("Failed to save path selection");
+        }
+
+        const data = await response.json();
+        
+        // Redirect to finalize page (plan generation happens after account creation)
+        router.push(data.redirect_url || '/onboarding/finalize');
+        
+    } catch (err) {
+        console.error("Failed to save path:", err);
         setInitializing(false);
-    }, 1500);
+    }
   };
 
   if (loading) {
