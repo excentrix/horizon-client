@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Upload, FileText, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [isDragging, setIsDragging] = useState(false);
@@ -79,7 +81,7 @@ export default function OnboardingPage() {
     formData.append("resume", file);
 
     try {
-      const response = await fetch("/api/onboarding/upload-resume/", {
+      const response = await fetch(`${API_URL}/onboarding/upload-resume/`, {
         method: "POST",
         body: formData,
       });
@@ -109,7 +111,7 @@ export default function OnboardingPage() {
 
     const checkStatus = async (): Promise<void> => {
       try {
-        const response = await fetch(`/api/onboarding/session/${sessionKey}/`);
+        const response = await fetch(`${API_URL}/onboarding/session/${sessionKey}/`);
         const data = await response.json();
 
         if (data.parsing_status === "complete") {
@@ -140,7 +142,7 @@ export default function OnboardingPage() {
 
   const handleSkip = async () => {
     try {
-      const response = await fetch("/api/onboarding/skip-resume/", {
+      const response = await fetch(`${API_URL}/onboarding/skip-resume/`, {
         method: "POST",
       });
 
