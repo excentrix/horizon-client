@@ -24,6 +24,7 @@ import {
   ComprehensiveProgressReport,
   MemoryItem,
   ConversationAnalysis,
+  PortfolioArtifact,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -229,7 +230,7 @@ export const planningApi = {
       metadata?: Record<string, unknown>;
     }
   ) =>
-    extract<{ message: string; proof: Record<string, unknown> }>(
+    extract<{ message: string; proof: Record<string, unknown>; artifact_id?: string }>(
       http.post(`/planning/tasks/${taskId}/submit-proof/`, payload)
     ),
 
@@ -251,6 +252,18 @@ export const planningApi = {
     ),
 };
 
+// PORTFOLIO ------------------------------------------------------------------
+export const portfolioApi = {
+  listArtifacts: () =>
+    extract<PortfolioArtifact[]>(http.get("/portfolio/artifacts/")),
+  createArtifactFromProof: (payload: { proof_id: string }) =>
+    extract<{ message: string; artifact: PortfolioArtifact }>(
+      http.post("/portfolio/artifacts/from-proof/", payload)
+    ),
+  createArtifact: (payload: Partial<PortfolioArtifact>) =>
+    extract<PortfolioArtifact>(http.post("/portfolio/artifacts/", payload)),
+};
+
 // INTELLIGENCE ---------------------------------------------------------------
 export const intelligenceApi = {
   getMultiDomainDashboard: (params?: {
@@ -259,7 +272,7 @@ export const intelligenceApi = {
     stakeholder_type?: string;
   }) =>
     extract<MultiDomainDashboard>(
-      http.get("/intelligence/multi_domain_dashboard/", { params })
+      http.get("/intelligence/dashboard/", { params })
     ),
 
   getWellnessMonitoring: (params?: {
@@ -268,7 +281,7 @@ export const intelligenceApi = {
     days?: number;
   }) =>
     extract<WellnessMonitoring>(
-      http.get("/intelligence/wellness_monitoring/", { params })
+      http.get("/intelligence/wellness-monitoring/", { params })
     ),
 
   getAcademicProgressOverview: (params?: {
@@ -277,7 +290,7 @@ export const intelligenceApi = {
     include_predictions?: boolean;
   }) =>
     extract<AcademicProgressOverview>(
-      http.get("/intelligence/academic_progress_overview/", { params })
+      http.get("/intelligence/academic-progress/", { params })
     ),
 
   getCareerReadinessAssessment: (params?: {
@@ -286,7 +299,7 @@ export const intelligenceApi = {
     include_recommendations?: boolean;
   }) =>
     extract<CareerReadinessAssessment>(
-      http.get("/intelligence/career_readiness_assessment/", { params })
+      http.get("/intelligence/career-readiness/", { params })
     ),
 
   getUniversalGoalsManagement: (params?: {
@@ -295,7 +308,7 @@ export const intelligenceApi = {
     domain?: string;
   }) =>
     extract<UniversalGoalsManagement>(
-      http.get("/intelligence/universal_goals_management/", { params })
+      http.get("/intelligence/goals-management/", { params })
     ),
 
   getInsightsFeed: (params?: {
@@ -305,7 +318,7 @@ export const intelligenceApi = {
     limit?: number;
   }) =>
     extract<InsightsFeedResponse>(
-      http.get("/intelligence/insights_feed/", { params })
+      http.get("/intelligence/insights/", { params })
     ),
 
   getComprehensiveProgressReport: (params?: {
@@ -314,7 +327,7 @@ export const intelligenceApi = {
     include_projections?: boolean;
   }) =>
     extract<ComprehensiveProgressReport>(
-      http.get("/intelligence/comprehensive_progress_report/", { params })
+      http.get("/intelligence/progress-report/", { params })
     ),
 
   analyzeConversation: (payload: {

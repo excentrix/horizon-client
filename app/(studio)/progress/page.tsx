@@ -9,6 +9,7 @@ import {
   useWellnessMonitoring,
   useComprehensiveProgressReport,
 } from "@/hooks/use-intelligence";
+import { usePortfolioArtifacts } from "@/hooks/use-portfolio";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
@@ -111,6 +112,12 @@ export default function ProgressPage() {
     error: progressReportError,
   } = useComprehensiveProgressReport({ format: "summary" });
 
+  const {
+    data: artifacts,
+    isLoading: artifactsLoading,
+    error: artifactsError,
+  } = usePortfolioArtifacts();
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace("/login");
@@ -131,10 +138,17 @@ export default function ProgressPage() {
     if (progressReportError) {
       telemetry.error("Progress report error", { progressReportError });
     }
-  }, [dashboardError, wellnessError, insightsError, progressReportError]);
+    if (artifactsError) {
+      telemetry.error("Portfolio fetch error", { artifactsError });
+    }
+  }, [dashboardError, wellnessError, insightsError, progressReportError, artifactsError]);
 
   const isLoading =
-    dashboardLoading || wellnessLoading || insightsLoading || progressReportLoading;
+    dashboardLoading ||
+    wellnessLoading ||
+    insightsLoading ||
+    progressReportLoading ||
+    artifactsLoading;
 
   const domainScores = useMemo(() => {
     if (!dashboard) {
@@ -162,7 +176,7 @@ export default function ProgressPage() {
   const crisisAlerts = wellness?.crisis_alerts ?? [];
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-col gap-4 p-4">
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Progress mural</h1>
         <p className="text-sm text-muted-foreground">
@@ -342,6 +356,60 @@ export default function ProgressPage() {
             </CardContent>
           </Card>
         ) : null}
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Trophy room</CardTitle>
+            <CardDescription>Verified artifacts you can showcase.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-xs text-muted-foreground">
+            {artifacts && artifacts.length ? (
+              artifacts.slice(0, 6).map((artifact) => (
+                <div key={artifact.id} className="rounded-lg border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-foreground">
+                      {artifact.title}
+                    </span>
+                    <Badge variant={artifact.status === "verified" ? "default" : "secondary"}>
+                      {artifact.status}
+                    </Badge>
+                  </div>
+                  {artifact.description ? (
+                    <p className="mt-1 text-muted-foreground">{artifact.description}</p>
+                  ) : null}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Badge variant="outline">{artifact.artifact_type.replace(/_/g, " ")}</Badge>
+                    {artifact.url ? (
+                      <a
+                        href={artifact.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-primary underline"
+                      >
+                        View artifact
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p>No artifacts yet. Proof submissions will surface here.</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Portfolio cues</CardTitle>
+            <CardDescription>What helps you build a strong showcase.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-xs text-muted-foreground">
+            <p>Save proof of work from each task you complete.</p>
+            <p>Link real demos, repos, or written reflections.</p>
+            <p>Verified artifacts earn higher visibility later.</p>
+          </CardContent>
+        </Card>
       </section>
     </div>
   );

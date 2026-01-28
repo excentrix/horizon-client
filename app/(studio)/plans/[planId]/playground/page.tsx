@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePlan, usePlanMutations } from "@/hooks/use-plans";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useConversationMessages, useConversations } from "@/hooks/use-conversations";
+import { usePortfolioArtifacts } from "@/hooks/use-portfolio";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,8 @@ export default function PlanPlaygroundPage() {
   const planId = params.planId;
   const { data: plan } = usePlan(planId);
   const { updateTaskStatus } = usePlanMutations(planId);
+  const { data: artifacts } = usePortfolioArtifacts();
+  const safeArtifacts = Array.isArray(artifacts) ? artifacts : [];
   const [focusMode, setFocusMode] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
@@ -46,10 +49,13 @@ export default function PlanPlaygroundPage() {
   const [proofLink, setProofLink] = useState("");
   const [proofText, setProofText] = useState("");
   const [proofFile, setProofFile] = useState<File | null>(null);
+  const [lastArtifactId, setLastArtifactId] = useState<string | null>(null);
+  const [proofView, setProofView] = useState<"proof" | "artifacts">("proof");
   const [mentorInput, setMentorInput] = useState("");
   const [practiceMode, setPracticeMode] = useState<"code" | "scratch">("code");
   const [practiceNotes, setPracticeNotes] = useState("");
   const [learningMode, setLearningMode] = useState<"video" | "practice" | "quiz">("practice");
+  const [activeTab, setActiveTab] = useState<"learn" | "challenge">("learn");
   const [showTryIt, setShowTryIt] = useState(true);
   const [showPracticeLab, setShowPracticeLab] = useState(true);
   const [showResourceDock, setShowResourceDock] = useState(true);
@@ -322,11 +328,14 @@ export default function PlanPlaygroundPage() {
       return;
     }
     try {
-      await planningApi.submitTaskProof(activeTask.id, {
+      const response = await planningApi.submitTaskProof(activeTask.id, {
         submission_type: proofType,
         content,
         metadata,
       });
+      if (response.artifact_id) {
+        setLastArtifactId(response.artifact_id);
+      }
       const summary =
         proofType === "text" ? `Proof summary:\n${content}` : `Proof ${proofType}: ${content}`;
       setNotes((prev) => (prev ? `${prev}\n\n${summary}` : summary));
@@ -392,6 +401,56 @@ export default function PlanPlaygroundPage() {
     activeTask?.milestone_title
       ? `Progress toward ${activeTask.milestone_title}`
       : "Progress the journey + unlock the next step.";
+
+  const allowedProofTypes = useMemo(() => {
+    const method = activeTask?.verification?.method?.toLowerCase() ?? "";
+    if (method.includes("link") || method.includes("repo") || method.includes("url")) {
+      return ["link"] as const;
+    }
+    if (method.includes("summary") || method.includes("reflection") || method.includes("write")) {
+      return ["text"] as const;
+    }
+    if (method.includes("file") || method.includes("upload") || method.includes("artifact")) {
+      return ["file"] as const;
+    }
+    return ["link", "text", "file"] as const;
+  }, [activeTask?.verification?.method]);
+
+  const proofInstruction =
+    activeTask?.verification?.criteria ||
+    activeTask?.verification?.method ||
+    "Submit a short proof that shows you completed the task.";
+
+  useEffect(() => {
+    if (!allowedProofTypes.includes(proofType)) {
+      setProofType(allowedProofTypes[0]);
+    }
+  }, [allowedProofTypes, proofType]);
+
+  const planTaskIds = useMemo(() => {
+    return new Set((plan?.daily_tasks ?? []).map((task) => task.id));
+  }, [plan?.daily_tasks]);
+
+  const planArtifacts = useMemo(() => {
+    const planIdValue = plan?.id;
+    return safeArtifacts.filter((artifact) => {
+      if (artifact.source_task && planTaskIds.has(artifact.source_task)) {
+        return true;
+      }
+      const metadataPlanId =
+        (artifact.metadata as { plan_id?: string } | undefined)?.plan_id;
+      return Boolean(planIdValue && metadataPlanId === planIdValue);
+    });
+  }, [safeArtifacts, plan?.id, planTaskIds]);
+
+  const taskArtifacts = useMemo(() => {
+    if (!activeTask) return [];
+    return safeArtifacts.filter(
+      (artifact) =>
+        artifact.source_task === activeTask.id ||
+        artifact.proof_submission === lastArtifactId,
+    );
+  }, [activeTask, lastArtifactId, safeArtifacts]);
 
   const handleMentorAction = (action: "explain" | "example" | "quiz") => {
     if (mentorSocketStatus !== "open") {
@@ -580,6 +639,24 @@ export default function PlanPlaygroundPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="mr-2 flex items-center gap-1 rounded-full border bg-background px-1 py-1 text-xs">
+            <Button
+              size="sm"
+              variant={activeTab === "learn" ? "default" : "ghost"}
+              onClick={() => setActiveTab("learn")}
+              className="active:bg-black active:text-white rounded-l-2xl rounded-r-md"
+              >
+              Learn
+            </Button>
+            <Button
+              size="sm"
+              variant={activeTab === "challenge" ? "default" : "ghost"}
+              onClick={() => setActiveTab("challenge")}
+              className="active:bg-black active:text-white rounded-r-2xl rounded-l-md"
+            >
+              Challenge
+            </Button>
+          </div>
           <Button variant="outline" asChild>
             <Link href={`/plans?plan=${planId}`}>Back to plan</Link>
           </Button>
@@ -599,7 +676,9 @@ export default function PlanPlaygroundPage() {
         <div
           className={cn(
             "grid gap-4",
-            focusMode ? "grid-cols-1" : "lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]"
+            focusMode || activeTab === "challenge"
+              ? "grid-cols-1"
+              : "lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]"
           )}
         >
           {milestoneCelebration ? (
@@ -625,6 +704,7 @@ export default function PlanPlaygroundPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                {activeTab === "learn" ? (
                 <div className="rounded-lg border bg-muted/20 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Now Learning
@@ -699,7 +779,9 @@ export default function PlanPlaygroundPage() {
                     ) : null}
                   </div>
                 </div>
+                ) : null}
 
+                {activeTab === "learn" ? (
                 <div className="rounded-lg border bg-background p-4">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <div>
@@ -735,7 +817,7 @@ export default function PlanPlaygroundPage() {
                     </div>
                   </div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Challenge steps
+                    Learning steps
                   </p>
                   <div className="mt-2 space-y-2 text-sm">
                     {activeSteps.map((step, idx) => (
@@ -754,8 +836,9 @@ export default function PlanPlaygroundPage() {
                     Complete step {stepState.findLastIndex((value) => value) + 1} to unlock the next.
                   </p>
                 </div>
+                ) : null}
 
-                {showTryIt ? (
+                {activeTab === "learn" && showTryIt ? (
                   <div className="grid gap-4 lg:grid-cols-2">
                   <div className="rounded-lg border bg-background p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -791,7 +874,7 @@ export default function PlanPlaygroundPage() {
                   </div>
                 ) : null}
 
-                {learningMode === "quiz" ? (
+                {activeTab === "learn" && learningMode === "quiz" ? (
                   <div className="rounded-lg border bg-background p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
@@ -877,6 +960,7 @@ export default function PlanPlaygroundPage() {
                   </div>
                 ) : null}
                   </div>
+                  {activeTab === "learn" ? (
                   <div className="rounded-lg border bg-background p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Field notes
@@ -888,10 +972,11 @@ export default function PlanPlaygroundPage() {
                       className="mt-2 min-h-[120px]"
                     />
                   </div>
+                  ) : null}
                 </div>
                 ) : null}
 
-                {showPracticeLab ? (
+                {activeTab === "learn" && showPracticeLab ? (
                   <div className="rounded-lg border bg-background p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
@@ -1013,6 +1098,39 @@ export default function PlanPlaygroundPage() {
                 </div>
                 ) : null}
 
+                {activeTab === "challenge" ? (
+                  <div className="rounded-lg border bg-background p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Challenge assignment
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {proofInstruction}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                        Required to advance
+                      </Badge>
+                    </div>
+                    <div className="mt-3 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Proof required
+                      </p>
+                      <p className="mt-1 text-sm text-foreground">{challengeRequirement}</p>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button size="sm" variant="secondary" onClick={handleStartStep}>
+                        Start challenge
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setProofView("proof")}>
+                        Submit proof
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {activeTab === "challenge" ? (
                 <div ref={proofRef} className="rounded-lg border bg-background p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
@@ -1020,90 +1138,183 @@ export default function PlanPlaygroundPage() {
                         Proof of work
                       </p>
                       <p className="text-[11px] text-muted-foreground">
-                        Capture a link, a short summary, or a file name tied to this task.
+                        Submit the proof in the format required for this task.
                       </p>
                     </div>
-                    <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
-                      Optional
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant={proofView === "proof" ? "default" : "outline"}
+                        onClick={() => setProofView("proof")}
+                      >
+                        Submit proof
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={proofView === "artifacts" ? "default" : "outline"}
+                        onClick={() => setProofView("artifacts")}
+                      >
+                        My artifacts
+                      </Button>
+                      <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                        {allowedProofTypes.length === 1 ? "Format locked" : "Choose format"}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant={proofType === "link" ? "default" : "outline"}
-                      onClick={() => setProofType("link")}
-                    >
-                      Link
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={proofType === "text" ? "default" : "outline"}
-                      onClick={() => setProofType("text")}
-                    >
-                      Summary
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={proofType === "file" ? "default" : "outline"}
-                      onClick={() => setProofType("file")}
-                    >
-                      File
-                    </Button>
-                  </div>
-                  <div className="mt-3">
-                    {proofType === "link" ? (
-                      <Input
-                        type="url"
-                        value={proofLink}
-                        onChange={(event) => setProofLink(event.target.value)}
-                        placeholder="Paste a link to your proof (doc, repo, submission)"
-                      />
-                    ) : null}
-                    {proofType === "text" ? (
-                      <Textarea
-                        value={proofText}
-                        onChange={(event) => setProofText(event.target.value)}
-                        placeholder="Write a short summary of what you produced."
-                        className="min-h-[120px]"
-                      />
-                    ) : null}
-                    {proofType === "file" ? (
-                      <div className="space-y-2">
-                        <Input
-                          type="file"
-                          onChange={(event) =>
-                            setProofFile(event.target.files?.[0] ?? null)
-                          }
-                        />
-                        {proofFile ? (
-                          <p className="text-xs text-muted-foreground">
-                            Selected: {proofFile.name}
-                          </p>
+                  {proofView === "proof" ? (
+                    <>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {allowedProofTypes.includes("link") ? (
+                          <Button
+                            size="sm"
+                            variant={proofType === "link" ? "default" : "outline"}
+                            onClick={() => setProofType("link")}
+                          >
+                            Link
+                          </Button>
+                        ) : null}
+                        {allowedProofTypes.includes("text") ? (
+                          <Button
+                            size="sm"
+                            variant={proofType === "text" ? "default" : "outline"}
+                            onClick={() => setProofType("text")}
+                          >
+                            Summary
+                          </Button>
+                        ) : null}
+                        {allowedProofTypes.includes("file") ? (
+                          <Button
+                            size="sm"
+                            variant={proofType === "file" ? "default" : "outline"}
+                            onClick={() => setProofType("file")}
+                          >
+                            File
+                          </Button>
                         ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button size="sm" variant="secondary" onClick={handleSaveProof}>
-                      Save to field notes
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setProofLink("");
-                        setProofText("");
-                        setProofFile(null);
-                      }}
-                    >
-                      Clear
-                    </Button>
-                  </div>
-                  <p className="mt-2 text-[11px] text-muted-foreground">
-                    Proof is stored in your field notes until uploads are enabled.
-                  </p>
+                      <div className="mt-3">
+                        {proofType === "link" ? (
+                          <Input
+                            type="url"
+                            value={proofLink}
+                            onChange={(event) => setProofLink(event.target.value)}
+                            placeholder="Paste a link to your proof (doc, repo, submission)"
+                          />
+                        ) : null}
+                        {proofType === "text" ? (
+                          <Textarea
+                            value={proofText}
+                            onChange={(event) => setProofText(event.target.value)}
+                            placeholder="Write a short summary of what you produced."
+                            className="min-h-[120px]"
+                          />
+                        ) : null}
+                        {proofType === "file" ? (
+                          <div className="space-y-2">
+                            <Input
+                              type="file"
+                              onChange={(event) =>
+                                setProofFile(event.target.files?.[0] ?? null)
+                              }
+                            />
+                            {proofFile ? (
+                              <p className="text-xs text-muted-foreground">
+                                Selected: {proofFile.name}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button size="sm" variant="secondary" onClick={handleSaveProof}>
+                          Submit proof
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setProofLink("");
+                            setProofText("");
+                            setProofFile(null);
+                          }}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                      {lastArtifactId ? (
+                        <div className="mt-3 flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                          <span>Artifact added to your Trophy Room.</span>
+                          <Link href="/progress" className="text-primary underline">
+                            View in Trophy Room
+                          </Link>
+                        </div>
+                      ) : null}
+                      {taskArtifacts.length ? (
+                        <div className="mt-3 rounded-lg border bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Artifact status
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {taskArtifacts.slice(0, 2).map((artifact) => (
+                              <Badge
+                                key={artifact.id}
+                                variant={artifact.status === "verified" ? "default" : "secondary"}
+                              >
+                                {artifact.title} · {artifact.status}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        Proof is queued for AI verification and portfolio entry.
+                      </p>
+                    </>
+                  ) : (
+                    <div className="mt-3 space-y-3 text-xs text-muted-foreground">
+                      {planArtifacts.length ? (
+                        planArtifacts.slice(0, 5).map((artifact) => (
+                          <div
+                            key={artifact.id}
+                            className="rounded-lg border bg-muted/20 px-3 py-2"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-foreground">
+                                {artifact.title}
+                              </span>
+                              <Badge
+                                variant={artifact.status === "verified" ? "default" : "secondary"}
+                              >
+                                {artifact.status}
+                              </Badge>
+                            </div>
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              {artifact.artifact_type.replace(/_/g, " ")}
+                            </p>
+                            {artifact.url ? (
+                              <a
+                                href={artifact.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-1 inline-block text-primary underline"
+                              >
+                                View artifact
+                              </a>
+                            ) : null}
+                          </div>
+                        ))
+                      ) : (
+                        <p>No artifacts for this plan yet.</p>
+                      )}
+                      <Link href="/progress" className="text-primary underline">
+                        Open Trophy Room
+                      </Link>
+                    </div>
+                  )}
                 </div>
+                ) : null}
 
+                {activeTab === "challenge" ? (
                 <div className="rounded-lg border bg-muted/20 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Checkpoint
@@ -1139,10 +1350,11 @@ export default function PlanPlaygroundPage() {
                     </div>
                   ) : null}
                 </div>
+                ) : null}
               </CardContent>
             </Card>
 
-            {!focusMode && showResourceDock ? (
+            {!focusMode && activeTab === "learn" && showResourceDock ? (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Verified resources</CardTitle>
@@ -1415,58 +1627,8 @@ export default function PlanPlaygroundPage() {
             ) : null}
           </main>
 
-          {!focusMode ? (
+          {!focusMode && activeTab === "learn" ? (
             <aside className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Challenge</CardTitle>
-                  <CardDescription>Complete this to move the journey forward.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm text-muted-foreground">
-                  <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Current challenge
-                    </p>
-                    <p className="mt-1 text-sm text-foreground">
-                      {activeTask.title}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border bg-background px-3 py-2 text-xs">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Proof required
-                    </p>
-                    <p className="mt-1 text-sm text-foreground">{challengeRequirement}</p>
-                  </div>
-                  <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Reward preview
-                    </p>
-                    <p className="mt-1 text-sm text-foreground">{challengeReward}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={handleStartStep}
-                    >
-                      Start challenge
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setProofType("link");
-                        proofRef.current?.scrollIntoView({
-                          behavior: "smooth",
-                          block: "center",
-                        });
-                      }}
-                    >
-                      Add proof
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">{mentorConversationLabel}</CardTitle>

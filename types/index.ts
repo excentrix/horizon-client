@@ -397,6 +397,22 @@ export interface DailyTask {
   updated_at: string;
 }
 
+export interface PortfolioArtifact {
+  id: UUID;
+  user: UUID;
+  title: string;
+  description?: string;
+  artifact_type: "link" | "file" | "text" | "repo" | "case_study" | "project" | "demo";
+  source_task?: UUID | null;
+  proof_submission?: UUID | null;
+  url?: string;
+  content?: string;
+  metadata?: Record<string, unknown>;
+  status: "draft" | "verified";
+  created_at: string;
+  updated_at: string;
+}
+
 export type PlanStatus =
   | "draft"
   | "active"

@@ -11,6 +11,49 @@ import {
 } from "@/types";
 import { telemetry } from "@/lib/telemetry";
 
+const getStatus = (error: unknown) =>
+  (error as { response?: { status?: number } })?.response?.status;
+
+const buildEmptyDashboard = (): MultiDomainDashboard => ({
+  user_info: {},
+  academic_overview: {},
+  career_overview: {},
+  wellness_overview: {},
+  domain_integration: {},
+  cross_domain_insights: [],
+  competency_growth: {},
+  goal_progression: {},
+  wellness_trends: {},
+  urgent_alerts: [],
+  recommendations: [],
+  overall_progress_score: 0,
+  domain_balance_score: 0,
+  wellness_risk_level: "unknown",
+  generated_at: new Date().toISOString(),
+  data_completeness: {},
+});
+
+const buildEmptyWellness = (): WellnessMonitoring => ({
+  profile: null,
+  recent_assessments: 0,
+  crisis_alerts: [],
+  wellness_trends: {},
+  support_recommendations: [],
+  intervention_priority: {},
+});
+
+const buildEmptyProgressReport = (): ComprehensiveProgressReport => ({
+  period_start: new Date().toISOString(),
+  period_end: new Date().toISOString(),
+  executive_summary: {},
+  domain_progress: {},
+  competency_development: {},
+  goal_achievements: {},
+  cross_domain_insights: [],
+  areas_for_improvement: [],
+  strengths_and_achievements: [],
+});
+
 export const useMultiDomainDashboard = (params?: {
   period?: number;
   include_projections?: boolean;
@@ -22,6 +65,11 @@ export const useMultiDomainDashboard = (params?: {
       try {
         return await intelligenceApi.getMultiDomainDashboard(params);
       } catch (error) {
+        const status = getStatus(error);
+        if (status === 404 || (status && status >= 500)) {
+          telemetry.warn("Dashboard unavailable", { status, params });
+          return buildEmptyDashboard();
+        }
         telemetry.error("Failed to load dashboard", { error, params });
         throw error;
       }
@@ -39,6 +87,11 @@ export const useWellnessMonitoring = (params?: {
       try {
         return await intelligenceApi.getWellnessMonitoring(params);
       } catch (error) {
+        const status = getStatus(error);
+        if (status === 404 || (status && status >= 500)) {
+          telemetry.warn("Wellness monitoring unavailable", { status, params });
+          return buildEmptyWellness();
+        }
         telemetry.error("Failed to load wellness monitoring", { error, params });
         throw error;
       }
@@ -108,9 +161,8 @@ export const useInsightsFeed = (params?: {
       try {
         return await intelligenceApi.getInsightsFeed(params);
       } catch (error) {
-        const status =
-          (error as { response?: { status?: number } })?.response?.status;
-        if (status === 404) {
+        const status = getStatus(error);
+        if (status === 404 || (status && status >= 500)) {
           telemetry.warn("Insights feed unavailable", { params });
           return {
             insights: [],
@@ -137,6 +189,11 @@ export const useComprehensiveProgressReport = (params?: {
       try {
         return await intelligenceApi.getComprehensiveProgressReport(params);
       } catch (error) {
+        const status = getStatus(error);
+        if (status === 404 || (status && status >= 500)) {
+          telemetry.warn("Comprehensive report unavailable", { status, params });
+          return buildEmptyProgressReport();
+        }
         telemetry.error("Failed to load comprehensive report", { error, params });
         throw error;
       }
