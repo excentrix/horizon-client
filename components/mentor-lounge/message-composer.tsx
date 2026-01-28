@@ -33,12 +33,7 @@ function PromptInputDraftSync({ draft, onTypingChange }: { draft: string; onTypi
     }
   }, [draft, textInput]);
 
-  useEffect(() => {
-    if (textInput.value !== draft) {
-      setComposerDraft(textInput.value);
-    }
-    onTypingChange?.(Boolean(textInput.value.trim()));
-  }, [draft, onTypingChange, setComposerDraft, textInput.value]);
+
 
   return null;
 }

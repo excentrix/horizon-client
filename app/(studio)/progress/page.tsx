@@ -174,6 +174,19 @@ export default function ProgressPage() {
 
   const insights = insightsFeed?.insights ?? [];
   const crisisAlerts = wellness?.crisis_alerts ?? [];
+  const trophyArtifacts = useMemo(() => {
+    if (!artifacts) return [];
+    return artifacts.filter((artifact) => {
+      if (artifact.featured) return true;
+      const verified =
+        artifact.verification_status === "verified" ||
+        artifact.verification_status === "human_verified";
+      const isHighSignal = ["project", "demo", "repo", "case_study"].includes(
+        artifact.artifact_type,
+      );
+      return verified && isHighSignal;
+    });
+  }, [artifacts]);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 p-4">
@@ -365,15 +378,22 @@ export default function ProgressPage() {
             <CardDescription>Verified artifacts you can showcase.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-xs text-muted-foreground">
-            {artifacts && artifacts.length ? (
-              artifacts.slice(0, 6).map((artifact) => (
+            {trophyArtifacts.length ? (
+              trophyArtifacts.slice(0, 6).map((artifact) => (
                 <div key={artifact.id} className="rounded-lg border bg-muted/30 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-semibold text-foreground">
                       {artifact.title}
                     </span>
-                    <Badge variant={artifact.status === "verified" ? "default" : "secondary"}>
-                      {artifact.status}
+                    <Badge
+                      variant={
+                        artifact.verification_status === "verified" ||
+                        artifact.verification_status === "human_verified"
+                          ? "default"
+                          : "secondary"
+                      }
+                    >
+                      {artifact.verification_status ?? artifact.status}
                     </Badge>
                   </div>
                   {artifact.description ? (
@@ -395,7 +415,7 @@ export default function ProgressPage() {
                 </div>
               ))
             ) : (
-              <p>No artifacts yet. Proof submissions will surface here.</p>
+              <p>No promoted artifacts yet. Complete a project or get verified to showcase here.</p>
             )}
           </CardContent>
         </Card>

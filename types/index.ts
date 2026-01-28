@@ -408,7 +408,12 @@ export interface PortfolioArtifact {
   url?: string;
   content?: string;
   metadata?: Record<string, unknown>;
-  status: "draft" | "verified";
+  status: "draft" | "needs_review" | "verified";
+  verification_status?: "pending" | "verified" | "human_verified" | "rejected" | "needs_revision";
+  featured?: boolean;
+  visibility?: "private" | "mentors" | "employers" | "public";
+  reflection?: string;
+  reflection_prompt?: string;
   created_at: string;
   updated_at: string;
 }

@@ -255,7 +255,9 @@ export const planningApi = {
 // PORTFOLIO ------------------------------------------------------------------
 export const portfolioApi = {
   listArtifacts: () =>
-    extract<PortfolioArtifact[]>(http.get("/portfolio/artifacts/")),
+    extract<PortfolioArtifact[] | PaginatedResponse<PortfolioArtifact>>(
+      http.get("/portfolio/artifacts/")
+    ).then(normalizeList),
   createArtifactFromProof: (payload: { proof_id: string }) =>
     extract<{ message: string; artifact: PortfolioArtifact }>(
       http.post("/portfolio/artifacts/from-proof/", payload)

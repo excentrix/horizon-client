@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { usePlan, usePlanMutations } from "@/hooks/use-plans";
@@ -31,6 +32,7 @@ export default function PlanPlaygroundPage() {
   const { data: plan } = usePlan(planId);
   const { updateTaskStatus } = usePlanMutations(planId);
   const { data: artifacts } = usePortfolioArtifacts();
+  const queryClient = useQueryClient();
   const safeArtifacts = Array.isArray(artifacts) ? artifacts : [];
   const [focusMode, setFocusMode] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
@@ -51,6 +53,9 @@ export default function PlanPlaygroundPage() {
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [lastArtifactId, setLastArtifactId] = useState<string | null>(null);
   const [proofView, setProofView] = useState<"proof" | "artifacts">("proof");
+  const [artifactFilter, setArtifactFilter] = useState<
+    "all" | "task" | "verified" | "draft"
+  >("all");
   const [mentorInput, setMentorInput] = useState("");
   const [practiceMode, setPracticeMode] = useState<"code" | "scratch">("code");
   const [practiceNotes, setPracticeNotes] = useState("");
@@ -336,6 +341,7 @@ export default function PlanPlaygroundPage() {
       if (response.artifact_id) {
         setLastArtifactId(response.artifact_id);
       }
+      queryClient.invalidateQueries({ queryKey: ["portfolio-artifacts"] });
       const summary =
         proofType === "text" ? `Proof summary:\n${content}` : `Proof ${proofType}: ${content}`;
       setNotes((prev) => (prev ? `${prev}\n\n${summary}` : summary));
@@ -431,6 +437,16 @@ export default function PlanPlaygroundPage() {
     return new Set((plan?.daily_tasks ?? []).map((task) => task.id));
   }, [plan?.daily_tasks]);
 
+  const taskMilestoneMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (plan?.daily_tasks ?? []).forEach((task) => {
+      if (task.milestone_title) {
+        map.set(task.id, task.milestone_title);
+      }
+    });
+    return map;
+  }, [plan?.daily_tasks]);
+
   const planArtifacts = useMemo(() => {
     const planIdValue = plan?.id;
     return safeArtifacts.filter((artifact) => {
@@ -451,6 +467,53 @@ export default function PlanPlaygroundPage() {
         artifact.proof_submission === lastArtifactId,
     );
   }, [activeTask, lastArtifactId, safeArtifacts]);
+
+  const filteredPlanArtifacts = useMemo(() => {
+    return planArtifacts.filter((artifact) => {
+      const verification = artifact.verification_status;
+      if (artifactFilter === "verified") {
+        return verification === "verified" || verification === "human_verified";
+      }
+      if (artifactFilter === "draft") {
+        return artifact.status === "draft" || verification === "pending";
+      }
+      if (artifactFilter === "task") {
+        return Boolean(activeTask && artifact.source_task === activeTask.id);
+      }
+      return true;
+    });
+  }, [planArtifacts, artifactFilter, activeTask]);
+
+  const artifactGroups = useMemo(() => {
+    const groups = new Map<string, typeof filteredPlanArtifacts>();
+    filteredPlanArtifacts.forEach((artifact) => {
+      const milestoneTitle =
+        (artifact.source_task && taskMilestoneMap.get(artifact.source_task)) ||
+        "Ungrouped";
+      if (!groups.has(milestoneTitle)) {
+        groups.set(milestoneTitle, []);
+      }
+      groups.get(milestoneTitle)?.push(artifact);
+    });
+    return Array.from(groups.entries());
+  }, [filteredPlanArtifacts, taskMilestoneMap]);
+
+  const getArtifactStatusLabel = (artifact: (typeof safeArtifacts)[number]) => {
+    const verification = artifact.verification_status;
+    if (verification === "human_verified") return "verified";
+    if (verification === "verified") return "verified";
+    if (verification === "needs_revision") return "needs revision";
+    if (verification === "rejected") return "rejected";
+    if (verification === "pending") return "pending";
+    return artifact.status ?? "draft";
+  };
+
+  const getArtifactBadgeVariant = (artifact: (typeof safeArtifacts)[number]) => {
+    const label = getArtifactStatusLabel(artifact);
+    if (label === "verified") return "default";
+    if (label === "needs revision" || label === "rejected") return "destructive";
+    return "secondary";
+  };
 
   const handleMentorAction = (action: "explain" | "example" | "quiz") => {
     if (mentorSocketStatus !== "open") {
@@ -1258,9 +1321,9 @@ export default function PlanPlaygroundPage() {
                             {taskArtifacts.slice(0, 2).map((artifact) => (
                               <Badge
                                 key={artifact.id}
-                                variant={artifact.status === "verified" ? "default" : "secondary"}
+                                variant={getArtifactBadgeVariant(artifact)}
                               >
-                                {artifact.title} · {artifact.status}
+                                {artifact.title} · {getArtifactStatusLabel(artifact)}
                               </Badge>
                             ))}
                           </div>
@@ -1272,35 +1335,72 @@ export default function PlanPlaygroundPage() {
                     </>
                   ) : (
                     <div className="mt-3 space-y-3 text-xs text-muted-foreground">
-                      {planArtifacts.length ? (
-                        planArtifacts.slice(0, 5).map((artifact) => (
-                          <div
-                            key={artifact.id}
-                            className="rounded-lg border bg-muted/20 px-3 py-2"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-semibold text-foreground">
-                                {artifact.title}
-                              </span>
-                              <Badge
-                                variant={artifact.status === "verified" ? "default" : "secondary"}
-                              >
-                                {artifact.status}
-                              </Badge>
-                            </div>
-                            <p className="mt-1 text-[11px] text-muted-foreground">
-                              {artifact.artifact_type.replace(/_/g, " ")}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={artifactFilter === "all" ? "default" : "outline"}
+                          onClick={() => setArtifactFilter("all")}
+                        >
+                          All
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={artifactFilter === "task" ? "default" : "outline"}
+                          onClick={() => setArtifactFilter("task")}
+                        >
+                          This task
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={artifactFilter === "verified" ? "default" : "outline"}
+                          onClick={() => setArtifactFilter("verified")}
+                        >
+                          Verified
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={artifactFilter === "draft" ? "default" : "outline"}
+                          onClick={() => setArtifactFilter("draft")}
+                        >
+                          Drafts
+                        </Button>
+                      </div>
+                      {artifactGroups.length ? (
+                        artifactGroups.map(([groupTitle, items]) => (
+                          <div key={groupTitle} className="space-y-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              {groupTitle}
                             </p>
-                            {artifact.url ? (
-                              <a
-                                href={artifact.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="mt-1 inline-block text-primary underline"
+                            {items.map((artifact) => (
+                              <div
+                                key={artifact.id}
+                                className="rounded-lg border bg-muted/20 px-3 py-2"
                               >
-                                View artifact
-                              </a>
-                            ) : null}
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-semibold text-foreground">
+                                    {artifact.title}
+                                  </span>
+                                  <Badge
+                                    variant={getArtifactBadgeVariant(artifact)}
+                                  >
+                                    {getArtifactStatusLabel(artifact)}
+                                  </Badge>
+                                </div>
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {artifact.artifact_type.replace(/_/g, " ")}
+                                </p>
+                                {artifact.url ? (
+                                  <a
+                                    href={artifact.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="mt-1 inline-block text-primary underline"
+                                  >
+                                    View artifact
+                                  </a>
+                                ) : null}
+                              </div>
+                            ))}
                           </div>
                         ))
                       ) : (
