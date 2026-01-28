@@ -178,13 +178,10 @@ export default function ProgressPage() {
     if (!artifacts) return [];
     return artifacts.filter((artifact) => {
       if (artifact.featured) return true;
-      const verified =
+      return (
         artifact.verification_status === "verified" ||
-        artifact.verification_status === "human_verified";
-      const isHighSignal = ["project", "demo", "repo", "case_study"].includes(
-        artifact.artifact_type,
+        artifact.verification_status === "human_verified"
       );
-      return verified && isHighSignal;
     });
   }, [artifacts]);
 

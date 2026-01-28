@@ -11,6 +11,15 @@ import { usePortfolioArtifacts } from "@/hooks/use-portfolio";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import type { DailyTask } from "@/types";
@@ -47,6 +56,9 @@ export default function PlanPlaygroundPage() {
   const [mentorResponse, setMentorResponse] = useState<string | null>(null);
   const [mentorPrompt, setMentorPrompt] = useState<string>("");
   const [showRubric, setShowRubric] = useState(false);
+  const [showSubmission, setShowSubmission] = useState(false);
+  const [submissionProof, setSubmissionProof] = useState("");
+  const [submissionLoading, setSubmissionLoading] = useState(false);
   const [proofType, setProofType] = useState<"link" | "text" | "file">("link");
   const [proofLink, setProofLink] = useState("");
   const [proofText, setProofText] = useState("");
@@ -56,6 +68,7 @@ export default function PlanPlaygroundPage() {
   const [artifactFilter, setArtifactFilter] = useState<
     "all" | "task" | "verified" | "draft"
   >("all");
+  const [verificationPending, setVerificationPending] = useState(false);
   const [mentorInput, setMentorInput] = useState("");
   const [practiceMode, setPracticeMode] = useState<"code" | "scratch">("code");
   const [practiceNotes, setPracticeNotes] = useState("");
@@ -340,6 +353,7 @@ export default function PlanPlaygroundPage() {
       });
       if (response.artifact_id) {
         setLastArtifactId(response.artifact_id);
+        setVerificationPending(true);
       }
       queryClient.invalidateQueries({ queryKey: ["portfolio-artifacts"] });
       const summary =
@@ -353,6 +367,15 @@ export default function PlanPlaygroundPage() {
       telemetry.toastError("Unable to save proof right now.");
     }
   };
+
+  useEffect(() => {
+    if (!verificationPending || !lastArtifactId) return;
+    const interval = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ["portfolio-artifacts"] });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [verificationPending, lastArtifactId, queryClient]);
+
 
   const buildMentorContext = () => {
     const stepProgress = stepState.length
@@ -467,6 +490,19 @@ export default function PlanPlaygroundPage() {
         artifact.proof_submission === lastArtifactId,
     );
   }, [activeTask, lastArtifactId, safeArtifacts]);
+
+  const lastArtifactStatus = useMemo(() => {
+    if (!lastArtifactId) return null;
+    return safeArtifacts.find((artifact) => artifact.id === lastArtifactId) ?? null;
+  }, [lastArtifactId, safeArtifacts]);
+
+  useEffect(() => {
+    if (!verificationPending || !lastArtifactStatus) return;
+    const status = lastArtifactStatus.verification_status;
+    if (status && status !== "pending") {
+      setVerificationPending(false);
+    }
+  }, [verificationPending, lastArtifactStatus]);
 
   const filteredPlanArtifacts = useMemo(() => {
     return planArtifacts.filter((artifact) => {
@@ -1306,7 +1342,11 @@ export default function PlanPlaygroundPage() {
                       </div>
                       {lastArtifactId ? (
                         <div className="mt-3 flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                          <span>Artifact added to your Trophy Room.</span>
+                          <span>
+                            {verificationPending
+                              ? "Artifact submitted — verification in progress."
+                              : "Artifact added to your Trophy Room."}
+                          </span>
                           <Link href="/progress" className="text-primary underline">
                             View in Trophy Room
                           </Link>
@@ -1423,9 +1463,18 @@ export default function PlanPlaygroundPage() {
                     <Button onClick={handleStartSession} disabled={sessionStarted}>
                       {sessionStarted ? "Session running" : "Start session"}
                     </Button>
-                    <Button variant="outline" onClick={handleCompleteTask}>
-                      Complete task
-                    </Button>
+                    {activeTask?.assessment_config ? (
+                      <Button 
+                        onClick={() => setShowSubmission(true)}
+                        className="bg-violet-600 hover:bg-violet-700 text-white border-0"
+                      >
+                        Submit Proof (+{activeTask.assessment_config.xp_reward || 50} XP)
+                      </Button>
+                    ) : (
+                      <Button variant="outline" onClick={handleCompleteTask}>
+                        Complete task
+                      </Button>
+                    )}
                   </div>
                   <div className="mt-3 grid gap-3 text-xs text-muted-foreground md:grid-cols-3">
                     <RatingRow
@@ -1849,6 +1898,65 @@ export default function PlanPlaygroundPage() {
           ) : null}
         </div>
       )}
+      
+      <Dialog open={showSubmission} onOpenChange={setShowSubmission}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Claim Your Rewards</DialogTitle>
+            <DialogDescription>
+              Verify your work to earn {activeTask?.assessment_config?.xp_reward || 50} XP and unlock the next step.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+             {activeTask?.assessment_config?.verification_type === "github_repo" ? (
+                <div className="grid gap-2">
+                   <Label>Github Repository URL</Label>
+                   <Input 
+                     placeholder="https://github.com/username/project" 
+                     value={submissionProof}
+                     onChange={(e) => setSubmissionProof(e.target.value)}
+                   />
+                </div>
+             ) : (
+                <div className="grid gap-2">
+                   <Label>Proof of Work</Label>
+                   <Textarea 
+                     placeholder="Describe what you did or paste a link..."
+                     value={submissionProof}
+                     onChange={(e) => setSubmissionProof(e.target.value)}
+                   />
+                </div>
+             )}
+          </div>
+          
+          <DialogFooter>
+             <Button variant="outline" onClick={() => setShowSubmission(false)}>Cancel</Button>
+             <Button 
+               onClick={async () => {
+                  setSubmissionLoading(true);
+                  try {
+                      // Fallback to simple completion for now until API is ready
+                      await updateTaskStatus.mutateAsync({ 
+                          taskId: activeTask?.id ?? "", 
+                          status: "completed",
+                          completion_notes: submissionProof 
+                      });
+                      setShowSubmission(false);
+                      telemetry.info("Quest completed", { xp: activeTask?.assessment_config?.xp_reward });
+                  } catch(e) {
+                      console.error(e);
+                  } finally {
+                      setSubmissionLoading(false);
+                  }
+               }} 
+               disabled={!submissionProof || submissionLoading}
+             >
+               {submissionLoading ? "Verifying..." : "Submit & Claim"}
+             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

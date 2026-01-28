@@ -1,6 +1,6 @@
 "use client";
 
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -42,7 +42,7 @@ export default function PublicPortfolioPage({ params }: PublicPortfolioPageProps
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
+        <Spinner className="h-8 w-8 text-primary" />
       </div>
     );
   }

@@ -367,6 +367,14 @@ export interface DailyTask {
   current_tools_versions: Record<string, unknown>;
   kpis?: Array<{ metric?: string; target?: string }>;
   verification?: { method?: string; criteria?: string };
+  assessment_config?: {
+    id: string;
+    verification_type: "auto_quiz" | "code_execution" | "github_repo" | "file_upload" | "text_analysis" | "manual_rubric";
+    config: Record<string, unknown>;
+    rubric: Record<string, unknown>;
+    xp_reward: number;
+    badge_reward_id?: string;
+  };
   check_in_question?: string;
   check_in_response?: string;
   quiz_payload?: {
