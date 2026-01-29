@@ -25,6 +25,7 @@ import {
   MemoryItem,
   ConversationAnalysis,
   PortfolioArtifact,
+  BrainMapSnapshot,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -330,6 +331,15 @@ export const intelligenceApi = {
   }) =>
     extract<ComprehensiveProgressReport>(
       http.get("/intelligence/progress-report/", { params })
+    ),
+
+  getBrainMapSnapshot: (params?: { plan_id?: string }) =>
+    extract<BrainMapSnapshot>(
+      http.get("/intelligence/brain-map/", { params })
+    ),
+  syncBrainMap: (payload: { plan_id: string }) =>
+    extract<{ status: string; plan_id: string }>(
+      http.post("/intelligence/brain-map/sync/", payload)
     ),
 
   analyzeConversation: (payload: {

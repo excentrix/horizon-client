@@ -40,6 +40,10 @@ export default function GeneratingPage() {
           setTimeout(() => {
             router.push(`/plans/${data.draft_plan}/playground`);
           }, 2000);
+        } else if (data.current_step === "failed") {
+          setStatus("failed");
+          setMessage("Plan generation failed. Please try again.");
+          clearInterval(pollInterval);
         } else if (data.current_step === "generating") {
           // Still generating
           setMessage("Building your personalized curriculum...");

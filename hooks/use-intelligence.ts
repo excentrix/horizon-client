@@ -8,6 +8,7 @@ import {
   MultiDomainDashboard,
   UniversalGoalsManagement,
   WellnessMonitoring,
+  BrainMapSnapshot,
 } from "@/types";
 import { telemetry } from "@/lib/telemetry";
 
@@ -198,6 +199,26 @@ export const useComprehensiveProgressReport = (params?: {
         throw error;
       }
     },
+  });
+
+export const useBrainMap = (params?: { plan_id?: string }) =>
+  useQuery<BrainMapSnapshot>({
+    queryKey: ["intelligence", "brain-map", params],
+    queryFn: async () => {
+      try {
+        return await intelligenceApi.getBrainMapSnapshot(params);
+      } catch (error) {
+        telemetry.error("Failed to load brain map snapshot", { error, params });
+        throw error;
+      }
+    },
+    enabled: Boolean(params?.plan_id),
+  });
+
+export const useBrainMapSync = () =>
+  useMutation({
+    mutationFn: (payload: { plan_id: string }) =>
+      intelligenceApi.syncBrainMap(payload),
   });
 
 export const useAnalyzeConversation = () => {

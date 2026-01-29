@@ -8,6 +8,7 @@ import { usePlan, usePlanMutations } from "@/hooks/use-plans";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useConversationMessages, useConversations } from "@/hooks/use-conversations";
 import { usePortfolioArtifacts } from "@/hooks/use-portfolio";
+import { useBrainMap, useBrainMapSync } from "@/hooks/use-intelligence";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,8 @@ export default function PlanPlaygroundPage() {
   const { data: plan } = usePlan(planId);
   const { updateTaskStatus } = usePlanMutations(planId);
   const { data: artifacts } = usePortfolioArtifacts();
+  const { data: brainMap } = useBrainMap({ plan_id: plan?.id });
+  const brainMapSync = useBrainMapSync();
   const queryClient = useQueryClient();
   const safeArtifacts = Array.isArray(artifacts) ? artifacts : [];
   const [focusMode, setFocusMode] = useState(false);
@@ -1892,6 +1895,103 @@ export default function PlanPlaygroundPage() {
                         ? "Using your latest conversation for mentor replies."
                         : "Mentor replies appear here as the conversation updates."}
                   </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Brain Map</CardTitle>
+                  <CardDescription>
+                    Focus concepts and prerequisites for your current plan.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 text-xs text-muted-foreground">
+                  {brainMap ? (
+                    <>
+                      <div className="rounded-lg border bg-muted/30 px-3 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Focus concepts
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {brainMap.focus_concepts.slice(0, 4).map((concept) => (
+                            <span
+                              key={concept.name}
+                              className="rounded-full border bg-background px-2 py-1 text-[11px]"
+                            >
+                              {concept.name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      {brainMap.focus_concepts.slice(0, 2).map((concept) => {
+                        const missing =
+                          brainMap.missing_prerequisites?.[concept.name] ?? [];
+                        const mastery = brainMap.mastery_map?.[concept.name];
+                        return (
+                          <div
+                            key={concept.name}
+                            className="rounded-lg border bg-background px-3 py-2"
+                          >
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-semibold text-foreground">
+                                {concept.name}
+                              </span>
+                              <span className="text-muted-foreground">
+                                {mastery?.level
+                                  ? `Mastery: ${mastery.level}`
+                                  : "Mastery: unknown"}
+                              </span>
+                            </div>
+                            {missing.length ? (
+                              <div className="mt-2">
+                                <p className="text-[10px] uppercase text-muted-foreground">
+                                  Missing prereqs
+                                </p>
+                                <ul className="mt-1 list-disc space-y-1 pl-4">
+                                  {missing.slice(0, 3).map((item) => (
+                                    <li key={item}>{item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : (
+                              <p className="mt-2 text-[11px] text-emerald-600">
+                                Prereqs covered
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      <p>
+                        Brain map data appears once your plan concepts sync to the
+                        graph.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={!plan?.id || brainMapSync.isPending}
+                        onClick={() => {
+                          if (!plan?.id) return;
+                          brainMapSync.mutate(
+                            { plan_id: plan.id },
+                            {
+                              onSuccess: () => {
+                                telemetry.info("Brain map sync requested", {
+                                  planId: plan.id,
+                                });
+                                void queryClient.invalidateQueries({
+                                  queryKey: ["intelligence", "brain-map"],
+                                });
+                              },
+                            }
+                          );
+                        }}
+                      >
+                        {brainMapSync.isPending ? "Syncing..." : "Sync brain map"}
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </aside>

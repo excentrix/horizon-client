@@ -630,6 +630,24 @@ export interface ComprehensiveProgressReport {
   domain_growth_rates?: Record<string, unknown>;
 }
 
+export interface BrainMapSnapshot {
+  plan_id: string;
+  focus_concepts: Array<{
+    name: string;
+    type?: string;
+    domain?: string;
+  }>;
+  mastery_map: Record<
+    string,
+    {
+      level?: string;
+      confidence?: number;
+      updated_at?: string;
+    }
+  >;
+  missing_prerequisites: Record<string, string[]>;
+}
+
 export interface MemoryItem {
   id?: string;
   memory?: string;
