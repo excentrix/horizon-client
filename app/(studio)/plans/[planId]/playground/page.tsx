@@ -8,7 +8,7 @@ import { usePlan, usePlanMutations } from "@/hooks/use-plans";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useConversationMessages, useConversations } from "@/hooks/use-conversations";
 import { usePortfolioArtifacts } from "@/hooks/use-portfolio";
-import { useBrainMap, useBrainMapSync } from "@/hooks/use-intelligence";
+import { useBrainMap, useBrainMapSync, useLearnerModel } from "@/hooks/use-intelligence";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,7 @@ export default function PlanPlaygroundPage() {
   const { data: artifacts } = usePortfolioArtifacts();
   const { data: brainMap } = useBrainMap({ plan_id: plan?.id });
   const brainMapSync = useBrainMapSync();
+  const { data: learnerModel } = useLearnerModel();
   const queryClient = useQueryClient();
   const safeArtifacts = Array.isArray(artifacts) ? artifacts : [];
   const [focusMode, setFocusMode] = useState(false);
@@ -76,6 +77,7 @@ export default function PlanPlaygroundPage() {
   const [practiceMode, setPracticeMode] = useState<"code" | "scratch">("code");
   const [practiceNotes, setPracticeNotes] = useState("");
   const [learningMode, setLearningMode] = useState<"video" | "practice" | "quiz">("practice");
+  const [learningModeOverride, setLearningModeOverride] = useState(false);
   const [activeTab, setActiveTab] = useState<"learn" | "challenge">("learn");
   const [showTryIt, setShowTryIt] = useState(true);
   const [showPracticeLab, setShowPracticeLab] = useState(true);
@@ -190,6 +192,46 @@ export default function PlanPlaygroundPage() {
     );
   }, [selectedTaskId, tasks]);
 
+  const suggestedLearningMode = useMemo(() => {
+    const learnerPrefs =
+      (learnerModel?.learner_profile?.core?.preferences ?? {}) as Record<string, unknown>;
+    const prefs =
+      Object.keys(learnerPrefs).length > 0
+        ? learnerPrefs
+        : ((plan?.user_preferences_snapshot ?? {}) as Record<string, unknown>);
+    const learningStyle = String(prefs.primary_learning_style ?? "").toLowerCase();
+    const preferencesDetail = (prefs.preferences_detail ?? {}) as Record<string, unknown>;
+    const practiceStyle = String(preferencesDetail.practice_style ?? "").toLowerCase();
+    const explanationPref = String(preferencesDetail.explanation_preference ?? "").toLowerCase();
+
+    const resources = activeTask?.online_resources ?? [];
+    const resourceText = resources
+      .map((resource) =>
+        typeof resource === "string"
+          ? resource
+          : (resource.url as string) ||
+            (resource.link as string) ||
+            (resource.title as string) ||
+            ""
+      )
+      .join(" ")
+      .toLowerCase();
+
+    if (resourceText.includes("youtube") || resourceText.includes("video") || learningStyle === "visual") {
+      return "video";
+    }
+    if (practiceStyle === "project_based" || practiceStyle === "varied") {
+      return "practice";
+    }
+    if (explanationPref === "example_based") {
+      return "practice";
+    }
+    if (learningStyle === "auditory") {
+      return "video";
+    }
+    return "practice";
+  }, [activeTask?.online_resources, plan?.user_preferences_snapshot, learnerModel]);
+
   useEffect(() => {
     if (!activeTask?.id) return;
     if (lastTaskFocusRef.current === activeTask.id) return;
@@ -198,12 +240,15 @@ export default function PlanPlaygroundPage() {
     setPracticeMode(suggestedPracticeMode);
     setPracticeNotes("");
     setGeneratedActivities(null);
+    if (!learningModeOverride) {
+      setLearningMode(suggestedLearningMode);
+    }
     emitPlaygroundEvent("task_focus", {
       planId,
       taskId: activeTask.id,
       taskTitle: activeTask.title,
     });
-  }, [activeTask?.id, activeTask?.title, planId]);
+  }, [activeTask?.id, activeTask?.title, planId, learningModeOverride, suggestedLearningMode]);
 
   const milestoneCelebration = useMemo(() => {
     if (!activeTask?.milestone_id) return null;
@@ -895,27 +940,36 @@ export default function PlanPlaygroundPage() {
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        variant={learningMode === "video" ? "default" : "outline"}
-                        onClick={() => setLearningMode("video")}
-                      >
-                        Video-first
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={learningMode === "practice" ? "default" : "outline"}
-                        onClick={() => setLearningMode("practice")}
-                      >
-                        Practice-first
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={learningMode === "quiz" ? "default" : "outline"}
-                        onClick={() => setLearningMode("quiz")}
-                      >
-                        Quiz-first
-                      </Button>
+                        <Button
+                          size="sm"
+                          variant={learningMode === "video" ? "default" : "outline"}
+                          onClick={() => {
+                            setLearningMode("video");
+                            setLearningModeOverride(true);
+                          }}
+                        >
+                          Video-first
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={learningMode === "practice" ? "default" : "outline"}
+                          onClick={() => {
+                            setLearningMode("practice");
+                            setLearningModeOverride(true);
+                          }}
+                        >
+                          Practice-first
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={learningMode === "quiz" ? "default" : "outline"}
+                          onClick={() => {
+                            setLearningMode("quiz");
+                            setLearningModeOverride(true);
+                          }}
+                        >
+                          Quiz-first
+                        </Button>
                     </div>
                   </div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

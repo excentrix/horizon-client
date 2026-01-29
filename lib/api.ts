@@ -26,6 +26,7 @@ import {
   ConversationAnalysis,
   PortfolioArtifact,
   BrainMapSnapshot,
+  LearnerModelSnapshot,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -336,6 +337,10 @@ export const intelligenceApi = {
   getBrainMapSnapshot: (params?: { plan_id?: string }) =>
     extract<BrainMapSnapshot>(
       http.get("/intelligence/brain-map/", { params })
+    ),
+  getLearnerModel: () =>
+    extract<LearnerModelSnapshot>(
+      http.get("/intelligence/learner-model/")
     ),
   syncBrainMap: (payload: { plan_id: string }) =>
     extract<{ status: string; plan_id: string }>(

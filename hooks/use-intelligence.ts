@@ -9,6 +9,7 @@ import {
   UniversalGoalsManagement,
   WellnessMonitoring,
   BrainMapSnapshot,
+  LearnerModelSnapshot,
 } from "@/types";
 import { telemetry } from "@/lib/telemetry";
 
@@ -213,6 +214,19 @@ export const useBrainMap = (params?: { plan_id?: string }) =>
       }
     },
     enabled: Boolean(params?.plan_id),
+  });
+
+export const useLearnerModel = () =>
+  useQuery<LearnerModelSnapshot>({
+    queryKey: ["intelligence", "learner-model"],
+    queryFn: async () => {
+      try {
+        return await intelligenceApi.getLearnerModel();
+      } catch (error) {
+        telemetry.error("Failed to load learner model", { error });
+        throw error;
+      }
+    },
   });
 
 export const useBrainMapSync = () =>

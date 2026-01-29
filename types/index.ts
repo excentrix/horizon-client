@@ -648,6 +648,25 @@ export interface BrainMapSnapshot {
   missing_prerequisites: Record<string, string[]>;
 }
 
+export interface LearnerModelSnapshot {
+  learner_profile: {
+    generated_at?: string;
+    core: {
+      preferences?: Record<string, unknown> | null;
+      schedule?: Record<string, unknown> | null;
+      active_plan?: Record<string, unknown> | null;
+      competencies?: Array<Record<string, unknown>> | null;
+      wellness?: Record<string, unknown> | null;
+      goals?: Array<Record<string, unknown>> | null;
+    };
+    analysis_sections?: Record<string, unknown>;
+    progress_sections?: Record<string, unknown>;
+    insight_digest?: Record<string, unknown>;
+    runtime?: Record<string, unknown>;
+    sections?: Record<string, unknown>;
+  };
+}
+
 export interface MemoryItem {
   id?: string;
   memory?: string;
