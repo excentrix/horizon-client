@@ -426,6 +426,13 @@ export interface PortfolioArtifact {
   updated_at: string;
 }
 
+export interface PortfolioSkillTranscript {
+  competency: string;
+  best_level: "exposure" | "application" | "mastery";
+  evidence_count: number;
+  avg_quality: number;
+}
+
 export type PlanStatus =
   | "draft"
   | "active"

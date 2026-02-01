@@ -35,6 +35,19 @@ const defaultSteps = [
   "Try the exercise and reflect.",
 ];
 
+const masteryBaseProgress: Record<string, number> = {
+  in_progress: 35,
+  competent: 70,
+  mastery: 100,
+};
+
+const getMasteryProgress = (level?: string, confidence?: number | null) => {
+  if (!level) return 0;
+  const base = masteryBaseProgress[level] ?? 30;
+  const conf = confidence ? Math.min(Math.max(confidence, 0.2), 1) : 0.7;
+  return Math.round(base * conf);
+};
+
 export default function PlanPlaygroundPage() {
   const params = useParams<{ planId: string }>();
   const searchParams = useSearchParams();
@@ -47,6 +60,15 @@ export default function PlanPlaygroundPage() {
   const { data: learnerModel } = useLearnerModel();
   const queryClient = useQueryClient();
   const safeArtifacts = Array.isArray(artifacts) ? artifacts : [];
+  const focusConcepts = brainMap?.focus_concepts ?? [];
+  const masteryMap = brainMap?.mastery_map ?? {};
+  const unlockedConcepts = useMemo(() => {
+    if (!brainMap) return 0;
+    return focusConcepts.filter((concept) => {
+      const missing = brainMap.missing_prerequisites?.[concept.name] ?? [];
+      return missing.length === 0 && Boolean(masteryMap?.[concept.name]?.level);
+    }).length;
+  }, [brainMap, focusConcepts, masteryMap]);
   const [focusMode, setFocusMode] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
@@ -1962,11 +1984,14 @@ export default function PlanPlaygroundPage() {
                   {brainMap ? (
                     <>
                       <div className="rounded-lg border bg-muted/30 px-3 py-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Focus concepts
-                        </p>
+                        <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          <span>Focus concepts</span>
+                          <span>
+                            {unlockedConcepts}/{focusConcepts.length} unlocked
+                          </span>
+                        </div>
                         <div className="mt-2 flex flex-wrap gap-2">
-                          {brainMap.focus_concepts.slice(0, 4).map((concept) => (
+                          {focusConcepts.slice(0, 5).map((concept) => (
                             <span
                               key={concept.name}
                               className="rounded-full border bg-background px-2 py-1 text-[11px]"
@@ -1976,44 +2001,65 @@ export default function PlanPlaygroundPage() {
                           ))}
                         </div>
                       </div>
-                      {brainMap.focus_concepts.slice(0, 2).map((concept) => {
-                        const missing =
-                          brainMap.missing_prerequisites?.[concept.name] ?? [];
-                        const mastery = brainMap.mastery_map?.[concept.name];
-                        return (
-                          <div
-                            key={concept.name}
-                            className="rounded-lg border bg-background px-3 py-2"
-                          >
-                            <div className="flex items-center justify-between text-[11px]">
-                              <span className="font-semibold text-foreground">
-                                {concept.name}
-                              </span>
-                              <span className="text-muted-foreground">
-                                {mastery?.level
-                                  ? `Mastery: ${mastery.level}`
-                                  : "Mastery: unknown"}
-                              </span>
-                            </div>
-                            {missing.length ? (
-                              <div className="mt-2">
-                                <p className="text-[10px] uppercase text-muted-foreground">
-                                  Missing prereqs
-                                </p>
-                                <ul className="mt-1 list-disc space-y-1 pl-4">
-                                  {missing.slice(0, 3).map((item) => (
-                                    <li key={item}>{item}</li>
-                                  ))}
-                                </ul>
+                      <div className="space-y-3">
+                        {focusConcepts.slice(0, 3).map((concept) => {
+                          const missing =
+                            brainMap.missing_prerequisites?.[concept.name] ?? [];
+                          const mastery = masteryMap?.[concept.name];
+                          const progress = getMasteryProgress(
+                            mastery?.level,
+                            mastery?.confidence,
+                          );
+                          return (
+                            <div
+                              key={concept.name}
+                              className="rounded-lg border bg-background px-3 py-3"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-[11px] font-semibold text-foreground">
+                                    {concept.name}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    {mastery?.level
+                                      ? `Mastery: ${mastery.level}`
+                                      : "Mastery: unassessed"}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="relative h-10 w-10 rounded-full"
+                                    style={{
+                                      background: `conic-gradient(hsl(var(--primary)) ${progress}%, hsl(var(--muted)) ${progress}% 100%)`,
+                                    }}
+                                  >
+                                    <div className="absolute inset-1 rounded-full bg-background" />
+                                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-foreground">
+                                      {progress}%
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                            ) : (
-                              <p className="mt-2 text-[11px] text-emerald-600">
-                                Prereqs covered
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
+                              {missing.length ? (
+                                <div className="mt-2">
+                                  <p className="text-[10px] uppercase text-muted-foreground">
+                                    Missing prereqs
+                                  </p>
+                                  <ul className="mt-1 list-disc space-y-1 pl-4">
+                                    {missing.slice(0, 3).map((item) => (
+                                      <li key={item}>{item}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : (
+                                <p className="mt-2 text-[11px] text-emerald-600">
+                                  Prereqs covered
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </>
                   ) : (
                     <div className="space-y-2">

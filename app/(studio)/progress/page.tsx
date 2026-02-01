@@ -9,7 +9,7 @@ import {
   useWellnessMonitoring,
   useComprehensiveProgressReport,
 } from "@/hooks/use-intelligence";
-import { usePortfolioArtifacts } from "@/hooks/use-portfolio";
+import { usePortfolioArtifacts, usePortfolioSkillsTranscript } from "@/hooks/use-portfolio";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
@@ -117,6 +117,11 @@ export default function ProgressPage() {
     isLoading: artifactsLoading,
     error: artifactsError,
   } = usePortfolioArtifacts();
+  const {
+    data: skillsTranscript = [],
+    isLoading: skillsLoading,
+    error: skillsError,
+  } = usePortfolioSkillsTranscript();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -141,14 +146,25 @@ export default function ProgressPage() {
     if (artifactsError) {
       telemetry.error("Portfolio fetch error", { artifactsError });
     }
-  }, [dashboardError, wellnessError, insightsError, progressReportError, artifactsError]);
+    if (skillsError) {
+      telemetry.error("Skills transcript error", { skillsError });
+    }
+  }, [
+    dashboardError,
+    wellnessError,
+    insightsError,
+    progressReportError,
+    artifactsError,
+    skillsError,
+  ]);
 
   const isLoading =
     dashboardLoading ||
     wellnessLoading ||
     insightsLoading ||
     progressReportLoading ||
-    artifactsLoading;
+    artifactsLoading ||
+    skillsLoading;
 
   const domainScores = useMemo(() => {
     if (!dashboard) {
@@ -418,13 +434,27 @@ export default function ProgressPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Portfolio cues</CardTitle>
-            <CardDescription>What helps you build a strong showcase.</CardDescription>
+            <CardTitle>Skills verified</CardTitle>
+            <CardDescription>Proof-based competencies from your artifacts.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-xs text-muted-foreground">
-            <p>Save proof of work from each task you complete.</p>
-            <p>Link real demos, repos, or written reflections.</p>
-            <p>Verified artifacts earn higher visibility later.</p>
+            {skillsTranscript.length ? (
+              <div className="space-y-2">
+                {skillsTranscript.slice(0, 6).map((skill) => (
+                  <div key={skill.competency} className="rounded-lg border bg-muted/30 p-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-foreground">{skill.competency}</span>
+                      <Badge variant="outline">{skill.best_level}</Badge>
+                    </div>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {skill.evidence_count} evidence · avg quality {skill.avg_quality}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>Submit and verify artifacts to unlock your skills transcript.</p>
+            )}
           </CardContent>
         </Card>
       </section>

@@ -25,6 +25,7 @@ import {
   MemoryItem,
   ConversationAnalysis,
   PortfolioArtifact,
+  PortfolioSkillTranscript,
   BrainMapSnapshot,
   LearnerModelSnapshot,
 } from "@/types";
@@ -266,6 +267,10 @@ export const portfolioApi = {
     ),
   createArtifact: (payload: Partial<PortfolioArtifact>) =>
     extract<PortfolioArtifact>(http.post("/portfolio/artifacts/", payload)),
+  getSkillsTranscript: () =>
+    extract<{ skills: PortfolioSkillTranscript[] }>(
+      http.get("/portfolio/profiles/skills-transcript/")
+    ),
 };
 
 // INTELLIGENCE ---------------------------------------------------------------

@@ -1,11 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { portfolioApi } from "@/lib/api";
-import type { PortfolioArtifact } from "@/types";
+import type { PortfolioArtifact, PortfolioSkillTranscript } from "@/types";
 import { telemetry } from "@/lib/telemetry";
 
 const artifactsKey = ["portfolio-artifacts"];
 const profileKey = ["portfolio-profile"];
 const timelineKey = ["growth-timeline"];
+const skillsKey = ["portfolio-skills-transcript"];
 
 export function usePortfolioArtifacts() {
   return useQuery<PortfolioArtifact[]>({
@@ -66,6 +67,23 @@ export function useGrowthTimeline(days: number = 90) {
       }
     },
     staleTime: 120_000, // 2 minutes
+  });
+}
+
+export function usePortfolioSkillsTranscript() {
+  return useQuery<PortfolioSkillTranscript[]>({
+    queryKey: skillsKey,
+    queryFn: async () => {
+      try {
+        const response = await portfolioApi.getSkillsTranscript();
+        return response.skills ?? [];
+      } catch (error) {
+        telemetry.error("Failed to load skills transcript", { error });
+        throw error;
+      }
+    },
+    staleTime: 300_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -159,4 +177,3 @@ export function usePublicPortfolio(username: string) {
     staleTime: 60_000,
   });
 }
-
