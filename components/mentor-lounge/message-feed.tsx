@@ -381,6 +381,11 @@ function MessageFeedContent({
                           {missingInfoContext}
                         </p>
                       ) : null}
+                      {message.metadata?.missing_info_unblocks ? (
+                        <p className="mb-2 text-[11px] text-muted-foreground">
+                          {String(message.metadata.missing_info_unblocks)}
+                        </p>
+                      ) : null}
                       <div className="flex items-center gap-2">
                         <Input
                           value={quickReplies[missingInfoId] ?? ""}

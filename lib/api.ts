@@ -29,6 +29,11 @@ import {
   BrainMapSnapshot,
   LearnerModelSnapshot,
   MentorEngagementNudge,
+  GamificationSummary,
+  GamificationBadge,
+  GamificationUserBadge,
+  GamificationLeaderboard,
+  GamificationActivity,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -400,6 +405,24 @@ export const intelligenceApi = {
   getProgressReport(params?: { period?: number }) {
     return this.getComprehensiveProgressReport(params);
   },
+};
+
+// GAMIFICATION ---------------------------------------------------------------
+export const gamificationApi = {
+  getSummary: () =>
+    extract<GamificationSummary>(http.get("/gamification/points/summary/")),
+  listBadges: () =>
+    extract<GamificationBadge[]>(http.get("/gamification/badges/")),
+  getEarnedBadges: () =>
+    extract<GamificationUserBadge[]>(http.get("/gamification/badges/earned/")),
+  getAvailableBadges: () =>
+    extract<GamificationBadge[]>(http.get("/gamification/badges/available/")),
+  getLeaderboard: () =>
+    extract<GamificationLeaderboard>(http.get("/gamification/points/leaderboard/")),
+  getHistory: (page = 1) =>
+    extract<{ entries: GamificationActivity[]; page: number; per_page: number; total: number; has_more: boolean }>(
+      http.get("/gamification/points/history/", { params: { page } })
+    ),
 };
 
 // NOTIFICATIONS --------------------------------------------------------------

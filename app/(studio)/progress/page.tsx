@@ -10,6 +10,7 @@ import {
   useComprehensiveProgressReport,
 } from "@/hooks/use-intelligence";
 import { usePortfolioArtifacts, usePortfolioSkillsTranscript } from "@/hooks/use-portfolio";
+import { useGamificationSummary } from "@/hooks/use-gamification";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
@@ -122,6 +123,7 @@ export default function ProgressPage() {
     isLoading: skillsLoading,
     error: skillsError,
   } = usePortfolioSkillsTranscript();
+  const { data: gamificationSummary } = useGamificationSummary();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -432,31 +434,71 @@ export default function ProgressPage() {
             )}
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Skills verified</CardTitle>
-            <CardDescription>Proof-based competencies from your artifacts.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-xs text-muted-foreground">
-            {skillsTranscript.length ? (
-              <div className="space-y-2">
-                {skillsTranscript.slice(0, 6).map((skill) => (
-                  <div key={skill.competency} className="rounded-lg border bg-muted/30 p-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-foreground">{skill.competency}</span>
-                      <Badge variant="outline">{skill.best_level}</Badge>
-                    </div>
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      {skill.evidence_count} evidence · avg quality {skill.avg_quality}
-                    </p>
-                  </div>
-                ))}
+        <div className="space-y-4">
+          <Card className="overflow-hidden border-0 bg-gradient-to-br from-indigo-500 via-slate-900 to-emerald-500 text-white shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-white">Momentum level</CardTitle>
+              <CardDescription className="text-white/80">
+                Proof-backed points that grow with you.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-4xl font-semibold">
+                    {gamificationSummary?.profile?.total_points ?? 0}
+                  </p>
+                  <p className="text-sm text-white/70">XP earned</p>
+                </div>
+                <div className="rounded-full border border-white/30 px-4 py-2 text-sm font-semibold">
+                  Level {gamificationSummary?.profile?.level ?? 1}
+                </div>
               </div>
-            ) : (
-              <p>Submit and verify artifacts to unlock your skills transcript.</p>
-            )}
-          </CardContent>
-        </Card>
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-wide text-white/70">Recent badges</p>
+                <div className="flex flex-wrap gap-2">
+                  {gamificationSummary?.recent_badges?.length ? (
+                    gamificationSummary.recent_badges.slice(0, 4).map((award) => (
+                      <span
+                        key={award.id}
+                        className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium"
+                      >
+                        {award.badge.name}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-white/70">First badge unlocks on verified proof.</span>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Skills verified</CardTitle>
+              <CardDescription>Proof-based competencies from your artifacts.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-xs text-muted-foreground">
+              {skillsTranscript.length ? (
+                <div className="space-y-2">
+                  {skillsTranscript.slice(0, 6).map((skill) => (
+                    <div key={skill.competency} className="rounded-lg border bg-muted/30 p-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-foreground">{skill.competency}</span>
+                        <Badge variant="outline">{skill.best_level}</Badge>
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {skill.evidence_count} evidence · avg quality {skill.avg_quality}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p>Submit and verify artifacts to unlock your skills transcript.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </section>
     </div>
   );

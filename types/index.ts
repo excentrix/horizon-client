@@ -441,6 +441,86 @@ export interface MentorEngagementNudge {
   metadata?: Record<string, unknown>;
 }
 
+export interface GamificationBadge {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string;
+  category: "starter" | "momentum" | "milestone" | "craft";
+  icon?: string;
+  color?: string;
+  points_value?: number;
+}
+
+export interface GamificationUserBadge {
+  id: number;
+  badge: GamificationBadge;
+  awarded_at: string;
+  context?: Record<string, unknown>;
+}
+
+export interface GamificationPointsProfile {
+  total_points: number;
+  level: number;
+  level_progress: number;
+  xp_for_next_level: number;
+  level_progress_percentage: number;
+  current_streak: number;
+  longest_streak: number;
+  last_activity_date: string | null;
+  updated_at: string;
+}
+
+export interface GamificationSummary {
+  profile: GamificationPointsProfile;
+  recent_badges: GamificationUserBadge[];
+  recent_activity?: GamificationActivity[];
+  badge_count?: number;
+}
+
+export interface GamificationActivity {
+  id?: number;
+  points: number;
+  reason: string;
+  created_at: string;
+}
+
+export interface GamificationLeaderboardEntry {
+  rank: number;
+  user_id: string;
+  display_name: string;
+  weekly_xp: number;
+  level: number;
+  current_streak: number;
+}
+
+export interface GamificationLeaderboard {
+  leaderboard: GamificationLeaderboardEntry[];
+  period: string;
+  updated_at: string;
+}
+
+export interface GamificationEvent {
+  event_type: "points_earned" | "level_up" | "badge_earned" | "streak_milestone";
+  points?: number;
+  reason?: string;
+  total_points?: number;
+  level?: number;
+  level_progress?: number;
+  xp_for_next_level?: number;
+  current_streak?: number;
+  old_level?: number;
+  new_level?: number;
+  badge_id?: number;
+  badge_name?: string;
+  badge_slug?: string;
+  badge_icon?: string;
+  badge_color?: string;
+  badge_description?: string;
+  points_value?: number;
+  timestamp: string;
+}
+
 export type PlanStatus =
   | "draft"
   | "active"
@@ -718,6 +798,7 @@ export interface MissingInformationItem {
   field: string;
   question: string;
   context?: string;
+  unblocks?: string;
   status: "pending" | "resolved" | "skipped";
   timestamp: string;
 }

@@ -24,6 +24,7 @@ import { Suspense } from "react";
 function PlansContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
   const { data: plans = [], isLoading: plansLoading } = usePlans();
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [isPlanDrawerOpen, setPlanDrawerOpen] = useState(false);
@@ -32,13 +33,24 @@ function PlansContent() {
     const queryPlan = searchParams.get("plan");
     if (queryPlan && plans.some((plan) => plan.id === queryPlan)) {
       setSelectedPlanId(queryPlan);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("lastPlanId", queryPlan);
+      }
       return;
     }
 
     if (!selectedPlanId && plans.length) {
-      setSelectedPlanId(plans[0].id);
+      const stored =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("lastPlanId")
+          : null;
+      if (stored && plans.some((plan) => plan.id === stored)) {
+        setSelectedPlanId(stored);
+      } else {
+        setSelectedPlanId(plans[0].id);
+      }
     }
-  }, [plans, searchParams, selectedPlanId]);
+  }, [plans, searchParamsString, selectedPlanId]);
 
   const { data: plan, isLoading: planLoading } = usePlan(
     selectedPlanId ?? undefined,
@@ -83,6 +95,9 @@ function PlansContent() {
     const params = new URLSearchParams(searchParams.toString());
     params.set("plan", planId);
     router.replace(`?${params.toString()}`, { scroll: false });
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("lastPlanId", planId);
+    }
     setPlanDrawerOpen(false);
   };
 

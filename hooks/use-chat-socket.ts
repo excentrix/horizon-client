@@ -616,11 +616,13 @@ export function useChatSocket(conversationId: string | null) {
                if (info) {
                   const messageId = info.id ?? crypto.randomUUID();
                   const context = info.context ? `\n\nWhy I'm asking: ${info.context}` : "";
+                  const unblocks = info.unblocks ? `\n\nHow this helps: ${info.unblocks}` : "";
                   pushMissingInfo({
                       id: messageId,
                       field: info.field,
                       question: info.question,
                       context: info.context,
+                      unblocks: info.unblocks,
                       status: "pending",
                       timestamp: new Date().toISOString()
                   });
@@ -633,7 +635,7 @@ export function useChatSocket(conversationId: string | null) {
                       sender_type: "ai",
                       content:
                         (info.question ??
-                          "I need a bit more information to continue.") + context,
+                          "I need a bit more information to continue.") + context + unblocks,
                       sequence_number: Date.now(),
                       ai_model_used: undefined,
                       tokens_used: undefined,
@@ -646,6 +648,7 @@ export function useChatSocket(conversationId: string | null) {
                         missing_info_id: messageId,
                         missing_info_field: info.field,
                         missing_info_context: info.context,
+                        missing_info_unblocks: info.unblocks,
                       },
                     };
                     appendMessageToCache(queryClient, conversationId, missingInfoMessage);

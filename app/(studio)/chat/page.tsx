@@ -77,6 +77,7 @@ export default function ChatPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
   const selectedConversationId = useMentorLoungeStore(
     (state) => state.selectedConversationId,
   );
@@ -142,6 +143,7 @@ export default function ChatPage() {
   }>>([]);
   const [analysisByConversation, setAnalysisByConversation] = useState<Record<string, Record<string, unknown>>>({});
   const [latestPlan, setLatestPlan] = useState<PlanCreationResponse | null>(null);
+  const [lastPlanId, setLastPlanId] = useState<string | null>(null);
   const processedAnalysisRef = useRef<Map<string, string>>(new Map());
   const stageTrackerRef = useRef<Map<string, Set<string>>>(new Map());
   const analysisPollTimeoutRef = useRef<number | null>(null);
@@ -175,35 +177,9 @@ export default function ChatPage() {
   }, [conversations, searchParams, selectedConversationId, setSelectedConversationId]);
 
   useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (selectedConversationId) {
-      params.set("conversation", selectedConversationId);
-    } else {
-      params.delete("conversation");
-    }
-    const desiredPlanId =
-      planBuildId ?? latestPlan?.learning_plan_id ?? planIdFromQuery ?? null;
-    if (desiredPlanId) {
-      params.set("plan", desiredPlanId);
-    } else {
-      params.delete("plan");
-    }
-    const next = params.toString();
-    const current = searchParams.toString();
-    if (next === current) {
-      return;
-    }
-    const url = next ? `${pathname}?${next}` : pathname;
-    router.replace(url, { scroll: false });
-  }, [
-    latestPlan?.learning_plan_id,
-    pathname,
-    // planBuildId,
-    // planIdFromQuery,
-    router,
-    searchParams,
-    selectedConversationId,
-  ]);
+    if (typeof window === "undefined") return;
+    setLastPlanId(window.localStorage.getItem("lastPlanId"));
+  }, []);
 
   const fetchLatestAnalysis = useCallback(
     async (conversationId: string, options?: { silent?: boolean }) => {
@@ -359,6 +335,43 @@ useEffect(() => {
   const effectivePlanId =
     planBuildId ?? planIdFromQuery ?? latestPlan?.learning_plan_id ?? undefined;
   const { data: planRecord } = usePlan(effectivePlanId ?? undefined);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParamsString);
+    if (selectedConversationId) {
+      params.set("conversation", selectedConversationId);
+    } else {
+      params.delete("conversation");
+    }
+    const desiredPlanId =
+      planBuildId ?? latestPlan?.learning_plan_id ?? planIdFromQuery ?? lastPlanId ?? null;
+    if (desiredPlanId) {
+      params.set("plan", desiredPlanId);
+    } else {
+      params.delete("plan");
+    }
+    const next = params.toString();
+    const current = searchParamsString;
+    if (next === current) {
+      return;
+    }
+    const url = next ? `${pathname}?${next}` : pathname;
+    router.replace(url, { scroll: false });
+  }, [
+    latestPlan?.learning_plan_id,
+    pathname,
+    planBuildId,
+    planIdFromQuery,
+    router,
+    searchParamsString,
+    selectedConversationId,
+    lastPlanId,
+  ]);
+
+  useEffect(() => {
+    if (!effectivePlanId || typeof window === "undefined") return;
+    window.localStorage.setItem("lastPlanId", effectivePlanId);
+  }, [effectivePlanId]);
 
   // Activate polling for plan status fallback
   usePlanSessionPoller();

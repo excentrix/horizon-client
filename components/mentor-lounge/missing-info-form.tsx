@@ -59,6 +59,9 @@ export function MissingInfoForm({ item }: MissingInfoFormProps) {
              Input Required
           </CardTitle>
           <p className="text-xs text-muted-foreground">{item.context || item.question}</p>
+          {item.unblocks ? (
+            <p className="mt-1 text-[11px] text-muted-foreground">{item.unblocks}</p>
+          ) : null}
        </CardHeader>
        <CardContent className="pb-2">
           <form onSubmit={handleSubmit} className="flex gap-2">
