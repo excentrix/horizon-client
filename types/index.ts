@@ -433,6 +433,14 @@ export interface PortfolioSkillTranscript {
   avg_quality: number;
 }
 
+export interface MentorEngagementNudge {
+  type: "prereq" | "stuck" | "stretch" | "momentum" | "steady";
+  title: string;
+  message: string;
+  action_label?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export type PlanStatus =
   | "draft"
   | "active"

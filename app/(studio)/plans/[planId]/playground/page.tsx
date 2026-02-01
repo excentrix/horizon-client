@@ -23,7 +23,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import type { DailyTask } from "@/types";
+import type { DailyTask, MentorEngagementNudge } from "@/types";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { chatApi, planningApi } from "@/lib/api";
@@ -108,6 +108,9 @@ export default function PlanPlaygroundPage() {
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
   const [showQuizFeedback, setShowQuizFeedback] = useState(false);
   const [generatedActivities, setGeneratedActivities] = useState<GeneratedActivities | null>(null);
+  const [engagementNudge, setEngagementNudge] = useState<MentorEngagementNudge | null>(null);
+  const [nudgeLoading, setNudgeLoading] = useState(false);
+  const [nudgeRefresh, setNudgeRefresh] = useState(0);
   const { data: conversations = [] } = useConversations();
   const fallbackConversationId = useMemo(() => {
     if (!conversations.length) return undefined;
@@ -191,6 +194,17 @@ export default function PlanPlaygroundPage() {
         event_type: detail.eventType,
         payload: detail,
       });
+      if (
+        [
+          "task_focus",
+          "step_toggle",
+          "session_start",
+          "task_complete",
+          "resource_update",
+        ].includes(detail.eventType)
+      ) {
+        setNudgeRefresh((prev) => prev + 1);
+      }
     };
     window.addEventListener("playground:event", handler);
     return () => window.removeEventListener("playground:event", handler);
@@ -213,6 +227,29 @@ export default function PlanPlaygroundPage() {
       )[0]
     );
   }, [selectedTaskId, tasks]);
+
+  useEffect(() => {
+    if (!mentorConversationKey) {
+      setEngagementNudge(null);
+      return;
+    }
+    let active = true;
+    setNudgeLoading(true);
+    chatApi
+      .getEngagementNudge(mentorConversationKey)
+      .then((response) => {
+        if (active) {
+          setEngagementNudge(response.nudge ?? null);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setNudgeLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [mentorConversationKey, activeTask?.id, nudgeRefresh]);
 
   const suggestedLearningMode = useMemo(() => {
     const learnerPrefs =
@@ -1913,6 +1950,23 @@ export default function PlanPlaygroundPage() {
                       {stepState.filter(Boolean).length} of {stepState.length} steps complete
                       {sessionStarted ? " · Mentor is focusing on your task" : ""}
                     </p>
+                  </div>
+                  <div className="rounded-lg border bg-background px-3 py-2 text-xs text-muted-foreground">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Coach nudge
+                    </p>
+                    {nudgeLoading ? (
+                      <p className="mt-1">Updating nudge…</p>
+                    ) : engagementNudge ? (
+                      <>
+                        <p className="mt-1 text-sm font-semibold text-foreground">
+                          {engagementNudge.title}
+                        </p>
+                        <p className="mt-1">{engagementNudge.message}</p>
+                      </>
+                    ) : (
+                      <p className="mt-1">Keep going — your progress looks steady.</p>
+                    )}
                   </div>
                   {mentorPrompt ? (
                     <p className="text-[11px] text-muted-foreground">

@@ -28,6 +28,7 @@ import {
   PortfolioSkillTranscript,
   BrainMapSnapshot,
   LearnerModelSnapshot,
+  MentorEngagementNudge,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -134,6 +135,12 @@ export const chatApi = {
   }) =>
     extract<{ status: string }>(
       http.post("/chat/mentor-sessions/playground-event/", payload)
+    ),
+  getEngagementNudge: (conversationId: string) =>
+    extract<{ nudge: MentorEngagementNudge }>(
+      http.get("/chat/mentor-sessions/nudge/", {
+        params: { conversation_id: conversationId },
+      })
     ),
 
   getAIPersonalities: () =>
