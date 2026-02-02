@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import posthog from "posthog-js";
 import {
   format,
   isAfter,
@@ -309,6 +310,19 @@ export function TaskList({ tasks, onUpdateTask, isUpdating, planId }: TaskListPr
                                   check_in_response:
                                     completionData[`${task.id}-checkin`] ?? "",
                                 });
+
+                                // Capture task completed event
+                                posthog.capture('task_completed', {
+                                  task_id: task.id,
+                                  task_title: task.title,
+                                  task_type: task.task_type,
+                                  plan_id: planId,
+                                  estimated_duration_minutes: task.estimated_duration_minutes,
+                                  actual_duration_minutes: Number.isFinite(duration) ? duration : undefined,
+                                  difficulty_rating: Number.isFinite(difficulty) ? difficulty : undefined,
+                                  effectiveness_rating: Number.isFinite(effectiveness) ? effectiveness : undefined,
+                                });
+
                                 setCompletionTaskId(null);
                               }}
                               disabled={isUpdating}

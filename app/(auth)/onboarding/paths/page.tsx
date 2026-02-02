@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -74,7 +75,19 @@ export default function PathSelectionPage() {
         }
 
         const data = await response.json();
-        
+
+        // Find the selected path for event properties
+        const selectedPath = paths.find(p => p.slug === pathSlug);
+
+        // Capture path selected event
+        posthog.capture('onboarding_path_selected', {
+          path_slug: pathSlug,
+          path_title: selectedPath?.title,
+          path_difficulty: selectedPath?.difficulty,
+          path_duration_weeks: selectedPath?.duration_weeks,
+          match_score: selectedPath?.match_score,
+        });
+
         // Redirect to finalize page (plan generation happens after account creation)
         router.push(data.redirect_url || '/onboarding/finalize');
         

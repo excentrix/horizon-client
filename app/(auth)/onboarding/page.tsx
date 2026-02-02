@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Upload, FileText, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
@@ -118,6 +119,13 @@ export default function OnboardingPage() {
           setParseStatus("complete");
           // Store session key and redirect to form
           localStorage.setItem("onboarding_session_key", sessionKey);
+
+          // Capture resume uploaded event
+          posthog.capture('onboarding_resume_uploaded', {
+            file_type: file?.type,
+            file_size_kb: file ? Math.round(file.size / 1024) : undefined,
+          });
+
           setTimeout(() => {
             router.push("/onboarding/form");
           }, 1500);
@@ -152,6 +160,10 @@ export default function OnboardingPage() {
 
       const data = await response.json();
       localStorage.setItem("onboarding_session_key", data.session_key);
+
+      // Capture resume skipped event
+      posthog.capture('onboarding_resume_skipped');
+
       router.push("/onboarding/form");
     } catch (err) {
       setError("Failed to proceed. Please try again.");

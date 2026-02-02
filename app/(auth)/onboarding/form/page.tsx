@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -99,6 +100,15 @@ export default function OnboardingFormPage() {
       if (!response.ok) throw new Error("Submission failed");
 
       const data = await response.json();
+
+      // Capture form submitted event
+      posthog.capture('onboarding_form_submitted', {
+        target_role: formData.target_role,
+        experience_level: formData.experience_level,
+        hours_per_week: formData.hours_per_week,
+        skills_count: formData.skills.length,
+      });
+
       // Store matched paths? Or just navigate and fetch again?
       // For now, let's just navigate
       router.push("/onboarding/paths");

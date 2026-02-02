@@ -1,8 +1,8 @@
 "use client";
 
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import {
   Dialog,
   DialogContent,
@@ -79,6 +79,15 @@ export function CreateConversationModal({
     onSuccess: (newConversation) => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       setSelectedConversationId(newConversation.id);
+
+      // Capture conversation started event
+      posthog.capture('conversation_started', {
+        conversation_id: newConversation.id,
+        conversation_title: newConversation.title,
+        personality_type: newConversation.ai_personality?.type,
+        personality_name: newConversation.ai_personality?.name,
+      });
+
       telemetry.toastSuccess("New mentor thread ready!");
       onOpenChange(false);
       router.push("/chat");

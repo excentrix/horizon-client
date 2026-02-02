@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import posthog from "posthog-js";
 import { Send, ScanSearch } from "lucide-react";
 import {
   PromptInput,
@@ -66,6 +67,13 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
     setIsSubmitting(true);
     try {
       await onSend(trimmed);
+
+      // Capture message sent event
+      posthog.capture('message_sent', {
+        conversation_id: selectedConversationId,
+        message_length: trimmed.length,
+      });
+
       setComposerDraft("");
       onTypingChange?.(false);
     } catch (error) {

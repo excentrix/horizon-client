@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import posthog from "posthog-js";
 import { usePlans, usePlan, usePlanMutations } from "@/hooks/use-plans";
 import { PlanList } from "@/components/plans/plan-list";
 import { PlanDetail } from "@/components/plans/plan-detail";
@@ -168,7 +169,16 @@ function PlansContent() {
                   <PlanDetail
                     plan={plan}
                     tasks={tasks}
-                    onStart={() => startPlan.mutate()}
+                    onStart={() => {
+                      startPlan.mutate();
+                      // Capture plan started event
+                      posthog.capture('plan_started', {
+                        plan_id: plan.id,
+                        plan_title: plan.title,
+                        total_tasks: tasks.length,
+                        estimated_hours: plan.total_estimated_hours,
+                      });
+                    }}
                     onPause={() => pausePlan.mutate()}
                     onResume={() => resumePlan.mutate()}
                     onComplete={() => completePlan.mutate()}

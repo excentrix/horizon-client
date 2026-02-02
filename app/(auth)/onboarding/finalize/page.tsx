@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -73,10 +74,26 @@ export default function FinalizePage() {
       if (!response.ok) {
         throw new Error(data.error || "Failed to complete onboarding");
       }
-      
+
+      // Identify user in PostHog after account creation
+      if (data.user?.id || formData.email) {
+        posthog.identify(data.user?.id ?? formData.email, {
+          email: formData.email,
+          name: formData.displayName || formData.email.split("@")[0],
+          timezone: formData.timezone,
+        });
+      }
+
+      // Capture onboarding completed event
+      posthog.capture('onboarding_completed', {
+        email: formData.email,
+        timezone: formData.timezone,
+        has_display_name: Boolean(formData.displayName),
+      });
+
       // Success! Clear session key and redirect to generating page
       // localStorage.removeItem("onboarding_session_key"); // Keep for generating page
-      
+
       // Redirect to generating page (or dashboard if plan already done)
       router.push(data.redirect_url || '/dashboard');
       

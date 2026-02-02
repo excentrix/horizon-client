@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import posthog from "posthog-js";
 import { useAuth } from "@/context/AuthContext";
 import { ConversationList } from "@/components/mentor-lounge/conversation-list";
 import { MessageFeed } from "@/components/mentor-lounge/message-feed";
@@ -705,6 +706,13 @@ useEffect(() => {
     
     setAnalysisHistory(prev => [newAnalysis, ...prev]);
 
+    // Capture analysis requested event
+    posthog.capture('analysis_requested', {
+      conversation_id: selectedConversationId,
+      conversation_title: activeConversation?.title,
+      force_reanalysis: shouldForce,
+    });
+
     analyzeConversation.mutate(
       {
         conversationId: selectedConversationId,
@@ -748,6 +756,13 @@ useEffect(() => {
       }
     }
     setLatestPlan(null);
+
+    // Capture plan created event
+    posthog.capture('plan_created', {
+      conversation_id: selectedConversationId,
+      conversation_title: activeConversation?.title,
+    });
+
     createPlan.mutate(
       { conversationId: selectedConversationId },
       {
