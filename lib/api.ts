@@ -34,6 +34,7 @@ import {
   GamificationUserBadge,
   GamificationLeaderboard,
   GamificationActivity,
+  HomeDashboard,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -423,6 +424,11 @@ export const gamificationApi = {
     extract<{ entries: GamificationActivity[]; page: number; per_page: number; total: number; has_more: boolean }>(
       http.get("/gamification/points/history/", { params: { page } })
     ),
+};
+
+// DASHBOARDS --------------------------------------------------------------
+export const dashboardApi = {
+  getHome: () => extract<HomeDashboard>(http.get("/dashboards/home/")),
 };
 
 // NOTIFICATIONS --------------------------------------------------------------

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,26 @@ export default function PortfolioSettingsPage() {
   });
 
   const [saving, setSaving] = useState(false);
+  const publicUrl = useMemo(() => {
+    if (!profile?.slug || typeof window === "undefined") return "";
+    return `${window.location.origin}/p/${profile.slug}`;
+  }, [profile?.slug]);
+
+  useEffect(() => {
+    if (!profile) return;
+    setFormData({
+      headline: profile.headline || "",
+      bio: profile.bio || "",
+      github_url: profile.github_url || "",
+      linkedin_url: profile.linkedin_url || "",
+      portfolio_url: profile.portfolio_url || "",
+      twitter_url: profile.twitter_url || "",
+      is_public: profile.is_public || false,
+      show_competency_chart: profile.show_competency_chart ?? true,
+      show_growth_timeline: profile.show_growth_timeline ?? true,
+      show_learning_stats: profile.show_learning_stats ?? true,
+    });
+  }, [profile?.id]);
 
   const handleChange = (field: string, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -209,7 +229,7 @@ export default function PortfolioSettingsPage() {
                 <strong>Your public portfolio URL:</strong>
                 <br />
                 <code className="text-xs">
-                  {window.location.origin}/p/{profile?.slug || "username"}
+                  {publicUrl || "Enable public portfolio to generate link"}
                 </code>
               </p>
             </div>

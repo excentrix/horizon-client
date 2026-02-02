@@ -459,6 +459,15 @@ export interface GamificationUserBadge {
   context?: Record<string, unknown>;
 }
 
+export interface GamificationBadgeAward {
+  id: number;
+  name: string;
+  slug: string;
+  icon?: string;
+  color?: string;
+  awarded_at: string;
+}
+
 export interface GamificationPointsProfile {
   total_points: number;
   level: number;
@@ -473,7 +482,7 @@ export interface GamificationPointsProfile {
 
 export interface GamificationSummary {
   profile: GamificationPointsProfile;
-  recent_badges: GamificationUserBadge[];
+  recent_badges: Array<GamificationUserBadge | GamificationBadgeAward>;
   recent_activity?: GamificationActivity[];
   badge_count?: number;
 }
@@ -801,4 +810,48 @@ export interface MissingInformationItem {
   unblocks?: string;
   status: "pending" | "resolved" | "skipped";
   timestamp: string;
+}
+
+// Dashboard Home types
+export interface TodayTask {
+  id: UUID;
+  title: string;
+  description: string;
+  plan_id: UUID;
+  plan_title: string;
+  scheduled_date: string | null;
+  time_tag: "Overdue" | "Today" | "Upcoming";
+  is_overdue: boolean;
+  is_today: boolean;
+  estimated_duration: number | null;
+}
+
+export interface DashboardStreak {
+  current: number;
+  longest: number;
+  at_risk: boolean;
+}
+
+export interface WeeklyStats {
+  tasks_completed: number;
+  xp_earned: number;
+  goal_progress: number;
+  days_to_milestone: number | null;
+}
+
+export interface ActivityItem {
+  type: "task_completed" | "badge_earned" | "artifact_created";
+  title: string;
+  timestamp: string;
+  icon: string;
+  task_id?: UUID;
+  badge_id?: number;
+  artifact_id?: UUID;
+}
+
+export interface HomeDashboard {
+  today_task: TodayTask | null;
+  streak: DashboardStreak;
+  weekly_stats: WeeklyStats;
+  recent_activity: ActivityItem[];
 }

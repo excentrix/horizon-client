@@ -446,28 +446,62 @@ export default function ProgressPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-4xl font-semibold">
-                    {gamificationSummary?.profile?.total_points ?? 0}
+                    {gamificationSummary?.profile?.total_points?.toLocaleString() ?? 0}
                   </p>
                   <p className="text-sm text-white/70">XP earned</p>
                 </div>
-                <div className="rounded-full border border-white/30 px-4 py-2 text-sm font-semibold">
-                  Level {gamificationSummary?.profile?.level ?? 1}
+                <div className="text-center">
+                  <div className="rounded-full border border-white/30 px-4 py-2 text-lg font-bold bg-white/10">
+                    Level {gamificationSummary?.profile?.level ?? 1}
+                  </div>
+                  {(gamificationSummary?.profile?.current_streak ?? 0) > 0 && (
+                    <div className="mt-2 flex items-center justify-center gap-1.5 text-orange-300">
+                      <span className="text-lg">🔥</span>
+                      <span className="font-medium">{gamificationSummary?.profile?.current_streak} day streak</span>
+                    </div>
+                  )}
                 </div>
               </div>
+              
+              {/* XP Progress to next level */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs text-white/70">
+                  <span>Progress to Level {(gamificationSummary?.profile?.level ?? 1) + 1}</span>
+                  <span>
+                    {gamificationSummary?.profile?.level_progress ?? 0} / {gamificationSummary?.profile?.xp_for_next_level ?? 100} XP
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-white/20 overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-emerald-400 to-teal-300 rounded-full transition-all duration-500"
+                    style={{ 
+                      width: `${Math.min(100, gamificationSummary?.profile?.level_progress_percentage ?? 0)}%` 
+                    }}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-wide text-white/70">Recent badges</p>
                 <div className="flex flex-wrap gap-2">
                   {gamificationSummary?.recent_badges?.length ? (
-                    gamificationSummary.recent_badges.slice(0, 4).map((award) => (
-                      <span
-                        key={award.id}
-                        className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium"
-                      >
-                        {award.badge.name}
-                      </span>
-                    ))
+                    gamificationSummary.recent_badges.slice(0, 4).map((award) => {
+                      const badge = "badge" in award ? award.badge : award;
+                      return (
+                        <span
+                          key={`badge-${award.id}`}
+                          className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium hover:bg-white/25 transition-colors cursor-default"
+                          title={badge.description}
+                        >
+                          {badge.icon && <span className="mr-1">{badge.icon}</span>}
+                          {badge.name}
+                        </span>
+                      );
+                    })
                   ) : (
-                    <span className="text-xs text-white/70">First badge unlocks on verified proof.</span>
+                    <span className="text-xs text-white/70">
+                      First badge unlocks on verified proof.
+                    </span>
                   )}
                 </div>
               </div>
