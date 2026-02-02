@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
 import type { TodayTask } from "@/types";
 import { Calendar, Clock, ArrowRight, MessageSquare } from "lucide-react";
+import { telemetry } from "@/lib/telemetry";
 
 interface TodayFocusCardProps {
   task: TodayTask | null | undefined;
@@ -69,6 +70,12 @@ export function TodayFocusCard({ task, isLoading }: TodayFocusCardProps) {
   };
 
   const handleStartTask = () => {
+    telemetry.track("task_started_from_dashboard", {
+      task_id: task.id,
+      plan_id: task.plan_id,
+      is_overdue: task.is_overdue,
+      is_today: task.is_today,
+    });
     router.push(`/plans/${task.plan_id}`);
   };
 

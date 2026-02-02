@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { telemetry } from "@/lib/telemetry";
 import { 
   MessageSquare, 
   Calendar, 
@@ -143,7 +144,10 @@ export default function DashboardPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card 
             className="group cursor-pointer transition-all hover:border-violet-500 hover:shadow-lg"
-            onClick={() => router.push("/chat")}
+            onClick={() => {
+              telemetry.track("dashboard_quick_action_clicked", { action: "chat" });
+              router.push("/chat");
+            }}
           >
             <CardContent className="p-6">
               <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600">
@@ -158,7 +162,10 @@ export default function DashboardPage() {
 
           <Card
             className="group cursor-pointer transition-all hover:border-blue-500 hover:shadow-lg"
-            onClick={() => router.push("/plans")}
+            onClick={() => {
+              telemetry.track("dashboard_quick_action_clicked", { action: "plans" });
+              router.push("/plans");
+            }}
           >
             <CardContent className="p-6">
               <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
@@ -173,7 +180,10 @@ export default function DashboardPage() {
 
           <Card
             className="group cursor-pointer transition-all hover:border-green-500 hover:shadow-lg"
-            onClick={() => router.push("/progress")}
+            onClick={() => {
+              telemetry.track("dashboard_quick_action_clicked", { action: "progress" });
+              router.push("/progress");
+            }}
           >
             <CardContent className="p-6">
               <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-green-500/10 text-green-600">
@@ -188,7 +198,10 @@ export default function DashboardPage() {
 
           <Card
             className="group cursor-pointer transition-all hover:border-amber-500 hover:shadow-lg"
-            onClick={() => router.push("/portfolio")}
+            onClick={() => {
+              telemetry.track("dashboard_quick_action_clicked", { action: "portfolio" });
+              router.push("/portfolio");
+            }}
           >
             <CardContent className="p-6">
               <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
