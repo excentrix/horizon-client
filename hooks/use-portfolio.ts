@@ -37,11 +37,7 @@ export function usePortfolioProfile() {
     queryKey: profileKey,
     queryFn: async () => {
       try {
-        const response = await fetch("/api/portfolio/profiles/my_profile/", {
-          credentials: "include",
-        });
-        if (!response.ok) throw new Error("Failed to fetch profile");
-        return await response.json();
+        return await portfolioApi.getProfile();
       } catch (error) {
         telemetry.error("Failed to load portfolio profile", { error });
         throw error;
@@ -165,13 +161,14 @@ export function usePublicPortfolio(username: string) {
   return useQuery({
     queryKey: ["public-portfolio", username],
     queryFn: async () => {
-      const response = await fetch(`/api/portfolio/public/${username}/`);
-      if (!response.ok) {
-        if (response.status === 404) throw new Error("Portfolio not found");
-        if (response.status === 403) throw new Error("Portfolio is private");
+      try {
+        return await portfolioApi.getPublicPortfolio(username);
+      } catch (error) {
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        if (status === 404) throw new Error("Portfolio not found");
+        if (status === 403) throw new Error("Portfolio is private");
         throw new Error("Failed to load portfolio");
       }
-      return await response.json();
     },
     enabled: !!username,
     staleTime: 60_000,

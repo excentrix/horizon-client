@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Save } from "lucide-react";
 import Link from "next/link";
 import { usePortfolioProfile } from "@/hooks/use-portfolio";
+import { portfolioApi } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function PortfolioSettingsPage() {
@@ -59,14 +60,10 @@ export default function PortfolioSettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const response = await fetch("/api/portfolio/profiles/my_profile/", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) throw new Error("Failed to save");
+      if (!profile?.id) {
+        throw new Error("Missing profile id");
+      }
+      await portfolioApi.updateProfile(profile.id, formData);
 
       toast.success("Portfolio settings saved!");
     } catch (error) {

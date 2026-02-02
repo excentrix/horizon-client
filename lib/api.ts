@@ -274,6 +274,12 @@ export const portfolioApi = {
     extract<PortfolioArtifact[] | PaginatedResponse<PortfolioArtifact>>(
       http.get("/portfolio/artifacts/")
     ).then(normalizeList),
+  getProfile: () =>
+    extract<{ profile: UserSummary & { id: string; slug?: string } }>(
+      http.get("/portfolio/profiles/my_profile/")
+    ),
+  updateProfile: (profileId: string, payload: Record<string, unknown>) =>
+    extract(http.patch(`/portfolio/profiles/${profileId}/`, payload ?? {})),
   createArtifactFromProof: (payload: { proof_id: string }) =>
     extract<{ message: string; artifact: PortfolioArtifact }>(
       http.post("/portfolio/artifacts/from-proof/", payload)
@@ -283,6 +289,10 @@ export const portfolioApi = {
   getSkillsTranscript: () =>
     extract<{ skills: PortfolioSkillTranscript[] }>(
       http.get("/portfolio/profiles/skills-transcript/")
+    ),
+  getPublicPortfolio: (username: string) =>
+    extract(
+      http.get(`/portfolio/public/${username}/`)
     ),
 };
 
