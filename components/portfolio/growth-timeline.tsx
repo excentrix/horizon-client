@@ -13,7 +13,7 @@ import {
   Trophy,
   Target,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 
 interface Milestone {
   id: string;
@@ -96,6 +96,10 @@ export function GrowthTimeline({ milestones, className }: GrowthTimelineProps) {
           {milestones.map((milestone, index) => {
             const Icon = milestoneIcons[milestone.milestone_type] || Trophy;
             const colorClass = milestoneColors[milestone.milestone_type] || "bg-gray-500";
+            const achievedDate = new Date(milestone.achieved_at);
+            const achievedLabel = isValid(achievedDate)
+              ? format(achievedDate, "MMM d, yyyy 'at' h:mm a")
+              : "Date pending";
 
             return (
               <div key={milestone.id} className="relative flex gap-4 group">
@@ -131,7 +135,7 @@ export function GrowthTimeline({ milestones, className }: GrowthTimelineProps) {
                         )}
                       </div>
                       <time className="text-xs text-muted-foreground">
-                        {format(new Date(milestone.achieved_at), "MMM d, yyyy 'at' h:mm a")}
+                        {achievedLabel}
                       </time>
                     </div>
                   </div>

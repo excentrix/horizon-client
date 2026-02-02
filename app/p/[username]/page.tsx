@@ -21,6 +21,7 @@ import {
   Briefcase,
 } from "lucide-react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 
 import { ProjectShowcaseGrid } from "@/components/portfolio/project-showcase";
 import { CompetencyChart } from "@/components/portfolio/competency-chart";
@@ -30,14 +31,10 @@ import { CourseBadgeList } from "@/components/portfolio/course-badge";
 
 import { usePublicPortfolio } from "@/hooks/use-portfolio";
 
-interface PublicPortfolioPageProps {
-  params: {
-    username: string;
-  };
-}
-
-export default function PublicPortfolioPage({ params }: PublicPortfolioPageProps) {
-  const { data, isLoading, error } = usePublicPortfolio(params.username);
+export default function PublicPortfolioPage() {
+  const params = useParams<{ username?: string }>();
+  const username = params?.username ?? "";
+  const { data, isLoading, error } = usePublicPortfolio(username);
 
   if (isLoading) {
     return (
