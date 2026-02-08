@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useHomeDashboard } from "@/hooks/use-home-dashboard";
 import { useGamificationSummary } from "@/hooks/use-gamification";
+import { useFlowSuggestion } from "@/hooks/use-flow-suggestion";
 import { TodayFocusCard } from "@/components/dashboard/today-focus-card";
 import { QuickStatsCard } from "@/components/dashboard/quick-stats-card";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
+import { FlowStarter } from "@/components/dashboard/flow-starter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -30,6 +32,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const { data: homeData, isLoading: homeLoading } = useHomeDashboard();
   const { data: gamificationData } = useGamificationSummary();
+  const { data: flowData } = useFlowSuggestion('dashboard');
+  const [flowShownAt] = useState(new Date());
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -125,6 +129,14 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Flow Suggestion - Hero CTA */}
+      {flowData?.suggestion && (
+        <FlowStarter 
+          suggestion={flowData.suggestion} 
+          shownAt={flowShownAt}
+        />
+      )}
 
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-3">

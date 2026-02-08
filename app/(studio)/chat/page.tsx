@@ -1074,12 +1074,12 @@ useEffect(() => {
                     </p>
                   </div>
                 ) : null}
-                <div className="px-4 pb-3">
+                {/* <div className="px-4 pb-3">
                   <SessionGoal 
                     goal={activeConversation.description || "General exploration"} 
                     planTitle={latestPlan?.plan_title} 
                   />
-                </div>
+                </div> */}
               </header>
               <IntelligenceReportModal 
                 isOpen={isReportModalOpen}
