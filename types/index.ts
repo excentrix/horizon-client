@@ -367,6 +367,14 @@ export interface DailyTask {
   current_tools_versions: Record<string, unknown>;
   kpis?: Array<{ metric?: string; target?: string }>;
   verification?: { method?: string; criteria?: string };
+  assessment_config?: {
+    id: string;
+    verification_type: "auto_quiz" | "code_execution" | "github_repo" | "file_upload" | "text_analysis" | "manual_rubric";
+    config: Record<string, unknown>;
+    rubric: Record<string, unknown>;
+    xp_reward: number;
+    badge_reward_id?: string;
+  };
   check_in_question?: string;
   check_in_response?: string;
   quiz_payload?: {
@@ -395,6 +403,131 @@ export interface DailyTask {
   milestone_title?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface PortfolioArtifact {
+  id: UUID;
+  user: UUID;
+  title: string;
+  description?: string;
+  artifact_type: "link" | "file" | "text" | "repo" | "case_study" | "project" | "demo";
+  source_task?: UUID | null;
+  proof_submission?: UUID | null;
+  url?: string;
+  content?: string;
+  metadata?: Record<string, unknown>;
+  status: "draft" | "needs_review" | "verified";
+  verification_status?: "pending" | "verified" | "human_verified" | "rejected" | "needs_revision";
+  featured?: boolean;
+  visibility?: "private" | "mentors" | "employers" | "public";
+  reflection?: string;
+  reflection_prompt?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PortfolioSkillTranscript {
+  competency: string;
+  best_level: "exposure" | "application" | "mastery";
+  evidence_count: number;
+  avg_quality: number;
+}
+
+export interface MentorEngagementNudge {
+  type: "prereq" | "stuck" | "stretch" | "momentum" | "steady";
+  title: string;
+  message: string;
+  action_label?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface GamificationBadge {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string;
+  category: "starter" | "momentum" | "milestone" | "craft";
+  icon?: string;
+  color?: string;
+  points_value?: number;
+}
+
+export interface GamificationUserBadge {
+  id: number;
+  badge: GamificationBadge;
+  awarded_at: string;
+  context?: Record<string, unknown>;
+}
+
+export interface GamificationBadgeAward {
+  id: number;
+  name: string;
+  slug: string;
+  icon?: string;
+  color?: string;
+  awarded_at: string;
+}
+
+export interface GamificationPointsProfile {
+  total_points: number;
+  level: number;
+  level_progress: number;
+  xp_for_next_level: number;
+  level_progress_percentage: number;
+  current_streak: number;
+  longest_streak: number;
+  last_activity_date: string | null;
+  updated_at: string;
+}
+
+export interface GamificationSummary {
+  profile: GamificationPointsProfile;
+  recent_badges: Array<GamificationUserBadge | GamificationBadgeAward>;
+  recent_activity?: GamificationActivity[];
+  badge_count?: number;
+}
+
+export interface GamificationActivity {
+  id?: number;
+  points: number;
+  reason: string;
+  created_at: string;
+}
+
+export interface GamificationLeaderboardEntry {
+  rank: number;
+  user_id: string;
+  display_name: string;
+  weekly_xp: number;
+  level: number;
+  current_streak: number;
+}
+
+export interface GamificationLeaderboard {
+  leaderboard: GamificationLeaderboardEntry[];
+  period: string;
+  updated_at: string;
+}
+
+export interface GamificationEvent {
+  event_type: "points_earned" | "level_up" | "badge_earned" | "streak_milestone";
+  points?: number;
+  reason?: string;
+  total_points?: number;
+  level?: number;
+  level_progress?: number;
+  xp_for_next_level?: number;
+  current_streak?: number;
+  old_level?: number;
+  new_level?: number;
+  badge_id?: number;
+  badge_name?: string;
+  badge_slug?: string;
+  badge_icon?: string;
+  badge_color?: string;
+  badge_description?: string;
+  points_value?: number;
+  timestamp: string;
 }
 
 export type PlanStatus =
@@ -601,6 +734,43 @@ export interface ComprehensiveProgressReport {
   domain_growth_rates?: Record<string, unknown>;
 }
 
+export interface BrainMapSnapshot {
+  plan_id: string;
+  focus_concepts: Array<{
+    name: string;
+    type?: string;
+    domain?: string;
+  }>;
+  mastery_map: Record<
+    string,
+    {
+      level?: string;
+      confidence?: number;
+      updated_at?: string;
+    }
+  >;
+  missing_prerequisites: Record<string, string[]>;
+}
+
+export interface LearnerModelSnapshot {
+  learner_profile: {
+    generated_at?: string;
+    core: {
+      preferences?: Record<string, unknown> | null;
+      schedule?: Record<string, unknown> | null;
+      active_plan?: Record<string, unknown> | null;
+      competencies?: Array<Record<string, unknown>> | null;
+      wellness?: Record<string, unknown> | null;
+      goals?: Array<Record<string, unknown>> | null;
+    };
+    analysis_sections?: Record<string, unknown>;
+    progress_sections?: Record<string, unknown>;
+    insight_digest?: Record<string, unknown>;
+    runtime?: Record<string, unknown>;
+    sections?: Record<string, unknown>;
+  };
+}
+
 export interface MemoryItem {
   id?: string;
   memory?: string;
@@ -637,6 +807,51 @@ export interface MissingInformationItem {
   field: string;
   question: string;
   context?: string;
+  unblocks?: string;
   status: "pending" | "resolved" | "skipped";
   timestamp: string;
+}
+
+// Dashboard Home types
+export interface TodayTask {
+  id: UUID;
+  title: string;
+  description: string;
+  plan_id: UUID;
+  plan_title: string;
+  scheduled_date: string | null;
+  time_tag: "Overdue" | "Today" | "Upcoming";
+  is_overdue: boolean;
+  is_today: boolean;
+  estimated_duration: number | null;
+}
+
+export interface DashboardStreak {
+  current: number;
+  longest: number;
+  at_risk: boolean;
+}
+
+export interface WeeklyStats {
+  tasks_completed: number;
+  xp_earned: number;
+  goal_progress: number;
+  days_to_milestone: number | null;
+}
+
+export interface ActivityItem {
+  type: "task_completed" | "badge_earned" | "artifact_created";
+  title: string;
+  timestamp: string;
+  icon: string;
+  task_id?: UUID;
+  badge_id?: number;
+  artifact_id?: UUID;
+}
+
+export interface HomeDashboard {
+  today_task: TodayTask | null;
+  streak: DashboardStreak;
+  weekly_stats: WeeklyStats;
+  recent_activity: ActivityItem[];
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import posthog from "posthog-js";
 import { useAuth } from "@/context/AuthContext";
 import { ConversationList } from "@/components/mentor-lounge/conversation-list";
 import { MessageFeed } from "@/components/mentor-lounge/message-feed";
@@ -77,6 +78,7 @@ export default function ChatPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
   const selectedConversationId = useMentorLoungeStore(
     (state) => state.selectedConversationId,
   );
@@ -142,6 +144,7 @@ export default function ChatPage() {
   }>>([]);
   const [analysisByConversation, setAnalysisByConversation] = useState<Record<string, Record<string, unknown>>>({});
   const [latestPlan, setLatestPlan] = useState<PlanCreationResponse | null>(null);
+  const [lastPlanId, setLastPlanId] = useState<string | null>(null);
   const processedAnalysisRef = useRef<Map<string, string>>(new Map());
   const stageTrackerRef = useRef<Map<string, Set<string>>>(new Map());
   const analysisPollTimeoutRef = useRef<number | null>(null);
@@ -175,35 +178,9 @@ export default function ChatPage() {
   }, [conversations, searchParams, selectedConversationId, setSelectedConversationId]);
 
   useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (selectedConversationId) {
-      params.set("conversation", selectedConversationId);
-    } else {
-      params.delete("conversation");
-    }
-    const desiredPlanId =
-      planBuildId ?? latestPlan?.learning_plan_id ?? planIdFromQuery ?? null;
-    if (desiredPlanId) {
-      params.set("plan", desiredPlanId);
-    } else {
-      params.delete("plan");
-    }
-    const next = params.toString();
-    const current = searchParams.toString();
-    if (next === current) {
-      return;
-    }
-    const url = next ? `${pathname}?${next}` : pathname;
-    router.replace(url, { scroll: false });
-  }, [
-    latestPlan?.learning_plan_id,
-    pathname,
-    // planBuildId,
-    // planIdFromQuery,
-    router,
-    searchParams,
-    selectedConversationId,
-  ]);
+    if (typeof window === "undefined") return;
+    setLastPlanId(window.localStorage.getItem("lastPlanId"));
+  }, []);
 
   const fetchLatestAnalysis = useCallback(
     async (conversationId: string, options?: { silent?: boolean }) => {
@@ -359,6 +336,43 @@ useEffect(() => {
   const effectivePlanId =
     planBuildId ?? planIdFromQuery ?? latestPlan?.learning_plan_id ?? undefined;
   const { data: planRecord } = usePlan(effectivePlanId ?? undefined);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParamsString);
+    if (selectedConversationId) {
+      params.set("conversation", selectedConversationId);
+    } else {
+      params.delete("conversation");
+    }
+    const desiredPlanId =
+      planBuildId ?? latestPlan?.learning_plan_id ?? planIdFromQuery ?? lastPlanId ?? null;
+    if (desiredPlanId) {
+      params.set("plan", desiredPlanId);
+    } else {
+      params.delete("plan");
+    }
+    const next = params.toString();
+    const current = searchParamsString;
+    if (next === current) {
+      return;
+    }
+    const url = next ? `${pathname}?${next}` : pathname;
+    router.replace(url, { scroll: false });
+  }, [
+    latestPlan?.learning_plan_id,
+    pathname,
+    planBuildId,
+    planIdFromQuery,
+    router,
+    searchParamsString,
+    selectedConversationId,
+    lastPlanId,
+  ]);
+
+  useEffect(() => {
+    if (!effectivePlanId || typeof window === "undefined") return;
+    window.localStorage.setItem("lastPlanId", effectivePlanId);
+  }, [effectivePlanId]);
 
   // Activate polling for plan status fallback
   usePlanSessionPoller();
@@ -692,6 +706,13 @@ useEffect(() => {
     
     setAnalysisHistory(prev => [newAnalysis, ...prev]);
 
+    // Capture analysis requested event
+    posthog.capture('analysis_requested', {
+      conversation_id: selectedConversationId,
+      conversation_title: activeConversation?.title,
+      force_reanalysis: shouldForce,
+    });
+
     analyzeConversation.mutate(
       {
         conversationId: selectedConversationId,
@@ -735,6 +756,13 @@ useEffect(() => {
       }
     }
     setLatestPlan(null);
+
+    // Capture plan created event
+    posthog.capture('plan_created', {
+      conversation_id: selectedConversationId,
+      conversation_title: activeConversation?.title,
+    });
+
     createPlan.mutate(
       { conversationId: selectedConversationId },
       {
@@ -787,6 +815,8 @@ useEffect(() => {
 
   const planDisplayStatus =
     planRecord && planBuildStatus === "idle" ? "completed" : planBuildStatus;
+  const showPlanWorkbench =
+    ["queued", "in_progress", "warning"].includes(planBuildStatus) || createPlan.isPending;
 
   const planProgress = useMemo(() => {
     if (planDisplayStatus === "completed") {
@@ -1046,12 +1076,12 @@ useEffect(() => {
                     </p>
                   </div>
                 ) : null}
-                <div className="px-4 pb-3">
+                {/* <div className="px-4 pb-3">
                   <SessionGoal 
                     goal={activeConversation.description || "General exploration"} 
                     planTitle={latestPlan?.plan_title} 
                   />
-                </div>
+                </div> */}
               </header>
               <IntelligenceReportModal 
                 isOpen={isReportModalOpen}
@@ -1060,7 +1090,7 @@ useEffect(() => {
               />
               <div className="min-h-0 flex-1 overflow-hidden">
                 <div className="flex h-full min-h-0 flex-col gap-4 px-4 pb-4 pt-2 lg:px-5 lg:pb-6">
-                  {planWorkbenchData ? (
+                  {planWorkbenchData && showPlanWorkbench ? (
                     <PlanWorkbench
                       planData={planWorkbenchData}
                       status={planDisplayStatus}
@@ -1074,7 +1104,7 @@ useEffect(() => {
                     />
                   ) : null}
                   {/* IntelligenceStatus moved to header */}
-                  {planUpdates.length ? (
+                  {showPlanWorkbench && planUpdates.length ? (
                     <div className="mb-2 text-[11px] text-muted-foreground">
                       Plan status: {latestPlanUpdate?.data.message ?? "Working on your plan..."}
                     </div>

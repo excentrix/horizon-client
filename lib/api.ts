@@ -24,6 +24,17 @@ import {
   ComprehensiveProgressReport,
   MemoryItem,
   ConversationAnalysis,
+  PortfolioArtifact,
+  PortfolioSkillTranscript,
+  BrainMapSnapshot,
+  LearnerModelSnapshot,
+  MentorEngagementNudge,
+  GamificationSummary,
+  GamificationBadge,
+  GamificationUserBadge,
+  GamificationLeaderboard,
+  GamificationActivity,
+  HomeDashboard,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -131,6 +142,12 @@ export const chatApi = {
     extract<{ status: string }>(
       http.post("/chat/mentor-sessions/playground-event/", payload)
     ),
+  getEngagementNudge: (conversationId: string) =>
+    extract<{ nudge: MentorEngagementNudge }>(
+      http.get("/chat/mentor-sessions/nudge/", {
+        params: { conversation_id: conversationId },
+      })
+    ),
 
   getAIPersonalities: () =>
     extract<AIPersonality[]>(http.get("/chat/ai-personalities/")),
@@ -221,6 +238,17 @@ export const planningApi = {
     extract<{ message: string; mentor_id: string }>(
       http.post(`/planning/plans/${planId}/switch_mentor/`, payload)
     ),
+  submitTaskProof: (
+    taskId: string,
+    payload: {
+      submission_type: "link" | "text" | "file";
+      content: string;
+      metadata?: Record<string, unknown>;
+    }
+  ) =>
+    extract<{ message: string; proof: Record<string, unknown>; artifact_id?: string }>(
+      http.post(`/planning/tasks/${taskId}/submit-proof/`, payload)
+    ),
 
   getPlanSession: (sessionId: string) =>
     extract<{
@@ -240,6 +268,34 @@ export const planningApi = {
     ),
 };
 
+// PORTFOLIO ------------------------------------------------------------------
+export const portfolioApi = {
+  listArtifacts: () =>
+    extract<PortfolioArtifact[] | PaginatedResponse<PortfolioArtifact>>(
+      http.get("/portfolio/artifacts/")
+    ).then(normalizeList),
+  getProfile: () =>
+    extract<{ profile: UserSummary & { id: string; slug?: string } }>(
+      http.get("/portfolio/profiles/my_profile/")
+    ),
+  updateProfile: (profileId: string, payload: Record<string, unknown>) =>
+    extract(http.patch(`/portfolio/profiles/${profileId}/`, payload ?? {})),
+  createArtifactFromProof: (payload: { proof_id: string }) =>
+    extract<{ message: string; artifact: PortfolioArtifact }>(
+      http.post("/portfolio/artifacts/from-proof/", payload)
+    ),
+  createArtifact: (payload: Partial<PortfolioArtifact>) =>
+    extract<PortfolioArtifact>(http.post("/portfolio/artifacts/", payload)),
+  getSkillsTranscript: () =>
+    extract<{ skills: PortfolioSkillTranscript[] }>(
+      http.get("/portfolio/profiles/skills-transcript/")
+    ),
+  getPublicPortfolio: (username: string) =>
+    extract(
+      http.get(`/portfolio/public/${username}/`)
+    ),
+};
+
 // INTELLIGENCE ---------------------------------------------------------------
 export const intelligenceApi = {
   getMultiDomainDashboard: (params?: {
@@ -248,7 +304,7 @@ export const intelligenceApi = {
     stakeholder_type?: string;
   }) =>
     extract<MultiDomainDashboard>(
-      http.get("/intelligence/multi_domain_dashboard/", { params })
+      http.get("/intelligence/dashboard/", { params })
     ),
 
   getWellnessMonitoring: (params?: {
@@ -257,7 +313,7 @@ export const intelligenceApi = {
     days?: number;
   }) =>
     extract<WellnessMonitoring>(
-      http.get("/intelligence/wellness_monitoring/", { params })
+      http.get("/intelligence/wellness-monitoring/", { params })
     ),
 
   getAcademicProgressOverview: (params?: {
@@ -266,7 +322,7 @@ export const intelligenceApi = {
     include_predictions?: boolean;
   }) =>
     extract<AcademicProgressOverview>(
-      http.get("/intelligence/academic_progress_overview/", { params })
+      http.get("/intelligence/academic-progress/", { params })
     ),
 
   getCareerReadinessAssessment: (params?: {
@@ -275,7 +331,7 @@ export const intelligenceApi = {
     include_recommendations?: boolean;
   }) =>
     extract<CareerReadinessAssessment>(
-      http.get("/intelligence/career_readiness_assessment/", { params })
+      http.get("/intelligence/career-readiness/", { params })
     ),
 
   getUniversalGoalsManagement: (params?: {
@@ -284,7 +340,7 @@ export const intelligenceApi = {
     domain?: string;
   }) =>
     extract<UniversalGoalsManagement>(
-      http.get("/intelligence/universal_goals_management/", { params })
+      http.get("/intelligence/goals-management/", { params })
     ),
 
   getInsightsFeed: (params?: {
@@ -294,7 +350,7 @@ export const intelligenceApi = {
     limit?: number;
   }) =>
     extract<InsightsFeedResponse>(
-      http.get("/intelligence/insights_feed/", { params })
+      http.get("/intelligence/insights/", { params })
     ),
 
   getComprehensiveProgressReport: (params?: {
@@ -303,7 +359,20 @@ export const intelligenceApi = {
     include_projections?: boolean;
   }) =>
     extract<ComprehensiveProgressReport>(
-      http.get("/intelligence/comprehensive_progress_report/", { params })
+      http.get("/intelligence/progress-report/", { params })
+    ),
+
+  getBrainMapSnapshot: (params?: { plan_id?: string }) =>
+    extract<BrainMapSnapshot>(
+      http.get("/intelligence/brain-map/", { params })
+    ),
+  getLearnerModel: () =>
+    extract<LearnerModelSnapshot>(
+      http.get("/intelligence/learner-model/")
+    ),
+  syncBrainMap: (payload: { plan_id: string }) =>
+    extract<{ status: string; plan_id: string }>(
+      http.post("/intelligence/brain-map/sync/", payload)
     ),
 
   analyzeConversation: (payload: {
@@ -347,6 +416,29 @@ export const intelligenceApi = {
   getProgressReport(params?: { period?: number }) {
     return this.getComprehensiveProgressReport(params);
   },
+};
+
+// GAMIFICATION ---------------------------------------------------------------
+export const gamificationApi = {
+  getSummary: () =>
+    extract<GamificationSummary>(http.get("/gamification/points/summary/")),
+  listBadges: () =>
+    extract<GamificationBadge[]>(http.get("/gamification/badges/")),
+  getEarnedBadges: () =>
+    extract<GamificationUserBadge[]>(http.get("/gamification/badges/earned/")),
+  getAvailableBadges: () =>
+    extract<GamificationBadge[]>(http.get("/gamification/badges/available/")),
+  getLeaderboard: () =>
+    extract<GamificationLeaderboard>(http.get("/gamification/points/leaderboard/")),
+  getHistory: (page = 1) =>
+    extract<{ entries: GamificationActivity[]; page: number; per_page: number; total: number; has_more: boolean }>(
+      http.get("/gamification/points/history/", { params: { page } })
+    ),
+};
+
+// DASHBOARDS --------------------------------------------------------------
+export const dashboardApi = {
+  getHome: () => extract<HomeDashboard>(http.get("/dashboards/home/")),
 };
 
 // NOTIFICATIONS --------------------------------------------------------------

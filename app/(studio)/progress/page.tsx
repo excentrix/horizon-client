@@ -9,6 +9,8 @@ import {
   useWellnessMonitoring,
   useComprehensiveProgressReport,
 } from "@/hooks/use-intelligence";
+import { usePortfolioArtifacts, usePortfolioSkillsTranscript } from "@/hooks/use-portfolio";
+import { useGamificationSummary } from "@/hooks/use-gamification";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
@@ -111,6 +113,18 @@ export default function ProgressPage() {
     error: progressReportError,
   } = useComprehensiveProgressReport({ format: "summary" });
 
+  const {
+    data: artifacts,
+    isLoading: artifactsLoading,
+    error: artifactsError,
+  } = usePortfolioArtifacts();
+  const {
+    data: skillsTranscript = [],
+    isLoading: skillsLoading,
+    error: skillsError,
+  } = usePortfolioSkillsTranscript();
+  const { data: gamificationSummary } = useGamificationSummary();
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace("/login");
@@ -131,10 +145,28 @@ export default function ProgressPage() {
     if (progressReportError) {
       telemetry.error("Progress report error", { progressReportError });
     }
-  }, [dashboardError, wellnessError, insightsError, progressReportError]);
+    if (artifactsError) {
+      telemetry.error("Portfolio fetch error", { artifactsError });
+    }
+    if (skillsError) {
+      telemetry.error("Skills transcript error", { skillsError });
+    }
+  }, [
+    dashboardError,
+    wellnessError,
+    insightsError,
+    progressReportError,
+    artifactsError,
+    skillsError,
+  ]);
 
   const isLoading =
-    dashboardLoading || wellnessLoading || insightsLoading || progressReportLoading;
+    dashboardLoading ||
+    wellnessLoading ||
+    insightsLoading ||
+    progressReportLoading ||
+    artifactsLoading ||
+    skillsLoading;
 
   const domainScores = useMemo(() => {
     if (!dashboard) {
@@ -160,9 +192,19 @@ export default function ProgressPage() {
 
   const insights = insightsFeed?.insights ?? [];
   const crisisAlerts = wellness?.crisis_alerts ?? [];
+  const trophyArtifacts = useMemo(() => {
+    if (!artifacts) return [];
+    return artifacts.filter((artifact) => {
+      if (artifact.featured) return true;
+      return (
+        artifact.verification_status === "verified" ||
+        artifact.verification_status === "human_verified"
+      );
+    });
+  }, [artifacts]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-col gap-4 p-4">
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Progress mural</h1>
         <p className="text-sm text-muted-foreground">
@@ -342,6 +384,155 @@ export default function ProgressPage() {
             </CardContent>
           </Card>
         ) : null}
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Trophy room</CardTitle>
+            <CardDescription>Verified artifacts you can showcase.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-xs text-muted-foreground">
+            {trophyArtifacts.length ? (
+              trophyArtifacts.slice(0, 6).map((artifact) => (
+                <div key={artifact.id} className="rounded-lg border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-foreground">
+                      {artifact.title}
+                    </span>
+                    <Badge
+                      variant={
+                        artifact.verification_status === "verified" ||
+                        artifact.verification_status === "human_verified"
+                          ? "default"
+                          : "secondary"
+                      }
+                    >
+                      {artifact.verification_status ?? artifact.status}
+                    </Badge>
+                  </div>
+                  {artifact.description ? (
+                    <p className="mt-1 text-muted-foreground">{artifact.description}</p>
+                  ) : null}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Badge variant="outline">{artifact.artifact_type.replace(/_/g, " ")}</Badge>
+                    {artifact.url ? (
+                      <a
+                        href={artifact.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-primary underline"
+                      >
+                        View artifact
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p>No promoted artifacts yet. Complete a project or get verified to showcase here.</p>
+            )}
+          </CardContent>
+        </Card>
+        <div className="space-y-4">
+          <Card className="overflow-hidden border-0 bg-gradient-to-br from-indigo-500 via-slate-900 to-emerald-500 text-white shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-white">Momentum level</CardTitle>
+              <CardDescription className="text-white/80">
+                Proof-backed points that grow with you.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-4xl font-semibold">
+                    {gamificationSummary?.profile?.total_points?.toLocaleString() ?? 0}
+                  </p>
+                  <p className="text-sm text-white/70">XP earned</p>
+                </div>
+                <div className="text-center">
+                  <div className="rounded-full border border-white/30 px-4 py-2 text-lg font-bold bg-white/10">
+                    Level {gamificationSummary?.profile?.level ?? 1}
+                  </div>
+                  {(gamificationSummary?.profile?.current_streak ?? 0) > 0 && (
+                    <div className="mt-2 flex items-center justify-center gap-1.5 text-orange-300">
+                      <span className="text-lg">🔥</span>
+                      <span className="font-medium">{gamificationSummary?.profile?.current_streak} day streak</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* XP Progress to next level */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs text-white/70">
+                  <span>Progress to Level {(gamificationSummary?.profile?.level ?? 1) + 1}</span>
+                  <span>
+                    {gamificationSummary?.profile?.level_progress ?? 0} / {gamificationSummary?.profile?.xp_for_next_level ?? 100} XP
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-white/20 overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-emerald-400 to-teal-300 rounded-full transition-all duration-500"
+                    style={{ 
+                      width: `${Math.min(100, gamificationSummary?.profile?.level_progress_percentage ?? 0)}%` 
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-wide text-white/70">Recent badges</p>
+                <div className="flex flex-wrap gap-2">
+                  {gamificationSummary?.recent_badges?.length ? (
+                    gamificationSummary.recent_badges.slice(0, 4).map((award) => {
+                      const badge = "badge" in award ? award.badge : award;
+                      return (
+                        <span
+                          key={`badge-${award.id}`}
+                          className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium hover:bg-white/25 transition-colors cursor-default"
+                          title={badge.description}
+                        >
+                          {badge.icon && <span className="mr-1">{badge.icon}</span>}
+                          {badge.name}
+                        </span>
+                      );
+                    })
+                  ) : (
+                    <span className="text-xs text-white/70">
+                      First badge unlocks on verified proof.
+                    </span>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Skills verified</CardTitle>
+              <CardDescription>Proof-based competencies from your artifacts.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-xs text-muted-foreground">
+              {skillsTranscript.length ? (
+                <div className="space-y-2">
+                  {skillsTranscript.slice(0, 6).map((skill) => (
+                    <div key={skill.competency} className="rounded-lg border bg-muted/30 p-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-foreground">{skill.competency}</span>
+                        <Badge variant="outline">{skill.best_level}</Badge>
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {skill.evidence_count} evidence · avg quality {skill.avg_quality}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p>Submit and verify artifacts to unlock your skills transcript.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </section>
     </div>
   );

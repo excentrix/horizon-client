@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BrainCircuit,
+  Briefcase,
   Compass,
+  FolderOpen,
   MessageCircle,
   Radar,
   Trophy,
@@ -39,6 +41,18 @@ const NAV_ITEMS = [
     label: "Plan Workbench",
     icon: BrainCircuit,
     description: "Active learning campaigns",
+  },
+  {
+    href: "/artifacts",
+    label: "Artifacts",
+    icon: Briefcase,
+    description: "Submitted, verified, and promoted work",
+  },
+  {
+    href: "/portfolio",
+    label: "Portfolio",
+    icon: FolderOpen,
+    description: "Your professional portfolio showcase",
   },
   {
     href: "/progress",

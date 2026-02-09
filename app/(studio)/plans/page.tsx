@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import posthog from "posthog-js";
 import { usePlans, usePlan, usePlanMutations } from "@/hooks/use-plans";
 import { PlanList } from "@/components/plans/plan-list";
 import { PlanDetail } from "@/components/plans/plan-detail";
@@ -24,6 +25,7 @@ import { Suspense } from "react";
 function PlansContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
   const { data: plans = [], isLoading: plansLoading } = usePlans();
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [isPlanDrawerOpen, setPlanDrawerOpen] = useState(false);
@@ -32,13 +34,24 @@ function PlansContent() {
     const queryPlan = searchParams.get("plan");
     if (queryPlan && plans.some((plan) => plan.id === queryPlan)) {
       setSelectedPlanId(queryPlan);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("lastPlanId", queryPlan);
+      }
       return;
     }
 
     if (!selectedPlanId && plans.length) {
-      setSelectedPlanId(plans[0].id);
+      const stored =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("lastPlanId")
+          : null;
+      if (stored && plans.some((plan) => plan.id === stored)) {
+        setSelectedPlanId(stored);
+      } else {
+        setSelectedPlanId(plans[0].id);
+      }
     }
-  }, [plans, searchParams, selectedPlanId]);
+  }, [plans, searchParamsString, selectedPlanId]);
 
   const { data: plan, isLoading: planLoading } = usePlan(
     selectedPlanId ?? undefined,
@@ -83,6 +96,9 @@ function PlansContent() {
     const params = new URLSearchParams(searchParams.toString());
     params.set("plan", planId);
     router.replace(`?${params.toString()}`, { scroll: false });
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("lastPlanId", planId);
+    }
     setPlanDrawerOpen(false);
   };
 
@@ -153,7 +169,16 @@ function PlansContent() {
                   <PlanDetail
                     plan={plan}
                     tasks={tasks}
-                    onStart={() => startPlan.mutate()}
+                    onStart={() => {
+                      startPlan.mutate();
+                      // Capture plan started event
+                      posthog.capture('plan_started', {
+                        plan_id: plan.id,
+                        plan_title: plan.title,
+                        total_tasks: tasks.length,
+                        estimated_hours: plan.total_estimated_hours,
+                      });
+                    }}
                     onPause={() => pausePlan.mutate()}
                     onResume={() => resumePlan.mutate()}
                     onComplete={() => completePlan.mutate()}

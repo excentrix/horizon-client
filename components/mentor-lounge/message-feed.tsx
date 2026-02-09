@@ -30,6 +30,8 @@ import { AgentInsightsCard } from "./agent-insights-card";
 import { PlanStatusBanner } from "./plan-status-banner";
 import { PlanBuildHeaderBadge } from "./plan-build-header-badge";
 import { useStickToBottomContext } from "use-stick-to-bottom";
+import { FlowSuggestionChip } from "@/components/chat/flow-suggestion-chip";
+import { useFlowSuggestion } from "@/hooks/use-flow-suggestion";
 
 interface MessageFeedProps {
   conversation?: Conversation;
@@ -238,6 +240,21 @@ function MessageFeedContent({
   streamingMessage?: string | null;
   theme?: PersonaTheme;
 }) {
+  // Fetch chat-context flow suggestion (only when not streaming)
+  const { data: flowData } = useFlowSuggestion('chat');
+  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
+  const [suggestionShownAt] = useState(() => new Date());
+  
+  // Determine if we should show the flow chip
+  // Show after the last AI message, not during streaming, and only once per session
+  const lastMessage = displayMessages[displayMessages.length - 1];
+  const showFlowChip = 
+    flowData?.suggestion &&
+    !suggestionDismissed &&
+    !streamingMessage &&
+    !mentorTyping &&
+    lastMessage?.sender_type === 'ai' &&
+    displayMessages.length > 1; // Don't show on first message
   const { scrollRef } = useStickToBottomContext();
   const planSessionId = useMentorLoungeStore((state) => state.planSessionId);
   const resolveMissingInfo = useMentorLoungeStore((state) => state.resolveMissingInfo);
@@ -381,6 +398,11 @@ function MessageFeedContent({
                           {missingInfoContext}
                         </p>
                       ) : null}
+                      {message.metadata?.missing_info_unblocks ? (
+                        <p className="mb-2 text-[11px] text-muted-foreground">
+                          {String(message.metadata.missing_info_unblocks)}
+                        </p>
+                      ) : null}
                       <div className="flex items-center gap-2">
                         <Input
                           value={quickReplies[missingInfoId] ?? ""}
@@ -454,6 +476,21 @@ function MessageFeedContent({
           </MessageContent>
         </Message>
       ) : null}
+
+      {/* Flow suggestion chip after last AI message */}
+      {showFlowChip && flowData?.suggestion && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.5 }}
+        >
+          <FlowSuggestionChip
+            suggestion={flowData.suggestion}
+            shownAt={suggestionShownAt}
+            onDismiss={() => setSuggestionDismissed(true)}
+          />
+        </motion.div>
+      )}
 
       {!displayMessages.length && !isLoading ? (
         <ConversationEmptyState

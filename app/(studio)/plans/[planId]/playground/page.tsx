@@ -1,20 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { usePlan, usePlanMutations } from "@/hooks/use-plans";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useConversationMessages, useConversations } from "@/hooks/use-conversations";
+import { usePortfolioArtifacts } from "@/hooks/use-portfolio";
+import { useBrainMap, useBrainMapSync, useLearnerModel } from "@/hooks/use-intelligence";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import type { DailyTask } from "@/types";
+import type { DailyTask, MentorEngagementNudge } from "@/types";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
-import { chatApi } from "@/lib/api";
+import { chatApi, planningApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
 
 const defaultSteps = [
@@ -23,12 +35,40 @@ const defaultSteps = [
   "Try the exercise and reflect.",
 ];
 
+const masteryBaseProgress: Record<string, number> = {
+  in_progress: 35,
+  competent: 70,
+  mastery: 100,
+};
+
+const getMasteryProgress = (level?: string, confidence?: number | null) => {
+  if (!level) return 0;
+  const base = masteryBaseProgress[level] ?? 30;
+  const conf = confidence ? Math.min(Math.max(confidence, 0.2), 1) : 0.7;
+  return Math.round(base * conf);
+};
+
 export default function PlanPlaygroundPage() {
   const params = useParams<{ planId: string }>();
   const searchParams = useSearchParams();
   const planId = params.planId;
   const { data: plan } = usePlan(planId);
   const { updateTaskStatus } = usePlanMutations(planId);
+  const { data: artifacts } = usePortfolioArtifacts();
+  const { data: brainMap } = useBrainMap({ plan_id: plan?.id });
+  const brainMapSync = useBrainMapSync();
+  const { data: learnerModel } = useLearnerModel();
+  const queryClient = useQueryClient();
+  const safeArtifacts = Array.isArray(artifacts) ? artifacts : [];
+  const focusConcepts = brainMap?.focus_concepts ?? [];
+  const masteryMap = brainMap?.mastery_map ?? {};
+  const unlockedConcepts = useMemo(() => {
+    if (!brainMap) return 0;
+    return focusConcepts.filter((concept) => {
+      const missing = brainMap.missing_prerequisites?.[concept.name] ?? [];
+      return missing.length === 0 && Boolean(masteryMap?.[concept.name]?.level);
+    }).length;
+  }, [brainMap, focusConcepts, masteryMap]);
   const [focusMode, setFocusMode] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
@@ -42,10 +82,25 @@ export default function PlanPlaygroundPage() {
   const [mentorResponse, setMentorResponse] = useState<string | null>(null);
   const [mentorPrompt, setMentorPrompt] = useState<string>("");
   const [showRubric, setShowRubric] = useState(false);
+  const [showSubmission, setShowSubmission] = useState(false);
+  const [submissionProof, setSubmissionProof] = useState("");
+  const [submissionLoading, setSubmissionLoading] = useState(false);
+  const [proofType, setProofType] = useState<"link" | "text" | "file">("link");
+  const [proofLink, setProofLink] = useState("");
+  const [proofText, setProofText] = useState("");
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [lastArtifactId, setLastArtifactId] = useState<string | null>(null);
+  const [proofView, setProofView] = useState<"proof" | "artifacts">("proof");
+  const [artifactFilter, setArtifactFilter] = useState<
+    "all" | "task" | "verified" | "draft"
+  >("all");
+  const [verificationPending, setVerificationPending] = useState(false);
   const [mentorInput, setMentorInput] = useState("");
   const [practiceMode, setPracticeMode] = useState<"code" | "scratch">("code");
   const [practiceNotes, setPracticeNotes] = useState("");
   const [learningMode, setLearningMode] = useState<"video" | "practice" | "quiz">("practice");
+  const [learningModeOverride, setLearningModeOverride] = useState(false);
+  const [activeTab, setActiveTab] = useState<"learn" | "challenge">("learn");
   const [showTryIt, setShowTryIt] = useState(true);
   const [showPracticeLab, setShowPracticeLab] = useState(true);
   const [showResourceDock, setShowResourceDock] = useState(true);
@@ -53,6 +108,9 @@ export default function PlanPlaygroundPage() {
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
   const [showQuizFeedback, setShowQuizFeedback] = useState(false);
   const [generatedActivities, setGeneratedActivities] = useState<GeneratedActivities | null>(null);
+  const [engagementNudge, setEngagementNudge] = useState<MentorEngagementNudge | null>(null);
+  const [nudgeLoading, setNudgeLoading] = useState(false);
+  const [nudgeRefresh, setNudgeRefresh] = useState(0);
   const { data: conversations = [] } = useConversations();
   const fallbackConversationId = useMemo(() => {
     if (!conversations.length) return undefined;
@@ -89,6 +147,7 @@ export default function PlanPlaygroundPage() {
   }, [conversations, mentorConversationId]);
   const lastContextSentRef = useRef<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const proofRef = useRef<HTMLDivElement | null>(null);
   const lastTaskFocusRef = useRef<string | null>(null);
   const lastEventSentRef = useRef<Record<string, number>>({});
   const mentorSuggestions = [
@@ -135,6 +194,17 @@ export default function PlanPlaygroundPage() {
         event_type: detail.eventType,
         payload: detail,
       });
+      if (
+        [
+          "task_focus",
+          "step_toggle",
+          "session_start",
+          "task_complete",
+          "resource_update",
+        ].includes(detail.eventType)
+      ) {
+        setNudgeRefresh((prev) => prev + 1);
+      }
     };
     window.addEventListener("playground:event", handler);
     return () => window.removeEventListener("playground:event", handler);
@@ -159,6 +229,69 @@ export default function PlanPlaygroundPage() {
   }, [selectedTaskId, tasks]);
 
   useEffect(() => {
+    if (!mentorConversationKey) {
+      setEngagementNudge(null);
+      return;
+    }
+    let active = true;
+    setNudgeLoading(true);
+    chatApi
+      .getEngagementNudge(mentorConversationKey)
+      .then((response) => {
+        if (active) {
+          setEngagementNudge(response.nudge ?? null);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setNudgeLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [mentorConversationKey, activeTask?.id, nudgeRefresh]);
+
+  const suggestedLearningMode = useMemo(() => {
+    const learnerPrefs =
+      (learnerModel?.learner_profile?.core?.preferences ?? {}) as Record<string, unknown>;
+    const prefs =
+      Object.keys(learnerPrefs).length > 0
+        ? learnerPrefs
+        : ((plan?.user_preferences_snapshot ?? {}) as Record<string, unknown>);
+    const learningStyle = String(prefs.primary_learning_style ?? "").toLowerCase();
+    const preferencesDetail = (prefs.preferences_detail ?? {}) as Record<string, unknown>;
+    const practiceStyle = String(preferencesDetail.practice_style ?? "").toLowerCase();
+    const explanationPref = String(preferencesDetail.explanation_preference ?? "").toLowerCase();
+
+    const resources = activeTask?.online_resources ?? [];
+    const resourceText = resources
+      .map((resource) =>
+        typeof resource === "string"
+          ? resource
+          : (resource.url as string) ||
+            (resource.link as string) ||
+            (resource.title as string) ||
+            ""
+      )
+      .join(" ")
+      .toLowerCase();
+
+    if (resourceText.includes("youtube") || resourceText.includes("video") || learningStyle === "visual") {
+      return "video";
+    }
+    if (practiceStyle === "project_based" || practiceStyle === "varied") {
+      return "practice";
+    }
+    if (explanationPref === "example_based") {
+      return "practice";
+    }
+    if (learningStyle === "auditory") {
+      return "video";
+    }
+    return "practice";
+  }, [activeTask?.online_resources, plan?.user_preferences_snapshot, learnerModel]);
+
+  useEffect(() => {
     if (!activeTask?.id) return;
     if (lastTaskFocusRef.current === activeTask.id) return;
     lastTaskFocusRef.current = activeTask.id;
@@ -166,12 +299,15 @@ export default function PlanPlaygroundPage() {
     setPracticeMode(suggestedPracticeMode);
     setPracticeNotes("");
     setGeneratedActivities(null);
+    if (!learningModeOverride) {
+      setLearningMode(suggestedLearningMode);
+    }
     emitPlaygroundEvent("task_focus", {
       planId,
       taskId: activeTask.id,
       taskTitle: activeTask.title,
     });
-  }, [activeTask?.id, activeTask?.title, planId]);
+  }, [activeTask?.id, activeTask?.title, planId, learningModeOverride, suggestedLearningMode]);
 
   const milestoneCelebration = useMemo(() => {
     if (!activeTask?.milestone_id) return null;
@@ -288,6 +424,66 @@ export default function PlanPlaygroundPage() {
     });
   };
 
+  const handleSaveProof = async () => {
+    if (!activeTask) {
+      telemetry.toastError("Select a task before submitting proof.");
+      return;
+    }
+    let content = "";
+    const metadata: Record<string, unknown> = {
+      source: "playground",
+      task_id: activeTask.id,
+    };
+    if (proofType === "link") {
+      content = proofLink.trim();
+    } else if (proofType === "text") {
+      content = proofText.trim();
+      if (content) {
+        metadata.word_count = content.split(/\s+/).length;
+      }
+    } else if (proofType === "file") {
+      content = proofFile?.name ?? "";
+      if (proofFile) {
+        metadata.file_name = proofFile.name;
+        metadata.file_size = proofFile.size;
+      }
+    }
+    if (!content) {
+      telemetry.toastError("Add a proof link, summary, or file name first.");
+      return;
+    }
+    try {
+      const response = await planningApi.submitTaskProof(activeTask.id, {
+        submission_type: proofType,
+        content,
+        metadata,
+      });
+      if (response.artifact_id) {
+        setLastArtifactId(response.artifact_id);
+        setVerificationPending(true);
+      }
+      queryClient.invalidateQueries({ queryKey: ["portfolio-artifacts"] });
+      const summary =
+        proofType === "text" ? `Proof summary:\n${content}` : `Proof ${proofType}: ${content}`;
+      setNotes((prev) => (prev ? `${prev}\n\n${summary}` : summary));
+      telemetry.toastSuccess("Proof saved to your task.");
+      setProofLink("");
+      setProofText("");
+      setProofFile(null);
+    } catch {
+      telemetry.toastError("Unable to save proof right now.");
+    }
+  };
+
+  useEffect(() => {
+    if (!verificationPending || !lastArtifactId) return;
+    const interval = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ["portfolio-artifacts"] });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [verificationPending, lastArtifactId, queryClient]);
+
+
   const buildMentorContext = () => {
     const stepProgress = stepState.length
       ? `${stepState.filter(Boolean).length}/${stepState.length} steps complete`
@@ -300,8 +496,8 @@ export default function PlanPlaygroundPage() {
           "Primary resource"
       : "No resource yet";
     const noteSnippet = notes.trim()
-      ? `Notes: ${notes.trim().slice(0, 140)}`
-      : "Notes: none";
+    ? `Field notes: ${notes.trim().slice(0, 140)}`
+    : "Field notes: none";
     const reflectionSnippet = reflection.trim()
       ? `Reflection: ${reflection.trim().slice(0, 140)}`
       : "Reflection: none";
@@ -323,6 +519,143 @@ export default function PlanPlaygroundPage() {
       ? `${stepState.filter(Boolean).length}/${stepState.length} steps complete`
       : "No steps yet";
     return `Current task: ${activeTask?.title ?? "Unknown"} · ${stepSummary}`;
+  };
+
+  const challengeRequirement =
+    activeTask?.verification?.criteria ||
+    activeTask?.verification?.method ||
+    (activeTask?.kpis?.length
+      ? activeTask.kpis
+          .map((kpi) => kpi.target || kpi.metric)
+          .filter(Boolean)
+          .slice(0, 2)
+          .join(" · ")
+      : null) ||
+    "Show one concrete takeaway from this task.";
+
+  const challengeReward =
+    activeTask?.milestone_title
+      ? `Progress toward ${activeTask.milestone_title}`
+      : "Progress the journey + unlock the next step.";
+
+  const allowedProofTypes = useMemo(() => {
+    const method = activeTask?.verification?.method?.toLowerCase() ?? "";
+    if (method.includes("link") || method.includes("repo") || method.includes("url")) {
+      return ["link"] as const;
+    }
+    if (method.includes("summary") || method.includes("reflection") || method.includes("write")) {
+      return ["text"] as const;
+    }
+    if (method.includes("file") || method.includes("upload") || method.includes("artifact")) {
+      return ["file"] as const;
+    }
+    return ["link", "text", "file"] as const;
+  }, [activeTask?.verification?.method]);
+
+  const proofInstruction =
+    activeTask?.verification?.criteria ||
+    activeTask?.verification?.method ||
+    "Submit a short proof that shows you completed the task.";
+
+  useEffect(() => {
+    if (!allowedProofTypes.includes(proofType)) {
+      setProofType(allowedProofTypes[0]);
+    }
+  }, [allowedProofTypes, proofType]);
+
+  const planTaskIds = useMemo(() => {
+    return new Set((plan?.daily_tasks ?? []).map((task) => task.id));
+  }, [plan?.daily_tasks]);
+
+  const taskMilestoneMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (plan?.daily_tasks ?? []).forEach((task) => {
+      if (task.milestone_title) {
+        map.set(task.id, task.milestone_title);
+      }
+    });
+    return map;
+  }, [plan?.daily_tasks]);
+
+  const planArtifacts = useMemo(() => {
+    const planIdValue = plan?.id;
+    return safeArtifacts.filter((artifact) => {
+      if (artifact.source_task && planTaskIds.has(artifact.source_task)) {
+        return true;
+      }
+      const metadataPlanId =
+        (artifact.metadata as { plan_id?: string } | undefined)?.plan_id;
+      return Boolean(planIdValue && metadataPlanId === planIdValue);
+    });
+  }, [safeArtifacts, plan?.id, planTaskIds]);
+
+  const taskArtifacts = useMemo(() => {
+    if (!activeTask) return [];
+    return safeArtifacts.filter(
+      (artifact) =>
+        artifact.source_task === activeTask.id ||
+        artifact.proof_submission === lastArtifactId,
+    );
+  }, [activeTask, lastArtifactId, safeArtifacts]);
+
+  const lastArtifactStatus = useMemo(() => {
+    if (!lastArtifactId) return null;
+    return safeArtifacts.find((artifact) => artifact.id === lastArtifactId) ?? null;
+  }, [lastArtifactId, safeArtifacts]);
+
+  useEffect(() => {
+    if (!verificationPending || !lastArtifactStatus) return;
+    const status = lastArtifactStatus.verification_status;
+    if (status && status !== "pending") {
+      setVerificationPending(false);
+    }
+  }, [verificationPending, lastArtifactStatus]);
+
+  const filteredPlanArtifacts = useMemo(() => {
+    return planArtifacts.filter((artifact) => {
+      const verification = artifact.verification_status;
+      if (artifactFilter === "verified") {
+        return verification === "verified" || verification === "human_verified";
+      }
+      if (artifactFilter === "draft") {
+        return artifact.status === "draft" || verification === "pending";
+      }
+      if (artifactFilter === "task") {
+        return Boolean(activeTask && artifact.source_task === activeTask.id);
+      }
+      return true;
+    });
+  }, [planArtifacts, artifactFilter, activeTask]);
+
+  const artifactGroups = useMemo(() => {
+    const groups = new Map<string, typeof filteredPlanArtifacts>();
+    filteredPlanArtifacts.forEach((artifact) => {
+      const milestoneTitle =
+        (artifact.source_task && taskMilestoneMap.get(artifact.source_task)) ||
+        "Ungrouped";
+      if (!groups.has(milestoneTitle)) {
+        groups.set(milestoneTitle, []);
+      }
+      groups.get(milestoneTitle)?.push(artifact);
+    });
+    return Array.from(groups.entries());
+  }, [filteredPlanArtifacts, taskMilestoneMap]);
+
+  const getArtifactStatusLabel = (artifact: (typeof safeArtifacts)[number]) => {
+    const verification = artifact.verification_status;
+    if (verification === "human_verified") return "verified";
+    if (verification === "verified") return "verified";
+    if (verification === "needs_revision") return "needs revision";
+    if (verification === "rejected") return "rejected";
+    if (verification === "pending") return "pending";
+    return artifact.status ?? "draft";
+  };
+
+  const getArtifactBadgeVariant = (artifact: (typeof safeArtifacts)[number]) => {
+    const label = getArtifactStatusLabel(artifact);
+    if (label === "verified") return "default";
+    if (label === "needs revision" || label === "rejected") return "destructive";
+    return "secondary";
   };
 
   const handleMentorAction = (action: "explain" | "example" | "quiz") => {
@@ -512,6 +845,24 @@ export default function PlanPlaygroundPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="mr-2 flex items-center gap-1 rounded-full border bg-background px-1 py-1 text-xs">
+            <Button
+              size="sm"
+              variant={activeTab === "learn" ? "default" : "ghost"}
+              onClick={() => setActiveTab("learn")}
+              className="active:bg-black active:text-white rounded-l-2xl rounded-r-md"
+              >
+              Learn
+            </Button>
+            <Button
+              size="sm"
+              variant={activeTab === "challenge" ? "default" : "ghost"}
+              onClick={() => setActiveTab("challenge")}
+              className="active:bg-black active:text-white rounded-r-2xl rounded-l-md"
+            >
+              Challenge
+            </Button>
+          </div>
           <Button variant="outline" asChild>
             <Link href={`/plans?plan=${planId}`}>Back to plan</Link>
           </Button>
@@ -531,7 +882,9 @@ export default function PlanPlaygroundPage() {
         <div
           className={cn(
             "grid gap-4",
-            focusMode ? "grid-cols-1" : "lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]"
+            focusMode || activeTab === "challenge"
+              ? "grid-cols-1"
+              : "lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]"
           )}
         >
           {milestoneCelebration ? (
@@ -557,6 +910,7 @@ export default function PlanPlaygroundPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                {activeTab === "learn" ? (
                 <div className="rounded-lg border bg-muted/20 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Now Learning
@@ -631,7 +985,9 @@ export default function PlanPlaygroundPage() {
                     ) : null}
                   </div>
                 </div>
+                ) : null}
 
+                {activeTab === "learn" ? (
                 <div className="rounded-lg border bg-background p-4">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <div>
@@ -643,31 +999,40 @@ export default function PlanPlaygroundPage() {
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        variant={learningMode === "video" ? "default" : "outline"}
-                        onClick={() => setLearningMode("video")}
-                      >
-                        Video-first
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={learningMode === "practice" ? "default" : "outline"}
-                        onClick={() => setLearningMode("practice")}
-                      >
-                        Practice-first
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={learningMode === "quiz" ? "default" : "outline"}
-                        onClick={() => setLearningMode("quiz")}
-                      >
-                        Quiz-first
-                      </Button>
+                        <Button
+                          size="sm"
+                          variant={learningMode === "video" ? "default" : "outline"}
+                          onClick={() => {
+                            setLearningMode("video");
+                            setLearningModeOverride(true);
+                          }}
+                        >
+                          Video-first
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={learningMode === "practice" ? "default" : "outline"}
+                          onClick={() => {
+                            setLearningMode("practice");
+                            setLearningModeOverride(true);
+                          }}
+                        >
+                          Practice-first
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={learningMode === "quiz" ? "default" : "outline"}
+                          onClick={() => {
+                            setLearningMode("quiz");
+                            setLearningModeOverride(true);
+                          }}
+                        >
+                          Quiz-first
+                        </Button>
                     </div>
                   </div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Micro-steps
+                    Learning steps
                   </p>
                   <div className="mt-2 space-y-2 text-sm">
                     {activeSteps.map((step, idx) => (
@@ -686,12 +1051,13 @@ export default function PlanPlaygroundPage() {
                     Complete step {stepState.findLastIndex((value) => value) + 1} to unlock the next.
                   </p>
                 </div>
+                ) : null}
 
-                {showTryIt ? (
+                {activeTab === "learn" && showTryIt ? (
                   <div className="grid gap-4 lg:grid-cols-2">
                   <div className="rounded-lg border bg-background p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Try it
+                      Challenge check
                     </p>
                     <p className="mt-2 text-[11px] text-muted-foreground">
                       Prompt: Summarize the main idea in 2 sentences, then add one real-world implication.
@@ -723,24 +1089,36 @@ export default function PlanPlaygroundPage() {
                   </div>
                 ) : null}
 
-                {learningMode === "quiz" ? (
+                {activeTab === "learn" && learningMode === "quiz" ? (
                   <div className="rounded-lg border bg-background p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Quick quiz
+                          Checkpoint quiz
                         </p>
                         <p className="text-[11px] text-muted-foreground">
                           Check your understanding before moving on.
                         </p>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => setShowQuizFeedback(true)}
-                      >
-                        Check answers
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setShowQuizFeedback(true)}
+                        >
+                          Check answers
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setQuizAnswers({});
+                            setShowQuizFeedback(false);
+                          }}
+                        >
+                          {showQuizFeedback ? "Try again" : "Reset"}
+                        </Button>
+                      </div>
                     </div>
                     <div className="mt-3 space-y-4 text-sm">
                       {getQuizQuestions(activeTask).map((question) => (
@@ -797,21 +1175,23 @@ export default function PlanPlaygroundPage() {
                   </div>
                 ) : null}
                   </div>
+                  {activeTab === "learn" ? (
                   <div className="rounded-lg border bg-background p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Notes
+                      Field notes
                     </p>
                     <Textarea
                       value={notes}
                       onChange={(event) => setNotes(event.target.value)}
-                      placeholder="Capture your notes here..."
+                      placeholder="Capture your field notes here..."
                       className="mt-2 min-h-[120px]"
                     />
                   </div>
+                  ) : null}
                 </div>
                 ) : null}
 
-                {showPracticeLab ? (
+                {activeTab === "learn" && showPracticeLab ? (
                   <div className="rounded-lg border bg-background p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
@@ -915,8 +1295,8 @@ export default function PlanPlaygroundPage() {
                       onClick={() =>
                         setNotes((prev) =>
                           prev
-                            ? `${prev}\n\nLab notes:\n${practiceNotes}`
-                            : `Lab notes:\n${practiceNotes}`,
+                            ? `${prev}\n\nField notes:\n${practiceNotes}`
+                            : `Field notes:\n${practiceNotes}`,
                         )
                       }
                     >
@@ -933,17 +1313,284 @@ export default function PlanPlaygroundPage() {
                 </div>
                 ) : null}
 
+                {activeTab === "challenge" ? (
+                  <div className="rounded-lg border bg-background p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Challenge assignment
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {proofInstruction}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                        Required to advance
+                      </Badge>
+                    </div>
+                    <div className="mt-3 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Proof required
+                      </p>
+                      <p className="mt-1 text-sm text-foreground">{challengeRequirement}</p>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button size="sm" variant="secondary" onClick={handleStartStep}>
+                        Start challenge
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setProofView("proof")}>
+                        Submit proof
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {activeTab === "challenge" ? (
+                <div ref={proofRef} className="rounded-lg border bg-background p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Proof of work
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Submit the proof in the format required for this task.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant={proofView === "proof" ? "default" : "outline"}
+                        onClick={() => setProofView("proof")}
+                      >
+                        Submit proof
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={proofView === "artifacts" ? "default" : "outline"}
+                        onClick={() => setProofView("artifacts")}
+                      >
+                        My artifacts
+                      </Button>
+                      <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                        {allowedProofTypes.length === 1 ? "Format locked" : "Choose format"}
+                      </Badge>
+                    </div>
+                  </div>
+                  {proofView === "proof" ? (
+                    <>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {allowedProofTypes.includes("link") ? (
+                          <Button
+                            size="sm"
+                            variant={proofType === "link" ? "default" : "outline"}
+                            onClick={() => setProofType("link")}
+                          >
+                            Link
+                          </Button>
+                        ) : null}
+                        {allowedProofTypes.includes("text") ? (
+                          <Button
+                            size="sm"
+                            variant={proofType === "text" ? "default" : "outline"}
+                            onClick={() => setProofType("text")}
+                          >
+                            Summary
+                          </Button>
+                        ) : null}
+                        {allowedProofTypes.includes("file") ? (
+                          <Button
+                            size="sm"
+                            variant={proofType === "file" ? "default" : "outline"}
+                            onClick={() => setProofType("file")}
+                          >
+                            File
+                          </Button>
+                        ) : null}
+                      </div>
+                      <div className="mt-3">
+                        {proofType === "link" ? (
+                          <Input
+                            type="url"
+                            value={proofLink}
+                            onChange={(event) => setProofLink(event.target.value)}
+                            placeholder="Paste a link to your proof (doc, repo, submission)"
+                          />
+                        ) : null}
+                        {proofType === "text" ? (
+                          <Textarea
+                            value={proofText}
+                            onChange={(event) => setProofText(event.target.value)}
+                            placeholder="Write a short summary of what you produced."
+                            className="min-h-[120px]"
+                          />
+                        ) : null}
+                        {proofType === "file" ? (
+                          <div className="space-y-2">
+                            <Input
+                              type="file"
+                              onChange={(event) =>
+                                setProofFile(event.target.files?.[0] ?? null)
+                              }
+                            />
+                            {proofFile ? (
+                              <p className="text-xs text-muted-foreground">
+                                Selected: {proofFile.name}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button size="sm" variant="secondary" onClick={handleSaveProof}>
+                          Submit proof
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setProofLink("");
+                            setProofText("");
+                            setProofFile(null);
+                          }}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                      {lastArtifactId ? (
+                        <div className="mt-3 flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                          <span>
+                            {verificationPending
+                              ? "Artifact submitted — verification in progress."
+                              : "Artifact added to your Trophy Room."}
+                          </span>
+                          <Link href="/progress" className="text-primary underline">
+                            View in Trophy Room
+                          </Link>
+                        </div>
+                      ) : null}
+                      {taskArtifacts.length ? (
+                        <div className="mt-3 rounded-lg border bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Artifact status
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {taskArtifacts.slice(0, 2).map((artifact) => (
+                              <Badge
+                                key={artifact.id}
+                                variant={getArtifactBadgeVariant(artifact)}
+                              >
+                                {artifact.title} · {getArtifactStatusLabel(artifact)}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        Proof is queued for AI verification and portfolio entry.
+                      </p>
+                    </>
+                  ) : (
+                    <div className="mt-3 space-y-3 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={artifactFilter === "all" ? "default" : "outline"}
+                          onClick={() => setArtifactFilter("all")}
+                        >
+                          All
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={artifactFilter === "task" ? "default" : "outline"}
+                          onClick={() => setArtifactFilter("task")}
+                        >
+                          This task
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={artifactFilter === "verified" ? "default" : "outline"}
+                          onClick={() => setArtifactFilter("verified")}
+                        >
+                          Verified
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={artifactFilter === "draft" ? "default" : "outline"}
+                          onClick={() => setArtifactFilter("draft")}
+                        >
+                          Drafts
+                        </Button>
+                      </div>
+                      {artifactGroups.length ? (
+                        artifactGroups.map(([groupTitle, items]) => (
+                          <div key={groupTitle} className="space-y-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              {groupTitle}
+                            </p>
+                            {items.map((artifact) => (
+                              <div
+                                key={artifact.id}
+                                className="rounded-lg border bg-muted/20 px-3 py-2"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-semibold text-foreground">
+                                    {artifact.title}
+                                  </span>
+                                  <Badge
+                                    variant={getArtifactBadgeVariant(artifact)}
+                                  >
+                                    {getArtifactStatusLabel(artifact)}
+                                  </Badge>
+                                </div>
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {artifact.artifact_type.replace(/_/g, " ")}
+                                </p>
+                                {artifact.url ? (
+                                  <a
+                                    href={artifact.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="mt-1 inline-block text-primary underline"
+                                  >
+                                    View artifact
+                                  </a>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        ))
+                      ) : (
+                        <p>No artifacts for this plan yet.</p>
+                      )}
+                      <Link href="/progress" className="text-primary underline">
+                        Open Trophy Room
+                      </Link>
+                    </div>
+                  )}
+                </div>
+                ) : null}
+
+                {activeTab === "challenge" ? (
                 <div className="rounded-lg border bg-muted/20 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Session ritual
+                    Checkpoint
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button onClick={handleStartSession} disabled={sessionStarted}>
                       {sessionStarted ? "Session running" : "Start session"}
                     </Button>
-                    <Button variant="outline" onClick={handleCompleteTask}>
-                      Complete task
-                    </Button>
+                    {activeTask?.assessment_config ? (
+                      <Button 
+                        onClick={() => setShowSubmission(true)}
+                        className="bg-violet-600 hover:bg-violet-700 text-white border-0"
+                      >
+                        Submit Proof (+{activeTask.assessment_config.xp_reward || 50} XP)
+                      </Button>
+                    ) : (
+                      <Button variant="outline" onClick={handleCompleteTask}>
+                        Complete task
+                      </Button>
+                    )}
                   </div>
                   <div className="mt-3 grid gap-3 text-xs text-muted-foreground md:grid-cols-3">
                     <RatingRow
@@ -968,13 +1615,14 @@ export default function PlanPlaygroundPage() {
                     </div>
                   ) : null}
                 </div>
+                ) : null}
               </CardContent>
             </Card>
 
-            {!focusMode && showResourceDock ? (
+            {!focusMode && activeTab === "learn" && showResourceDock ? (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Resource Dock</CardTitle>
+                  <CardTitle className="text-base">Verified resources</CardTitle>
                   <CardDescription>Open learning material without leaving the playground.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -1042,7 +1690,7 @@ export default function PlanPlaygroundPage() {
                             ) : null}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            Source: seen in the Resource Dock (Open full for the complete material).
+                            Source: seen in Verified resources (Open full for the complete material).
                           </div>
                           <div className="rounded-lg border bg-background px-3 py-2 text-xs text-muted-foreground">
                             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1163,7 +1811,7 @@ export default function PlanPlaygroundPage() {
                           variant="secondary"
                           onClick={() => markResource("resource-0", "completed")}
                         >
-                          Mark viewed
+                          Mark explored
                         </Button>
                       </div>
                     </div>
@@ -1225,7 +1873,7 @@ export default function PlanPlaygroundPage() {
                               variant={engagement?.completed_at ? "secondary" : "outline"}
                               onClick={() => markResource(resourceKey, "completed")}
                             >
-                              {engagement?.completed_at ? "Viewed" : "Mark viewed"}
+                              {engagement?.completed_at ? "Explored" : "Mark explored"}
                             </Button>
                             {engagement?.opened_at ? (
                               <span>Opened</span>
@@ -1244,7 +1892,7 @@ export default function PlanPlaygroundPage() {
             ) : null}
           </main>
 
-          {!focusMode ? (
+          {!focusMode && activeTab === "learn" ? (
             <aside className="space-y-4">
               <Card>
                 <CardHeader>
@@ -1302,6 +1950,23 @@ export default function PlanPlaygroundPage() {
                       {stepState.filter(Boolean).length} of {stepState.length} steps complete
                       {sessionStarted ? " · Mentor is focusing on your task" : ""}
                     </p>
+                  </div>
+                  <div className="rounded-lg border bg-background px-3 py-2 text-xs text-muted-foreground">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Coach nudge
+                    </p>
+                    {nudgeLoading ? (
+                      <p className="mt-1">Updating nudge…</p>
+                    ) : engagementNudge ? (
+                      <>
+                        <p className="mt-1 text-sm font-semibold text-foreground">
+                          {engagementNudge.title}
+                        </p>
+                        <p className="mt-1">{engagementNudge.message}</p>
+                      </>
+                    ) : (
+                      <p className="mt-1">Keep going — your progress looks steady.</p>
+                    )}
                   </div>
                   {mentorPrompt ? (
                     <p className="text-[11px] text-muted-foreground">
@@ -1362,10 +2027,190 @@ export default function PlanPlaygroundPage() {
                   </p>
                 </CardContent>
               </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Brain Map</CardTitle>
+                  <CardDescription>
+                    Focus concepts and prerequisites for your current plan.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 text-xs text-muted-foreground">
+                  {brainMap ? (
+                    <>
+                      <div className="rounded-lg border bg-muted/30 px-3 py-2">
+                        <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          <span>Focus concepts</span>
+                          <span>
+                            {unlockedConcepts}/{focusConcepts.length} unlocked
+                          </span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {focusConcepts.slice(0, 5).map((concept) => (
+                            <span
+                              key={concept.name}
+                              className="rounded-full border bg-background px-2 py-1 text-[11px]"
+                            >
+                              {concept.name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        {focusConcepts.slice(0, 3).map((concept) => {
+                          const missing =
+                            brainMap.missing_prerequisites?.[concept.name] ?? [];
+                          const mastery = masteryMap?.[concept.name];
+                          const progress = getMasteryProgress(
+                            mastery?.level,
+                            mastery?.confidence,
+                          );
+                          return (
+                            <div
+                              key={concept.name}
+                              className="rounded-lg border bg-background px-3 py-3"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-[11px] font-semibold text-foreground">
+                                    {concept.name}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    {mastery?.level
+                                      ? `Mastery: ${mastery.level}`
+                                      : "Mastery: unassessed"}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="relative h-10 w-10 rounded-full"
+                                    style={{
+                                      background: `conic-gradient(hsl(var(--primary)) ${progress}%, hsl(var(--muted)) ${progress}% 100%)`,
+                                    }}
+                                  >
+                                    <div className="absolute inset-1 rounded-full bg-background" />
+                                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-foreground">
+                                      {progress}%
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              {missing.length ? (
+                                <div className="mt-2">
+                                  <p className="text-[10px] uppercase text-muted-foreground">
+                                    Missing prereqs
+                                  </p>
+                                  <ul className="mt-1 list-disc space-y-1 pl-4">
+                                    {missing.slice(0, 3).map((item) => (
+                                      <li key={item}>{item}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : (
+                                <p className="mt-2 text-[11px] text-emerald-600">
+                                  Prereqs covered
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      <p>
+                        Brain map data appears once your plan concepts sync to the
+                        graph.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={!plan?.id || brainMapSync.isPending}
+                        onClick={() => {
+                          if (!plan?.id) return;
+                          brainMapSync.mutate(
+                            { plan_id: plan.id },
+                            {
+                              onSuccess: () => {
+                                telemetry.info("Brain map sync requested", {
+                                  planId: plan.id,
+                                });
+                                void queryClient.invalidateQueries({
+                                  queryKey: ["intelligence", "brain-map"],
+                                });
+                              },
+                            }
+                          );
+                        }}
+                      >
+                        {brainMapSync.isPending ? "Syncing..." : "Sync brain map"}
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </aside>
           ) : null}
         </div>
       )}
+      
+      <Dialog open={showSubmission} onOpenChange={setShowSubmission}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Claim Your Rewards</DialogTitle>
+            <DialogDescription>
+              Verify your work to earn {activeTask?.assessment_config?.xp_reward || 50} XP and unlock the next step.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+             {activeTask?.assessment_config?.verification_type === "github_repo" ? (
+                <div className="grid gap-2">
+                   <Label>Github Repository URL</Label>
+                   <Input 
+                     placeholder="https://github.com/username/project" 
+                     value={submissionProof}
+                     onChange={(e) => setSubmissionProof(e.target.value)}
+                   />
+                </div>
+             ) : (
+                <div className="grid gap-2">
+                   <Label>Proof of Work</Label>
+                   <Textarea 
+                     placeholder="Describe what you did or paste a link..."
+                     value={submissionProof}
+                     onChange={(e) => setSubmissionProof(e.target.value)}
+                   />
+                </div>
+             )}
+          </div>
+          
+          <DialogFooter>
+             <Button variant="outline" onClick={() => setShowSubmission(false)}>Cancel</Button>
+             <Button 
+               onClick={async () => {
+                  setSubmissionLoading(true);
+                  try {
+                      // Fallback to simple completion for now until API is ready
+                      await updateTaskStatus.mutateAsync({ 
+                          taskId: activeTask?.id ?? "", 
+                          status: "completed",
+                          completion_notes: submissionProof 
+                      });
+                      setShowSubmission(false);
+                      telemetry.info("Quest completed", { xp: activeTask?.assessment_config?.xp_reward });
+                  } catch(e) {
+                      console.error(e);
+                  } finally {
+                      setSubmissionLoading(false);
+                  }
+               }} 
+               disabled={!submissionProof || submissionLoading}
+             >
+               {submissionLoading ? "Verifying..." : "Submit & Claim"}
+             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1463,10 +2308,11 @@ function getQuizQuestions(task: DailyTask) {
       rationale: question.rationale,
     }));
   }
+  const taskLabel = task.title ? `"${task.title}"` : "this task";
   return [
     {
       id: "q-1",
-      question: "Which statement best summarizes the core idea?",
+      question: `Which statement best summarizes the core idea of ${taskLabel}?`,
       options: [
         "It focuses on identifying key terms only.",
         "It explains the main concept and its application.",
@@ -1478,7 +2324,7 @@ function getQuizQuestions(task: DailyTask) {
     },
     {
       id: "q-2",
-      question: "What should you do right after this task?",
+      question: `What should you do right after ${taskLabel}?`,
       options: [
         "Skip the reflection and move on immediately.",
         "Capture one takeaway and one open question.",
