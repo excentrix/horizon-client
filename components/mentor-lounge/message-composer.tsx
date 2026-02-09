@@ -24,9 +24,8 @@ interface MessageComposerProps {
   onTypingChange?: (isTyping: boolean) => void;
 }
 
-function PromptInputDraftSync({ draft, onTypingChange }: { draft: string; onTypingChange?: (isTyping: boolean) => void }) {
+function PromptInputDraftSync({ draft }: { draft: string }) {
   const { textInput } = usePromptInputController();
-  const setComposerDraft = useMentorLoungeStore((state) => state.setComposerDraft);
 
   useEffect(() => {
     if (textInput.value !== draft) {
@@ -127,7 +126,7 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
         }}
         className="rounded-2xl border bg-card/90 shadow-sm"
       >
-        <PromptInputDraftSync draft={composerDraft} onTypingChange={onTypingChange} />
+        <PromptInputDraftSync draft={composerDraft} />
         <PromptInputBody>
           <PromptInputTextarea
             placeholder={

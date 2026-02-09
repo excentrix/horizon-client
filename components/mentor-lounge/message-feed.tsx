@@ -442,7 +442,7 @@ function MessageFeedContent({
                               resolveMissingInfo(missingInfoId);
                               setQuickReplies((prev) => ({ ...prev, [missingInfoId]: "" }));
                               telemetry.toastInfo("Information updated", "Thanks! Updated.");
-                            } catch (error) {
+                            } catch {
                               telemetry.toastError("Failed to update information.");
                             } finally {
                               setSubmitting((prev) => ({ ...prev, [missingInfoId]: false }));

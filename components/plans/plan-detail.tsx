@@ -136,7 +136,7 @@ export function PlanDetail({
     }
     return plan.estimated_duration_weeks;
   })();
-  const milestones = plan.milestones ?? [];
+  const milestones = useMemo(() => plan.milestones ?? [], [plan.milestones]);
   const visibleMilestones = showAllMilestones
     ? milestones
     : milestones.slice(0, 3);

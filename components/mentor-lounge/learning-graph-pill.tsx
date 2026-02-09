@@ -1,7 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
-import { Network, BookOpen, AlertCircle } from "lucide-react";
+import { Network, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GraphLearningSnapshot } from "@/types";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
