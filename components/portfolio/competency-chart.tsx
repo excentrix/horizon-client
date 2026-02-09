@@ -24,13 +24,7 @@ interface CompetencyChartProps {
   className?: string;
 }
 
-const proficiencyLevels = {
-  developing: 1,
-  emerging: 2,
-  proficient: 3,
-  advanced: 4,
-  expert: 5,
-};
+
 
 export function CompetencyChart({ competencies, className }: CompetencyChartProps) {
   // Prepare data for radar chart

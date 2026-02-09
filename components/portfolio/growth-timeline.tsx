@@ -93,7 +93,7 @@ export function GrowthTimeline({ milestones, className }: GrowthTimelineProps) {
           {/* Vertical line */}
           <div className="absolute left-[15px] top-0 bottom-0 w-0.5 bg-border" />
 
-          {milestones.map((milestone, index) => {
+          {milestones.map((milestone) => {
             const Icon = milestoneIcons[milestone.milestone_type] || Trophy;
             const colorClass = milestoneColors[milestone.milestone_type] || "bg-gray-500";
             const achievedDate = new Date(milestone.achieved_at);

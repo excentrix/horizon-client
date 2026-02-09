@@ -2,7 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, Award, Trophy, Zap } from "lucide-react";
+import { CheckCircle2, Award, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface CourseBadge {

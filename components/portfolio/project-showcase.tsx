@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, Star, GitFork, Code2, Github } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 interface ProjectShowcaseProps {
@@ -25,7 +26,6 @@ interface ProjectShowcaseProps {
 }
 
 export function ProjectShowcaseCard({
-  id,
   title,
   description,
   thumbnail,
@@ -48,10 +48,12 @@ export function ProjectShowcaseCard({
       {/* Thumbnail */}
       {thumbnail ? (
         <div className="relative aspect-video overflow-hidden bg-muted">
-          <img
+          <Image
             src={thumbnail}
             alt={title}
-            className="object-cover w-full h-full group-hover:scale-110 transition-transform duration-300"
+            fill
+            className="object-cover group-hover:scale-110 transition-transform duration-300"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
           {featured && (
             <div className="absolute top-2 right-2">
@@ -155,7 +157,7 @@ export function ProjectShowcaseCard({
 
 interface ProjectShowcaseGridProps {
   projects: Array<Omit<ProjectShowcaseProps, "onClick">>;
-  onProjectClick?: (project: any) => void;
+  onProjectClick?: (project: Omit<ProjectShowcaseProps, "onClick">) => void;
   className?: string;
 }
 

@@ -78,7 +78,7 @@ export function ArtifactDetailModal({
       await onReflectionSubmit?.(artifact.id, reflection);
       toast.success("Reflection saved successfully!");
       setReflection("");
-    } catch (error) {
+    } catch {
       toast.error("Failed to save reflection");
     } finally {
       setSubmitting(false);

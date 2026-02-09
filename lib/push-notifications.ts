@@ -116,7 +116,7 @@ export class PushNotificationManager {
       // Subscribe to push
       const subscription = await this.registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: applicationServerKey as any, // Type assertion for compatibility
+        applicationServerKey: applicationServerKey as unknown as BufferSource,
       });
 
       console.log('Push subscription created:', subscription);
@@ -219,7 +219,7 @@ export class PushNotificationManager {
   /**
    * Remove subscription from backend
    */
-  private async removeSubscriptionFromBackend(subscription: PushSubscription): Promise<void> {
+  private async removeSubscriptionFromBackend(_subscription: PushSubscription): Promise<void> {
     try {
       await fetch(`${API_BASE_URL}/api/notifications/push-subscriptions/unsubscribe_all/`, {
         method: 'POST',
