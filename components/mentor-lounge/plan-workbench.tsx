@@ -9,20 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { PlanCreationResponse } from "@/types";
 import {
   Plan,
-  PlanAction,
-  PlanContent,
   PlanDescription,
-  PlanFooter,
   PlanHeader,
   PlanTitle,
-  PlanTrigger,
 } from "@/components/ai-elements/plan";
 import { Loader } from "@/components/ai-elements/loader";
-import {
-  Checkpoint,
-  CheckpointIcon,
-  CheckpointTrigger,
-} from "@/components/ai-elements/checkpoint";
 
 interface PlanWorkbenchProps {
   planData: Partial<PlanCreationResponse>;
@@ -70,7 +61,7 @@ export function PlanWorkbench({
       isStreaming={status === "in_progress" || status === "queued"}
       open={isOpen}
       onOpenChange={setIsOpen}
-      className="border border-muted bg-card/70 backdrop-blur-sm"
+      className="border border-primary/10 bg-card/80 backdrop-blur-sm shadow-sm"
     >
       <PlanHeader className="flex-col gap-2 pb-2">
         <div className="flex w-full items-center gap-3">
@@ -81,73 +72,44 @@ export function PlanWorkbench({
               <Sparkles className="size-4 text-primary" />
             )}
             <div className="space-y-0.5">
-              <PlanTitle className="text-sm">
+              <PlanTitle className="text-[13px] font-semibold">
                 {planData.plan_title || "New Learning Plan"}
               </PlanTitle>
-              <PlanDescription className="text-xs">
+              <PlanDescription className="text-[11px] text-muted-foreground">
                 {statusMessage ?? hint}
               </PlanDescription>
             </div>
           </div>
-          <PlanAction className="ml-auto">
-            <Badge
-              variant={status === "completed" ? "default" : "secondary"}
-              className="text-[11px]"
-            >
-              {status === "completed" ? "Ready" : status.replace("_", " ")}
-            </Badge>
-          </PlanAction>
+          <Badge
+            variant={status === "completed" ? "default" : "secondary"}
+            className="ml-auto text-[10px]"
+          >
+            {status === "completed" ? "Ready" : status.replace("_", " ")}
+          </Badge>
         </div>
-        <div className="space-y-2">
-          <Progress value={progress} className="h-1.5" />
+        <Progress value={progress} className="h-1" />
+        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+          <span>
+            {planData.task_count ? `${planData.task_count} tasks` : "Drafting tasks"}
+          </span>
+          <span className="truncate">
+            {statusMeta?.tool
+              ? `Using ${statusMeta.tool}`
+              : statusMeta?.agent
+                ? `Agent: ${statusMeta.agent}`
+                : "Building"}
+          </span>
         </div>
+        {planData.learning_plan_id ? (
+          <div className="flex justify-end">
+            <Button asChild size="sm" variant="ghost" className="h-7 gap-1 text-[11px]">
+              <Link href={`/plans?plan=${planData.learning_plan_id}`}>
+                Open <ArrowRight className="h-3 w-3" />
+              </Link>
+            </Button>
+          </div>
+        ) : null}
       </PlanHeader>
-
-      <PlanContent className="pt-0">
-        <div className="space-y-2">
-          <Checkpoint className="text-[11px]">
-            <CheckpointIcon className="text-muted-foreground" />
-            <CheckpointTrigger
-              tooltip={statusMeta?.stepType || "Live plan status"}
-              className="px-2"
-            >
-              {statusMeta?.tool
-                ? `Using ${statusMeta.tool}`
-                : statusMeta?.agent
-                  ? `Agent: ${statusMeta.agent}`
-                  : "Working on your plan"}
-            </CheckpointTrigger>
-          </Checkpoint>
-          <div className="text-[11px] text-muted-foreground">
-            {statusMessage ?? hint}
-          </div>
-        </div>
-      </PlanContent>
-
-      <PlanFooter className="flex items-center justify-between pt-2">
-        <span className="text-[11px] text-muted-foreground">
-          {planData.task_count
-            ? `${planData.task_count} tasks`
-            : "Drafting tasks"}
-        </span>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <PlanTrigger />
-            <span>Details</span>
-          </div>
-          <Button asChild size="sm" className="gap-2">
-            <Link
-              href={
-                planData.learning_plan_id
-                  ? `/plans?plan=${planData.learning_plan_id}`
-                  : "/plans"
-              }
-            >
-              Start <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </Button>
-        </div>
-      </PlanFooter>
     </Plan>
   );
 }

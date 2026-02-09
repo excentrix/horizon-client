@@ -815,6 +815,8 @@ useEffect(() => {
 
   const planDisplayStatus =
     planRecord && planBuildStatus === "idle" ? "completed" : planBuildStatus;
+  const showPlanWorkbench =
+    ["queued", "in_progress", "warning"].includes(planBuildStatus) || createPlan.isPending;
 
   const planProgress = useMemo(() => {
     if (planDisplayStatus === "completed") {
@@ -1088,7 +1090,7 @@ useEffect(() => {
               />
               <div className="min-h-0 flex-1 overflow-hidden">
                 <div className="flex h-full min-h-0 flex-col gap-4 px-4 pb-4 pt-2 lg:px-5 lg:pb-6">
-                  {planWorkbenchData ? (
+                  {planWorkbenchData && showPlanWorkbench ? (
                     <PlanWorkbench
                       planData={planWorkbenchData}
                       status={planDisplayStatus}
@@ -1102,7 +1104,7 @@ useEffect(() => {
                     />
                   ) : null}
                   {/* IntelligenceStatus moved to header */}
-                  {planUpdates.length ? (
+                  {showPlanWorkbench && planUpdates.length ? (
                     <div className="mb-2 text-[11px] text-muted-foreground">
                       Plan status: {latestPlanUpdate?.data.message ?? "Working on your plan..."}
                     </div>

@@ -12,7 +12,7 @@ export interface InlineContent {
 }
 
 export interface FlowSuggestion {
-  type: 'continue' | 'quick_win' | 'celebrate' | 'stretch' | 'explore' | 'personalize' | 'alternate' | 'nudge' | 'showcase';
+  type: 'continue' | 'quick_win' | 'celebrate' | 'stretch' | 'explore' | 'personalize' | 'alternate' | 'nudge' | 'showcase' | 'apply';
   title: string;
   message: string;
   action_label: string;
