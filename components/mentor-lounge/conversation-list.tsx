@@ -64,14 +64,14 @@ export function ConversationList({
             type="button"
             onClick={() => selectConversation(conversation.id)}
             className={cn(
-              "w-full rounded-xl border px-4 py-3 text-left transition",
+              "w-full rounded-xl border px-3 py-2 text-left transition",
               isActive
                 ? activeClass ?? "border-slate-300 bg-slate-50"
                 : "border-transparent bg-muted/40 hover:border-border",
             )}
           >
-            <div className="flex items-center justify-between text-sm font-medium">
-              <span>{conversation.title}</span>
+            <div className="flex min-w-0 items-center justify-between gap-2 text-sm font-medium">
+              <span className="truncate">{conversation.title}</span>
               {conversation.is_pinned ? <Pin className="h-4 w-4" /> : null}
             </div>
             {conversation.topic ? (

@@ -61,10 +61,14 @@ const processQueue = (
 
 const http: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true,
 });
 
 http.interceptors.request.use((config) => {
+  const url = config.url ?? "";
+  const isAuthRoute = url.includes("/auth/login/") || url.includes("/auth/register/");
+  if (isAuthRoute) {
+    return config;
+  }
   const token = Cookies.get("accessToken");
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -85,7 +89,6 @@ http.interceptors.response.use(
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (!REFRESH_ENDPOINT) {
-        clearSessionTokens();
         return Promise.reject(error);
       }
       if (isRefreshing) {
@@ -106,7 +109,6 @@ http.interceptors.response.use(
         const { data } = await axios.post<RefreshResponse>(
           `${API_BASE_URL}${REFRESH_ENDPOINT}`,
           { refresh: refreshToken },
-          { withCredentials: true },
         );
 
         const newAccessToken =

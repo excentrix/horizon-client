@@ -12,6 +12,7 @@ import {
 import { useRouter, usePathname } from "next/navigation";
 import Cookies from "js-cookie";
 import { toast } from "sonner";
+import posthog from "posthog-js";
 import { telemetry } from "@/lib/telemetry";
 import { authApi } from "@/lib/api";
 import type {
@@ -66,10 +67,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const profile = await authApi.me();
       setUser(profile);
     } catch (error) {
-      clearSessionTokens();
-      setUser(null);
-      if (pathname && !pathname.startsWith("/login")) {
-        router.replace("/login");
+      const status =
+        (error as { response?: { status?: number } })?.response?.status;
+      if (status === 401 || status === 403) {
+        clearSessionTokens();
+        setUser(null);
+        if (pathname && !pathname.startsWith("/login")) {
+          router.replace("/login");
+        }
+      } else {
+        telemetry.warn("Profile fetch failed; keeping session", { error });
       }
       throw error;
     } finally {
@@ -94,9 +101,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       try {
         const response = await authApi.login(payload);
-        const { access_token, refresh_token } = response.session;
-        setSessionTokens(access_token, refresh_token, Boolean(payload.remember_me));
+        const access =
+          response.session.access_token ?? response.session.access ?? undefined;
+        const refresh =
+          response.session.refresh_token ?? response.session.refresh ?? undefined;
+        setSessionTokens(access, refresh, Boolean(payload.remember_me));
         setUser(response.user);
+
+        // Identify user in PostHog
+        posthog.identify(response.user.id ?? response.user.email, {
+          email: response.user.email,
+          name: response.user.full_name,
+          username: response.user.username,
+        });
+
+        // Capture login event
+        posthog.capture('user_signed_in', {
+          email: response.user.email,
+          remember_me: Boolean(payload.remember_me),
+        });
+
         toast.success("Welcome back!", {
           description: response.user.full_name ?? response.user.email,
         });
@@ -120,6 +144,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       try {
         await authApi.register(payload);
+
+        // Capture signup event
+        posthog.capture('user_signed_up', {
+          email: payload.email,
+          username: payload.username,
+        });
+
         toast.success("Account created! Sign in to continue.");
         router.push("/login");
       } catch (error) {
@@ -142,6 +173,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Non-blocking; still clear local session
       telemetry.warn("Logout request failed", { error });
     } finally {
+      // Capture logout event and reset PostHog
+      posthog.capture('user_logged_out');
+      posthog.reset();
+
       clearSessionTokens();
       setUser(null);
       router.push("/login");

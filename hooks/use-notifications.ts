@@ -8,6 +8,7 @@ import {
   type StageStreamEvent,
   type StageEventPayload,
 } from "@/lib/analysis-stage";
+import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
 
 export type NotificationSocketStatus =
   | "idle"
@@ -66,6 +67,14 @@ export function useNotificationsSocket() {
   const [latestEvent, setLatestEvent] = useState<Record<string, unknown> | null>(
     null,
   );
+  const {
+    pushRuntimeStep,
+    pushMissingInfo,
+    pushPlanUpdate,
+    setPlanBuildStatus,
+    updateLastPlanActivity,
+    pushInsight,
+  } = useMentorLoungeStore();
 
   const socketRef = useRef<WebSocket | null>(null);
   const heartbeatIntervalRef = useRef<number | null>(null);
@@ -298,6 +307,167 @@ export function useNotificationsSocket() {
                     ]);
                     setUnreadCount((prev) => prev + 1);
                   }
+                }
+              }
+              break;
+            }
+            case "agent_runtime": {
+              const step = payload?.data as Record<string, unknown> | undefined;
+              if (step) {
+                pushRuntimeStep({
+                  id: (step.id as string) ?? crypto.randomUUID(),
+                  agent: (step.agent as string) ?? "System",
+                  step: (step.step as string) ?? "Processing",
+                  status: (step.status as string) ?? "running",
+                  timestamp:
+                    (step.timestamp as string) ?? new Date().toISOString(),
+                  details: step.details as Record<string, unknown> | undefined,
+                  input: step.input as Record<string, unknown> | undefined,
+                  output: step.output as Record<string, unknown> | undefined,
+                  confidence: step.confidence as number | undefined,
+                });
+
+                if (step.status) {
+                  const statusValue = String(step.status);
+                  const mapped =
+                    statusValue === "initializing" || statusValue === "queued"
+                      ? "queued"
+                      : statusValue === "completed"
+                        ? "completed"
+                        : statusValue === "error" || statusValue === "failed"
+                          ? "failed"
+                          : "in_progress";
+                  setPlanBuildStatus(
+                    mapped,
+                    (step.step as string) ?? "Working on your plan...",
+                  );
+                  updateLastPlanActivity();
+                }
+              }
+              break;
+            }
+            case "missing_information": {
+              const info = payload?.data as Record<string, unknown> | undefined;
+              if (info) {
+                pushMissingInfo({
+                  id: (info.id as string) ?? crypto.randomUUID(),
+                  field: info.field as string,
+                  question: info.question as string,
+                  context: info.context as string | undefined,
+                  unblocks: info.unblocks as string | undefined,
+                  status: "pending",
+                  timestamp: new Date().toISOString(),
+                });
+                pushPlanUpdate({
+                  type: "plan_update",
+                  data: {
+                    id: (info.id as string) ?? crypto.randomUUID(),
+                    status: "warning",
+                    message:
+                      (info.question as string) ??
+                      "Additional info needed to continue.",
+                    timestamp: new Date().toISOString(),
+                  },
+                });
+              }
+              break;
+            }
+            case "insight_generated": {
+              const insight = payload?.data as Record<string, unknown> | undefined;
+              if (insight) {
+                pushInsight({
+                  id: (insight.id as string) ?? crypto.randomUUID(),
+                  type: (insight.type as string) ?? "recommendation",
+                  title: (insight.title as string) ?? "New Insight",
+                  message: (insight.message as string) ?? "",
+                  data: insight.data as Record<string, unknown> | undefined,
+                  timestamp: new Date().toISOString(),
+                  is_read: false,
+                });
+              }
+              break;
+            }
+            case "plan_update": {
+              const data = payload?.data as Record<string, unknown> | undefined;
+              if (data) {
+                const eventId =
+                  (data.event_id as string) ??
+                  (typeof crypto !== "undefined" && crypto.randomUUID
+                    ? crypto.randomUUID()
+                    : `plan-update-${Date.now()}`);
+                pushPlanUpdate({
+                  type: "plan_update",
+                  data: {
+                    id: eventId,
+                    conversation_id: data.conversation_id as string | undefined,
+                    status: (data.status as any) ?? "in_progress",
+                    message:
+                      (data.message as string) ?? "Working on your plan...",
+                    plan_id: data.plan_id as string | undefined,
+                    plan_title: data.plan_title as string | undefined,
+                    task_count: data.task_count as number | undefined,
+                    agent: data.agent as string | undefined,
+                    tool: data.tool as string | undefined,
+                    step_type: data.step_type as string | undefined,
+                    timestamp: (data.timestamp as string) ?? new Date().toISOString(),
+                  },
+                });
+                if (data.status) {
+                  const mapped =
+                    data.status === "queued" || data.status === "initializing"
+                      ? "queued"
+                      : data.status === "completed"
+                        ? "completed"
+                        : data.status === "error" || data.status === "failed"
+                          ? "failed"
+                          : "in_progress";
+                  setPlanBuildStatus(
+                    mapped,
+                    (data.message as string) ?? undefined,
+                    data.plan_id as string | undefined,
+                    data.plan_title as string | undefined,
+                  );
+                  updateLastPlanActivity();
+                }
+              }
+              break;
+            }
+            case "gamification_update": {
+              const data = payload?.data as Record<string, unknown> | undefined;
+              if (data) {
+                const eventType = data.event_type as string;
+                // Dispatch custom event that gamification provider can listen to
+                const gamificationEvent = new CustomEvent("gamification:update", {
+                  detail: {
+                    event_type: eventType,
+                    points: data.points,
+                    reason: data.reason,
+                    total_points: data.total_points,
+                    level: data.level,
+                    level_progress: data.level_progress,
+                    xp_for_next_level: data.xp_for_next_level,
+                    current_streak: data.current_streak,
+                    old_level: data.old_level,
+                    new_level: data.new_level,
+                    badge_id: data.badge_id,
+                    badge_name: data.badge_name,
+                    badge_slug: data.badge_slug,
+                    badge_icon: data.badge_icon,
+                    badge_color: data.badge_color,
+                    badge_description: data.badge_description,
+                    points_value: data.points_value,
+                    timestamp: data.timestamp || new Date().toISOString(),
+                  },
+                });
+                window.dispatchEvent(gamificationEvent);
+
+                // Also show a toast for major events
+                if (eventType === "level_up") {
+                  telemetry.toastSuccess(`🎉 Level up! You're now Level ${data.new_level}!`);
+                } else if (eventType === "badge_earned") {
+                  telemetry.toastSuccess(`🏆 New badge: ${data.badge_name}!`);
+                } else if (eventType === "streak_milestone") {
+                  telemetry.toastSuccess(`🔥 ${data.current_streak} day streak!`);
                 }
               }
               break;

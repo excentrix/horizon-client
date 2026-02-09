@@ -7,6 +7,8 @@ import {
 import { planningApi } from "@/lib/api";
 import type { DailyTask, LearningPlan } from "@/types";
 import { telemetry } from "@/lib/telemetry";
+import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
+import { useEffect } from "react";
 
 const plansKey = ["learning-plans"];
 const planKey = (planId: string) => [...plansKey, planId];
@@ -21,6 +23,17 @@ export function usePlans() {
         telemetry.error("Failed to load learning plans", { error });
         throw error;
       }
+    },
+    staleTime: 120_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: (failureCount, error) => {
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
+      if (status === 429) {
+        return false;
+      }
+      return failureCount < 1;
     },
   });
 }
@@ -40,11 +53,23 @@ export function usePlan(planId?: string) {
       }
     },
     enabled: Boolean(planId),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
+      if (status === 429) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
   });
 }
 
 export function useCreatePlanFromConversation() {
   const queryClient = useQueryClient();
+  const { setPlanBuildStatus, setPlanSessionId } = useMentorLoungeStore();
 
   return useMutation({
     mutationFn: (payload: { conversationId: string }) => {
@@ -53,7 +78,20 @@ export function useCreatePlanFromConversation() {
       });
     },
     onSuccess: (data) => {
-      telemetry.toastInfo("Plan created!", data.message);
+      telemetry.toastInfo("Plan started", data.message);
+      
+      // Store session details
+      if (data.session_id) {
+        setPlanSessionId(data.session_id);
+      }
+      
+      // Set status to queued/in_progress based on response
+      setPlanBuildStatus(
+        (data.status as any) || "queued",
+        data.message || "Plan creation request accepted"
+      );
+      
+      // Invalidate queries just in case
       queryClient.invalidateQueries({ queryKey: plansKey });
     },
     onError: (error: unknown) => {
@@ -63,6 +101,7 @@ export function useCreatePlanFromConversation() {
         (error instanceof Error ? error.message : undefined) ||
         "Unknown error";
       telemetry.toastError("Unable to create plan", message);
+      setPlanBuildStatus("failed", message);
     },
   });
 }
@@ -134,9 +173,12 @@ export function usePlanMutations(planId?: string) {
   });
 
   const updateTaskStatus = useMutation({
-    mutationFn: ({ taskId, status }: { taskId: string; status: DailyTask["status"] }) => {
+    mutationFn: ({
+      taskId,
+      ...payload
+    }: { taskId: string } & Partial<DailyTask>) => {
       if (!planId) throw new Error("Missing plan id");
-      return planningApi.updateTaskStatus(planId, taskId, { status });
+      return planningApi.updateTaskStatus(planId, taskId, payload);
     },
     onSuccess: () => {
       invalidate();

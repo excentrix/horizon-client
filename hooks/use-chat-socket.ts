@@ -13,6 +13,7 @@ import type {
   PaginatedResponse,
 } from "@/types";
 import { telemetry } from "@/lib/telemetry";
+import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
 
 export type SocketStatus = "idle" | "connecting" | "open" | "closed" | "error";
 
@@ -128,6 +129,16 @@ const updateConversationSnapshot = (
 
 export function useChatSocket(conversationId: string | null) {
   const queryClient = useQueryClient();
+  const {
+    pushPlanUpdate,
+    setActiveAgent,
+    pushRoutingDecision,
+    setPlanBuildStatus,
+    updateLastPlanActivity,
+    pushRuntimeStep,
+    pushInsight,
+    pushMissingInfo,
+  } = useMentorLoungeStore();
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const heartbeatIntervalRef = useRef<number | null>(null);
@@ -256,7 +267,13 @@ export function useChatSocket(conversationId: string | null) {
       return;
     }
 
-    const token = Cookies.get("accessToken");
+    const token =
+      Cookies.get("accessToken") ||
+      (typeof window !== "undefined"
+        ? window.localStorage.getItem("accessToken")
+        : null) ||
+      Cookies.get("token") ||
+      null;
     if (!token) {
       setStatus("error");
       setError("Missing authentication token");
@@ -279,6 +296,7 @@ export function useChatSocket(conversationId: string | null) {
       setError(null);
       setStreamState({ content: null });
       updateMentorTyping(false);
+      setActiveAgent(null);
 
       socket.onopen = () => {
         if (activeConversationRef.current !== conversationId) {
@@ -411,8 +429,19 @@ export function useChatSocket(conversationId: string | null) {
             }
             case "stream_complete": {
               const message = payload?.message as ChatMessage | undefined;
+              const toolRuntime = payload?.tool_runtime_invocations || payload?.tool_invocations;
+
               if (message) {
                 message.conversation ??= conversationId;
+                
+                // Merge tool runtime logs if provided separately in the event
+                if (toolRuntime && Array.isArray(toolRuntime)) {
+                  message.metadata = {
+                    ...message.metadata,
+                    tool_runtime_invocations: toolRuntime,
+                  };
+                }
+
                 if (conversationId) {
                   appendMessageToCache(queryClient, conversationId, message);
                   updateConversationSnapshot(
@@ -424,13 +453,34 @@ export function useChatSocket(conversationId: string | null) {
               }
               setStreamState({ messageId: undefined, content: null });
               updateMentorTyping(false);
+              setActiveAgent(null);
               break;
             }
             case "stream_error": {
               setStreamState({ messageId: undefined, content: null });
               updateMentorTyping(false);
+              setActiveAgent(null);
               if (payload?.error) {
                 telemetry.toastError(payload.error);
+              }
+              break;
+            }
+            case "agent_start": {
+              const agentName = (payload?.agent as string) || "General Mentor";
+              const reason = (payload?.reason as string) || "Routing...";
+              // "confidence" might be in payload if the backend sends it early, otherwise optional.
+              
+              setActiveAgent({ name: agentName });
+              updateMentorTyping(true);
+
+              // Log routing decision if present
+              if (payload?.agent) {
+                 pushRoutingDecision({
+                     agent: agentName,
+                     reason: reason,
+                     confidence: (payload?.confidence as number) ?? 1.0, 
+                     timestamp: new Date().toISOString(),
+                 });
               }
               break;
             }
@@ -438,6 +488,183 @@ export function useChatSocket(conversationId: string | null) {
               const isTyping = Boolean(payload?.is_typing);
               updateMentorTyping(isTyping);
               break;
+            }
+            case "plan_update": {
+              const data = payload?.data as
+                | (Record<string, unknown> & {
+                    status?: string;
+                    message?: string;
+                    timestamp?: string;
+                    agent?: string;
+                    event_id?: string;
+                    conversation_id?: string;
+                    step_type?: string;
+                    tool?: string;
+                  })
+                | undefined;
+
+              const targetConversation =
+                (data?.conversation_id as string | undefined) ?? conversationId;
+              if (
+                targetConversation &&
+                conversationId &&
+                targetConversation !== conversationId
+              ) {
+                break;
+              }
+
+              const eventId =
+                data?.event_id ??
+                (typeof crypto !== "undefined" && crypto.randomUUID
+                  ? crypto.randomUUID()
+                  : `plan-update-${Date.now()}`);
+
+              pushPlanUpdate({
+                type: "plan_update",
+                data: {
+                  id: eventId,
+                  conversation_id: targetConversation ?? undefined,
+                  status: (data?.status as any) ?? "in_progress",
+                  message: (data?.message as string) ?? "Working on your plan...",
+                  plan_id: data?.plan_id as string | undefined,
+                  plan_title: data?.plan_title as string | undefined,
+                  task_count: data?.task_count as number | undefined,
+                  agent: data?.agent as string | undefined,
+                  tool: data?.tool as string | undefined,
+                  step_type: data?.step_type as string | undefined,
+                  timestamp: data?.timestamp ? (data.timestamp as string) : new Date().toISOString(),
+                }
+              });
+
+              // Update global plan build status in store
+              if (data?.status) {
+                // Cast to specific PlanBuildStatus to avoid type errors, defaulting to "in_progress" if unknown
+                const status = (data.status as any) || "in_progress";
+                setPlanBuildStatus(
+                  status,
+                  (data.message as string) ?? undefined,
+                  (data.plan_id as string) ?? undefined,
+                  (data.plan_title as string) ?? undefined,
+                );
+                updateLastPlanActivity();
+              }
+
+              if (data?.status === "failed" && data?.message) {
+                telemetry.toastError(String(data.message));
+              }
+              break;
+            }
+            case "agent_runtime": {
+              const step = payload?.data;
+              if (step) {
+                 pushRuntimeStep({
+                     id: step.id ?? crypto.randomUUID(),
+                     agent: step.agent ?? "System",
+                     step: step.step ?? "Processing",
+                     status: step.status ?? "running",
+                     timestamp: step.timestamp ?? new Date().toISOString(),
+                     details: step.details,
+                     input: step.input,
+                     output: step.output,
+                     confidence: step.confidence
+                 });
+                 // Also set active agent/typing if running
+                 if (step.status === "running") {
+                    setActiveAgent({ name: step.agent });
+                    updateMentorTyping(true);
+                 } else if (step.status === "completed" || step.status === "failed") {
+                    // Don't clear immediately, let UI linger
+                    updateMentorTyping(false);
+                 }
+
+                 if (step.status) {
+                    const mapped =
+                      step.status === "initializing" || step.status === "queued"
+                        ? "queued"
+                        : step.status === "completed"
+                          ? "completed"
+                          : step.status === "error" || step.status === "failed"
+                            ? "failed"
+                            : "in_progress";
+                    setPlanBuildStatus(
+                      mapped,
+                      step.step ?? "Working on your plan...",
+                    );
+                    updateLastPlanActivity();
+                 }
+              }
+              break;
+            }
+            case "insight_generated": {
+               const insight = payload?.data;
+               if (insight) {
+                  pushInsight({
+                      id: insight.id ?? crypto.randomUUID(),
+                      type: insight.type ?? "recommendation",
+                      title: insight.title ?? "New Insight",
+                      message: insight.message ?? "",
+                      data: insight.data,
+                      timestamp: insight.timestamp ?? new Date().toISOString(),
+                      is_read: false
+                  });
+                  telemetry.toastInfo(insight.title, insight.message);
+               }
+               break;
+            }
+            case "missing_information": {
+               const info = payload?.data;
+               if (info) {
+                  const messageId = info.id ?? crypto.randomUUID();
+                  const context = info.context ? `\n\nWhy I'm asking: ${info.context}` : "";
+                  const unblocks = info.unblocks ? `\n\nHow this helps: ${info.unblocks}` : "";
+                  pushMissingInfo({
+                      id: messageId,
+                      field: info.field,
+                      question: info.question,
+                      context: info.context,
+                      unblocks: info.unblocks,
+                      status: "pending",
+                      timestamp: new Date().toISOString()
+                  });
+                  if (conversationId) {
+                    const isoTimestamp = new Date().toISOString();
+                    const missingInfoMessage: ChatMessage = {
+                      id: `missing-info-${messageId}`,
+                      conversation: conversationId,
+                      message_type: "text",
+                      sender_type: "ai",
+                      content:
+                        (info.question ??
+                          "I need a bit more information to continue.") + context + unblocks,
+                      sequence_number: Date.now(),
+                      ai_model_used: undefined,
+                      tokens_used: undefined,
+                      processing_time: undefined,
+                      is_edited: false,
+                      is_flagged: false,
+                      created_at: isoTimestamp,
+                      updated_at: isoTimestamp,
+                      metadata: {
+                        missing_info_id: messageId,
+                        missing_info_field: info.field,
+                        missing_info_context: info.context,
+                        missing_info_unblocks: info.unblocks,
+                      },
+                    };
+                    appendMessageToCache(queryClient, conversationId, missingInfoMessage);
+                    updateConversationSnapshot(queryClient, conversationId, missingInfoMessage);
+                  }
+                  pushPlanUpdate({
+                    type: "plan_update",
+                    data: {
+                      id: `missing-info-${messageId}`,
+                      status: "warning",
+                      message: info.question ?? "Additional info needed to continue.",
+                      timestamp: new Date().toISOString(),
+                    },
+                  });
+               }
+               break;
             }
             default:
               telemetry.info("Unhandled chat socket event", { type });
@@ -453,12 +680,29 @@ export function useChatSocket(conversationId: string | null) {
       setError("Unable to open chat connection");
       scheduleReconnect();
     }
-  }, [conversationId, queryClient, resetSocket, scheduleReconnect, startHeartbeat, stopHeartbeat, updateMentorTyping]);
+  }, [
+    conversationId,
+    pushPlanUpdate,
+    pushRoutingDecision,
+    setActiveAgent,
+    queryClient,
+    resetSocket,
+    scheduleReconnect,
+    startHeartbeat,
+    stopHeartbeat,
+    updateMentorTyping,
+  ]);
 
   connectRef.current = connect;
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (
+      content: string,
+      options?: {
+        context?: string;
+        metadata?: Record<string, unknown>;
+      },
+    ) => {
       const socket = socketRef.current;
       if (!socket || socket.readyState !== WebSocket.OPEN) {
         telemetry.toastError("Chat connection is not ready yet.");
@@ -506,7 +750,12 @@ export function useChatSocket(conversationId: string | null) {
       socket.send(
         JSON.stringify({
           type: "streaming_message",
-          message: { content: trimmed, temp_id: tempId }, // send temp_id to backend
+          message: {
+            content: trimmed,
+            temp_id: tempId,
+            context: options?.context,
+            metadata: options?.metadata,
+          },
         }),
       );
 
@@ -519,6 +768,7 @@ export function useChatSocket(conversationId: string | null) {
     reconnectAttemptsRef.current = 0;
     setStreamState({ content: null });
     updateMentorTyping(false);
+    setActiveAgent(null);
 
     if (!conversationId) {
       resetSocket();
