@@ -1,7 +1,6 @@
 "use client";
 
 import { Shield, ShieldAlert, ShieldCheck, AlertTriangle } from "lucide-react";
-import { cn } from "@/lib/utils";
 import type { GuardrailsMetadata, SafetyMetadata } from "@/types";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 

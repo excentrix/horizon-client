@@ -48,7 +48,6 @@ const visibilityIcons = {
 };
 
 export function ArtifactCard({
-  id,
   title,
   description,
   artifactType,

@@ -147,7 +147,7 @@ export class PushNotificationManager {
         console.log('Unsubscribed from push notifications');
         
         // Notify backend
-        await this.removeSubscriptionFromBackend(subscription);
+        await this.removeSubscriptionFromBackend();
         
         return true;
       }
@@ -219,7 +219,7 @@ export class PushNotificationManager {
   /**
    * Remove subscription from backend
    */
-  private async removeSubscriptionFromBackend(_subscription: PushSubscription): Promise<void> {
+  private async removeSubscriptionFromBackend(): Promise<void> {
     try {
       await fetch(`${API_BASE_URL}/api/notifications/push-subscriptions/unsubscribe_all/`, {
         method: 'POST',

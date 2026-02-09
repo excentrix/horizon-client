@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Check, X, ArrowRight, CalendarClock, BookOpen } from "lucide-react";
+import { ArrowRight, CalendarClock, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { MissingInformationItem } from "@/types";
 import { telemetry } from "@/lib/telemetry";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
@@ -39,7 +39,7 @@ export function MissingInfoForm({ item }: MissingInfoFormProps) {
       
       resolveMissingInfo(item.id);
       telemetry.toastInfo("Information updated", "Thanks! We've updated your profile.");
-    } catch (error) {
+    } catch {
        telemetry.toastError("Failed to update information. Please try again.");
     } finally {
       setIsSubmitting(false);

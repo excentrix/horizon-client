@@ -78,11 +78,11 @@ export function PlanDetail({
     }
     return `${description.slice(0, 220).trim()}...`;
   }, [description]);
-  const sortedTasks = [...tasks].sort(
+  const sortedTasks = useMemo(() => [...tasks].sort(
     (a, b) =>
       new Date(a.scheduled_date).getTime() -
       new Date(b.scheduled_date).getTime(),
-  );
+  ), [tasks]);
   const today = startOfDay(new Date());
   const todayTasks = sortedTasks.filter((task) =>
     isSameDay(parseISO(task.scheduled_date), today),
