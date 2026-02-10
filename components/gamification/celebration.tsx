@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Flame, Star, Trophy, Zap, Crown, Sparkles } from "lucide-react";
+import { Flame, Trophy, Crown, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GamificationEvent } from "@/types";
 

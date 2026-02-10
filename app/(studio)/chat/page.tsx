@@ -23,8 +23,6 @@ import { CreateConversationModal } from "@/components/mentor-lounge/create-conve
 import { PlusCircle } from 'lucide-react';
 import type { PlanCreationResponse } from "@/types";
 import { useNotifications } from "@/context/NotificationContext";
-import { IntelligenceStatus } from "@/components/mentor-lounge/intelligence-status";
-import { SessionGoal } from "@/components/mentor-lounge/session-goal";
 import { SafetyAlert } from "@/components/mentor-lounge/safety-alert";
 import { IntelligenceReportModal } from "@/components/mentor-lounge/intelligence-report-modal";
 import { PersonalitySelector } from "@/components/mentor-lounge/personality-selector";
@@ -93,9 +91,8 @@ export default function ChatPage() {
     (state) => state.setMentorActions,
   );
   const planUpdates = useMentorLoungeStore((state) => state.planUpdates);
-  const agentRuntime = useMentorLoungeStore((state) => state.agentRuntime);
-  const insights = useMentorLoungeStore((state) => state.insights);
   const missingInformation = useMentorLoungeStore((state) => state.missingInformation);
+  
   const {
     data: conversations = [],
     isLoading: conversationsLoading,
@@ -126,7 +123,7 @@ export default function ChatPage() {
   const activeListClass = personaTheme.conversationActive;
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [isReportModalOpen, setReportModalOpen] = useState(false);
-  const [analysisTimedOut, setAnalysisTimedOut] = useState<string | null>(null);
+  const [, setAnalysisTimedOut] = useState<string | null>(null);
   const [isInsightsOpen, setInsightsOpen] = useState(false);
   
   // Analysis history state
@@ -988,7 +985,7 @@ useEffect(() => {
                                   .sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime())
                                   [0];
                                 
-                                const record = analysisSummary?.analysis_record as Record<string, any> | undefined;
+                                const record = analysisSummary?.analysis_record as Record<string, unknown> | undefined;
                                 
                                 const academicData = record ? {
                                   domain: record.primary_domain_name,
@@ -1000,14 +997,14 @@ useEffect(() => {
                                 } : analysisSummary?.analysis_results as Record<string, unknown>;
 
                                 const careerData = record?.career_stage_indicators ? {
-                                  ...record.career_stage_indicators,
-                                  interests: record.career_interests?.join(", ")
+                                  ...(record.career_stage_indicators as Record<string, unknown>),
+                                  interests: (record.career_interests as string[] | undefined)?.join(", ")
                                 } : undefined;
 
                                 const wellnessData = record?.wellness_indicators ? {
-                                  ...record.wellness_indicators,
-                                  stress_indicators: record.stress_indicators?.join(", "),
-                                  support_needs: record.support_needs?.join(", ")
+                                  ...(record.wellness_indicators as Record<string, unknown>),
+                                  stress_indicators: (record.stress_indicators as string[] | undefined)?.join(", "),
+                                  support_needs: (record.support_needs as string[] | undefined)?.join(", ")
                                 } : undefined;
 
                                 return (

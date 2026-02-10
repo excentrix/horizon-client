@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Flame, Star, Trophy, Zap, Award, TrendingUp } from "lucide-react";
+import { Flame, Trophy, Award, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -23,7 +23,6 @@ export function GamificationStatsCard({
     level,
     levelProgress,
     xpForNextLevel,
-    levelProgressPercentage,
     currentStreak,
     longestStreak,
     recentBadges,
@@ -159,20 +158,25 @@ export function GamificationStatsCard({
           <div>
             <h4 className="text-sm font-medium mb-2">Recent Badges</h4>
             <div className="flex flex-wrap gap-2">
-              {recentBadges.slice(0, 4).map((award) => (
-                <motion.div
-                  key={award.badge.id}
-                  whileHover={{ scale: 1.1 }}
-                  className={cn(
-                    "px-2.5 py-1 rounded-full text-xs font-medium",
-                    "bg-gradient-to-r from-purple-500/10 to-pink-500/10",
-                    "border border-purple-500/20 text-purple-700 dark:text-purple-300"
-                  )}
-                  title={award.badge.description}
-                >
-                  {award.badge.name}
-                </motion.div>
-              ))}
+              {recentBadges.slice(0, 4).map((award) => {
+                const badgeName = "badge" in award ? award.badge.name : award.name;
+                const badgeDescription = "badge" in award ? award.badge.description : "";
+                
+                return (
+                  <motion.div
+                    key={"badge" in award ? `user-badge-${award.id}` : `badge-award-${award.id}`}
+                    whileHover={{ scale: 1.1 }}
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-xs font-medium",
+                      "bg-gradient-to-r from-purple-500/10 to-pink-500/10",
+                      "border border-purple-500/20 text-purple-700 dark:text-purple-300"
+                    )}
+                    title={badgeDescription}
+                  >
+                    {badgeName}
+                  </motion.div>
+                );
+              })}
               {recentBadges.length > 4 && (
                 <span className="px-2.5 py-1 text-xs text-muted-foreground">
                   +{recentBadges.length - 4} more

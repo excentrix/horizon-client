@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowRight, Check, Clock, BarChart, Rocket } from "lucide-react";
+import { Loader2, ArrowRight, Check, Clock, BarChart } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
@@ -193,7 +192,7 @@ export default function PathSelectionPage() {
         
         {/* Fallback/Custom Option */}
         <div className="mt-16 text-center">
-            <p className="text-gray-500 dark:text-gray-400 mb-4">Don't see what you're looking for?</p>
+            <p className="text-gray-500 dark:text-gray-400 mb-4">Don&apos;t see what you&apos;re looking for?</p>
             <Button variant="ghost" className="text-violet-600 hover:text-violet-700 dark:text-violet-400">
                 Create a Custom Path from Scratch <ArrowRight className="ml-1 h-4 w-4" />
             </Button>

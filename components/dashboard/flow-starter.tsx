@@ -3,7 +3,7 @@
  */
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +37,7 @@ const SUGGESTION_ICONS = {
   alternate: Target,
   nudge: Sparkles,
   showcase: Trophy,
+  apply: Zap,
 };
 
 const SUGGESTION_COLORS = {
@@ -49,6 +50,7 @@ const SUGGESTION_COLORS = {
   alternate: 'from-indigo-500/10 to-blue-500/10 border-indigo-500/20',
   nudge: 'from-pink-500/10 to-rose-500/10 border-pink-500/20',
   showcase: 'from-amber-500/10 to-orange-500/10 border-amber-500/20',
+  apply: 'from-cyan-500/10 to-blue-500/10 border-cyan-500/20',
 };
 
 function getPriorityBadge(priority: number) {
@@ -142,7 +144,7 @@ export function FlowStarter({ suggestion, shownAt }: FlowStarterProps) {
           <div className="rounded-lg border bg-background/80 p-4">
             <InlineWorkspace 
               content={suggestion.inline_content as InlineContent}
-              onComplete={(result) => {
+              onComplete={() => {
                 // Handle inline content completion
                 if (suggestion.log_id) {
                   acceptMutation.mutate({

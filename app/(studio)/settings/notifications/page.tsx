@@ -326,7 +326,7 @@ export default function NotificationSettingsPage() {
             <div className="space-y-0.5">
               <Label htmlFor="daily_digest">Daily Digest</Label>
               <p className="text-sm text-gray-500">
-                Get a morning briefing at 8am with today's tasks
+                Get a morning briefing at 8am with today&apos;s tasks
               </p>
             </div>
             <Switch
@@ -344,7 +344,7 @@ export default function NotificationSettingsPage() {
         <CardHeader>
           <CardTitle>Quiet Hours (Coming Soon)</CardTitle>
           <CardDescription>
-            Set times when you don't want to receive notifications
+            Set times when you don&apos;t want to receive notifications
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -51,9 +51,9 @@ export default function PortfolioSettingsPage() {
       show_growth_timeline: profile.show_growth_timeline ?? true,
       show_learning_stats: profile.show_learning_stats ?? true,
     });
-  }, [profile?.id]);
+  }, [profile]);
 
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -66,7 +66,7 @@ export default function PortfolioSettingsPage() {
       await portfolioApi.updateProfile(profile.id, formData);
 
       toast.success("Portfolio settings saved!");
-    } catch (error) {
+    } catch {
       toast.error("Failed to save settings");
     } finally {
       setSaving(false);

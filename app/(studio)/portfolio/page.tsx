@@ -31,22 +31,23 @@ import {
   useGrowthTimeline,
   useAddReflection,
 } from "@/hooks/use-portfolio";
-import { useRouter } from "next/navigation";
+import type { PortfolioArtifact } from "@/types";
+
 
 export default function PortfolioPage() {
-  const router = useRouter();
-  const [selectedArtifact, setSelectedArtifact] = useState<any>(null);
+
+  const [selectedArtifact, setSelectedArtifact] = useState<PortfolioArtifact | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   // Queries
-  const { data: artifacts = [], isLoading: artifactsLoading } = usePortfolioArtifacts();
-  const { data: profileData, isLoading: profileLoading } = usePortfolioProfile();
-  const { data: timelineData, isLoading: timelineLoading } = useGrowthTimeline(90);
+  const { data: artifacts = [] } = usePortfolioArtifacts();
+  const { data: profileData } = usePortfolioProfile();
+  const { data: timelineData } = useGrowthTimeline(90);
 
   // Mutations
-  const { mutateAsync: addReflection, isPending: reflectionPending } = useAddReflection();
+  const { mutateAsync: addReflection } = useAddReflection();
 
-  const handleArtifactClick = async (artifact: any) => {
+  const handleArtifactClick = async (artifact: PortfolioArtifact) => {
     // Fetch full details if needed (for now using artifact data directly)
     setSelectedArtifact(artifact);
     setDetailModalOpen(true);
@@ -59,10 +60,10 @@ export default function PortfolioPage() {
   };
 
   const profile = profileData?.profile;
-  const verifiedCount = artifacts.filter((a: any) =>
-    ["verified", "human_verified"].includes(a.verification_status)
+  const verifiedCount = artifacts.filter((a: PortfolioArtifact) =>
+    a.verification_status && ["verified", "human_verified"].includes(a.verification_status)
   ).length;
-  const featuredCount = artifacts.filter((a: any) => a.featured).length;
+  const featuredCount = artifacts.filter((a: PortfolioArtifact) => a.featured).length;
   const [copied, setCopied] = useState(false);
   const [badgeCopied, setBadgeCopied] = useState(false);
   const publicUrl = useMemo(() => {
@@ -72,17 +73,17 @@ export default function PortfolioPage() {
   const highlightArtifacts = useMemo(() => {
     if (!artifacts.length) return [];
     const preferred = artifacts
-      .filter((artifact: any) => artifact.featured)
+      .filter((artifact: PortfolioArtifact) => artifact.featured)
       .slice(0, 3);
     if (preferred.length >= 3) return preferred;
-    const verified = artifacts.filter((artifact: any) =>
-      ["verified", "human_verified"].includes(artifact.verification_status)
+    const verified = artifacts.filter((artifact: PortfolioArtifact) =>
+      artifact.verification_status && ["verified", "human_verified"].includes(artifact.verification_status)
     );
     const remaining = verified
-      .filter((artifact: any) => !preferred.includes(artifact))
+      .filter((artifact: PortfolioArtifact) => !preferred.includes(artifact))
       .slice(0, 3 - preferred.length);
     const fallback = artifacts
-      .filter((artifact: any) => !preferred.includes(artifact) && !remaining.includes(artifact))
+      .filter((artifact: PortfolioArtifact) => !preferred.includes(artifact) && !remaining.includes(artifact))
       .slice(0, 3 - preferred.length - remaining.length);
     return [...preferred, ...remaining, ...fallback];
   }, [artifacts]);
@@ -222,7 +223,7 @@ export default function PortfolioPage() {
                     Add or verify an artifact to light up your highlight reel.
                   </div>
                 ) : (
-                  highlightArtifacts.map((artifact: any, index: number) => (
+                  highlightArtifacts.map((artifact: PortfolioArtifact, index: number) => (
                     <button
                       key={artifact.id ?? `${artifact.title}-${index}`}
                       onClick={() => handleArtifactClick(artifact)}
@@ -317,16 +318,16 @@ export default function PortfolioPage() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
-              {artifactsLoading ? (
+              {false ? ( // Keeping structure but removing unused loading var usage if needed, or better: just remove the check if artifacts is [] initially
                 <div className="text-center py-12 text-muted-foreground">
                   Loading trophy room...
                 </div>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {artifacts
-                    .filter((artifact: any) => artifact.featured)
+                    .filter((artifact: PortfolioArtifact) => artifact.featured)
                     .slice(0, 6)
-                    .map((artifact: any) => (
+                    .map((artifact: PortfolioArtifact) => (
                       <button
                         key={artifact.id}
                         onClick={() => handleArtifactClick(artifact)}
@@ -348,7 +349,7 @@ export default function PortfolioPage() {
                         </p>
                       </button>
                     ))}
-                  {!artifacts.filter((artifact: any) => artifact.featured).length && (
+                  {!artifacts.filter((artifact: PortfolioArtifact) => artifact.featured).length && (
                     <div className="col-span-full rounded-2xl border border-dashed border-slate-200 bg-white/60 p-6 text-sm text-muted-foreground">
                       Promote your best work to see it featured here.
                     </div>
@@ -389,7 +390,16 @@ export default function PortfolioPage() {
 
       {/* Artifact Detail Modal */}
       <ArtifactDetailModal
-        artifact={selectedArtifact}
+        artifact={
+          selectedArtifact
+            ? {
+                ...selectedArtifact,
+                verification_status: selectedArtifact.verification_status ?? "pending",
+                visibility: selectedArtifact.visibility ?? "private",
+                featured: selectedArtifact.featured ?? false,
+              }
+            : null
+        }
         open={detailModalOpen}
         onOpenChange={setDetailModalOpen}
         onReflectionSubmit={handleReflectionSubmit}

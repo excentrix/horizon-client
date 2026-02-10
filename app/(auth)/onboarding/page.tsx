@@ -98,8 +98,8 @@ export default function OnboardingPage() {
       // Poll for parsing completion
       await pollParsingStatus(data.session_key);
 
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed. Please try again.");
+    } catch {
+      setError("Upload failed. Please try again.");
       setParseStatus("failed");
     } finally {
       setUploading(false);
@@ -139,7 +139,7 @@ export default function OnboardingPage() {
           setParseStatus("failed");
           setError("Parsing timeout. Please try again.");
         }
-      } catch (err) {
+      } catch {
         setParseStatus("failed");
         setError("Failed to check parsing status.");
       }
@@ -165,7 +165,7 @@ export default function OnboardingPage() {
       posthog.capture('onboarding_resume_skipped');
 
       router.push("/onboarding/form");
-    } catch (err) {
+    } catch {
       setError("Failed to proceed. Please try again.");
     }
   };
@@ -180,9 +180,10 @@ export default function OnboardingPage() {
             Welcome to <span className="bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">Horizon</span>
           </h1>
           <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
-            Let's personalize your learning journey in just a few steps
+            Let&apos;s personalize your learning journey in just a few steps
           </p>
         </div>
+
 
         {/* Progress Bar */}
         <div className="mb-12 w-full max-w-2xl">
@@ -340,7 +341,7 @@ export default function OnboardingPage() {
             </div>
 
             <p className="text-center text-xs text-gray-500">
-              Don't worry, you can always add this information later
+              Don&apos;t worry, you can always add this information later
             </p>
           </CardContent>
         </Card>

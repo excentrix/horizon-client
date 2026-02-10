@@ -19,7 +19,7 @@ import { toast } from "sonner";
 interface ArtifactDetail {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   artifact_type: string;
   url?: string;
   content?: string;

@@ -2,17 +2,13 @@
 
 import { useState } from "react";
 import { 
-  Bot, 
-  ChevronDown, 
-  ChevronUp, 
-  Cpu, 
-  Database, 
-  Terminal, 
-  Shield, 
-  CheckCircle2, 
-  Clock,
+  Cpu,
+  Terminal,
   BrainCircuit,
-  Zap
+  Zap,
+  Bot,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ToolInvocation, GuardrailsMetadata, SafetyMetadata } from "@/types";
@@ -35,9 +31,8 @@ export function AgentInsightsCard({
   toolInvocations = [], 
   toolRuntimeInvocations = [],
   guardrails,
-  safety,
+
   agentName = "Agent",
-  className
 }: AgentInsightsCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   

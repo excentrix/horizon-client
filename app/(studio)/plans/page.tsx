@@ -51,7 +51,7 @@ function PlansContent() {
         setSelectedPlanId(plans[0].id);
       }
     }
-  }, [plans, searchParamsString, selectedPlanId]);
+  }, [plans, searchParamsString, selectedPlanId, searchParams]);
 
   const { data: plan, isLoading: planLoading } = usePlan(
     selectedPlanId ?? undefined,

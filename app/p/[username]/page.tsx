@@ -4,17 +4,16 @@ import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+
+import type { PortfolioArtifact } from "@/types";
 import { Separator } from "@/components/ui/separator";
 import {
   Download,
   Linkedin,
   Github,
   Globe,
-  Twitter,
   AlertCircle,
   ArrowLeft,
-  MapPin,
   Mail,
   Calendar,
   Award,
@@ -246,7 +245,7 @@ export default function PublicPortfolioPage() {
                 <h2 className="text-2xl font-bold">Featured Projects</h2>
               </div>
               <ProjectShowcaseGrid
-                projects={featured_artifacts.map((artifact: any) => ({
+                projects={featured_artifacts.map((artifact: PortfolioArtifact) => ({
                   id: artifact.id,
                   title: artifact.title,
                   description: artifact.description,

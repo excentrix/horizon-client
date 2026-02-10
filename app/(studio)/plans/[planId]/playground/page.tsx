@@ -59,9 +59,9 @@ export default function PlanPlaygroundPage() {
   const brainMapSync = useBrainMapSync();
   const { data: learnerModel } = useLearnerModel();
   const queryClient = useQueryClient();
-  const safeArtifacts = Array.isArray(artifacts) ? artifacts : [];
-  const focusConcepts = brainMap?.focus_concepts ?? [];
-  const masteryMap = brainMap?.mastery_map ?? {};
+  const safeArtifacts = useMemo(() => Array.isArray(artifacts) ? artifacts : [], [artifacts]);
+  const focusConcepts = useMemo(() => brainMap?.focus_concepts ?? [], [brainMap]);
+  const masteryMap = useMemo(() => brainMap?.mastery_map ?? {}, [brainMap]);
   const unlockedConcepts = useMemo(() => {
     if (!brainMap) return 0;
     return focusConcepts.filter((concept) => {
@@ -79,8 +79,34 @@ export default function PlanPlaygroundPage() {
   const [confidence, setConfidence] = useState<number | null>(null);
   const [stepStates, setStepStates] = useState<Record<string, boolean[]>>({});
   const [showExample, setShowExample] = useState(false);
-  const [mentorResponse, setMentorResponse] = useState<string | null>(null);
   const [mentorPrompt, setMentorPrompt] = useState<string>("");
+  
+  const selectedTaskId = searchParams.get("task");
+  const tasks = useMemo(() => plan?.daily_tasks ?? [], [plan?.daily_tasks]);
+
+  const activeTask = useMemo(() => {
+    if (!selectedTaskId) return tasks[0];
+    return tasks.find((t) => t.id === selectedTaskId) ?? tasks[0];
+  }, [tasks, selectedTaskId]);
+
+  const suggestedPracticeMode = useMemo(() => {
+    if (!activeTask) return "code";
+    const text = `${activeTask.title} ${activeTask.description}`.toLowerCase();
+    if (activeTask.task_type === "hands_on" || activeTask.task_type === "practice") {
+      if (text.includes("math") || text.includes("equation") || text.includes("formula")) {
+        return "scratch";
+      }
+      return "code";
+    }
+    if (text.includes("proof") || text.includes("derive") || text.includes("calculate")) {
+      return "scratch";
+    }
+    if (text.includes("code") || text.includes("python") || text.includes("algorithm")) {
+      return "code";
+    }
+    return "code";
+  }, [activeTask]);
+
   const [showRubric, setShowRubric] = useState(false);
   const [showSubmission, setShowSubmission] = useState(false);
   const [submissionProof, setSubmissionProof] = useState("");
@@ -210,23 +236,8 @@ export default function PlanPlaygroundPage() {
     return () => window.removeEventListener("playground:event", handler);
   }, [mentorConversationKey]);
 
-  const tasks = plan?.daily_tasks ?? [];
-  const selectedTaskId = searchParams.get("task");
 
-  const activeTask = useMemo(() => {
-    if (selectedTaskId) {
-      const found = tasks.find((task) => task.id === selectedTaskId);
-      if (found) return found;
-    }
-    return (
-      tasks.find((task) => task.status !== "completed") ??
-      tasks.sort(
-        (a, b) =>
-          new Date(a.scheduled_date).getTime() -
-          new Date(b.scheduled_date).getTime()
-      )[0]
-    );
-  }, [selectedTaskId, tasks]);
+
 
   useEffect(() => {
     if (!mentorConversationKey) {
@@ -265,7 +276,8 @@ export default function PlanPlaygroundPage() {
 
     const resources = activeTask?.online_resources ?? [];
     const resourceText = resources
-      .map((resource) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((resource: any) =>
         typeof resource === "string"
           ? resource
           : (resource.url as string) ||
@@ -307,7 +319,7 @@ export default function PlanPlaygroundPage() {
       taskId: activeTask.id,
       taskTitle: activeTask.title,
     });
-  }, [activeTask?.id, activeTask?.title, planId, learningModeOverride, suggestedLearningMode]);
+  }, [activeTask?.id, activeTask?.title, planId, learningModeOverride, suggestedLearningMode, suggestedPracticeMode]);
 
   const milestoneCelebration = useMemo(() => {
     if (!activeTask?.milestone_id) return null;
@@ -339,23 +351,7 @@ export default function PlanPlaygroundPage() {
     return defaultSteps;
   }, [activeTask]);
 
-  const suggestedPracticeMode = useMemo(() => {
-    if (!activeTask) return "code";
-    const text = `${activeTask.title} ${activeTask.description}`.toLowerCase();
-    if (activeTask.task_type === "hands_on" || activeTask.task_type === "practice") {
-      if (text.includes("math") || text.includes("equation") || text.includes("formula")) {
-        return "scratch";
-      }
-      return "code";
-    }
-    if (text.includes("proof") || text.includes("derive") || text.includes("calculate")) {
-      return "scratch";
-    }
-    if (text.includes("code") || text.includes("python") || text.includes("algorithm")) {
-      return "code";
-    }
-    return "code";
-  }, [activeTask]);
+
 
   useEffect(() => {
     if (learningMode === "video") {
@@ -533,11 +529,6 @@ export default function PlanPlaygroundPage() {
       : null) ||
     "Show one concrete takeaway from this task.";
 
-  const challengeReward =
-    activeTask?.milestone_title
-      ? `Progress toward ${activeTask.milestone_title}`
-      : "Progress the journey + unlock the next step.";
-
   const allowedProofTypes = useMemo(() => {
     const method = activeTask?.verification?.method?.toLowerCase() ?? "";
     if (method.includes("link") || method.includes("repo") || method.includes("url")) {
@@ -558,7 +549,7 @@ export default function PlanPlaygroundPage() {
     "Submit a short proof that shows you completed the task.";
 
   useEffect(() => {
-    if (!allowedProofTypes.includes(proofType)) {
+    if (!(allowedProofTypes as readonly string[]).includes(proofType)) {
       setProofType(allowedProofTypes[0]);
     }
   }, [allowedProofTypes, proofType]);
@@ -669,7 +660,7 @@ export default function PlanPlaygroundPage() {
       quiz: "Quiz me on this task with 2 quick questions.",
     };
     const prompt = actionMap[action];
-    setMentorResponse(`Sent to mentor: ${prompt}`);
+    // setMentorResponse removed
     setMentorPrompt(prompt);
     void handleMentorSend(prompt, buildMentorContext(), `mentor_action_${action}`);
   };
@@ -1379,7 +1370,7 @@ export default function PlanPlaygroundPage() {
                   {proofView === "proof" ? (
                     <>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {allowedProofTypes.includes("link") ? (
+                        {(allowedProofTypes as unknown as string[]).includes("link") ? (
                           <Button
                             size="sm"
                             variant={proofType === "link" ? "default" : "outline"}
@@ -1388,7 +1379,7 @@ export default function PlanPlaygroundPage() {
                             Link
                           </Button>
                         ) : null}
-                        {allowedProofTypes.includes("text") ? (
+                        {(allowedProofTypes as unknown as string[]).includes("text") ? (
                           <Button
                             size="sm"
                             variant={proofType === "text" ? "default" : "outline"}
@@ -1397,7 +1388,7 @@ export default function PlanPlaygroundPage() {
                             Summary
                           </Button>
                         ) : null}
-                        {allowedProofTypes.includes("file") ? (
+                        {(allowedProofTypes as unknown as string[]).includes("file") ? (
                           <Button
                             size="sm"
                             variant={proofType === "file" ? "default" : "outline"}
@@ -1408,7 +1399,7 @@ export default function PlanPlaygroundPage() {
                         ) : null}
                       </div>
                       <div className="mt-3">
-                        {proofType === "link" ? (
+                        {(proofType as string) === "link" ? (
                           <Input
                             type="url"
                             value={proofLink}
@@ -1416,7 +1407,7 @@ export default function PlanPlaygroundPage() {
                             placeholder="Paste a link to your proof (doc, repo, submission)"
                           />
                         ) : null}
-                        {proofType === "text" ? (
+                        {(proofType as string) === "text" ? (
                           <Textarea
                             value={proofText}
                             onChange={(event) => setProofText(event.target.value)}
@@ -1424,7 +1415,7 @@ export default function PlanPlaygroundPage() {
                             className="min-h-[120px]"
                           />
                         ) : null}
-                        {proofType === "file" ? (
+                        {(proofType as string) === "file" ? (
                           <div className="space-y-2">
                             <Input
                               type="file"

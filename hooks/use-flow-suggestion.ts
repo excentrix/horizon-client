@@ -7,7 +7,7 @@ import { telemetry } from '@/lib/telemetry';
 
 export interface InlineContent {
   content_type: 'quiz' | 'code' | 'reflection' | 'task_preview';
-  data: Record<string, any>;
+  data: Record<string, unknown>;
   interactions_enabled: boolean;
 }
 
@@ -17,7 +17,7 @@ export interface FlowSuggestion {
   message: string;
   action_label: string;
   inline_content?: InlineContent;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   priority: number;
   log_id?: string;
 }

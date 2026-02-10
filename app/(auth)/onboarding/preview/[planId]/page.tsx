@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowRight, Calendar, CheckCircle, BookOpen, Trophy } from "lucide-react";
+import { Loader2, ArrowRight, Calendar, BookOpen, Trophy } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
@@ -107,7 +107,7 @@ export default function PlanPreviewPage({ params }: { params: Promise<{ planId: 
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-violet-100">
             A {plan.estimated_duration_weeks}-week journey tailored to your goals. 
-            We've curated {plan.task_count} high-impact tasks to get you there.
+            We&apos;ve curated {plan.task_count} high-impact tasks to get you there.
           </p>
           
           <div className="mt-10 flex justify-center gap-4">
@@ -175,7 +175,7 @@ export default function PlanPreviewPage({ params }: { params: Promise<{ planId: 
                         <div>
                             <h3 className="font-semibold text-gray-900 dark:text-white">Verification System</h3>
                             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                                Every task includes automated verification. We'll check your code, quiz your knowledge, or review your projects to ensure you're actually learning.
+                                Every task includes automated verification. We&apos;ll check your code, quiz your knowledge, or review your projects to ensure you&apos;re actually learning.
                             </p>
                         </div>
                     </div>

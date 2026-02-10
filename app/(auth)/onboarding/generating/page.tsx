@@ -15,8 +15,6 @@ export default function GeneratingPage() {
   
   const [status, setStatus] = useState<Status>("generating");
   const [message, setMessage] = useState("Analyzing your profile and preferences...");
-  const [planId, setPlanId] = useState<string | null>(null);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!sessionKey) {
@@ -32,7 +30,6 @@ export default function GeneratingPage() {
 
         if (data.current_step === "complete" && data.draft_plan) {
           setStatus("completed");
-          setPlanId(data.draft_plan);
           setMessage("Your personalized learning plan is ready!");
           clearInterval(pollInterval);
           

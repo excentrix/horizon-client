@@ -25,6 +25,7 @@ import {
   MemoryItem,
   ConversationAnalysis,
   PortfolioArtifact,
+  PortfolioProfile,
   PortfolioSkillTranscript,
   BrainMapSnapshot,
   LearnerModelSnapshot,
@@ -275,7 +276,7 @@ export const portfolioApi = {
       http.get("/portfolio/artifacts/")
     ).then(normalizeList),
   getProfile: () =>
-    extract<{ profile: UserSummary & { id: string; slug?: string } }>(
+    extract<{ profile: PortfolioProfile }>(
       http.get("/portfolio/profiles/my_profile/")
     ),
   updateProfile: (profileId: string, payload: Record<string, unknown>) =>

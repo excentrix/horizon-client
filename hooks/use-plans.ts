@@ -5,10 +5,10 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { planningApi } from "@/lib/api";
-import type { DailyTask, LearningPlan } from "@/types";
+import type { DailyTask, LearningPlan, PlanBuildStatus } from "@/types";
 import { telemetry } from "@/lib/telemetry";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
-import { useEffect } from "react";
+
 
 const plansKey = ["learning-plans"];
 const planKey = (planId: string) => [...plansKey, planId];
@@ -87,7 +87,7 @@ export function useCreatePlanFromConversation() {
       
       // Set status to queued/in_progress based on response
       setPlanBuildStatus(
-        (data.status as any) || "queued",
+        (data.status as PlanBuildStatus) || "queued",
         data.message || "Plan creation request accepted"
       );
       

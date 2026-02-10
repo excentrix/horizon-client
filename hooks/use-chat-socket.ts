@@ -11,6 +11,7 @@ import type {
   ChatMessage,
   Conversation,
   PaginatedResponse,
+  PlanBuildStatus,
 } from "@/types";
 import { telemetry } from "@/lib/telemetry";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
@@ -524,7 +525,7 @@ export function useChatSocket(conversationId: string | null) {
                 data: {
                   id: eventId,
                   conversation_id: targetConversation ?? undefined,
-                  status: (data?.status as any) ?? "in_progress",
+                  status: (data?.status as PlanBuildStatus) ?? "in_progress",
                   message: (data?.message as string) ?? "Working on your plan...",
                   plan_id: data?.plan_id as string | undefined,
                   plan_title: data?.plan_title as string | undefined,
@@ -539,7 +540,7 @@ export function useChatSocket(conversationId: string | null) {
               // Update global plan build status in store
               if (data?.status) {
                 // Cast to specific PlanBuildStatus to avoid type errors, defaulting to "in_progress" if unknown
-                const status = (data.status as any) || "in_progress";
+                const status = (data.status as PlanBuildStatus) || "in_progress";
                 setPlanBuildStatus(
                   status,
                   (data.message as string) ?? undefined,
@@ -691,6 +692,7 @@ export function useChatSocket(conversationId: string | null) {
     startHeartbeat,
     stopHeartbeat,
     updateMentorTyping,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   ]);
 
   connectRef.current = connect;
@@ -783,9 +785,9 @@ export function useChatSocket(conversationId: string | null) {
 
     return () => {
       resetSocket();
-      setStatus("idle");
       setError(null);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, connect, resetSocket, updateMentorTyping]);
 
   useEffect(() => {

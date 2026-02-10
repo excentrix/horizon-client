@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, Briefcase, Award } from "lucide-react";
+import { Target, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GraphCareerSnapshot } from "@/types";
 import { Badge } from "@/components/ui/badge";

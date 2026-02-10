@@ -419,6 +419,7 @@ export interface PortfolioArtifact {
   status: "draft" | "needs_review" | "verified";
   verification_status?: "pending" | "verified" | "human_verified" | "rejected" | "needs_revision";
   featured?: boolean;
+  tags?: string[];
   visibility?: "private" | "mentors" | "employers" | "public";
   reflection?: string;
   reflection_prompt?: string;
@@ -431,6 +432,22 @@ export interface PortfolioSkillTranscript {
   best_level: "exposure" | "application" | "mastery";
   evidence_count: number;
   avg_quality: number;
+}
+
+export interface PortfolioProfile extends UserSummary {
+  headline?: string;
+  bio?: string;
+  github_url?: string;
+  linkedin_url?: string;
+  portfolio_url?: string;
+  twitter_url?: string;
+  is_public?: boolean;
+  slug?: string;
+  show_competency_chart?: boolean;
+  show_growth_timeline?: boolean;
+  show_learning_stats?: boolean;
+  view_count?: number;
+  verified_artifacts?: number;
 }
 
 export interface MentorEngagementNudge {

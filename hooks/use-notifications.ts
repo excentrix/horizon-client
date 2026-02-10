@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Cookies from "js-cookie";
-import type { ToastNotification } from "@/types";
+import type { ToastNotification, PlanBuildStatus } from "@/types";
 import { telemetry } from "@/lib/telemetry";
 import {
   describeStageEvent,
@@ -318,10 +318,10 @@ export function useNotificationsSocket() {
                   id: (step.id as string) ?? crypto.randomUUID(),
                   agent: (step.agent as string) ?? "System",
                   step: (step.step as string) ?? "Processing",
-                  status: (step.status as string) ?? "running",
+                  status: (step.status as unknown) as "running" | "completed" | "failed" | "waiting_for_input",
                   timestamp:
                     (step.timestamp as string) ?? new Date().toISOString(),
-                  details: step.details as Record<string, unknown> | undefined,
+                  details: typeof step.details === 'object' ? JSON.stringify(step.details) : (step.details as string | undefined),
                   input: step.input as Record<string, unknown> | undefined,
                   output: step.output as Record<string, unknown> | undefined,
                   confidence: step.confidence as number | undefined,
@@ -377,7 +377,7 @@ export function useNotificationsSocket() {
               if (insight) {
                 pushInsight({
                   id: (insight.id as string) ?? crypto.randomUUID(),
-                  type: (insight.type as string) ?? "recommendation",
+                  type: (insight.type as unknown) as "recommendation" | "crisis" | "trend" | "milestone",
                   title: (insight.title as string) ?? "New Insight",
                   message: (insight.message as string) ?? "",
                   data: insight.data as Record<string, unknown> | undefined,
@@ -400,7 +400,7 @@ export function useNotificationsSocket() {
                   data: {
                     id: eventId,
                     conversation_id: data.conversation_id as string | undefined,
-                    status: (data.status as any) ?? "in_progress",
+                    status: (data.status as PlanBuildStatus) ?? "in_progress",
                     message:
                       (data.message as string) ?? "Working on your plan...",
                     plan_id: data.plan_id as string | undefined,
@@ -493,6 +493,7 @@ export function useNotificationsSocket() {
         connect();
       }, 5000);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clearReconnectTimeout, resetSocket, startHeartbeat, stopHeartbeat]);
 
   useEffect(() => {

@@ -12,8 +12,6 @@ import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { FlowStarter } from "@/components/dashboard/flow-starter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import { telemetry } from "@/lib/telemetry";
 import { 
   MessageSquare, 
@@ -62,7 +60,7 @@ export default function DashboardPage() {
                 Welcome back{user?.first_name ? `, ${user.first_name}` : ""}! 👋
               </h1>
               <p className="mt-1 text-muted-foreground">
-                Your learning journey continues — let's make today count
+                Your learning journey continues — let&apos;s make today count
               </p>
             </div>
             
@@ -239,24 +237,29 @@ export default function DashboardPage() {
               <Award className="h-5 w-5 text-violet-600" />
               Recent Achievements
             </CardTitle>
-            <CardDescription>Badges you've unlocked on your journey</CardDescription>
+            <CardDescription>Badges you&apos;ve unlocked on your journey</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {gamificationData?.recent_badges?.length ? (
-              gamificationData.recent_badges.slice(0, 5).map((badge) => (
-                <div
-                  key={badge.id}
-                  className="flex items-center gap-3 rounded-lg border bg-gradient-to-r from-violet-50/50 to-fuchsia-50/50 p-3 dark:from-violet-950/20 dark:to-fuchsia-950/20"
-                >
-                  <div className="text-2xl">{badge.badge.icon || "🏆"}</div>
-                  <div className="flex-1">
-                    <p className="font-medium">{badge.badge.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {badge.badge.description}
-                    </p>
+              gamificationData.recent_badges.slice(0, 5).map((item) => {
+                const badge = "badge" in item ? item.badge : item;
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3 rounded-lg border bg-gradient-to-r from-violet-50/50 to-fuchsia-50/50 p-3 dark:from-violet-950/20 dark:to-fuchsia-950/20"
+                  >
+                    <div className="text-2xl">{badge.icon || "🏆"}</div>
+                    <div className="flex-1">
+                      <p className="font-medium">{badge.name}</p>
+                      {"description" in badge && badge.description && (
+                        <p className="text-xs text-muted-foreground">
+                          {badge.description}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="py-8 text-center">
                 <div className="mb-2 inline-flex h-12 w-12 items-center justify-center rounded-full bg-muted">

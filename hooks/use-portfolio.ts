@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { portfolioApi } from "@/lib/api";
-import type { PortfolioArtifact, PortfolioSkillTranscript } from "@/types";
+import type { PortfolioArtifact, PortfolioProfile, PortfolioSkillTranscript } from "@/types";
 import { telemetry } from "@/lib/telemetry";
 
 const artifactsKey = ["portfolio-artifacts"];
@@ -33,7 +33,7 @@ export function usePortfolioArtifacts() {
 }
 
 export function usePortfolioProfile() {
-  return useQuery({
+  return useQuery<{ profile: PortfolioProfile }>({
     queryKey: profileKey,
     queryFn: async () => {
       try {

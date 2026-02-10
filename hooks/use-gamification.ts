@@ -8,7 +8,7 @@ import type {
   GamificationLeaderboard,
   GamificationEvent,
 } from "@/types";
-import { useEffect, useCallback } from "react";
+import { useCallback } from "react";
 
 // Query keys
 const summaryKey = ["gamification", "summary"];

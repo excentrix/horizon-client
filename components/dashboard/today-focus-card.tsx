@@ -42,11 +42,11 @@ export function TodayFocusCard({ task, isLoading }: TodayFocusCardProps) {
             <span className="text-2xl">🎉</span>
             No tasks scheduled for today
           </CardTitle>
-          <CardDescription>You're all caught up! Ready to start something new?</CardDescription>
+          <CardDescription>You&apos;re all caught up! Ready to start something new?</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Explore your learning plans to see what's coming up, or chat with a mentor to discover new learning paths.
+            Explore your learning plans to see what&apos;s coming up, or chat with a mentor to discover new learning paths.
           </p>
           <div className="flex flex-wrap gap-3">
             <Button onClick={() => router.push("/plans")} size="lg">
@@ -84,7 +84,7 @@ export function TodayFocusCard({ task, isLoading }: TodayFocusCardProps) {
       <CardHeader>
         <div className="flex items-start justify-between">
           <div>
-            <CardTitle className="text-2xl">Today's Focus</CardTitle>
+            <CardTitle className="text-2xl">Today&apos;s Focus</CardTitle>
             <CardDescription>Recommended task to work on now</CardDescription>
           </div>
           <Badge variant={getTimeTagColor()} className="text-xs">

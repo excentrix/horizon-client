@@ -1,11 +1,11 @@
 // Service Worker for Web Push Notifications
 // This file handles push notifications and notification clicks
 
-const CACHE_NAME = 'horizon-notifications-v1';
+
 const FRONTEND_URL = self.location.origin;
 
 // Install event
-self.addEventListener('install', (event) => {
+self.addEventListener('install', () => {
   console.log('[Service Worker] Installing...');
   self.skipWaiting(); // Activate immediately
 });

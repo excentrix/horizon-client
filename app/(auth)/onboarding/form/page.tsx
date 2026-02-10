@@ -59,7 +59,7 @@ export default function OnboardingFormPage() {
           setFormData((prev) => ({
             ...prev,
             target_role: parsed_data.current_role || "",
-            experience_level: (parsed_data.experience_level || "beginner") as any,
+            experience_level: (parsed_data.experience_level || "beginner") as OnboardingData["experience_level"],
             skills: parsed_data.skills || [],
           }));
         }
@@ -74,7 +74,7 @@ export default function OnboardingFormPage() {
       .getProfileDetail()
       .then((profile) => {
         const prefs = profile.mentor_preferences ?? {};
-        const override = prefs.tone_override ?? null;
+        const override = (prefs.tone_override as string) ?? null;
         setToneOverride(override);
       })
       .catch(() => {
@@ -99,7 +99,7 @@ export default function OnboardingFormPage() {
 
       if (!response.ok) throw new Error("Submission failed");
 
-      const data = await response.json();
+      await response.json();
 
       // Capture form submitted event
       posthog.capture('onboarding_form_submitted', {
@@ -186,66 +186,66 @@ export default function OnboardingFormPage() {
             </div>
             <CardTitle className="text-2xl">Design Your Journey</CardTitle>
             <CardDescription>
-              We've pre-filled some details from your resume. Tweak them to find your perfect path.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-8">
-              
-              {/* Target Role */}
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-base">
-                    <Target className="h-4 w-4 text-violet-600" />
-                    What is your target role?
-                </Label>
-                <Input
-                  placeholder="e.g. Senior Backend Engineer, Data Scientist"
-                  value={formData.target_role}
-                  onChange={(e) => setFormData({ ...formData, target_role: e.target.value })}
-                  className="h-12 text-lg"
-                  required
-                />
-              </div>
-
-              {/* Experience Level */}
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-base">
-                    <Trophy className="h-4 w-4 text-violet-600" />
-                    Current Experience Level
-                </Label>
-                <div className="grid grid-cols-3 gap-3">
-                    {['beginner', 'intermediate', 'advanced'].map((level) => (
-                        <button
-                            key={level}
-                            type="button"
-                            onClick={() => setFormData({ ...formData, experience_level: level as any })}
-                            className={cn(
-                                "flex flex-col items-center justify-center rounded-lg border p-3 text-sm font-medium transition-all hover:bg-violet-50 dark:hover:bg-violet-900/10",
-                                formData.experience_level === level
-                                    ? "border-violet-600 bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300 ring-2 ring-violet-600 ring-offset-2 dark:ring-offset-gray-900"
-                                    : "border-gray-200 text-gray-600 dark:border-gray-800 dark:text-gray-400"
-                            )}
-                        >
-                            <span className="capitalize">{level}</span>
-                        </button>
-                    ))}
-                </div>
-              </div>
-
-              {/* Mentor Tone (Coming Soon) */}
-              <div className="relative space-y-3 rounded-2xl border border-dashed border-violet-200 bg-violet-50/40 p-5 dark:border-violet-900/40 dark:bg-violet-900/10">
-                <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-2 text-base">
-                    <Sparkles className="h-4 w-4 text-violet-600" />
-                    Mentor Tone (Pro)
-                  </Label>
-                  <Badge className="border border-violet-300 bg-white text-violet-700 dark:border-violet-800 dark:bg-gray-900 dark:text-violet-200">
-                    Coming soon
-                  </Badge>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  We automatically adapt your mentor's tone based on your progress and mood. You'll soon be able to
-                  override it manually.
+                  We&apos;ve pre-filled some details from your resume. Tweak them to find your perfect path.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-8">
+                  
+                  {/* Target Role */}
+                  <div className="space-y-3">
+                    <Label className="flex items-center gap-2 text-base">
+                        <Target className="h-4 w-4 text-violet-600" />
+                        What is your target role?
+                    </Label>
+                    <Input
+                      placeholder="e.g. Senior Backend Engineer, Data Scientist"
+                      value={formData.target_role}
+                      onChange={(e) => setFormData({ ...formData, target_role: e.target.value })}
+                      className="h-12 text-lg"
+                      required
+                    />
+                  </div>
+    
+                  {/* Experience Level */}
+                  <div className="space-y-3">
+                    <Label className="flex items-center gap-2 text-base">
+                        <Trophy className="h-4 w-4 text-violet-600" />
+                        Current Experience Level
+                    </Label>
+                    <div className="grid grid-cols-3 gap-3">
+                        {['beginner', 'intermediate', 'advanced'].map((level) => (
+                            <button
+                                key={level}
+                                type="button"
+                                onClick={() => setFormData({ ...formData, experience_level: level as OnboardingData["experience_level"] })}
+                                className={cn(
+                                    "flex flex-col items-center justify-center rounded-lg border p-3 text-sm font-medium transition-all hover:bg-violet-50 dark:hover:bg-violet-900/10",
+                                    formData.experience_level === level
+                                        ? "border-violet-600 bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300 ring-2 ring-violet-600 ring-offset-2 dark:ring-offset-gray-900"
+                                        : "border-gray-200 text-gray-600 dark:border-gray-800 dark:text-gray-400"
+                                )}
+                            >
+                                <span className="capitalize">{level}</span>
+                            </button>
+                        ))}
+                    </div>
+                  </div>
+    
+                  {/* Mentor Tone (Coming Soon) */}
+                  <div className="relative space-y-3 rounded-2xl border border-dashed border-violet-200 bg-violet-50/40 p-5 dark:border-violet-900/40 dark:bg-violet-900/10">
+                    <div className="flex items-center justify-between">
+                      <Label className="flex items-center gap-2 text-base">
+                        <Sparkles className="h-4 w-4 text-violet-600" />
+                        Mentor Tone (Pro)
+                      </Label>
+                      <Badge className="border border-violet-300 bg-white text-violet-700 dark:border-violet-800 dark:bg-gray-900 dark:text-violet-200">
+                        Coming soon
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      We automatically adapt your mentor&apos;s tone based on your progress and mood. You&apos;ll soon be able to
+                      override it manually.
                 </p>
                 <div className={cn("grid grid-cols-3 gap-3", !toneOverrideEnabled && "opacity-60")}>
                   {["Supportive", "Direct", "Hard love"].map((tone) => {
