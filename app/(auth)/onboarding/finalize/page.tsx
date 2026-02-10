@@ -103,14 +103,14 @@ export default function FinalizePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center px-4 py-12">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen bg-[#f6f4ff] dark:bg-[#0b0b0f] flex items-center justify-center px-4 py-12">
+      <Card className="w-full max-w-md border-2 border-black bg-white shadow-[10px_10px_0_0_#000]">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900/30">
-            <Rocket className="h-7 w-7 text-violet-600" />
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border-2 border-black bg-[#fcd34d]">
+            <Rocket className="h-7 w-7 text-black" />
           </div>
-          <CardTitle className="text-2xl">Almost There!</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-2xl font-extrabold">Almost There!</CardTitle>
+          <CardDescription className="text-gray-700">
             Create your account to save your personalized learning plan and start your journey.
           </CardDescription>
         </CardHeader>
@@ -128,6 +128,7 @@ export default function FinalizePage() {
                 placeholder="What should we call you?"
                 value={formData.displayName}
                 onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
+                className="border-2 border-black shadow-[3px_3px_0_0_#000]"
               />
             </div>
             
@@ -144,6 +145,7 @@ export default function FinalizePage() {
                 required
                 value={formData.email}
                 onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                className="border-2 border-black shadow-[3px_3px_0_0_#000]"
               />
             </div>
             
@@ -160,6 +162,7 @@ export default function FinalizePage() {
                 required
                 value={formData.password}
                 onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                className="border-2 border-black shadow-[3px_3px_0_0_#000]"
               />
             </div>
             
@@ -173,6 +176,7 @@ export default function FinalizePage() {
                 required
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                className="border-2 border-black shadow-[3px_3px_0_0_#000]"
               />
             </div>
             
@@ -186,20 +190,20 @@ export default function FinalizePage() {
                 id="timezone"
                 value={formData.timezone}
                 onChange={(e) => setFormData(prev => ({ ...prev, timezone: e.target.value }))}
-                className="bg-gray-50 dark:bg-gray-900"
+                className="border-2 border-black shadow-[3px_3px_0_0_#000]"
               />
               <p className="text-xs text-gray-500">Auto-detected. We use this to schedule your daily tasks.</p>
             </div>
             
             {/* Error message */}
             {error && (
-              <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-600 dark:text-red-400">
+              <div className="rounded-md border-2 border-black bg-red-100 p-3 text-sm font-semibold text-red-700 shadow-[3px_3px_0_0_#000]">
                 {error}
               </div>
             )}
             
             {/* Submit */}
-            <Button type="submit" className="w-full h-11 text-base bg-violet-600 hover:bg-violet-700" disabled={loading}>
+            <Button type="submit" className="w-full h-11 text-base bg-black text-white shadow-[4px_4px_0_0_#000] hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

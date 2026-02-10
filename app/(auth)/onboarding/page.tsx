@@ -171,15 +171,18 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+    <div className="min-h-screen bg-[#f6f4ff] dark:bg-[#0b0b0f]">
       <div className="container mx-auto flex min-h-screen flex-col items-center justify-center px-4 py-16">
         
         {/* Header */}
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-5xl">
-            Welcome to <span className="bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">Horizon</span>
+          <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-5xl">
+            Welcome to{" "}
+            <span className="inline-block -rotate-1 rounded-md border-2 border-black bg-[#fcd34d] px-2 py-1 text-black shadow-[6px_6px_0_0_#000]">
+              Horizon
+            </span>
           </h1>
-          <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
+          <p className="mt-4 text-lg font-medium text-gray-700 dark:text-gray-300">
             Let&apos;s personalize your learning journey. A resume helps, but it&apos;s optional.
           </p>
         </div>
@@ -189,26 +192,26 @@ export default function OnboardingPage() {
         <div className="mb-12 w-full max-w-2xl">
           <div className="flex items-center justify-between">
             <div className="flex flex-col items-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-white">1</div>
-              <span className="mt-2 text-sm font-medium text-violet-600">Upload (Optional)</span>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-white text-black shadow-[3px_3px_0_0_#000]">1</div>
+              <span className="mt-2 text-sm font-semibold text-gray-900">Upload (Optional)</span>
             </div>
-            <div className="h-1 flex-1 bg-gray-200 dark:bg-gray-700 mx-4" />
+            <div className="mx-4 h-1 flex-1 bg-black/10" />
             <div className="flex flex-col items-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700 text-gray-500">2</div>
-              <span className="mt-2 text-sm text-gray-500">Tell Us More</span>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-[#e0f2fe] text-black shadow-[3px_3px_0_0_#000]">2</div>
+              <span className="mt-2 text-sm font-semibold text-gray-900">Tell Us More</span>
             </div>
-            <div className="h-1 flex-1 bg-gray-200 dark:bg-gray-700 mx-4" />
+            <div className="mx-4 h-1 flex-1 bg-black/10" />
             <div className="flex flex-col items-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700 text-gray-500">3</div>
-              <span className="mt-2 text-sm text-gray-500">Choose Path</span>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-[#dcfce7] text-black shadow-[3px_3px_0_0_#000]">3</div>
+              <span className="mt-2 text-sm font-semibold text-gray-900">Choose Path</span>
             </div>
           </div>
         </div>
 
         {/* Main Card */}
-        <Card className="w-full max-w-2xl">
+        <Card className="w-full max-w-2xl border-2 border-black bg-white shadow-[10px_10px_0_0_#000]">
           <CardHeader>
-            <CardTitle>Upload Your Resume (Optional)</CardTitle>
+            <CardTitle className="text-2xl">Upload Your Resume (Optional)</CardTitle>
             <CardDescription>
               We can tailor your path faster with a resume, or you can enter details manually.
             </CardDescription>
@@ -221,11 +224,11 @@ export default function OnboardingPage() {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               className={cn(
-                "relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-all",
+                "relative flex flex-col items-center justify-center rounded-lg border-2 border-black p-12 transition-all",
                 isDragging
-                  ? "border-violet-600 bg-violet-50 dark:bg-violet-950/20"
-                  : "border-gray-300 dark:border-gray-700 hover:border-violet-400",
-                file && "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20"
+                  ? "bg-[#fef9c3]"
+                  : "bg-white hover:bg-[#f1f5f9]",
+                file && "bg-[#dcfce7]"
               )}
             >
               {parseStatus === "idle" && !file && (
@@ -259,39 +262,39 @@ export default function OnboardingPage() {
 
               {parseStatus === "uploading" && (
                 <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
-                  <p className="text-sm font-medium text-gray-700">Uploading...</p>
+                  <Loader2 className="h-8 w-8 animate-spin text-black" />
+                  <p className="text-sm font-semibold text-gray-900">Uploading...</p>
                 </div>
               )}
 
               {parseStatus === "parsing" && (
                 <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
-                  <p className="text-sm font-medium text-gray-700">Analyzing your resume with AI...</p>
-                  <p className="text-xs text-gray-500">This usually takes 10-15 seconds</p>
+                  <Loader2 className="h-8 w-8 animate-spin text-black" />
+                  <p className="text-sm font-semibold text-gray-900">Analyzing your resume with AI...</p>
+                  <p className="text-xs text-gray-600">This usually takes 10-15 seconds</p>
                 </div>
               )}
 
               {parseStatus === "complete" && (
                 <div className="flex flex-col items-center gap-3">
                   <CheckCircle2 className="h-8 w-8 text-emerald-600" />
-                  <p className="text-sm font-medium text-emerald-700">Resume analyzed successfully!</p>
-                  <p className="text-xs text-gray-500">Redirecting...</p>
+                  <p className="text-sm font-semibold text-emerald-700">Resume analyzed successfully!</p>
+                  <p className="text-xs text-gray-600">Redirecting...</p>
                 </div>
               )}
 
               {parseStatus === "failed" && (
                 <div className="flex flex-col items-center gap-3">
                   <AlertCircle className="h-8 w-8 text-red-600" />
-                  <p className="text-sm font-medium text-red-700">Analysis failed</p>
-                  <p className="text-xs text-gray-500">You can try again or skip this step</p>
+                  <p className="text-sm font-semibold text-red-700">Analysis failed</p>
+                  <p className="text-xs text-gray-600">You can try again or skip this step</p>
                 </div>
               )}
             </div>
 
             {/* Error Message */}
             {error && (
-              <div className="rounded-lg bg-red-50 dark:bg-red-950/20 p-4 text-sm text-red-700 dark:text-red-400">
+              <div className="rounded-lg border-2 border-black bg-red-100 p-4 text-sm font-semibold text-red-700 shadow-[4px_4px_0_0_#000]">
                 {error}
               </div>
             )}
@@ -302,7 +305,7 @@ export default function OnboardingPage() {
                 <Button
                   onClick={handleUpload}
                   disabled={uploading}
-                  className="flex-1 bg-violet-600 hover:bg-violet-700"
+                  className="flex-1 bg-black text-white shadow-[4px_4px_0_0_#000] hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition"
                 >
                   {uploading ? (
                     <>
@@ -323,7 +326,7 @@ export default function OnboardingPage() {
                     setError("");
                   }}
                   variant="outline"
-                  className="flex-1"
+                  className="flex-1 border-2 border-black shadow-[4px_4px_0_0_#000] hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition"
                 >
                   Try Again
                 </Button>
@@ -333,14 +336,14 @@ export default function OnboardingPage() {
                 <Button
                   onClick={handleSkip}
                   variant="outline"
-                  className="flex-1"
+                  className="flex-1 border-2 border-black shadow-[4px_4px_0_0_#000] hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition"
                 >
                   Continue Without Resume
                 </Button>
               )}
             </div>
 
-            <p className="text-center text-xs text-gray-500">
+            <p className="text-center text-xs font-medium text-gray-700">
               No resume? No problem — we&apos;ll ask a few quick questions next.
             </p>
           </CardContent>

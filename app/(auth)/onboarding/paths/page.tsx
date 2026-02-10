@@ -108,15 +108,15 @@ export default function PathSelectionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 px-4 py-12">
+    <div className="min-h-screen bg-[#f6f4ff] dark:bg-[#0b0b0f] px-4 py-12">
       <div className="container mx-auto max-w-5xl">
 
         {/* Header */}
         <div className="mb-12 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl">
+            <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-4xl">
                 We found the perfect paths for you
             </h1>
-            <p className="mt-4 text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            <p className="mt-4 text-lg font-medium text-gray-700 max-w-2xl mx-auto">
                 Based on your goals and background, our AI recommends starting with one of these specialized tracks.
             </p>
         </div>
@@ -127,33 +127,33 @@ export default function PathSelectionPage() {
                 <Card 
                     key={path.id} 
                     className={cn(
-                        "flex flex-col relative transition-all duration-300 hover:shadow-xl hover:-translate-y-1 relative overflow-hidden",
-                        index === 0 ? "border-violet-500 shadow-violet-500/20 ring-2 ring-violet-500 ring-offset-2 dark:ring-offset-gray-950" : "border-gray-200 dark:border-gray-800"
+                        "flex flex-col relative transition-all duration-300 hover:-translate-y-1 overflow-hidden border-2 border-black bg-white shadow-[8px_8px_0_0_#000]",
+                        index === 0 ? "ring-4 ring-black" : ""
                     )}
                 >
                     {/* Top Match Badge */}
                     {index === 0 && (
-                        <div className="absolute top-0 right-0 bg-violet-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg z-10">
+                        <div className="absolute top-0 right-0 bg-black text-white text-xs font-bold px-3 py-1 rounded-bl-lg z-10">
                             TOP MATCH ({path.match_score}%)
                         </div>
                     )}
                     {path.is_generated && (
-                        <div className="absolute top-3 left-3 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700 shadow-sm dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200">
+                        <div className="absolute top-3 left-3 rounded-full border-2 border-black bg-[#fcd34d] px-3 py-1 text-[11px] font-semibold text-black shadow-[3px_3px_0_0_#000]">
                             AI Generated
                         </div>
                     )}
                     
                     <CardHeader className="pb-4">
                         <div className="text-4xl mb-4">{path.icon}</div>
-                        <CardTitle className="text-xl">{path.title}</CardTitle>
-                        <CardDescription className="line-clamp-2 min-h-[40px]">
+                        <CardTitle className="text-xl font-extrabold">{path.title}</CardTitle>
+                        <CardDescription className="line-clamp-2 min-h-[40px] text-gray-700">
                             {path.description}
                         </CardDescription>
                     </CardHeader>
                     
                     <CardContent className="flex-1 space-y-4">
                         {/* Stats */}
-                        <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 py-2 border-y border-gray-100 dark:border-gray-800">
+                        <div className="flex items-center justify-between text-sm text-gray-700 py-2 border-y-2 border-black/10">
                              <div className="flex items-center gap-1.5">
                                 <Clock className="h-4 w-4" />
                                 {path.duration_weeks}w
@@ -163,9 +163,9 @@ export default function PathSelectionPage() {
                                 <span className="capitalize">{path.difficulty}</span>
                              </div>
                         </div>
-                        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center justify-between text-xs text-gray-700">
                           <span>Match confidence</span>
-                          <span className="font-semibold text-violet-600 dark:text-violet-300">
+                          <span className="font-semibold text-black">
                             {path.match_score}%
                           </span>
                         </div>
@@ -184,8 +184,8 @@ export default function PathSelectionPage() {
                     <CardFooter className="pt-4">
                         <Button 
                             className={cn(
-                                "w-full text-base h-11", 
-                                index === 0 ? "bg-violet-600 hover:bg-violet-700" : "bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                "w-full text-base h-11 border-2 border-black shadow-[4px_4px_0_0_#000] transition hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000]", 
+                                index === 0 ? "bg-black text-white" : "bg-white text-black"
                             )}
                             onClick={() => handleSelectPath(path.slug)}
                             disabled={initializing}
@@ -206,8 +206,12 @@ export default function PathSelectionPage() {
         
         {/* Fallback/Custom Option */}
         <div className="mt-16 text-center">
-            <p className="text-gray-500 dark:text-gray-400 mb-4">Don&apos;t see what you&apos;re looking for?</p>
-            <Button variant="ghost" className="text-violet-600 hover:text-violet-700 dark:text-violet-400">
+            <p className="text-gray-700 mb-4 font-medium">Don&apos;t see what you&apos;re looking for?</p>
+            <Button
+              variant="ghost"
+              className="text-black hover:text-black"
+              onClick={() => router.push("/onboarding/custom")}
+            >
                 Create a Custom Path from Scratch <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
         </div>

@@ -186,39 +186,39 @@ export default function OnboardingFormPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 px-4 py-12">
+    <div className="min-h-screen bg-[#f6f4ff] dark:bg-[#0b0b0f] px-4 py-12">
       <div className="container mx-auto max-w-2xl">
         
         {/* Progress */}
         <div className="mb-8 flex justify-center">
-            <div className="flex items-center space-x-2 text-sm text-gray-500">
-                <span className="h-2 w-2 rounded-full bg-violet-600"></span>
-                <span className="font-medium text-violet-600">Preferences</span>
-                <span className="h-px w-8 bg-gray-300 dark:bg-gray-700"></span>
-                <span className="h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-700"></span>
-                <span>Path Selection</span>
+            <div className="flex items-center space-x-2 text-sm font-semibold text-gray-900">
+                <span className="h-2 w-2 rounded-full bg-black"></span>
+                <span>Preferences</span>
+                <span className="h-px w-8 bg-black/30"></span>
+                <span className="h-2 w-2 rounded-full bg-black/20"></span>
+                <span className="text-gray-600">Path Selection</span>
             </div>
         </div>
 
-        <Card className="border-0 shadow-lg ring-1 ring-gray-200 dark:ring-gray-800">
+        <Card className="border-2 border-black bg-white shadow-[10px_10px_0_0_#000]">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900/30">
-                <BrainCircuit className="h-6 w-6 text-violet-600" />
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border-2 border-black bg-[#fcd34d]">
+                <BrainCircuit className="h-6 w-6 text-black" />
             </div>
-            <CardTitle className="text-2xl">Design Your Journey</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-2xl font-extrabold">Design Your Journey</CardTitle>
+            <CardDescription className="text-gray-700">
                   If you uploaded a resume, we pre-filled some details. Otherwise, just answer a few quick questions.
                 </CardDescription>
               </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-8">
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-8">
 
               {!hasResumePrefill && (
-                <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-4 text-sm text-gray-700 dark:border-violet-900/40 dark:bg-violet-900/10 dark:text-gray-300">
-                  <div className="mb-2 font-semibold text-violet-700 dark:text-violet-300">
+                <div className="rounded-xl border-2 border-black bg-[#e0f2fe] p-4 text-sm text-gray-900 shadow-[6px_6px_0_0_#000]">
+                  <div className="mb-2 font-semibold text-black">
                     Quick picks to get you started
                   </div>
-                  <div className="mb-3 text-xs text-gray-600 dark:text-gray-400">
+                  <div className="mb-3 text-xs text-gray-700">
                     Tap a role or skill to autofill. You can edit anytime.
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -227,7 +227,7 @@ export default function OnboardingFormPage() {
                         key={role}
                         type="button"
                         onClick={() => setFormData((prev) => ({ ...prev, target_role: role }))}
-                        className="rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-medium text-violet-700 shadow-sm transition hover:border-violet-400 dark:border-violet-800 dark:bg-gray-900 dark:text-violet-200"
+                        className="rounded-full border-2 border-black bg-white px-3 py-1 text-xs font-semibold text-black shadow-[3px_3px_0_0_#000] transition hover:translate-y-0.5 hover:shadow-[1px_1px_0_0_#000]"
                       >
                         {role}
                       </button>
@@ -245,7 +245,7 @@ export default function OnboardingFormPage() {
                               : { ...prev, skills: [...prev.skills, skill] }
                           )
                         }
-                        className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700 shadow-sm transition hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"
+                        className="rounded-full border-2 border-black bg-white px-3 py-1 text-xs font-semibold text-black shadow-[3px_3px_0_0_#000] transition hover:translate-y-0.5 hover:shadow-[1px_1px_0_0_#000]"
                       >
                         {skill}
                       </button>
@@ -256,42 +256,42 @@ export default function OnboardingFormPage() {
                   
                   {/* Target Role */}
                   <div className="space-y-3">
-                    <Label className="flex items-center gap-2 text-base">
-                        <Target className="h-4 w-4 text-violet-600" />
-                        What is your target role?
-                    </Label>
-                    <Input
-                      placeholder="e.g. Senior Backend Engineer, Data Scientist"
-                      value={formData.target_role}
-                      onChange={(e) => setFormData({ ...formData, target_role: e.target.value })}
-                      className="h-12 text-lg"
-                      required
-                    />
+                <Label className="flex items-center gap-2 text-base font-semibold text-gray-900">
+                    <Target className="h-4 w-4 text-violet-600" />
+                    What is your target role?
+                </Label>
+                <Input
+                  placeholder="e.g. Senior Backend Engineer, Data Scientist"
+                  value={formData.target_role}
+                  onChange={(e) => setFormData({ ...formData, target_role: e.target.value })}
+                  className="h-12 text-lg border-2 border-black shadow-[4px_4px_0_0_#000]"
+                  required
+                />
                   </div>
     
                   {/* Experience Level */}
                   <div className="space-y-3">
-                    <Label className="flex items-center gap-2 text-base">
-                        <Trophy className="h-4 w-4 text-violet-600" />
-                        Current Experience Level
-                    </Label>
-                    <div className="grid grid-cols-3 gap-3">
-                        {['beginner', 'intermediate', 'advanced'].map((level) => (
-                            <button
+                <Label className="flex items-center gap-2 text-base font-semibold text-gray-900">
+                    <Trophy className="h-4 w-4 text-violet-600" />
+                    Current Experience Level
+                </Label>
+                <div className="grid grid-cols-3 gap-3">
+                    {['beginner', 'intermediate', 'advanced'].map((level) => (
+                        <button
                                 key={level}
                                 type="button"
                                 onClick={() => setFormData({ ...formData, experience_level: level as OnboardingData["experience_level"] })}
-                                className={cn(
-                                    "flex flex-col items-center justify-center rounded-lg border p-3 text-sm font-medium transition-all hover:bg-violet-50 dark:hover:bg-violet-900/10",
-                                    formData.experience_level === level
-                                        ? "border-violet-600 bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300 ring-2 ring-violet-600 ring-offset-2 dark:ring-offset-gray-900"
-                                        : "border-gray-200 text-gray-600 dark:border-gray-800 dark:text-gray-400"
-                                )}
-                            >
-                                <span className="capitalize">{level}</span>
-                            </button>
-                        ))}
-                    </div>
+                            className={cn(
+                                "flex flex-col items-center justify-center rounded-lg border-2 border-black p-3 text-sm font-semibold transition-all",
+                                formData.experience_level === level
+                                    ? "bg-[#dcfce7] text-black shadow-[4px_4px_0_0_#000]"
+                                    : "bg-white text-black shadow-[3px_3px_0_0_#000] hover:translate-y-0.5 hover:shadow-[1px_1px_0_0_#000]"
+                            )}
+                        >
+                            <span className="capitalize">{level}</span>
+                        </button>
+                    ))}
+                </div>
                   </div>
     
                   {/* Mentor Tone (Coming Soon) */}
@@ -344,11 +344,11 @@ export default function OnboardingFormPage() {
               {/* Time Commitment */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                    <Label className="flex items-center gap-2 text-base">
+                    <Label className="flex items-center gap-2 text-base font-semibold text-gray-900">
                         <Clock className="h-4 w-4 text-violet-600" />
                         Weekly Time Commitment
                     </Label>
-                    <span className="text-sm font-medium text-violet-600 bg-violet-50 dark:bg-violet-900/30 px-2.5 py-0.5 rounded-full">
+                    <span className="text-sm font-semibold text-black bg-[#fcd34d] px-2.5 py-0.5 rounded-full border-2 border-black shadow-[2px_2px_0_0_#000]">
                         {formData.hours_per_week} hours
                     </span>
                 </div>
@@ -360,22 +360,22 @@ export default function OnboardingFormPage() {
                   step={1}
                   className="py-4"
                 />
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-700">
                     Recommended: 10-15 hours for steady progress.
                 </p>
               </div>
 
               {/* Skills */}
               <div className="space-y-3">
-                <Label className="text-base">Top Skills (for placement)</Label>
-                <div className="flex flex-wrap gap-2 rounded-lg border border-gray-200 bg-gray-50/50 p-4 dark:border-gray-800 dark:bg-gray-900/50 min-h-[100px]">
+                <Label className="text-base font-semibold text-gray-900">Top Skills (for placement)</Label>
+                <div className="flex flex-wrap gap-2 rounded-lg border-2 border-black bg-white p-4 min-h-[100px] shadow-[4px_4px_0_0_#000]">
                     {formData.skills.map((skill) => (
-                        <Badge variant="secondary" key={skill} className="gap-1 bg-white dark:bg-gray-800 shadow-sm pl-2.5 pr-1 py-1 text-sm">
+                        <Badge variant="secondary" key={skill} className="gap-1 bg-[#e0f2fe] text-black border-2 border-black shadow-[2px_2px_0_0_#000] pl-2.5 pr-1 py-1 text-sm">
                             {skill}
                             <button
                                 type="button"
                                 onClick={() => removeSkill(skill)}
-                                className="ml-1 rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700"
+                                className="ml-1 rounded-full p-0.5 hover:bg-black/10"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                             </button>
@@ -387,14 +387,14 @@ export default function OnboardingFormPage() {
                         value={skillInput}
                         onChange={(e) => setSkillInput(e.target.value)}
                         onKeyDown={addSkill}
-                        className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400 min-w-[150px]"
+                        className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-500 min-w-[150px]"
                     />
                 </div>
               </div>
 
               <Button 
                 type="submit" 
-                className="w-full text-lg h-12 bg-violet-600 hover:bg-violet-700"
+                className="w-full text-lg h-12 bg-black text-white shadow-[4px_4px_0_0_#000] hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition"
                 disabled={submitting}
               >
                 {submitting ? (
