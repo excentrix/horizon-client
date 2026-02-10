@@ -391,6 +391,14 @@ export interface DailyTask {
     score?: number;
     completed_at?: string;
   };
+  lesson_blocks?: Array<{
+    id?: string;
+    title?: string;
+    type?: "objective" | "concept" | "example" | "recap" | "exercise";
+    content?: string;
+    resource_id?: string;
+  }>;
+  lesson_generated_at?: string | null;
   adaptive_difficulty: boolean;
   status: TaskStatus;
   started_at?: string | null;

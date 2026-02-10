@@ -250,6 +250,16 @@ export const planningApi = {
     extract<{ message: string; proof: Record<string, unknown>; artifact_id?: string }>(
       http.post(`/planning/tasks/${taskId}/submit-proof/`, payload)
     ),
+  generateTaskLesson: (
+    taskId: string,
+    payload?: { scope?: "task" | "milestone"; force?: boolean }
+  ) =>
+    extract<{
+      message: string;
+      milestone_id?: string;
+      task?: DailyTask;
+      tasks?: DailyTask[];
+    }>(http.post(`/planning/tasks/${taskId}/generate-lesson/`, payload ?? {})),
 
   getPlanSession: (sessionId: string) =>
     extract<{

@@ -52,7 +52,7 @@ export default function PlanPlaygroundPage() {
   const params = useParams<{ planId: string }>();
   const searchParams = useSearchParams();
   const planId = params.planId;
-  const { data: plan } = usePlan(planId);
+  const { data: plan, refetch: refetchPlan } = usePlan(planId);
   const { updateTaskStatus } = usePlanMutations(planId);
   const { data: artifacts } = usePortfolioArtifacts();
   const { data: brainMap } = useBrainMap({ plan_id: plan?.id });
@@ -77,9 +77,12 @@ export default function PlanPlaygroundPage() {
   const [effort, setEffort] = useState<number | null>(null);
   const [understanding, setUnderstanding] = useState<number | null>(null);
   const [confidence, setConfidence] = useState<number | null>(null);
+  const [milestoneFeedbackSent, setMilestoneFeedbackSent] = useState<Record<string, boolean>>({});
   const [stepStates, setStepStates] = useState<Record<string, boolean[]>>({});
   const [showExample, setShowExample] = useState(false);
   const [mentorPrompt, setMentorPrompt] = useState<string>("");
+  const [lessonLoading, setLessonLoading] = useState(false);
+  const lessonRequestRef = useRef<Record<string, boolean>>({});
   
   const selectedTaskId = searchParams.get("task");
   const tasks = useMemo(() => plan?.daily_tasks ?? [], [plan?.daily_tasks]);
@@ -88,6 +91,22 @@ export default function PlanPlaygroundPage() {
     if (!selectedTaskId) return tasks[0];
     return tasks.find((t) => t.id === selectedTaskId) ?? tasks[0];
   }, [tasks, selectedTaskId]);
+
+  useEffect(() => {
+    if (!activeTask?.id) return;
+    if (activeTask.lesson_blocks?.length) return;
+    if (lessonRequestRef.current[activeTask.id]) return;
+    lessonRequestRef.current[activeTask.id] = true;
+    setLessonLoading(true);
+    const scope = activeTask.milestone_id ? "milestone" : "task";
+    planningApi
+      .generateTaskLesson(activeTask.id, { scope })
+      .then(() => refetchPlan())
+      .catch(() => {
+        lessonRequestRef.current[activeTask.id] = false;
+      })
+      .finally(() => setLessonLoading(false));
+  }, [activeTask?.id, activeTask?.lesson_blocks, activeTask?.milestone_id, refetchPlan]);
 
   const suggestedPracticeMode = useMemo(() => {
     if (!activeTask) return "code";
@@ -342,14 +361,126 @@ export default function PlanPlaygroundPage() {
     return null;
   }, [activeTask?.milestone_id, plan?.milestones, tasks]);
 
+  const milestoneProgress = useMemo(() => {
+    if (!activeTask?.milestone_id) return null;
+    const milestone = plan?.milestones?.find(
+      (item) => item.milestone_id === activeTask.milestone_id
+    );
+    if (!milestone) return null;
+    const milestoneTasks = tasks.filter(
+      (task) => task.milestone_id === milestone.milestone_id
+    );
+    if (!milestoneTasks.length) return null;
+    const completedCount = milestoneTasks.filter(
+      (task) => task.status === "completed"
+    ).length;
+    return {
+      milestone,
+      total: milestoneTasks.length,
+      completed: completedCount,
+      isComplete: completedCount === milestoneTasks.length,
+    };
+  }, [activeTask?.milestone_id, plan?.milestones, tasks]);
+
+  const lessonBlocks = useMemo(() => {
+    if (!activeTask) return [];
+    if (activeTask.lesson_blocks?.length) {
+      return activeTask.lesson_blocks;
+    }
+    const hints = activeTask.ai_generated_hints ?? [];
+    const examples = activeTask.ai_generated_examples ?? [];
+    const resources = activeTask.online_resources ?? [];
+    const resourceMetadata = activeTask.resource_metadata ?? {};
+    const firstResource = resources[0];
+    const resourceId =
+      typeof firstResource === "string"
+        ? firstResource
+        : (firstResource as Record<string, unknown>)?.url ??
+          (firstResource as Record<string, unknown>)?.link ??
+          undefined;
+    const excerpt =
+      resourceId && resourceMetadata[resourceId]
+        ? (resourceMetadata[resourceId] as { excerpt?: string }).excerpt
+        : undefined;
+    return [
+      {
+        id: "objective",
+        type: "objective",
+        title: "Objective",
+        content:
+          activeTask.description ||
+          `Understand the core idea behind ${activeTask.title}.`,
+      },
+      {
+        id: "concept",
+        type: "concept",
+        title: "Core concept",
+        content:
+          hints[0] ||
+          `Focus on the primary concept in ${activeTask.title} and why it matters.`,
+      },
+      ...(resourceId
+        ? [
+            {
+              id: "resource",
+              type: "concept",
+              title: "Key resource",
+              content: excerpt || String(resourceId),
+              resource_id: String(resourceId),
+            },
+          ]
+        : []),
+      {
+        id: "example",
+        type: "example",
+        title: "Worked example",
+        content:
+          examples.length > 0
+            ? String(examples[0])
+            : "Write a short example that applies the concept.",
+      },
+      {
+        id: "recap",
+        type: "recap",
+        title: "Quick recap",
+        content:
+          activeTask.check_in_question ||
+          "Summarize the key idea and add one practical implication.",
+      },
+      {
+        id: "exercise",
+        type: "exercise",
+        title: "Try it",
+        content:
+          activeTask.check_in_question ||
+          "Summarize the key idea and add one practical implication.",
+      },
+    ];
+  }, [activeTask]);
+
+  const exercisePrompt = useMemo(() => {
+    const block = lessonBlocks.find((item) => item.type === "exercise");
+    return (
+      block?.content ??
+      activeTask?.check_in_question ??
+      "Summarize the main idea in 2 sentences, then add one real-world implication."
+    );
+  }, [lessonBlocks, activeTask?.check_in_question]);
+
   const activeSteps = useMemo(() => {
     if (!activeTask) return defaultSteps;
+    if (lessonBlocks.length) {
+      return lessonBlocks
+        .filter((block) => block.type !== "exercise")
+        .slice(0, 4)
+        .map((block) => block.title || block.content || "Learning step");
+    }
     const hints = activeTask.ai_generated_hints ?? [];
     if (hints.length >= 2) {
       return hints.slice(0, 3);
     }
     return defaultSteps;
-  }, [activeTask]);
+  }, [activeTask, lessonBlocks]);
 
 
 
@@ -372,6 +503,15 @@ export default function PlanPlaygroundPage() {
   }, [learningMode]);
 
   const stepState = stepStates[activeTask?.id ?? ""] ?? activeSteps.map(() => false);
+  const quizQuestions = useMemo(() => {
+    return activeTask ? getQuizQuestions(activeTask) : [];
+  }, [activeTask]);
+  const quizAnsweredAll = useMemo(() => {
+    if (!quizQuestions.length) return true;
+    return quizQuestions.every((question) => quizAnswers[question.id] !== undefined);
+  }, [quizQuestions, quizAnswers]);
+  const stepsComplete = useMemo(() => stepState.every(Boolean), [stepState]);
+  const canCompleteTask = stepsComplete && quizAnsweredAll;
 
   const toggleStep = (index: number) => {
     if (!activeTask) return;
@@ -497,12 +637,20 @@ export default function PlanPlaygroundPage() {
     const reflectionSnippet = reflection.trim()
       ? `Reflection: ${reflection.trim().slice(0, 140)}`
       : "Reflection: none";
+    const quizScore = activeTask ? calculateQuizScore(activeTask, quizAnswers) : 0;
+    const quizTotal = quizQuestions.length;
+    const quizSummary =
+      quizTotal > 0
+        ? `Checkpoint quiz: ${quizScore}/${quizTotal} answered (${quizAnsweredAll ? "complete" : "in progress"})`
+        : "Checkpoint quiz: not required";
+
     return [
       `Plan: ${plan?.title ?? "Learning plan"}`,
       `Current task: ${activeTask?.title ?? "Unknown task"}`,
       activeTask?.description ? `Task details: ${activeTask.description}` : null,
       activeTask?.task_type ? `Task type: ${activeTask.task_type}` : null,
       `Progress: ${stepProgress}`,
+      quizSummary,
       `Resource: ${resourceLabel}`,
       noteSnippet,
       reflectionSnippet,
@@ -514,7 +662,11 @@ export default function PlanPlaygroundPage() {
     const stepSummary = stepState.length
       ? `${stepState.filter(Boolean).length}/${stepState.length} steps complete`
       : "No steps yet";
-    return `Current task: ${activeTask?.title ?? "Unknown"} · ${stepSummary}`;
+    const quizScore = activeTask ? calculateQuizScore(activeTask, quizAnswers) : 0;
+    const quizSummary = quizQuestions.length
+      ? `Quiz ${quizScore}/${quizQuestions.length}`
+      : "Quiz N/A";
+    return `Current task: ${activeTask?.title ?? "Unknown"} · ${stepSummary} · ${quizSummary}`;
   };
 
   const challengeRequirement =
@@ -717,6 +869,13 @@ export default function PlanPlaygroundPage() {
 
   const handleCompleteTask = () => {
     if (!activeTask) return;
+    if (!canCompleteTask) {
+      telemetry.toastInfo(
+        "Finish the learning steps",
+        "Complete the steps and answer the checkpoint before finishing."
+      );
+      return;
+    }
     const durationMinutes =
       sessionStartTime && sessionStarted
         ? Math.max(1, Math.round((Date.now() - sessionStartTime) / 60000))
@@ -730,6 +889,16 @@ export default function PlanPlaygroundPage() {
       effectiveness_rating: understanding ?? undefined,
       completion_notes: notes,
       check_in_response: reflection,
+      milestone_feedback:
+        milestoneProgress?.isComplete && activeTask.milestone_id
+          ? {
+              milestone_id: activeTask.milestone_id,
+              effort,
+              understanding,
+              confidence,
+              reflection: reflection.trim() || null,
+            }
+          : undefined,
       quiz_response: {
         answers: quizAnswers,
         score: calculateQuizScore(activeTask, quizAnswers),
@@ -746,6 +915,12 @@ export default function PlanPlaygroundPage() {
     });
     setSessionStarted(false);
     setSessionStartTime(null);
+    if (milestoneProgress?.isComplete && activeTask.milestone_id) {
+      setMilestoneFeedbackSent((prev) => ({
+        ...prev,
+        [activeTask.milestone_id as string]: true,
+      }));
+    }
   };
 
   const resources = (activeTask?.online_resources ?? []) as Array<
@@ -917,37 +1092,32 @@ export default function PlanPlaygroundPage() {
                       </p>
                     </div>
                     <div className="grid gap-2 text-xs text-muted-foreground">
-                      <div>
-                        <span className="text-[10px] font-semibold uppercase tracking-wide">
-                          Objective
-                        </span>
-                        <p className="mt-1 text-sm text-foreground">
-                          {activeTask.description}
+                      {lessonLoading ? (
+                        <p className="text-[11px] text-muted-foreground">
+                          Generating lesson blocks for this milestone...
                         </p>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-semibold uppercase tracking-wide">
-                          Step prompt
-                        </span>
-                        <p className="mt-1 text-sm text-foreground">
-                          {activeTask.check_in_question ??
-                            "Summarize the key idea in two sentences."}
-                        </p>
-                      </div>
-                      {resources[0] ? (
-                        <div>
-                          <span className="text-[10px] font-semibold uppercase tracking-wide">
-                            First resource
+                      ) : null}
+                      {lessonBlocks.length ? (
+                        lessonBlocks.map((block) => (
+                          <div key={block.id ?? block.title} className="rounded-lg border bg-background/80 p-3">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              {block.title ?? block.type ?? "Lesson block"}
+                            </span>
+                            <p className="mt-1 text-sm text-foreground">
+                              {block.content}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-lg border bg-background/80 p-3">
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Objective
                           </span>
                           <p className="mt-1 text-sm text-foreground">
-                            {typeof resources[0] === "string"
-                              ? resources[0]
-                              : (resources[0].title as string) ||
-                                (resources[0].name as string) ||
-                                "Resource"}
+                            {activeTask.description}
                           </p>
                         </div>
-                      ) : null}
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" onClick={handleStartStep}>
@@ -1051,7 +1221,7 @@ export default function PlanPlaygroundPage() {
                       Challenge check
                     </p>
                     <p className="mt-2 text-[11px] text-muted-foreground">
-                      Prompt: Summarize the main idea in 2 sentences, then add one real-world implication.
+                      Prompt: {exercisePrompt}
                     </p>
                     <Textarea
                       value={reflection}
@@ -1112,7 +1282,7 @@ export default function PlanPlaygroundPage() {
                       </div>
                     </div>
                     <div className="mt-3 space-y-4 text-sm">
-                      {getQuizQuestions(activeTask).map((question) => (
+                      {quizQuestions.map((question) => (
                         <div key={question.id} className="rounded-lg border bg-muted/20 p-3">
                           <p className="text-sm font-medium">{question.question}</p>
                           <div className="mt-2 space-y-2">
@@ -1160,7 +1330,7 @@ export default function PlanPlaygroundPage() {
                     {showQuizFeedback ? (
                       <div className="mt-3 rounded-lg border bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
                         Score: {calculateQuizScore(activeTask, quizAnswers)} /{" "}
-                        {getQuizQuestions(activeTask).length}
+                        {quizQuestions.length}
                       </div>
                     ) : null}
                   </div>
@@ -1578,11 +1748,16 @@ export default function PlanPlaygroundPage() {
                         Submit Proof (+{activeTask.assessment_config.xp_reward || 50} XP)
                       </Button>
                     ) : (
-                      <Button variant="outline" onClick={handleCompleteTask}>
+                      <Button variant="outline" onClick={handleCompleteTask} disabled={!canCompleteTask}>
                         Complete task
                       </Button>
                     )}
                   </div>
+                  {!canCompleteTask && !activeTask?.assessment_config ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Complete all learning steps and answer the checkpoint to finish this task.
+                    </p>
+                  ) : null}
                   <div className="mt-3 grid gap-3 text-xs text-muted-foreground md:grid-cols-3">
                     <RatingRow
                       label="Effort"
