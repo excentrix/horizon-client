@@ -28,6 +28,7 @@ import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { chatApi, planningApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
+import { ArtifactDetailModal } from "@/components/portfolio/artifact-detail-modal";
 
 const defaultSteps = [
   "Review the objective and materials.",
@@ -74,6 +75,10 @@ export default function PlanPlaygroundPage() {
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [reflection, setReflection] = useState("");
+  const [tryItFeedback, setTryItFeedback] = useState<{
+    score: number;
+    tips: string[];
+  } | null>(null);
   const [effort, setEffort] = useState<number | null>(null);
   const [understanding, setUnderstanding] = useState<number | null>(null);
   const [confidence, setConfidence] = useState<number | null>(null);
@@ -152,6 +157,10 @@ export default function PlanPlaygroundPage() {
   const [resourceViewMode, setResourceViewMode] = useState<"embedded" | "curated">("embedded");
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
   const [showQuizFeedback, setShowQuizFeedback] = useState(false);
+  const [milestoneQuizAnswers, setMilestoneQuizAnswers] = useState<Record<string, number>>({});
+  const [milestoneCheckSubmitted, setMilestoneCheckSubmitted] = useState(false);
+  const [selectedArtifact, setSelectedArtifact] = useState<(typeof safeArtifacts)[number] | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [generatedActivities, setGeneratedActivities] = useState<GeneratedActivities | null>(null);
   const [engagementNudge, setEngagementNudge] = useState<MentorEngagementNudge | null>(null);
   const [nudgeLoading, setNudgeLoading] = useState(false);
@@ -382,6 +391,34 @@ export default function PlanPlaygroundPage() {
     };
   }, [activeTask?.milestone_id, plan?.milestones, tasks]);
 
+  const milestoneQuestions = useMemo(() => {
+    if (!milestoneProgress?.isComplete) return [];
+    const milestoneTasks = tasks.filter(
+      (task) => task.milestone_id === milestoneProgress.milestone.milestone_id
+    );
+    const collected = milestoneTasks.flatMap((task) =>
+      getQuizQuestions(task).map((question) => ({
+        ...question,
+        id: `${task.id}-${question.id}`,
+      }))
+    );
+    return collected.slice(0, 3);
+  }, [milestoneProgress, tasks]);
+
+  const milestoneScore = useMemo(() => {
+    if (!milestoneQuestions.length) return 0;
+    let score = 0;
+    milestoneQuestions.forEach((question) => {
+      if (
+        question.answer_index !== undefined &&
+        milestoneQuizAnswers[question.id] === question.answer_index
+      ) {
+        score += 1;
+      }
+    });
+    return score;
+  }, [milestoneQuestions, milestoneQuizAnswers]);
+
   const lessonBlocks = useMemo(() => {
     if (!activeTask) return [];
     if (activeTask.lesson_blocks?.length) {
@@ -466,6 +503,51 @@ export default function PlanPlaygroundPage() {
       "Summarize the main idea in 2 sentences, then add one real-world implication."
     );
   }, [lessonBlocks, activeTask?.check_in_question]);
+
+  const tryItKeywords = useMemo(() => {
+    const base = [
+      activeTask?.title ?? "",
+      activeTask?.description ?? "",
+      lessonBlocks.map((block) => block.content ?? "").join(" "),
+    ]
+      .join(" ")
+      .toLowerCase();
+    const words = base
+      .split(/[^a-z0-9]+/g)
+      .filter((word) => word.length > 4);
+    const unique = Array.from(new Set(words));
+    return unique.slice(0, 4);
+  }, [activeTask?.title, activeTask?.description, lessonBlocks]);
+
+  const handleTryItFeedback = () => {
+    const text = reflection.trim();
+    if (!text) {
+      telemetry.toastError("Add a short response first.");
+      return;
+    }
+    let score = 0;
+    const tips: string[] = [];
+    const sentenceCount = text.split(/[.!?]+/).filter(Boolean).length;
+    if (sentenceCount >= 2) {
+      score += 1;
+    } else {
+      tips.push("Aim for at least two sentences to show depth.");
+    }
+    if (text.length >= 120) {
+      score += 1;
+    } else {
+      tips.push("Add one more detail or example to strengthen the answer.");
+    }
+    if (tryItKeywords.length) {
+      const hit = tryItKeywords.some((keyword) => text.toLowerCase().includes(keyword));
+      if (hit) {
+        score += 1;
+      } else {
+        tips.push("Mention one key concept from the lesson.");
+      }
+    }
+    setTryItFeedback({ score, tips });
+  };
 
   const activeSteps = useMemo(() => {
     if (!activeTask) return defaultSteps;
@@ -1098,16 +1180,46 @@ export default function PlanPlaygroundPage() {
                         </p>
                       ) : null}
                       {lessonBlocks.length ? (
-                        lessonBlocks.map((block) => (
-                          <div key={block.id ?? block.title} className="rounded-lg border bg-background/80 p-3">
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                              {block.title ?? block.type ?? "Lesson block"}
-                            </span>
-                            <p className="mt-1 text-sm text-foreground">
-                              {block.content}
-                            </p>
-                          </div>
-                        ))
+                        lessonBlocks.map((block) => {
+                          const meta =
+                            block.resource_id && resourceMetadata[block.resource_id]
+                              ? resourceMetadata[block.resource_id]
+                              : null;
+                          const sourceUrl = block.source_url ?? meta?.url;
+                          return (
+                            <div
+                              key={block.id ?? block.title}
+                              className={cn(
+                                "rounded-lg border bg-background/80 p-3",
+                                block.resource_id ? "border-amber-200 bg-amber-50/40" : ""
+                              )}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  {block.title ?? block.type ?? "Lesson block"}
+                                </span>
+                                {block.resource_id ? (
+                                  <span className="rounded-full border px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                    {block.verified ?? meta?.verified ? "Verified source" : "Source excerpt"}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <p className="mt-1 text-sm text-foreground">
+                                {block.content}
+                              </p>
+                              {sourceUrl ? (
+                                <a
+                                  href={String(sourceUrl)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mt-2 inline-flex items-center text-[11px] font-semibold text-primary underline"
+                                >
+                                  Open source
+                                </a>
+                              ) : null}
+                            </div>
+                          );
+                        })
                       ) : (
                         <div className="rounded-lg border bg-background/80 p-3">
                           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1233,10 +1345,26 @@ export default function PlanPlaygroundPage() {
                       <Button size="sm" variant="outline" onClick={() => setShowRubric((prev) => !prev)}>
                         {showRubric ? "Hide rubric" : "Check rubric"}
                       </Button>
-                      <Button size="sm" variant="secondary">
+                      <Button size="sm" variant="secondary" onClick={handleTryItFeedback}>
                         Submit for feedback
                       </Button>
                     </div>
+                    {tryItFeedback ? (
+                      <div className="mt-3 rounded-lg border bg-emerald-50 p-3 text-xs text-emerald-700">
+                        <p className="font-semibold text-emerald-800">
+                          Feedback score: {tryItFeedback.score}/3
+                        </p>
+                        {tryItFeedback.tips.length ? (
+                          <ul className="mt-2 list-disc space-y-1 pl-4 text-emerald-700">
+                            {tryItFeedback.tips.map((tip) => (
+                              <li key={tip}>{tip}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-2">Strong response. Ready for the checkpoint.</p>
+                        )}
+                      </div>
+                    ) : null}
                     {showRubric ? (
                       <div className="mt-3 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
                         <p className="text-[10px] font-semibold uppercase tracking-wide">
@@ -1636,12 +1764,21 @@ export default function PlanPlaygroundPage() {
                           </p>
                           <div className="mt-2 flex flex-wrap gap-2">
                             {taskArtifacts.slice(0, 2).map((artifact) => (
-                              <Badge
+                              <button
                                 key={artifact.id}
-                                variant={getArtifactBadgeVariant(artifact)}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedArtifact(artifact);
+                                  setDetailModalOpen(true);
+                                }}
+                                className="text-left"
                               >
-                                {artifact.title} · {getArtifactStatusLabel(artifact)}
-                              </Badge>
+                                <Badge
+                                  variant={getArtifactBadgeVariant(artifact)}
+                                >
+                                  {artifact.title} · {getArtifactStatusLabel(artifact)}
+                                </Badge>
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -1736,6 +1873,84 @@ export default function PlanPlaygroundPage() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Checkpoint
                   </p>
+                  {milestoneProgress?.isComplete && milestoneQuestions.length ? (
+                    <div className="mt-3 rounded-lg border bg-background p-3 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Milestone check
+                        </p>
+                        <Badge variant="outline">
+                          {milestoneProgress.milestone.title}
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        Quick check across the milestone. Answer all questions to lock in progress.
+                      </p>
+                      <div className="mt-3 space-y-3">
+                        {milestoneQuestions.map((question) => (
+                          <div key={question.id} className="rounded-md border bg-muted/10 px-3 py-2">
+                            <p className="text-sm font-medium">{question.question}</p>
+                            <div className="mt-2 space-y-2">
+                              {question.options.map((option, idx) => {
+                                const selected = milestoneQuizAnswers[question.id] === idx;
+                                return (
+                                  <button
+                                    key={`${question.id}-${idx}`}
+                                    type="button"
+                                    onClick={() =>
+                                      setMilestoneQuizAnswers((prev) => ({
+                                        ...prev,
+                                        [question.id]: idx,
+                                      }))
+                                    }
+                                    className={cn(
+                                      "flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm",
+                                      selected ? "border-primary bg-primary/10" : "bg-background",
+                                    )}
+                                  >
+                                    <span>{option}</span>
+                                    {selected ? (
+                                      <span className="text-xs font-semibold text-primary">
+                                        Selected
+                                      </span>
+                                    ) : null}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            if (!plan?.id || !milestoneProgress?.milestone?.milestone_id) return;
+                            await planningApi.submitMilestoneCheck(
+                              plan.id,
+                              milestoneProgress.milestone.milestone_id,
+                              {
+                                score: milestoneScore,
+                                total: milestoneQuestions.length,
+                                summary: reflection.trim() || undefined,
+                              }
+                            );
+                            setMilestoneCheckSubmitted(true);
+                          }}
+                        >
+                          Submit milestone check
+                        </Button>
+                        <span className="text-[11px] text-muted-foreground">
+                          Score: {milestoneScore}/{milestoneQuestions.length}
+                        </span>
+                      </div>
+                      {milestoneCheckSubmitted ? (
+                        <div className="mt-2 rounded-lg border bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700">
+                          Milestone check saved. Keep going!
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button onClick={handleStartSession} disabled={sessionStarted}>
                       {sessionStarted ? "Session running" : "Start session"}
@@ -2377,6 +2592,20 @@ export default function PlanPlaygroundPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ArtifactDetailModal
+        artifact={
+          selectedArtifact
+            ? {
+                ...selectedArtifact,
+                verification_status: selectedArtifact.verification_status ?? "pending",
+                visibility: selectedArtifact.visibility ?? "private",
+                featured: selectedArtifact.featured ?? false,
+              }
+            : null
+        }
+        open={detailModalOpen}
+        onOpenChange={setDetailModalOpen}
+      />
     </div>
   );
 }

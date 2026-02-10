@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { telemetry } from "@/lib/telemetry";
 import { Crown, Sparkles, Trophy } from "lucide-react";
+import { ArtifactDetailModal } from "@/components/portfolio/artifact-detail-modal";
 
 const statusLabel = (status?: string) => {
   if (!status) return "draft";
@@ -21,6 +22,8 @@ export default function ArtifactsPage() {
   const router = useRouter();
   const { data: artifacts = [], isLoading, error } = usePortfolioArtifacts();
   const [tab, setTab] = useState<"submitted" | "verified" | "promoted">("submitted");
+  const [selectedArtifact, setSelectedArtifact] = useState<typeof artifacts[number] | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -53,9 +56,31 @@ export default function ArtifactsPage() {
     );
   }, [artifacts, tab]);
 
+  const handleArtifactClick = (artifact: typeof artifacts[number]) => {
+    setSelectedArtifact(artifact);
+    setDetailModalOpen(true);
+  };
+
   const promotedArtifacts = useMemo(() => {
     if (!artifacts.length) return [];
     return artifacts.filter((artifact) => artifact.featured).slice(0, 3);
+  }, [artifacts]);
+
+  const milestoneCollections = useMemo(() => {
+    const groups = new Map<string, typeof artifacts>();
+    artifacts.forEach((artifact) => {
+      const meta = artifact.metadata as { milestone_title?: string } | undefined;
+      const title = meta?.milestone_title;
+      if (!title) return;
+      if (!groups.has(title)) {
+        groups.set(title, []);
+      }
+      groups.get(title)?.push(artifact);
+    });
+    return Array.from(groups.entries()).map(([title, items]) => ({
+      title,
+      items: items.slice(0, 4),
+    }));
   }, [artifacts]);
 
   return (
@@ -134,6 +159,40 @@ export default function ArtifactsPage() {
         </Button>
       </div>
 
+      {milestoneCollections.length ? (
+        <Card className="border-0 bg-gradient-to-br from-white via-slate-50 to-slate-100 shadow-lg">
+          <CardHeader>
+            <CardTitle>Milestone collections</CardTitle>
+            <CardDescription>
+              Proof grouped by milestone: objective → approach → outcome → evidence.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {milestoneCollections.map((collection) => (
+              <div key={collection.title} className="rounded-2xl border bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {collection.title}
+                </p>
+                <div className="mt-3 space-y-3">
+                  {collection.items.map((artifact) => (
+                    <button
+                      key={artifact.id}
+                      onClick={() => handleArtifactClick(artifact)}
+                      className="w-full rounded-xl border bg-muted/10 px-3 py-2 text-left text-xs transition hover:border-muted-foreground/40"
+                    >
+                      <div className="font-semibold text-foreground">{artifact.title}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Evidence: {artifact.artifact_type.replace(/_/g, " ")}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {isLoading ? (
         <div className="grid gap-4 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, idx) => (
@@ -161,7 +220,11 @@ export default function ArtifactsPage() {
           <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filteredArtifacts.length ? (
               filteredArtifacts.map((artifact) => (
-                <div key={artifact.id} className="rounded-2xl border bg-muted/10 p-4">
+                <button
+                  key={artifact.id}
+                  onClick={() => handleArtifactClick(artifact)}
+                  className="rounded-2xl border bg-muted/10 p-4 text-left transition hover:-translate-y-0.5 hover:border-muted-foreground/40"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-semibold text-foreground line-clamp-1">
                       {artifact.title}
@@ -198,7 +261,7 @@ export default function ArtifactsPage() {
                       View artifact
                     </a>
                   ) : null}
-                </div>
+                </button>
               ))
             ) : (
               <p className="text-sm text-muted-foreground">No artifacts in this view yet.</p>
@@ -206,6 +269,21 @@ export default function ArtifactsPage() {
           </CardContent>
         </Card>
       )}
+
+      <ArtifactDetailModal
+        artifact={
+          selectedArtifact
+            ? {
+                ...selectedArtifact,
+                verification_status: selectedArtifact.verification_status ?? "pending",
+                visibility: selectedArtifact.visibility ?? "private",
+                featured: selectedArtifact.featured ?? false,
+              }
+            : null
+        }
+        open={detailModalOpen}
+        onOpenChange={setDetailModalOpen}
+      />
     </div>
   );
 }

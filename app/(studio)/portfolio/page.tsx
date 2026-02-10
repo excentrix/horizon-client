@@ -88,6 +88,23 @@ export default function PortfolioPage() {
     return [...preferred, ...remaining, ...fallback];
   }, [artifacts]);
 
+  const milestoneCollections = useMemo(() => {
+    const groups = new Map<string, typeof artifacts>();
+    artifacts.forEach((artifact: PortfolioArtifact) => {
+      const meta = artifact.metadata as { milestone_title?: string } | undefined;
+      const title = meta?.milestone_title;
+      if (!title) return;
+      if (!groups.has(title)) {
+        groups.set(title, []);
+      }
+      groups.get(title)?.push(artifact);
+    });
+    return Array.from(groups.entries()).map(([title, items]) => ({
+      title,
+      items: items.slice(0, 3),
+    }));
+  }, [artifacts]);
+
   return (
     <div className="container mx-auto py-8 space-y-8">
       {/* Header */}
@@ -249,7 +266,41 @@ export default function PortfolioPage() {
                   ))
                 )}
               </CardContent>
+          </Card>
+
+          {milestoneCollections.length ? (
+            <Card className="border-0 bg-gradient-to-br from-white via-slate-50 to-slate-100 shadow-lg">
+              <CardHeader>
+                <CardTitle>Milestone collections</CardTitle>
+                <CardDescription>
+                  Objective → Approach → Outcome → Evidence, grouped by milestone.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {milestoneCollections.map((collection) => (
+                  <div key={collection.title} className="rounded-2xl border bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {collection.title}
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {collection.items.map((artifact: PortfolioArtifact) => (
+                        <button
+                          key={artifact.id}
+                          onClick={() => handleArtifactClick(artifact)}
+                          className="w-full rounded-xl border bg-muted/10 px-3 py-2 text-left text-xs transition hover:border-muted-foreground/40"
+                        >
+                          <div className="font-semibold text-foreground">{artifact.title}</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            Evidence: {artifact.artifact_type.replace(/_/g, " ")}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
             </Card>
+          ) : null}
 
             <Card className="border-0 bg-gradient-to-b from-white to-slate-50 shadow-xl">
               <CardHeader>

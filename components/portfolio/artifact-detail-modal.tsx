@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { ExternalLink, Lightbulb, Send } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { useSetVisibility } from "@/hooks/use-portfolio";
 
 interface ArtifactDetail {
   id: string;
@@ -64,8 +65,15 @@ export function ArtifactDetailModal({
 }: ArtifactDetailModalProps) {
   const [reflection, setReflection] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const { mutateAsync: setVisibility } = useSetVisibility();
+  const [visibilityUpdating, setVisibilityUpdating] = useState(false);
 
   if (!artifact) return null;
+
+  const isYoutube = artifact.url?.includes("youtube") || artifact.url?.includes("youtu.be");
+  const isPdf = artifact.url?.toLowerCase().endsWith(".pdf");
+  const showContent = Boolean(artifact.content);
+  const showEmbed = Boolean(artifact.url);
 
   const handleReflectionSubmit = async () => {
     if (!reflection.trim()) {
@@ -82,6 +90,19 @@ export function ArtifactDetailModal({
       toast.error("Failed to save reflection");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleVisibilityChange = async (visibility: string) => {
+    if (!artifact) return;
+    setVisibilityUpdating(true);
+    try {
+      await setVisibility({ artifactId: artifact.id, visibility });
+      toast.success("Visibility updated");
+    } catch {
+      toast.error("Failed to update visibility");
+    } finally {
+      setVisibilityUpdating(false);
     }
   };
 
@@ -113,6 +134,19 @@ export function ArtifactDetailModal({
               <Badge key={i} variant="secondary">
                 {tag}
               </Badge>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs">
+            {["private", "mentors", "employers", "public"].map((visibility) => (
+              <Button
+                key={visibility}
+                size="sm"
+                variant={artifact.visibility === visibility ? "default" : "outline"}
+                disabled={visibilityUpdating}
+                onClick={() => handleVisibilityChange(visibility)}
+              >
+                {visibility}
+              </Button>
             ))}
           </div>
 
@@ -183,17 +217,45 @@ export function ArtifactDetailModal({
             </div>
           )}
 
-          {artifact.url && (
-            <div>
-              <Link
-                href={artifact.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-primary hover:underline"
-              >
-                <ExternalLink className="h-4 w-4" />
-                View original artifact
-              </Link>
+          {(showContent || showEmbed) && (
+            <div className="rounded-lg border p-4 space-y-3">
+              <h3 className="font-semibold">Artifact preview</h3>
+              {showContent ? (
+                <div className="rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-wrap">
+                  {artifact.content}
+                </div>
+              ) : null}
+              {showEmbed ? (
+                isYoutube ? (
+                  <div className="aspect-video w-full overflow-hidden rounded-lg border bg-black">
+                    <iframe
+                      title="artifact-video"
+                      src={artifact.url}
+                      className="h-full w-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : isPdf ? (
+                  <iframe
+                    title="artifact-pdf"
+                    src={artifact.url}
+                    className="h-[360px] w-full rounded-lg border"
+                  />
+                ) : (
+                  <div>
+                    <Link
+                      href={artifact.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-primary hover:underline"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Open artifact link
+                    </Link>
+                  </div>
+                )
+              ) : null}
             </div>
           )}
 

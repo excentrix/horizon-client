@@ -397,6 +397,8 @@ export interface DailyTask {
     type?: "objective" | "concept" | "example" | "recap" | "exercise";
     content?: string;
     resource_id?: string;
+    verified?: boolean;
+    source_url?: string | null;
   }>;
   lesson_generated_at?: string | null;
   adaptive_difficulty: boolean;

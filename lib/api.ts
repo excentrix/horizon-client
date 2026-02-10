@@ -239,6 +239,14 @@ export const planningApi = {
     extract<{ message: string; mentor_id: string }>(
       http.post(`/planning/plans/${planId}/switch_mentor/`, payload)
     ),
+  submitMilestoneCheck: (
+    planId: string,
+    milestoneId: string,
+    payload: { score: number; total: number; summary?: string }
+  ) =>
+    extract<{ message: string; milestone_id: string; feedback?: Record<string, unknown> }>(
+      http.post(`/planning/plans/${planId}/milestones/${milestoneId}/check/`, payload)
+    ),
   submitTaskProof: (
     taskId: string,
     payload: {
