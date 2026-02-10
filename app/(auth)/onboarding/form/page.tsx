@@ -186,7 +186,7 @@ export default function OnboardingFormPage() {
             </div>
             <CardTitle className="text-2xl">Design Your Journey</CardTitle>
             <CardDescription>
-                  We&apos;ve pre-filled some details from your resume. Tweak them to find your perfect path.
+                  If you uploaded a resume, we pre-filled some details. Otherwise, just answer a few quick questions.
                 </CardDescription>
               </CardHeader>
               <CardContent>

@@ -482,6 +482,7 @@ export interface GamificationBadgeAward {
   slug: string;
   icon?: string;
   color?: string;
+  description?: string;
   awarded_at: string;
 }
 

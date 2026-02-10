@@ -180,7 +180,7 @@ export default function OnboardingPage() {
             Welcome to <span className="bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">Horizon</span>
           </h1>
           <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
-            Let&apos;s personalize your learning journey in just a few steps
+            Let&apos;s personalize your learning journey. A resume helps, but it&apos;s optional.
           </p>
         </div>
 
@@ -190,7 +190,7 @@ export default function OnboardingPage() {
           <div className="flex items-center justify-between">
             <div className="flex flex-col items-center">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-white">1</div>
-              <span className="mt-2 text-sm font-medium text-violet-600">Upload Resume</span>
+              <span className="mt-2 text-sm font-medium text-violet-600">Upload (Optional)</span>
             </div>
             <div className="h-1 flex-1 bg-gray-200 dark:bg-gray-700 mx-4" />
             <div className="flex flex-col items-center">
@@ -208,9 +208,9 @@ export default function OnboardingPage() {
         {/* Main Card */}
         <Card className="w-full max-w-2xl">
           <CardHeader>
-            <CardTitle>Upload Your Resume</CardTitle>
+            <CardTitle>Upload Your Resume (Optional)</CardTitle>
             <CardDescription>
-              Help us understand your background to create a personalized learning plan
+              We can tailor your path faster with a resume, or you can enter details manually.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -232,7 +232,7 @@ export default function OnboardingPage() {
                 <>
                   <Upload className="mb-4 h-12 w-12 text-gray-400" />
                   <p className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Drag and drop your resume here
+                    Drag and drop your resume here (optional)
                   </p>
                   <p className="mb-4 text-xs text-gray-500">
                     or click to browse (PDF, PNG, JPG, TXT, DOCX • Max 10MB)
@@ -335,13 +335,13 @@ export default function OnboardingPage() {
                   variant="outline"
                   className="flex-1"
                 >
-                  Skip for Now
+                  Continue Without Resume
                 </Button>
               )}
             </div>
 
             <p className="text-center text-xs text-gray-500">
-              Don&apos;t worry, you can always add this information later
+              No resume? No problem — we&apos;ll ask a few quick questions next.
             </p>
           </CardContent>
         </Card>
