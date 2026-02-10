@@ -26,6 +26,7 @@ export default function OnboardingFormPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [sessionKey, setSessionKey] = useState<string | null>(null);
+  const [hasResumePrefill, setHasResumePrefill] = useState(false);
   const [formData, setFormData] = useState<OnboardingData>({
     target_role: "",
     experience_level: "beginner",
@@ -55,6 +56,7 @@ export default function OnboardingFormPage() {
       .then((res) => res.json())
       .then((data) => {
         if (data.parsed_data) {
+          setHasResumePrefill(true);
           const { parsed_data } = data;
           setFormData((prev) => ({
             ...prev,
@@ -67,6 +69,25 @@ export default function OnboardingFormPage() {
       .catch((err) => console.error("Failed to fetch session", err))
       .finally(() => setLoading(false));
   }, [router]);
+
+  const suggestedRoles = [
+    "Backend Engineer",
+    "Data Scientist",
+    "Product Manager",
+    "UI/UX Designer",
+    "DevOps Engineer",
+    "AI Engineer",
+  ];
+
+  const suggestedSkills = [
+    "Python",
+    "JavaScript",
+    "SQL",
+    "React",
+    "Docker",
+    "Statistics",
+    "System Design",
+  ];
 
   useEffect(() => {
     if (!toneOverrideEnabled) return;
@@ -189,8 +210,49 @@ export default function OnboardingFormPage() {
                   If you uploaded a resume, we pre-filled some details. Otherwise, just answer a few quick questions.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-8">
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-8">
+
+              {!hasResumePrefill && (
+                <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-4 text-sm text-gray-700 dark:border-violet-900/40 dark:bg-violet-900/10 dark:text-gray-300">
+                  <div className="mb-2 font-semibold text-violet-700 dark:text-violet-300">
+                    Quick picks to get you started
+                  </div>
+                  <div className="mb-3 text-xs text-gray-600 dark:text-gray-400">
+                    Tap a role or skill to autofill. You can edit anytime.
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestedRoles.map((role) => (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => setFormData((prev) => ({ ...prev, target_role: role }))}
+                        className="rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-medium text-violet-700 shadow-sm transition hover:border-violet-400 dark:border-violet-800 dark:bg-gray-900 dark:text-violet-200"
+                      >
+                        {role}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {suggestedSkills.map((skill) => (
+                      <button
+                        key={skill}
+                        type="button"
+                        onClick={() =>
+                          setFormData((prev) =>
+                            prev.skills.includes(skill)
+                              ? prev
+                              : { ...prev, skills: [...prev.skills, skill] }
+                          )
+                        }
+                        className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700 shadow-sm transition hover:border-gray-300 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"
+                      >
+                        {skill}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
                   
                   {/* Target Role */}
                   <div className="space-y-3">

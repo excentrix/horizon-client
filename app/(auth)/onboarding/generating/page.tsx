@@ -120,12 +120,15 @@ export default function GeneratingPage() {
 
         {/* Error state */}
         {status === "failed" && (
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-4 px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition"
-          >
-            Try Again
-          </button>
+          <div className="mt-4 flex flex-col items-center gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => router.push(\"/onboarding/paths\")}\n+              className=\"px-6 py-3 border border-white/20 text-white rounded-lg transition hover:bg-white/10\"\n+            >\n+              Choose a Different Path\n+            </button>\n+            <button\n+              onClick={() => router.push(\"/dashboard\")}\n+              className=\"px-6 py-3 border border-white/20 text-white rounded-lg transition hover:bg-white/10\"\n+            >\n+              Go to Dashboard\n+            </button>\n+          </div>\n         )}\n*** End Patch"}}$commentary to=functions.apply_patch  体育彩票天天 to=functions.apply_patch code
         )}
       </div>
     </div>

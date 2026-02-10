@@ -22,6 +22,9 @@ type MatchedPath = {
   cover_image_url: string;
   match_score: number;
   match_reasons: string[];
+  quality_score?: number;
+  is_generated?: boolean;
+  match_source?: "seed" | "generated";
 };
 
 export default function PathSelectionPage() {
@@ -134,6 +137,11 @@ export default function PathSelectionPage() {
                             TOP MATCH ({path.match_score}%)
                         </div>
                     )}
+                    {path.is_generated && (
+                        <div className="absolute top-3 left-3 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700 shadow-sm dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200">
+                            AI Generated
+                        </div>
+                    )}
                     
                     <CardHeader className="pb-4">
                         <div className="text-4xl mb-4">{path.icon}</div>
@@ -154,6 +162,12 @@ export default function PathSelectionPage() {
                                 <BarChart className="h-4 w-4" />
                                 <span className="capitalize">{path.difficulty}</span>
                              </div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                          <span>Match confidence</span>
+                          <span className="font-semibold text-violet-600 dark:text-violet-300">
+                            {path.match_score}%
+                          </span>
                         </div>
 
                         {/* Match Reasons */}

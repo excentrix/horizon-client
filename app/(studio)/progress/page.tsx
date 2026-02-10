@@ -491,7 +491,7 @@ export default function ProgressPage() {
                         <span
                           key={`badge-${award.id}`}
                           className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium hover:bg-white/25 transition-colors cursor-default"
-                          title={badge.description}
+                          title={(badge as any).description}
                         >
                           {badge.icon && <span className="mr-1">{badge.icon}</span>}
                           {badge.name}
