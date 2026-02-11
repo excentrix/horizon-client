@@ -249,14 +249,18 @@ export const planningApi = {
     ),
   submitTaskProof: (
     taskId: string,
-    payload: {
-      submission_type: "link" | "text" | "file";
-      content: string;
-      metadata?: Record<string, unknown>;
-    }
+    payload:
+      | {
+          submission_type: "link" | "text" | "file";
+          content: string;
+          metadata?: Record<string, unknown>;
+        }
+      | FormData
   ) =>
     extract<{ message: string; proof: Record<string, unknown>; artifact_id?: string }>(
-      http.post(`/planning/tasks/${taskId}/submit-proof/`, payload)
+      http.post(`/planning/tasks/${taskId}/submit-proof/`, payload, {
+        headers: payload instanceof FormData ? { "Content-Type": "multipart/form-data" } : undefined,
+      })
     ),
   generateTaskLesson: (
     taskId: string,

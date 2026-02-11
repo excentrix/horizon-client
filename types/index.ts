@@ -391,6 +391,13 @@ export interface DailyTask {
     score?: number;
     completed_at?: string;
   };
+  milestone_feedback?: {
+    milestone_id?: string;
+    effort?: number | null;
+    understanding?: number | null;
+    confidence?: number | null;
+    reflection?: string | null;
+  };
   lesson_blocks?: Array<{
     id?: string;
     title?: string;
