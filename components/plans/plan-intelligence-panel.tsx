@@ -64,7 +64,7 @@ export function PlanIntelligencePanel({
   );
 
   return (
-    <Card className="h-fit max-h-[calc(100vh-12rem)] overflow-hidden rounded-[28px] border border-white/80 bg-white/85 shadow-[var(--shadow-2)] backdrop-blur">
+    <Card className="h-fit max-h-[calc(100vh-10rem)] overflow-hidden rounded-[28px] border border-white/80 bg-white/85 shadow-[var(--shadow-2)] backdrop-blur">
       <CardHeader className="space-y-1 pb-3">
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
           Learning cockpit
