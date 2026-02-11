@@ -139,7 +139,7 @@ export function MessageFeed({
 
   if (!conversation) {
     return (
-      <div className="grid flex-1 place-items-center rounded-xl border border-dashed bg-muted/30 p-8 text-sm text-muted-foreground">
+      <div className="grid flex-1 place-items-center rounded-xl border border-dashed bg-muted/30 p-8 text-sm text-muted-foreground dark:border-white/10 dark:bg-white/5">
         Select a mentor thread to continue the conversation.
       </div>
     );
@@ -150,13 +150,13 @@ export function MessageFeed({
       className={cn(
         "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden",
         variant === "card"
-          ? "rounded-2xl border bg-white/80 shadow-[var(--shadow-1)]"
+          ? "rounded-2xl border bg-white/80 shadow-[var(--shadow-1)] dark:bg-neutral-900/80 dark:border-white/10"
           : "rounded-none border-0 bg-transparent shadow-none",
         theme?.containerBorder,
       )}
     >
       {showHeader ? (
-        <header className="border-b bg-white/70 px-6 py-4 backdrop-blur">
+        <header className="border-b bg-white/70 px-6 py-4 backdrop-blur dark:bg-neutral-900/70 dark:border-white/10">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold">{conversation.title}</h2>
@@ -169,11 +169,11 @@ export function MessageFeed({
                 className={cn(
                   "rounded-full px-3 py-1 font-medium",
                   connectionStatus === "open"
-                    ? "bg-emerald-100 text-emerald-700"
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
                     : connectionStatus === "connecting"
-                      ? "bg-amber-100 text-amber-700"
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400"
                       : connectionStatus === "error"
-                        ? "bg-rose-100 text-rose-700"
+                        ? "bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400"
                         : `${theme?.statusBadgeBg ?? "bg-muted"} ${theme?.statusBadgeText ?? "text-muted-foreground"}`,
                 )}
               >
@@ -192,7 +192,7 @@ export function MessageFeed({
             </div>
           </div>
           {connectionError ? (
-            <p className="mt-2 rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">
+            <p className="mt-2 rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-500/10 dark:text-rose-400">
               {connectionError}
             </p>
           ) : null}
@@ -249,11 +249,11 @@ function MessageFeedContent({
   const { data: flowData } = useFlowSuggestion('chat');
   const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   const [suggestionShownAt] = useState(() => new Date());
-  
+
   // Determine if we should show the flow chip
   // Show after the last AI message, not during streaming, and only once per session
   const lastMessage = displayMessages[displayMessages.length - 1];
-  const showFlowChip = 
+  const showFlowChip =
     flowData?.suggestion &&
     !suggestionDismissed &&
     !streamingMessage &&
@@ -342,152 +342,152 @@ function MessageFeedContent({
       <AnimatePresence initial={false}>
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
           {displayMessages.map((message, index) => {
-          const isUser = message.sender_type === "user";
-          const prevSender = displayMessages[index - 1]?.sender_type;
-          const isNewAssistantTurn =
-            !isUser && prevSender !== "ai";
-          const metadata = message.metadata as
-            | { missing_info_id?: string; missing_info_field?: string; missing_info_context?: string }
-            | undefined;
-          const missingInfoId = metadata?.missing_info_id;
-          const missingInfoField = metadata?.missing_info_field;
-          const missingInfoContext = metadata?.missing_info_context;
-          return (
-            <motion.div
-              key={message.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 12 }}
-              transition={{ duration: 0.18 }}
-            >
-              {isNewAssistantTurn ? (
-                <div className="flex items-center gap-3 py-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                    Mentor
-                  </span>
-                  <span className="h-px flex-1 bg-gradient-to-r from-muted/60 via-muted/30 to-transparent" />
-                </div>
-              ) : null}
-              <Message from={isUser ? "user" : "assistant"}>
-                <MessageContent
-                  className={cn(
-                    "max-w-[72%] rounded-2xl px-4 py-3 text-sm shadow-[var(--shadow-1)]",
-                    "group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground",
-                    !isUser &&
-                      `${theme?.bubbleBg ?? "bg-white/80"} ${theme?.bubbleText ?? "text-foreground"} border border-white/70`,
-                  )}
-                >
-                  <MessageResponse>{message.content}</MessageResponse>
+            const isUser = message.sender_type === "user";
+            const prevSender = displayMessages[index - 1]?.sender_type;
+            const isNewAssistantTurn =
+              !isUser && prevSender !== "ai";
+            const metadata = message.metadata as
+              | { missing_info_id?: string; missing_info_field?: string; missing_info_context?: string }
+              | undefined;
+            const missingInfoId = metadata?.missing_info_id;
+            const missingInfoField = metadata?.missing_info_field;
+            const missingInfoContext = metadata?.missing_info_context;
+            return (
+              <motion.div
+                key={message.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 12 }}
+                transition={{ duration: 0.18 }}
+              >
+                {isNewAssistantTurn ? (
+                  <div className="flex items-center gap-3 py-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                      Mentor
+                    </span>
+                    <span className="h-px flex-1 bg-gradient-to-r from-muted/60 via-muted/30 to-transparent" />
+                  </div>
+                ) : null}
+                <Message from={isUser ? "user" : "assistant"}>
+                  <MessageContent
+                    className={cn(
+                      "max-w-[72%] rounded-2xl px-4 py-3 text-sm shadow-[var(--shadow-1)]",
+                      "group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground",
+                      !isUser &&
+                      `${theme?.bubbleBg ?? "bg-white/80"} ${theme?.bubbleText ?? "text-foreground"} border border-white/70 dark:bg-white/5 dark:border-white/10`,
+                    )}
+                  >
+                    <MessageResponse>{message.content}</MessageResponse>
 
-                  {message.metadata?.graph_learning_snapshot && (
-                    <LearningGraphPill snapshot={message.metadata.graph_learning_snapshot} />
-                  )}
-                  {message.metadata?.graph_career_snapshot && (
-                    <CareerGoalsPill snapshot={message.metadata.graph_career_snapshot} />
-                  )}
+                    {message.metadata?.graph_learning_snapshot && (
+                      <LearningGraphPill snapshot={message.metadata.graph_learning_snapshot} />
+                    )}
+                    {message.metadata?.graph_career_snapshot && (
+                      <CareerGoalsPill snapshot={message.metadata.graph_career_snapshot} />
+                    )}
 
-                  <AgentInsightsCard
-                    agentTools={message.metadata?.agent_tools}
-                    toolInvocations={message.metadata?.tool_invocations}
-                    toolRuntimeInvocations={message.metadata?.tool_runtime_invocations}
-                    guardrails={message.metadata?.guardrails}
-                    safety={message.metadata?.safety}
-                    agentName={message.cortex?.agent}
-                  />
+                    <AgentInsightsCard
+                      agentTools={message.metadata?.agent_tools}
+                      toolInvocations={message.metadata?.tool_invocations}
+                      toolRuntimeInvocations={message.metadata?.tool_runtime_invocations}
+                      guardrails={message.metadata?.guardrails}
+                      safety={message.metadata?.safety}
+                      agentName={message.cortex?.agent}
+                    />
 
-                  {message.cortex ? (
-                    <div className="mt-2 flex justify-end">
-                      <div
-                        className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2 py-0.5 text-[10px] font-medium text-foreground/70"
-                        title={`${message.cortex.reason} • Confidence: ${(
-                          message.cortex.confidence * 100
-                        ).toFixed(0)}%`}
-                      >
-                        <Bot className="h-3 w-3" />
-                        {message.cortex.agent}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {!isUser && missingInfoId && missingInfoField ? (
-                    <div className="mt-3 rounded-xl border bg-background/70 p-3 text-xs">
-                      {missingInfoContext ? (
-                        <p className="mb-2 text-[11px] text-muted-foreground">
-                          {missingInfoContext}
-                        </p>
-                      ) : null}
-                      {message.metadata?.missing_info_unblocks ? (
-                        <p className="mb-2 text-[11px] text-muted-foreground">
-                          {String(message.metadata.missing_info_unblocks)}
-                        </p>
-                      ) : null}
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={quickReplies[missingInfoId] ?? ""}
-                          onChange={(event) =>
-                            setQuickReplies((prev) => ({
-                              ...prev,
-                              [missingInfoId]: event.target.value,
-                            }))
-                          }
-                          placeholder="Type your answer…"
-                          className="h-8 text-xs"
-                        />
-                        <Button
-                          size="sm"
-                          className="h-8 px-3"
-                          disabled={
-                            !planSessionId ||
-                            !quickReplies[missingInfoId]?.trim() ||
-                            submitting[missingInfoId]
-                          }
-                          onClick={async () => {
-                            if (!planSessionId) {
-                              telemetry.toastError(
-                                "Unable to submit info",
-                                "Missing plan session."
-                              );
-                              return;
-                            }
-                            const reply = quickReplies[missingInfoId]?.trim();
-                            if (!reply) return;
-                            setSubmitting((prev) => ({ ...prev, [missingInfoId]: true }));
-                            try {
-                              await planningApi.submitMissingInfo(planSessionId, {
-                                field: missingInfoField,
-                                value: reply,
-                              });
-                              resolveMissingInfo(missingInfoId);
-                              setQuickReplies((prev) => ({ ...prev, [missingInfoId]: "" }));
-                              telemetry.toastInfo("Information updated", "Thanks! Updated.");
-                            } catch {
-                              telemetry.toastError("Failed to update information.");
-                            } finally {
-                              setSubmitting((prev) => ({ ...prev, [missingInfoId]: false }));
-                            }
-                          }}
+                    {message.cortex ? (
+                      <div className="mt-2 flex justify-end">
+                        <div
+                          className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2 py-0.5 text-[10px] font-medium text-foreground/70 dark:bg-white/10"
+                          title={`${message.cortex.reason} • Confidence: ${(
+                            message.cortex.confidence * 100
+                          ).toFixed(0)}%`}
                         >
-                          <Send className="h-3 w-3" />
-                        </Button>
+                          <Bot className="h-3 w-3" />
+                          {message.cortex.agent}
+                        </div>
                       </div>
-                      {!planSessionId ? (
-                        <p className="mt-2 text-[11px] text-muted-foreground">
-                          Open the plan builder to submit this info.
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </MessageContent>
-              </Message>
-            </motion.div>
-          );
-        })}
+                    ) : null}
+
+                    {!isUser && missingInfoId && missingInfoField ? (
+                      <div className="mt-3 rounded-xl border bg-background/70 p-3 text-xs dark:bg-white/5 dark:border-white/10">
+                        {missingInfoContext ? (
+                          <p className="mb-2 text-[11px] text-muted-foreground">
+                            {missingInfoContext}
+                          </p>
+                        ) : null}
+                        {message.metadata?.missing_info_unblocks ? (
+                          <p className="mb-2 text-[11px] text-muted-foreground">
+                            {String(message.metadata.missing_info_unblocks)}
+                          </p>
+                        ) : null}
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={quickReplies[missingInfoId] ?? ""}
+                            onChange={(event) =>
+                              setQuickReplies((prev) => ({
+                                ...prev,
+                                [missingInfoId]: event.target.value,
+                              }))
+                            }
+                            placeholder="Type your answer…"
+                            className="h-8 text-xs"
+                          />
+                          <Button
+                            size="sm"
+                            className="h-8 px-3"
+                            disabled={
+                              !planSessionId ||
+                              !quickReplies[missingInfoId]?.trim() ||
+                              submitting[missingInfoId]
+                            }
+                            onClick={async () => {
+                              if (!planSessionId) {
+                                telemetry.toastError(
+                                  "Unable to submit info",
+                                  "Missing plan session."
+                                );
+                                return;
+                              }
+                              const reply = quickReplies[missingInfoId]?.trim();
+                              if (!reply) return;
+                              setSubmitting((prev) => ({ ...prev, [missingInfoId]: true }));
+                              try {
+                                await planningApi.submitMissingInfo(planSessionId, {
+                                  field: missingInfoField,
+                                  value: reply,
+                                });
+                                resolveMissingInfo(missingInfoId);
+                                setQuickReplies((prev) => ({ ...prev, [missingInfoId]: "" }));
+                                telemetry.toastInfo("Information updated", "Thanks! Updated.");
+                              } catch {
+                                telemetry.toastError("Failed to update information.");
+                              } finally {
+                                setSubmitting((prev) => ({ ...prev, [missingInfoId]: false }));
+                              }
+                            }}
+                          >
+                            <Send className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        {!planSessionId ? (
+                          <p className="mt-2 text-[11px] text-muted-foreground">
+                            Open the plan builder to submit this info.
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </MessageContent>
+                </Message>
+              </motion.div>
+            );
+          })}
         </div>
       </AnimatePresence>
 
       {mentorTyping && !streamingMessage ? (
         <Message from="assistant">
-          <MessageContent className="rounded-2xl border border-dashed bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+          <MessageContent className="rounded-2xl border border-dashed bg-muted/40 px-4 py-3 text-xs text-muted-foreground dark:bg-white/5 dark:border-white/10">
             <span className="inline-flex items-center gap-2">
               <Loader size={14} />
               Mentor is typing...

@@ -66,11 +66,11 @@ export function ConversationList({
             className={cn(
               "w-full rounded-2xl border px-4 py-3 text-left transition shadow-sm",
               isActive
-                ? activeClass ?? "border-primary/30 bg-white/80"
-                : "border-transparent bg-white/60 hover:border-border hover:bg-white/80",
+                ? activeClass ?? "border-primary/30 bg-white/80 dark:bg-primary/10 dark:border-primary/50"
+                : "border-transparent bg-white/60 hover:border-border hover:bg-white/80 dark:bg-white/5 dark:hover:bg-white/10 dark:border-white/10",
             )}
           >
-            <div className="flex min-w-0 items-center justify-between gap-2 text-sm font-medium">
+            <div className="flex min-w-0 items-center justify-between gap-2 text-sm font-medium text-foreground">
               <span className="truncate">{conversation.title}</span>
               {conversation.is_pinned ? <Pin className="h-4 w-4" /> : null}
             </div>

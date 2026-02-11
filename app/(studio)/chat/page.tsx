@@ -37,7 +37,7 @@ import { LearnerProfilePanel } from "@/components/mentor-lounge/learner-profile-
 import { PlanWorkbench } from "@/components/mentor-lounge/plan-workbench";
 import { PlanBuildHeaderBadge } from "@/components/mentor-lounge/plan-build-header-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Brain, User, PanelRightOpen } from "lucide-react";
+import { Brain, User, PanelRightOpen, ChevronRight, ChevronLeft } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlanSessionPoller } from "@/hooks/use-plan-poller";
 
@@ -104,7 +104,7 @@ function ChatContent() {
   );
   const planUpdates = useMentorLoungeStore((state) => state.planUpdates);
   const missingInformation = useMentorLoungeStore((state) => state.missingInformation);
-  
+
   const {
     data: conversations = [],
     isLoading: conversationsLoading,
@@ -137,7 +137,8 @@ function ChatContent() {
   const [isReportModalOpen, setReportModalOpen] = useState(false);
   const [, setAnalysisTimedOut] = useState<string | null>(null);
   const [isInsightsOpen, setInsightsOpen] = useState(false);
-  
+  const [isSidebarOpen, setSidebarOpen] = useState(true);
+
   // Analysis history state
   const [analysisHistory, setAnalysisHistory] = useState<Array<{
     id: string;
@@ -148,7 +149,7 @@ function ChatContent() {
     completed_at?: string;
     progress?: number;
     current_stage?: string;
-    stage_messages?: Array<{stage: string; message: string; timestamp: string}>;
+    stage_messages?: Array<{ stage: string; message: string; timestamp: string }>;
     results?: Record<string, unknown>;
   }>>([]);
   const [analysisByConversation, setAnalysisByConversation] = useState<Record<string, Record<string, unknown>>>({});
@@ -211,17 +212,17 @@ function ChatContent() {
               : [];
             const completionEntry: StageHistoryEntry | null = response.analyzed_at
               ? {
-                  stage: "analysis_complete",
-                  message: "Analysis synchronized",
-                  timestamp: response.analyzed_at,
-                }
+                stage: "analysis_complete",
+                message: "Analysis synchronized",
+                timestamp: response.analyzed_at,
+              }
               : null;
 
             const mergedHistory =
               completionEntry &&
-              !history.some(
-                (entry) => entry.timestamp === completionEntry.timestamp
-              )
+                !history.some(
+                  (entry) => entry.timestamp === completionEntry.timestamp
+                )
                 ? [...history, completionEntry].slice(-stageHistoryLimit)
                 : history;
 
@@ -293,18 +294,18 @@ function ChatContent() {
   useEffect(() => {
     const fetchAnalysisHistory = async () => {
       if (!user) return;
-      
+
       try {
         const Cookies = (await import('js-cookie')).default;
         const token = Cookies.get('accessToken');
         if (!token) return;
-        
+
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/intelligence/my-analyses/`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
         });
-        
+
         if (response.ok) {
           const data = await response.json();
           setAnalysisHistory(data);
@@ -313,21 +314,21 @@ function ChatContent() {
         console.error('Failed to fetch analysis history:', error);
       }
     };
-    
+
     fetchAnalysisHistory();
   }, [user]);
 
-useEffect(() => {
-  setComposerDraft("");
-  setTypingStatus(false);
-  setLatestPlan(null);
-  setMentorActions([]);
-}, [
-  selectedConversationId,
-  setComposerDraft,
-  setTypingStatus,
-  setMentorActions,
-]);
+  useEffect(() => {
+    setComposerDraft("");
+    setTypingStatus(false);
+    setLatestPlan(null);
+    setMentorActions([]);
+  }, [
+    selectedConversationId,
+    setComposerDraft,
+    setTypingStatus,
+    setMentorActions,
+  ]);
 
   useEffect(() => {
     if (!selectedConversationId) {
@@ -544,12 +545,12 @@ useEffect(() => {
       if (stage) {
         const stageDescriptor = describeStageEvent(payload);
         const description = stageDescriptor?.message;
-        
+
         if (description && typeof description === 'string') {
           // Map stage to progress percentage
           const mappedProgress = STAGE_PROGRESS_MAP[stage];
           const currentProgress = typeof payload.progress === 'number' ? payload.progress : mappedProgress;
-          
+
           // Update analysis history with new stage message
           setAnalysisHistory(prev => prev.map(analysis => {
             if (analysis.conversation_id === conversationId && analysis.status === 'running') {
@@ -583,7 +584,7 @@ useEffect(() => {
       const normalizedEvent = eventType?.toLowerCase();
       const isErrorEvent =
         normalizedEvent === "analysis_error" || stage === "analysis_failed";
-       const isFinalEvent =
+      const isFinalEvent =
         normalizedEvent === "analysis_complete" ||
         normalizedEvent === "analysis_completed" ||
         progressStatus === "completed" ||
@@ -604,7 +605,7 @@ useEffect(() => {
           }
           return analysis;
         }));
-        
+
         if (selectedConversationId && conversationId === selectedConversationId) {
           clearAnalysisPolling();
           // Clear the timeout since analysis completed
@@ -613,7 +614,7 @@ useEffect(() => {
             analysisTimeoutRef.current = null;
           }
           setAnalysisTimedOut(null);
-          
+
           // AUTO-REFRESH: Fetch latest analysis results to update UI
           setTimeout(() => {
             fetchLatestAnalysis(conversationId, { silent: false });
@@ -641,7 +642,7 @@ useEffect(() => {
     | undefined;
   const hasAnalysisResults =
     Boolean(analysisResults) && Object.keys(analysisResults ?? {}).length > 0;
-  
+
   // Disable if pending, or if we have an active plan build in progress
   const isPlanBuilding = ["queued", "in_progress", "warning"].includes(planBuildStatus);
   const disablePlanButton =
@@ -657,7 +658,7 @@ useEffect(() => {
 
     stageTrackerRef.current.set(selectedConversationId, new Set());
     processedAnalysisRef.current.delete(selectedConversationId);
-    
+
     // Clear any existing timeout and reset timeout state
     if (analysisTimeoutRef.current) {
       window.clearTimeout(analysisTimeoutRef.current);
@@ -678,7 +679,7 @@ useEffect(() => {
         analysis_record: undefined,
       },
     }));
-    
+
     // Start 2-minute timeout
     analysisTimeoutRef.current = window.setTimeout(() => {
       if (selectedConversationId) {
@@ -687,7 +688,7 @@ useEffect(() => {
           "⚠️ Analysis is taking longer than expected",
           "This may indicate a problem with the AI service. You can retry the analysis if needed."
         );
-        
+
         // Mark analysis as failed in history so it doesn't spin forever
         setAnalysisHistory(prev => prev.map(a => {
           if (a.conversation_id === selectedConversationId && a.status === 'running') {
@@ -712,7 +713,7 @@ useEffect(() => {
       progress: 0,
       stage_messages: [],
     };
-    
+
     setAnalysisHistory(prev => [newAnalysis, ...prev]);
 
     // Capture analysis requested event
@@ -851,7 +852,7 @@ useEffect(() => {
   }, [planDisplayStatus, planUpdates.length]);
 
   return (
-    <div className="flex min-h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-[radial-gradient(1200px_600px_at_0%_0%,rgba(56,189,248,0.06),transparent),radial-gradient(900px_500px_at_100%_10%,rgba(249,115,22,0.06),transparent)]">
+    <div className="flex min-h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-[radial-gradient(1200px_600px_at_0%_0%,rgba(56,189,248,0.06),transparent),radial-gradient(900px_500px_at_100%_10%,rgba(249,115,22,0.06),transparent)] dark:bg-none dark:bg-background">
       <CreateConversationModal
         isOpen={isCreateModalOpen}
         onOpenChange={setCreateModalOpen}
@@ -865,88 +866,61 @@ useEffect(() => {
           
           Let's place the SessionGoal first.
       */}
-      <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-hidden px-4 pb-4 pt-4 lg:flex-row lg:gap-6">
-        <aside className="flex h-full w-full flex-col lg:w-80">
-          <div className="flex h-full flex-col rounded-[28px] border border-white/80 bg-white/80 shadow-[var(--shadow-2)] backdrop-blur">
-            <div className="flex items-center justify-between gap-4 px-4 py-3 lg:px-5 lg:py-4">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                  Mentor lounge
-                </p>
-                <h2 className="text-lg font-semibold leading-tight">Conversations</h2>
-                <p className="text-xs text-muted-foreground">
-                  Your general mentor adapts as you explore plans and goals.
-                </p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => setCreateModalOpen(true)}>
-                <PlusCircle className="h-6 w-6" />
-              </Button>
-            </div>
-            <Separator />
-            <div className="flex-1 overflow-y-auto px-3 py-3">
-              <ConversationList
-                conversations={conversations}
-                selectedConversationId={selectedConversationId}
-                isLoading={conversationsLoading}
-                activeClass={activeListClass}
-              />
-            </div>
-          </div>
-        </aside>
+      <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-hidden px-4 pb-4 pt-4 lg:flex-row lg:gap-6 relative">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-transparent">
           {activeConversation ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[28px] border border-white/80 bg-white/80 shadow-[var(--shadow-2)] backdrop-blur">
-              <header className="border-b border-white/80 bg-transparent">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[28px] border border-white/80 bg-white/80 shadow-[var(--shadow-2)] backdrop-blur dark:border-white/10 dark:bg-neutral-900/80">
+              <header className="border-b border-white/80 bg-transparent dark:border-white/10">
                 <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
-                  <div className="min-w-0 flex-1">
-                      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                        Active mentor
-                      </p>
-                      <h3 className="truncate text-lg font-semibold">{activeConversation.title}</h3>
-                      {/* Show selector if plan is active (mocked logic for now as 'specialized' check) 
+                  <div className="min-w-0 flex-1 text-foreground">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                      Active mentor
+                    </p>
+                    <h3 className="truncate text-lg font-semibold">{activeConversation.title}</h3>
+                    {/* Show selector if plan is active (mocked logic for now as 'specialized' check) 
                           In a real scenario, we'd check if user has an active plan that unlocks this.
                           For now, we allow switching if the current personality is NOT general, 
                           OR if we want to enable it for everyone with a plan. 
                           Let's assume if they have a 'latestPlan', they can switch.
                       */}
-                      {latestPlan || activeConversation.ai_personality?.type === 'specialized' ? (
-                          <div className="mt-1">
-                            <PersonalitySelector 
-                                currentPersonalityId={activeConversation.ai_personality?.id}
-                                onSelect={() => {
-                                    // We need a mutation to update the conversation's personality
-                                    // For now, let's just log it or we need to add that endpoint/mutation
-                                    // actually, usually you don't change personality of an existing chat, 
-                                    // you start a new one. But the user asked to "change the personality in a dropdown".
-                                    // So we probably need an update endpoint.
-                                    // Let's assume we can't update it easily yet without backend changes.
-                                    // Wait, the user said "The user should be able to change the personality in a dropdown".
-                                    // I'll implement the UI but maybe disable it or show a toast if backend doesn't support it.
-                                    // Actually, let's just show the name for now if we can't update it, 
-                                    // OR we can trigger a "New Conversation" with that personality?
-                                    // No, "change the personality". 
-                                    // I will add a TODO and just show the selector.
-                                    telemetry.toastError("Changing personality mid-conversation is coming soon.");
-                                }}
-                                disabled={false} 
-                            />
-                          </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          {activeConversation.ai_personality?.name}
-                        </p>
-                      )}
+                    {latestPlan || activeConversation.ai_personality?.type === 'specialized' ? (
+                      <div className="mt-1">
+                        <PersonalitySelector
+                          currentPersonalityId={activeConversation.ai_personality?.id}
+                          onSelect={() => {
+                            // We need a mutation to update the conversation's personality
+                            // For now, let's just log it or we need to add that endpoint/mutation
+                            // actually, usually you don't change personality of an existing chat, 
+                            // you start a new one. But the user asked to "change the personality in a dropdown".
+                            // So we probably need an update endpoint.
+                            // Let's assume we can't update it easily yet without backend changes.
+                            // Wait, the user said "The user should be able to change the personality in a dropdown".
+                            // I'll implement the UI but maybe disable it or show a toast if backend doesn't support it.
+                            // Actually, let's just show the name for now if we can't update it, 
+                            // OR we can trigger a "New Conversation" with that personality?
+                            // No, "change the personality". 
+                            // I will add a TODO and just show the selector.
+                            telemetry.toastError("Changing personality mid-conversation is coming soon.");
+                          }}
+                          disabled={false}
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        {activeConversation.ai_personality?.name}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-xs">
                     <span
                       className={cn(
                         "rounded-full px-2 py-1 font-medium",
                         socketStatus === "open"
-                          ? "bg-emerald-100 text-emerald-700"
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
                           : socketStatus === "connecting"
-                            ? "bg-amber-100 text-amber-700"
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400"
                             : socketStatus === "error"
-                              ? "bg-rose-100 text-rose-700"
+                              ? "bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400"
                               : "bg-muted text-muted-foreground"
                       )}
                     >
@@ -958,27 +932,27 @@ useEffect(() => {
                             ? "Offline"
                             : "Idle"}
                     </span>
-                    <span className="rounded-full bg-primary/10 px-2 py-1 font-medium text-primary">
+                    <span className="rounded-full bg-primary/10 px-2 py-1 font-medium text-primary dark:bg-primary/20">
                       {activeConversation.ai_personality?.name ?? "Adaptive Mentor"}
                     </span>
                     <PlanBuildHeaderBadge />
                     <Sheet open={isInsightsOpen} onOpenChange={setInsightsOpen}>
                       <SheetTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-7 gap-2 text-xs rounded-full">
+                        <Button variant="outline" size="sm" className="h-7 gap-2 text-xs rounded-full dark:border-white/10 dark:bg-white/5">
                           <PanelRightOpen className="h-3.5 w-3.5" />
                           Insights
                         </Button>
                       </SheetTrigger>
-                      <SheetContent side="right" className="flex w-[360px] flex-col bg-white/90 p-0 shadow-[var(--shadow-2)] sm:w-[440px]">
-                        <SheetHeader className="border-b bg-white/85 px-5 py-4">
-                          <SheetTitle className="text-lg">Mentor insights</SheetTitle>
-                          <SheetDescription className="text-xs">
+                      <SheetContent side="right" className="flex w-[360px] flex-col bg-white/90 p-0 shadow-[var(--shadow-2)] sm:w-[440px] dark:bg-neutral-900/95 dark:border-white/10">
+                        <SheetHeader className="border-b bg-white/85 px-5 py-4 dark:bg-transparent dark:border-white/10">
+                          <SheetTitle className="text-lg text-foreground">Mentor insights</SheetTitle>
+                          <SheetDescription className="text-xs text-muted-foreground">
                             Runtime updates and learner profile, in one place.
                           </SheetDescription>
                         </SheetHeader>
                         <div className="flex min-h-0 flex-1 flex-col">
                           <Tabs defaultValue="runtime" className="flex min-h-0 flex-1 flex-col">
-                            <div className="border-b px-5 py-3">
+                            <div className="border-b px-5 py-3 dark:border-white/10">
                               <TabsList className="grid w-full grid-cols-2 rounded-full bg-muted/30 p-1">
                                 <TabsTrigger value="runtime" className="text-xs gap-2 rounded-full">
                                   <Brain className="w-3.5 h-3.5" /> Runtime
@@ -1003,10 +977,10 @@ useEffect(() => {
                                 const latestCompletedAnalysis = analysisHistory
                                   .filter(a => a.conversation_id === selectedConversationId && a.status === 'completed')
                                   .sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime())
-                                  [0];
-                                
+                                [0];
+
                                 const record = analysisSummary?.analysis_record as Record<string, unknown> | undefined;
-                                
+
                                 const academicData = record ? {
                                   domain: record.primary_domain_name,
                                   topic: record.primary_topic_name,
@@ -1048,7 +1022,7 @@ useEffect(() => {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 text-xs"
+                      className="h-8 text-xs dark:border-white/10 dark:hover:bg-white/5"
                       onClick={() => handleAnalyzeConversation()}
                       disabled={!selectedConversationId || analyzeConversation.isPending}
                     >
@@ -1057,7 +1031,7 @@ useEffect(() => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 text-xs"
+                      className="h-8 text-xs text-muted-foreground hover:text-foreground"
                       onClick={() => handleAnalyzeConversation(true)}
                       disabled={!selectedConversationId || analyzeConversation.isPending}
                     >
@@ -1066,7 +1040,7 @@ useEffect(() => {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 text-xs"
+                      className="h-8 text-xs dark:border-white/10 dark:hover:bg-white/5"
                       onClick={() => {
                         void handleCreatePlan();
                       }}
@@ -1088,7 +1062,7 @@ useEffect(() => {
                 </div>
                 {socketError ? (
                   <div className="px-4 pb-3">
-                    <p className="rounded-md bg-rose-50 px-3 py-2 text-[11px] text-rose-700">
+                    <p className="rounded-md bg-rose-50 px-3 py-2 text-[11px] text-rose-700 dark:bg-rose-500/10 dark:text-rose-400">
                       {socketError}
                     </p>
                   </div>
@@ -1100,7 +1074,7 @@ useEffect(() => {
                   />
                 </div> */}
               </header>
-              <IntelligenceReportModal 
+              <IntelligenceReportModal
                 isOpen={isReportModalOpen}
                 onOpenChange={setReportModalOpen}
                 analysisSummary={analysisSummary}
@@ -1147,7 +1121,7 @@ useEffect(() => {
                         theme={personaTheme}
                         variant="plain"
                       />
-                      <div className="space-y-3 border-t border-white/80 bg-white/65 px-4 pb-4 pt-3">
+                      <div className="space-y-3 border-t border-white/80 bg-white/65 px-4 pb-4 pt-3 dark:border-white/10 dark:bg-neutral-900/40">
                         <AgentIndicator />
                         <MentorActionShelf
                           actions={mentorActions}
@@ -1175,11 +1149,11 @@ useEffect(() => {
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <Card className="w-96 text-center">
+              <Card className="w-96 text-center dark:bg-neutral-900/80 dark:border-white/10">
                 <CardHeader>
-                  <CardTitle>Welcome to the Mentor Lounge</CardTitle>
+                  <CardTitle className="text-foreground">Welcome to the Mentor Lounge</CardTitle>
                   <CardDescription>
-                    Select a conversation from the list on the left, or start a new one to begin.
+                    Select a conversation from the list on the right, or start a new one to begin.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1191,9 +1165,62 @@ useEffect(() => {
             </div>
           )}
         </section>
-        {/* Right Sidebar for Intelligence/Context */}
+
+        {/* Sidebar Toggle and Content */}
+        <div className="flex flex-row items-start">
+          {/* Vertical Toggle Strip */}
+          <div className="flex h-full items-start pt-8 lg:pt-12">
+            <button
+              onClick={() => setSidebarOpen(!isSidebarOpen)}
+              className={cn(
+                "group flex h-10 w-6 items-center justify-center rounded-l-xl border-y border-l border-white/80 bg-white/80 shadow-[-2px_0_8px_rgba(0,0,0,0.05)] backdrop-blur transition-all duration-300 hover:bg-white dark:border-white/10 dark:bg-neutral-800 dark:hover:bg-neutral-700",
+                !isSidebarOpen && "rounded-xl border-r shadow-lg lg:ml-2"
+              )}
+              title={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+            >
+              {isSidebarOpen ? (
+                <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              ) : (
+                <ChevronLeft className="h-4 w-4 text-muted-foreground transition-transform group-hover:-translate-x-0.5" />
+              )}
+            </button>
+          </div>
+
+          {/* Collapsible Sidebar content */}
+          <aside
+            className={cn(
+              "relative flex h-full flex-col transition-all duration-300 ease-in-out",
+              isSidebarOpen ? "w-full lg:w-80" : "w-0 overflow-hidden lg:w-0"
+            )}
+          >
+            <div className="flex h-full flex-col rounded-[28px] rounded-tl-none border border-white/80 bg-white/80 shadow-[var(--shadow-2)] backdrop-blur dark:border-white/10 dark:bg-neutral-900/80">
+              <div className="flex items-center justify-between gap-4 px-4 py-3 lg:px-5 lg:py-4">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                    Mentor lounge
+                  </p>
+                  <h2 className="text-lg font-semibold leading-tight text-foreground">Conversations</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Your general mentor adapts as you explore plans and goals.
+                  </p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setCreateModalOpen(true)} className="text-muted-foreground hover:text-foreground">
+                  <PlusCircle className="h-6 w-6" />
+                </Button>
+              </div>
+              <Separator className="dark:bg-white/10" />
+              <div className="flex-1 overflow-y-auto px-3 py-3">
+                <ConversationList
+                  conversations={conversations}
+                  selectedConversationId={selectedConversationId}
+                  isLoading={conversationsLoading}
+                  activeClass={activeListClass}
+                />
+              </div>
+            </div>
+          </aside>
+        </div>
       </div>
-      <CortexDebugDrawer />
     </div>
   );
 }

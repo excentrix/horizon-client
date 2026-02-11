@@ -92,14 +92,14 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
         selectedConversationId,
         composerDraft.trim()
       );
-      
+
       pushRoutingDecision({
         agent: result.agent,
         confidence: result.confidence,
         reason: `[PREVIEW] ${result.reason}`,
         timestamp: new Date().toISOString(),
       });
-      
+
       telemetry.toastInfo(`Preview: Routed to ${result.agent} (${(result.confidence * 100).toFixed(0)}%)`);
     } catch (error) {
       telemetry.warn("Failed to preview routing", { error });
@@ -124,7 +124,7 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
 
           await sendMessage(trimmed);
         }}
-        className="rounded-2xl border bg-card/90 shadow-sm"
+        className="rounded-2xl border bg-card/90 shadow-sm dark:border-white/10 dark:bg-neutral-900/80"
       >
         <PromptInputDraftSync draft={composerDraft} />
         <PromptInputBody>
@@ -146,7 +146,7 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
             className="border-none bg-transparent px-4 py-4 text-base leading-6"
           />
         </PromptInputBody>
-        <PromptInputFooter className="border-t px-3 py-2">
+        <PromptInputFooter className="border-t px-3 py-2 dark:border-white/10">
           <PromptInputTools>
             {showDebug ? (
               <PromptInputButton
