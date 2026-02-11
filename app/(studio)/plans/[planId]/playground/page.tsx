@@ -9,6 +9,7 @@ import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useConversationMessages, useConversations } from "@/hooks/use-conversations";
 import { usePortfolioArtifacts } from "@/hooks/use-portfolio";
 import { useBrainMap, useBrainMapSync, useLearnerModel } from "@/hooks/use-intelligence";
+import { useGamificationSummary } from "@/hooks/use-gamification";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import type { DailyTask, MentorEngagementNudge } from "@/types";
+import type { DailyTask, MentorEngagementNudge, GamificationEvent } from "@/types";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { chatApi, planningApi } from "@/lib/api";
@@ -259,6 +260,7 @@ export default function PlanPlaygroundPage() {
   const { data: brainMap } = useBrainMap({ plan_id: plan?.id });
   const brainMapSync = useBrainMapSync();
   const { data: learnerModel } = useLearnerModel();
+  const { data: gamificationSummary } = useGamificationSummary();
   const queryClient = useQueryClient();
   const safeArtifacts = useMemo(() => Array.isArray(artifacts) ? artifacts : [], [artifacts]);
   const focusConcepts = useMemo(() => brainMap?.focus_concepts ?? [], [brainMap]);
@@ -287,6 +289,7 @@ export default function PlanPlaygroundPage() {
   const [stepStates, setStepStates] = useState<Record<string, boolean[]>>({});
   const [showExample, setShowExample] = useState(false);
   const [mentorPrompt, setMentorPrompt] = useState<string>("");
+  const [recentGamification, setRecentGamification] = useState<GamificationEvent | null>(null);
   const [lessonLoading, setLessonLoading] = useState(false);
   const lessonRequestRef = useRef<Record<string, boolean>>({});
   
@@ -433,6 +436,23 @@ export default function PlanPlaygroundPage() {
     if (!chatEndRef.current) return;
     chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [mentorMessages, streamingMessage]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let timeout: number | undefined;
+    const handleGamificationUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<GamificationEvent>).detail;
+      if (!detail) return;
+      setRecentGamification(detail);
+      if (timeout) window.clearTimeout(timeout);
+      timeout = window.setTimeout(() => setRecentGamification(null), 5000);
+    };
+    window.addEventListener("gamification:update", handleGamificationUpdate);
+    return () => {
+      if (timeout) window.clearTimeout(timeout);
+      window.removeEventListener("gamification:update", handleGamificationUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -899,6 +919,7 @@ export default function PlanPlaygroundPage() {
     return { label: "Learning", detail: "Stay with the flow. Small steps, real progress." };
   }, [activeTab, focusMode, quizAnsweredAll, stepsComplete]);
   const canCompleteTask = stepsComplete && quizAnsweredAll;
+  const gamificationProfile = gamificationSummary?.profile;
 
   const toggleStep = (index: number) => {
     if (!activeTask) return;
@@ -1469,36 +1490,100 @@ export default function PlanPlaygroundPage() {
               <span className="text-xs text-muted-foreground">{learningState.detail}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="mr-2 flex items-center gap-1 rounded-full border bg-white/90 px-1 py-1 text-xs shadow-sm">
-              <Button
-                size="sm"
-                variant={activeTab === "learn" ? "default" : "ghost"}
-                onClick={() => setActiveTab("learn")}
-                className="rounded-l-2xl rounded-r-md active:bg-black active:text-white"
-              >
-                Learn
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-3 rounded-2xl border bg-white/85 px-3 py-2 text-xs shadow-sm">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Level {gamificationProfile?.level ?? 1}
+                </p>
+                <p className="text-sm font-semibold text-foreground">
+                  {gamificationProfile?.total_points ?? 0} XP
+                </p>
+              </div>
+              <div className="h-8 w-px bg-border" />
+              <div className="min-w-[120px]">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Progress
+                </p>
+                <div className="mt-1 h-2 w-full rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        gamificationProfile?.level_progress_percentage ?? 0,
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="h-8 w-px bg-border" />
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Streak
+                </p>
+                <p className="text-sm font-semibold text-foreground">
+                  {gamificationProfile?.current_streak ?? 0} days
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="mr-2 flex items-center gap-1 rounded-full border bg-white/90 px-1 py-1 text-xs shadow-sm">
+                <Button
+                  size="sm"
+                  variant={activeTab === "learn" ? "default" : "ghost"}
+                  onClick={() => setActiveTab("learn")}
+                  className="rounded-l-2xl rounded-r-md active:bg-black active:text-white"
+                >
+                  Learn
+                </Button>
+                <Button
+                  size="sm"
+                  variant={activeTab === "challenge" ? "default" : "ghost"}
+                  onClick={() => setActiveTab("challenge")}
+                  className="rounded-r-2xl rounded-l-md active:bg-black active:text-white"
+                >
+                  Challenge
+                </Button>
+              </div>
+              <Button variant="outline" asChild>
+                <Link href={`/plans?plan=${planId}`}>Back to plan</Link>
               </Button>
               <Button
-                size="sm"
-                variant={activeTab === "challenge" ? "default" : "ghost"}
-                onClick={() => setActiveTab("challenge")}
-                className="rounded-r-2xl rounded-l-md active:bg-black active:text-white"
+                variant={focusMode ? "default" : "outline"}
+                onClick={() => setFocusMode((prev) => !prev)}
               >
-                Challenge
+                {focusMode ? "Exit Focus Mode" : "Focus Mode"}
               </Button>
             </div>
-            <Button variant="outline" asChild>
-              <Link href={`/plans?plan=${planId}`}>Back to plan</Link>
-            </Button>
-            <Button
-              variant={focusMode ? "default" : "outline"}
-              onClick={() => setFocusMode((prev) => !prev)}
-            >
-              {focusMode ? "Exit Focus Mode" : "Focus Mode"}
-            </Button>
           </div>
         </header>
+
+        {recentGamification ? (
+          <div className="rounded-2xl border bg-white/90 px-4 py-3 text-sm shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Achievement unlocked
+                </p>
+                <p className="text-sm font-semibold text-foreground">
+                  {recentGamification.event_type === "points_earned"
+                    ? `+${recentGamification.points} XP`
+                    : recentGamification.event_type === "level_up"
+                      ? `Level ${recentGamification.new_level}`
+                      : recentGamification.event_type === "badge_earned"
+                        ? recentGamification.badge_name ?? "New badge"
+                        : `${recentGamification.current_streak ?? 0} day streak`}
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {recentGamification.reason ??
+                  recentGamification.badge_description ??
+                  "Keep up the momentum."}
+              </p>
+            </div>
+          </div>
+        ) : null}
 
         {!plan || !activeTask ? (
           <Card className="border-dashed bg-background/70">
@@ -3032,6 +3117,6 @@ export default function PlanPlaygroundPage() {
         onOpenChange={setDetailModalOpen}
       />
       </div>
-    </div>
+    </div>                                                                                                                      
   );
 }

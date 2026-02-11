@@ -55,7 +55,7 @@ export function ConversationList({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {conversations.map((conversation) => {
         const isActive = activeConversationId === conversation.id;
         return (
@@ -64,10 +64,10 @@ export function ConversationList({
             type="button"
             onClick={() => selectConversation(conversation.id)}
             className={cn(
-              "w-full rounded-xl border px-3 py-2 text-left transition",
+              "w-full rounded-2xl border px-4 py-3 text-left transition shadow-sm",
               isActive
-                ? activeClass ?? "border-slate-300 bg-slate-50"
-                : "border-transparent bg-muted/40 hover:border-border",
+                ? activeClass ?? "border-primary/30 bg-white/80"
+                : "border-transparent bg-white/60 hover:border-border hover:bg-white/80",
             )}
           >
             <div className="flex min-w-0 items-center justify-between gap-2 text-sm font-medium">

@@ -839,7 +839,7 @@ useEffect(() => {
   }, [planDisplayStatus, planUpdates.length]);
 
   return (
-    <div className="flex min-h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-background">
+    <div className="flex min-h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-[radial-gradient(1200px_600px_at_0%_0%,rgba(56,189,248,0.06),transparent),radial-gradient(900px_500px_at_100%_10%,rgba(249,115,22,0.06),transparent)]">
       <CreateConversationModal
         isOpen={isCreateModalOpen}
         onOpenChange={setCreateModalOpen}
@@ -853,36 +853,44 @@ useEffect(() => {
           
           Let's place the SessionGoal first.
       */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
-        <aside className="flex h-full w-full flex-col border-b bg-card/60 backdrop-blur lg:w-72 lg:border-b-0 lg:border-r">
-          <div className="flex items-center justify-between gap-4 px-4 py-3 lg:px-5 lg:py-4">
-            <div>
-              <h2 className="text-lg font-semibold leading-tight">Conversations</h2>
-              <p className="text-xs text-muted-foreground">
-                Your general mentor adapts as you explore plans and goals.
-              </p>
+      <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-hidden px-4 pb-4 pt-4 lg:flex-row lg:gap-6">
+        <aside className="flex h-full w-full flex-col lg:w-80">
+          <div className="flex h-full flex-col rounded-[28px] border border-white/80 bg-white/80 shadow-[var(--shadow-2)] backdrop-blur">
+            <div className="flex items-center justify-between gap-4 px-4 py-3 lg:px-5 lg:py-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                  Mentor lounge
+                </p>
+                <h2 className="text-lg font-semibold leading-tight">Conversations</h2>
+                <p className="text-xs text-muted-foreground">
+                  Your general mentor adapts as you explore plans and goals.
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setCreateModalOpen(true)}>
+                <PlusCircle className="h-6 w-6" />
+              </Button>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setCreateModalOpen(true)}>
-              <PlusCircle className="h-6 w-6" />
-            </Button>
-          </div>
-          <Separator />
-          <div className="flex-1 overflow-y-auto px-3 py-3">
-            <ConversationList
-              conversations={conversations}
-              selectedConversationId={selectedConversationId}
-              isLoading={conversationsLoading}
-              activeClass={activeListClass}
-            />
+            <Separator />
+            <div className="flex-1 overflow-y-auto px-3 py-3">
+              <ConversationList
+                conversations={conversations}
+                selectedConversationId={selectedConversationId}
+                isLoading={conversationsLoading}
+                activeClass={activeListClass}
+              />
+            </div>
           </div>
         </aside>
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-transparent">
           {activeConversation ? (
-            <>
-              <header className="border-b bg-card/30">
-                <div className="flex flex-wrap items-start justify-between gap-3 px-4 pb-2 pt-3">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[28px] border border-white/80 bg-white/80 shadow-[var(--shadow-2)] backdrop-blur">
+              <header className="border-b border-white/80 bg-transparent">
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
                   <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-base font-semibold">{activeConversation.title}</h3>
+                      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                        Active mentor
+                      </p>
+                      <h3 className="truncate text-lg font-semibold">{activeConversation.title}</h3>
                       {/* Show selector if plan is active (mocked logic for now as 'specialized' check) 
                           In a real scenario, we'd check if user has an active plan that unlocks this.
                           For now, we allow switching if the current personality is NOT general, 
@@ -944,41 +952,41 @@ useEffect(() => {
                     <PlanBuildHeaderBadge />
                     <Sheet open={isInsightsOpen} onOpenChange={setInsightsOpen}>
                       <SheetTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-7 gap-2 text-xs">
+                        <Button variant="outline" size="sm" className="h-7 gap-2 text-xs rounded-full">
                           <PanelRightOpen className="h-3.5 w-3.5" />
                           Insights
                         </Button>
                       </SheetTrigger>
-                      <SheetContent side="right" className="flex w-[360px] flex-col p-0 sm:w-[420px]">
-                        <SheetHeader className="border-b px-4 py-3">
-                          <SheetTitle>Mentor insights</SheetTitle>
+                      <SheetContent side="right" className="flex w-[360px] flex-col bg-white/90 p-0 shadow-[var(--shadow-2)] sm:w-[440px]">
+                        <SheetHeader className="border-b bg-white/85 px-5 py-4">
+                          <SheetTitle className="text-lg">Mentor insights</SheetTitle>
                           <SheetDescription className="text-xs">
                             Runtime updates and learner profile, in one place.
                           </SheetDescription>
                         </SheetHeader>
                         <div className="flex min-h-0 flex-1 flex-col">
                           <Tabs defaultValue="runtime" className="flex min-h-0 flex-1 flex-col">
-                            <div className="px-4 py-3 border-b">
-                              <TabsList className="w-full grid grid-cols-2">
-                                <TabsTrigger value="runtime" className="text-xs gap-2">
+                            <div className="border-b px-5 py-3">
+                              <TabsList className="grid w-full grid-cols-2 rounded-full bg-muted/30 p-1">
+                                <TabsTrigger value="runtime" className="text-xs gap-2 rounded-full">
                                   <Brain className="w-3.5 h-3.5" /> Runtime
                                 </TabsTrigger>
-                                <TabsTrigger value="profile" className="text-xs gap-2">
+                                <TabsTrigger value="profile" className="text-xs gap-2 rounded-full">
                                   <User className="w-3.5 h-3.5" /> Profile
                                 </TabsTrigger>
                               </TabsList>
                             </div>
                             <TabsContent value="runtime" className="flex-1 min-h-0 m-0 overflow-y-auto">
                               {missingInformation.length > 0 && (
-                                <div className="px-4 pt-4">
+                                <div className="px-5 pt-4">
                                   {missingInformation.filter(i => i.status === 'pending').map(item => (
                                     <MissingInfoForm key={item.id} item={item} />
                                   ))}
                                 </div>
                               )}
-                              <AnalysisHistory analyses={analysisHistory} className="flex-1" />
+                              <AnalysisHistory analyses={analysisHistory} className="flex-1 px-1" />
                             </TabsContent>
-                            <TabsContent value="profile" className="flex-1 min-h-0 m-0">
+                            <TabsContent value="profile" className="flex-1 min-h-0 m-0 px-1">
                               {(() => {
                                 const latestCompletedAnalysis = analysisHistory
                                   .filter(a => a.conversation_id === selectedConversationId && a.status === 'completed')
@@ -1023,7 +1031,7 @@ useEffect(() => {
                     </Sheet>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-2 px-4 pb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-4 pb-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
                       variant="outline"
@@ -1086,7 +1094,7 @@ useEffect(() => {
                 analysisSummary={analysisSummary}
               />
               <div className="min-h-0 flex-1 overflow-hidden">
-                <div className="flex h-full min-h-0 flex-col gap-4 px-4 pb-4 pt-2 lg:px-5 lg:pb-6">
+                <div className="flex h-full min-h-0 flex-col gap-4 px-4 pb-4 pt-3">
                   {planWorkbenchData && showPlanWorkbench ? (
                     <PlanWorkbench
                       planData={planWorkbenchData}
@@ -1107,49 +1115,52 @@ useEffect(() => {
                     </div>
                   ) : null}
                   <div className="min-h-0 flex-1">
-                    <MessageFeed
-                      conversation={activeConversation}
-                      messages={messages}
-                      isLoading={messagesLoading}
-                      connectionStatus={socketStatus}
-                      connectionError={socketError}
-                      showHeader={false}
-                      hasMore={hasNextPage}
-                      onLoadMore={async () => {
-                        if (hasNextPage && !isFetchingNextPage) {
-                          await fetchNextPage();
-                        }
-                      }}
-                      isLoadingMore={isFetchingNextPage}
-                      mentorTyping={mentorTyping}
-                      streamingMessage={streamingMessage}
-                      theme={personaTheme}
-                    />
+                    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+                      <MessageFeed
+                        conversation={activeConversation}
+                        messages={messages}
+                        isLoading={messagesLoading}
+                        connectionStatus={socketStatus}
+                        connectionError={socketError}
+                        showHeader={false}
+                        hasMore={hasNextPage}
+                        onLoadMore={async () => {
+                          if (hasNextPage && !isFetchingNextPage) {
+                            await fetchNextPage();
+                          }
+                        }}
+                        isLoadingMore={isFetchingNextPage}
+                        mentorTyping={mentorTyping}
+                        streamingMessage={streamingMessage}
+                        theme={personaTheme}
+                        variant="plain"
+                      />
+                      <div className="space-y-3 border-t border-white/80 bg-white/65 px-4 pb-4 pt-3">
+                        <AgentIndicator />
+                        <MentorActionShelf
+                          actions={mentorActions}
+                          onSendQuickReply={(message) => sendMessage(message)}
+                          disabled={
+                            messagesLoading ||
+                            !activeConversation ||
+                            socketStatus !== "open"
+                          }
+                        />
+                        <MessageComposer
+                          disabled={
+                            messagesLoading ||
+                            !activeConversation ||
+                            socketStatus !== "open"
+                          }
+                          onSend={sendMessage}
+                          onTypingChange={setTypingStatus}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="space-y-3 px-4 pb-4">
-                <AgentIndicator />
-                <MentorActionShelf
-                  actions={mentorActions}
-                  onSendQuickReply={(message) => sendMessage(message)}
-                  disabled={
-                    messagesLoading ||
-                    !activeConversation ||
-                    socketStatus !== "open"
-                  }
-                />
-                <MessageComposer
-                  disabled={
-                    messagesLoading ||
-                    !activeConversation ||
-                    socketStatus !== "open"
-                  }
-                  onSend={sendMessage}
-                  onTypingChange={setTypingStatus}
-                />
-              </div>
-            </>
+            </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <Card className="w-96 text-center">

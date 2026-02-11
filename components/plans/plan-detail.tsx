@@ -271,8 +271,8 @@ export function PlanDetail({
   };
 
   return (
-    <Card className="h-auto min-h-0">
-      <CardHeader className="space-y-3">
+    <Card className="h-auto min-h-0 rounded-[28px] border border-white/80 bg-white/85 shadow-[var(--shadow-2)] backdrop-blur">
+      <CardHeader className="space-y-4">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
           <div className="space-y-2">
             <CardTitle className="text-xl">{plan.title}</CardTitle>
@@ -295,7 +295,7 @@ export function PlanDetail({
               </div>
             ) : null}
           </div>
-          <div className="flex flex-col justify-between rounded-xl border bg-muted/20 p-4 aspect-square">
+          <div className="flex flex-col justify-between rounded-2xl border border-white/70 bg-white/70 p-4 shadow-[var(--shadow-1)] aspect-square">
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Mentor support
@@ -330,47 +330,66 @@ export function PlanDetail({
             >
               {(plan.status ?? "draft").replace(/_/g, " ")}
             </span>
-            <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground font-medium">
+            <span className="rounded-full border border-white/70 bg-white/70 px-3 py-1 text-muted-foreground font-medium">
               {plan.progress_percentage}% complete
             </span>
             {plan.primary_domain_name ? (
-              <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground font-medium">
+              <span className="rounded-full border border-white/70 bg-white/70 px-3 py-1 text-muted-foreground font-medium">
                 {plan.primary_domain_name}
               </span>
             ) : null}
           </div>
-          <div className="relative mt-1">
-            <Progress value={plan.progress_percentage} className="h-2" />
-            {milestoneProgress.length ? (
-              <div className="pointer-events-none absolute left-0 right-0 top-0 h-2">
-                {milestoneProgress.map((milestone) => {
-                  const fallbackOffset =
-                    milestoneCount > 1
-                      ? (milestone.index / (milestoneCount - 1)) * 100
-                      : 0;
-                  const weekOffset =
-                    milestoneTrackWeeks > 1
-                      ? (milestone.week / milestoneTrackWeeks) * 100
-                      : fallbackOffset;
-                  const markerOffset = Math.min(
-                    100,
-                    Math.max(0, weekOffset || fallbackOffset),
-                  );
+          <div className="relative mt-1 rounded-2xl border border-white/70 bg-white/70 px-4 py-4 shadow-[var(--shadow-1)]">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span className="uppercase tracking-[0.2em]">Progress</span>
+              <span className="font-medium text-foreground">
+                {plan.progress_percentage}%
+              </span>
+            </div>
+            <div className="relative mt-4">
+              <div className="h-1.5 w-full rounded-full bg-muted/50" />
+              <div
+                className="absolute left-0 top-0 h-1.5 rounded-full bg-primary"
+                style={{ width: `${Math.min(100, plan.progress_percentage)}%` }}
+              />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-between">
+                {(milestoneProgress.length
+                  ? milestoneProgress
+                  : Array.from({ length: Math.max(3, displayWeeks ? Math.min(6, displayWeeks) : 4) }).map(
+                      (_, index) => ({
+                        id: `step-${index}`,
+                        index,
+                        title: `Step ${index + 1}`,
+                        isComplete:
+                          plan.progress_percentage >=
+                          (index / Math.max(1, (milestoneProgress.length || 4) - 1)) *
+                            100,
+                      }),
+                    )
+                ).map((milestone, index, arr) => {
+                  const stepPct =
+                    arr.length > 1 ? (index / (arr.length - 1)) * 100 : 0;
+                  const completed =
+                    "isComplete" in milestone
+                      ? milestone.isComplete
+                      : plan.progress_percentage >= stepPct;
                   return (
-                    <span
-                      key={milestone.id}
+                    <div
+                      key={milestone.id ?? `step-${index}`}
                       className={cn(
-                        "absolute -top-1.5 h-5 w-1.5 rounded-full",
-                        milestone.isComplete
-                          ? "bg-primary"
-                          : "bg-muted-foreground/40",
+                        "flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-semibold shadow-sm transition",
+                        completed
+                          ? "border-primary bg-primary text-white"
+                          : "border-muted-foreground/30 bg-white text-muted-foreground",
                       )}
-                      style={{ left: `${markerOffset}%` }}
-                    />
+                      style={{ transform: "translateY(-50%)" }}
+                    >
+                      {index + 1}
+                    </div>
                   );
                 })}
               </div>
-            ) : null}
+            </div>
           </div>
           {lastCompletedMilestone ? (
             <div className="flex items-center gap-2 text-xs text-emerald-600">
@@ -385,30 +404,30 @@ export function PlanDetail({
           ) : null}
         </div>
         {(learningApproach || primaryStyle || maxDailyHours || motivationPatterns.length) ? (
-          <div className="rounded-xl border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+          <div className="rounded-2xl border border-white/70 bg-white/70 px-3 py-3 text-[11px] text-muted-foreground shadow-[var(--shadow-1)]">
             <p className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
               Why this plan fits you
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               {learningApproach ? (
-                <span className="rounded-full border bg-background px-2 py-1">
+                <span className="rounded-full border border-white/70 bg-white/70 px-2 py-1">
                   Approach: {learningApproach}
                 </span>
               ) : null}
               {primaryStyle ? (
-                <span className="rounded-full border bg-background px-2 py-1">
+                <span className="rounded-full border border-white/70 bg-white/70 px-2 py-1">
                   Style: {primaryStyle}
                 </span>
               ) : null}
               {maxDailyHours ? (
-                <span className="rounded-full border bg-background px-2 py-1">
+                <span className="rounded-full border border-white/70 bg-white/70 px-2 py-1">
                   Pace: {maxDailyHours}h/day
                 </span>
               ) : null}
               {motivationPatterns.slice(0, 2).map((pattern) => (
                 <span
                   key={pattern}
-                  className="rounded-full border bg-background px-2 py-1"
+                  className="rounded-full border border-white/70 bg-white/70 px-2 py-1"
                 >
                   Motivation: {pattern}
                 </span>
@@ -431,7 +450,7 @@ export function PlanDetail({
         </div>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
-        <div className="rounded-xl border bg-muted/20 p-4">
+        <div className="rounded-2xl border border-white/70 bg-white/70 p-4 shadow-[var(--shadow-1)]">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Focus today
           </h3>
@@ -440,7 +459,7 @@ export function PlanDetail({
               todayTasks.slice(0, 2).map((task) => (
                 <div
                   key={task.id}
-                  className="rounded-lg border bg-background px-3 py-2"
+                  className="rounded-xl border border-white/70 bg-white/80 px-3 py-2 shadow-sm"
                 >
                   <div className="flex items-center justify-between gap-2 text-sm font-medium">
                     <span>{task.title}</span>
@@ -455,7 +474,7 @@ export function PlanDetail({
                 </div>
               ))
             ) : nextTask ? (
-              <div className="rounded-lg border bg-background px-3 py-2">
+              <div className="rounded-xl border border-white/70 bg-white/80 px-3 py-2 shadow-sm">
                 <div className="flex items-center justify-between gap-2 text-sm font-medium">
                   <span>{nextTask.title}</span>
                   <span className="text-xs text-muted-foreground">
@@ -476,7 +495,7 @@ export function PlanDetail({
         </div>
 
         {milestones.length ? (
-          <div className="rounded-xl border bg-muted/20 p-4">
+          <div className="rounded-2xl border border-white/70 bg-white/70 p-4 shadow-[var(--shadow-1)]">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Milestones
@@ -495,7 +514,7 @@ export function PlanDetail({
               {visibleMilestones.map((milestone) => (
                 <div
                   key={milestone.id}
-                  className="rounded-lg border bg-background px-3 py-2"
+                  className="rounded-xl border border-white/70 bg-white/80 px-3 py-2 shadow-sm"
                 >
                   <div className="flex items-center justify-between gap-2 text-sm font-medium">
                     <span>{milestone.title}</span>

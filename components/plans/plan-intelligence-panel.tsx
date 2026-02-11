@@ -64,18 +64,21 @@ export function PlanIntelligencePanel({
   );
 
   return (
-    <Card className="h-fit">
-      <CardHeader className="space-y-1 pb-2">
-        <CardTitle className="text-base">Learning Cockpit</CardTitle>
+    <Card className="h-fit max-h-[calc(100vh-12rem)] overflow-hidden rounded-[28px] border border-white/80 bg-white/85 shadow-[var(--shadow-2)] backdrop-blur">
+      <CardHeader className="space-y-1 pb-3">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+          Learning cockpit
+        </p>
+        <CardTitle className="text-base">Stay in flow</CardTitle>
         <CardDescription className="text-xs">
-          Focus sessions and streaks to keep learning playful.
+          Focus sessions, streaks, and ambience in one place.
         </CardDescription>
         <div className="text-xs text-muted-foreground">
           {plan.difficulty_level} · {plan.estimated_duration_weeks} weeks
         </div>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
-        <section className="rounded-xl border bg-gradient-to-br from-slate-50 to-white p-3 shadow-sm">
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
+        <section className="rounded-2xl border border-white/70 bg-gradient-to-br from-slate-50 to-white p-4 shadow-[var(--shadow-1)]">
           <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
             <span>Focus timer</span>
             <span className="uppercase tracking-wide">{mode}</span>
@@ -179,7 +182,7 @@ export function PlanIntelligencePanel({
           </div>
         </section>
 
-        <section className="rounded-xl border bg-gradient-to-br from-amber-50 via-white to-rose-50 p-3 shadow-sm">
+        <section className="rounded-2xl border border-white/70 bg-gradient-to-br from-amber-50 via-white to-rose-50 p-4 shadow-[var(--shadow-1)]">
           <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
             <span>Streak tracker</span>
             <span className="uppercase tracking-wide">Gamify</span>
@@ -233,7 +236,7 @@ export function PlanIntelligencePanel({
           </p>
         </section>
 
-        <section className="rounded-xl border bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-3 text-white shadow-sm">
+        <section className="rounded-2xl border border-white/10 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-4 text-white shadow-[var(--shadow-1)]">
           <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-white/70">
             <span>Lofi player</span>
             <span>Study mode</span>

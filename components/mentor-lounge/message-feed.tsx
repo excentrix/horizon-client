@@ -47,6 +47,7 @@ interface MessageFeedProps {
   streamingMessage?: string | null;
   streamingMessageId?: string;
   theme?: PersonaTheme;
+  variant?: "card" | "plain";
 }
 
 const statusLabels: Record<SocketStatus, string> = {
@@ -71,6 +72,7 @@ export function MessageFeed({
   streamingMessage,
   streamingMessageId,
   theme,
+  variant = "card",
 }: MessageFeedProps) {
   const setMentorActions = useMentorLoungeStore((state) => state.setMentorActions);
   const streamingTimestampRef = useRef<string>(new Date().toISOString());
@@ -146,12 +148,15 @@ export function MessageFeed({
   return (
     <div
       className={cn(
-        "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background",
+        "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden",
+        variant === "card"
+          ? "rounded-2xl border bg-white/80 shadow-[var(--shadow-1)]"
+          : "rounded-none border-0 bg-transparent shadow-none",
         theme?.containerBorder,
       )}
     >
       {showHeader ? (
-        <header className="border-b px-6 py-4">
+        <header className="border-b bg-white/70 px-6 py-4 backdrop-blur">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold">{conversation.title}</h2>
@@ -169,7 +174,7 @@ export function MessageFeed({
                       ? "bg-amber-100 text-amber-700"
                       : connectionStatus === "error"
                         ? "bg-rose-100 text-rose-700"
-                        : `${theme?.statusBadgeBg ?? "bg-muted"} ${theme?.statusBadgeText ?? "text-muted-foreground"}`
+                        : `${theme?.statusBadgeBg ?? "bg-muted"} ${theme?.statusBadgeText ?? "text-muted-foreground"}`,
                 )}
               >
                 {statusLabels[connectionStatus]}
@@ -198,7 +203,7 @@ export function MessageFeed({
         className="flex-1 overflow-hidden"
         key={conversation.id}
       >
-        <ConversationContent className="gap-4 px-5 py-4">
+        <ConversationContent className="gap-4 px-5 pt-4 pb-2">
           <MessageFeedContent
             displayMessages={displayMessages}
             hasMore={hasMore}
@@ -335,8 +340,12 @@ function MessageFeedContent({
       ) : null}
 
       <AnimatePresence initial={false}>
-        {displayMessages.map((message) => {
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+          {displayMessages.map((message, index) => {
           const isUser = message.sender_type === "user";
+          const prevSender = displayMessages[index - 1]?.sender_type;
+          const isNewAssistantTurn =
+            !isUser && prevSender !== "ai";
           const metadata = message.metadata as
             | { missing_info_id?: string; missing_info_field?: string; missing_info_context?: string }
             | undefined;
@@ -351,12 +360,21 @@ function MessageFeedContent({
               exit={{ opacity: 0, y: 12 }}
               transition={{ duration: 0.18 }}
             >
+              {isNewAssistantTurn ? (
+                <div className="flex items-center gap-3 py-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                    Mentor
+                  </span>
+                  <span className="h-px flex-1 bg-gradient-to-r from-muted/60 via-muted/30 to-transparent" />
+                </div>
+              ) : null}
               <Message from={isUser ? "user" : "assistant"}>
                 <MessageContent
                   className={cn(
-                    "max-w-[70%] rounded-2xl px-4 py-3 shadow-sm",
+                    "max-w-[72%] rounded-2xl px-4 py-3 text-sm shadow-[var(--shadow-1)]",
                     "group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground",
-                    !isUser && `${theme?.bubbleBg ?? "bg-muted/60"} ${theme?.bubbleText ?? "text-foreground"}`,
+                    !isUser &&
+                      `${theme?.bubbleBg ?? "bg-white/80"} ${theme?.bubbleText ?? "text-foreground"} border border-white/70`,
                   )}
                 >
                   <MessageResponse>{message.content}</MessageResponse>
@@ -464,6 +482,7 @@ function MessageFeedContent({
             </motion.div>
           );
         })}
+        </div>
       </AnimatePresence>
 
       {mentorTyping && !streamingMessage ? (

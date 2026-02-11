@@ -61,18 +61,22 @@ export function PlanWorkbench({
       isStreaming={status === "in_progress" || status === "queued"}
       open={isOpen}
       onOpenChange={setIsOpen}
-      className="border border-primary/10 bg-card/80 backdrop-blur-sm shadow-sm"
+      className="overflow-hidden rounded-[24px] border border-white/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.92),rgba(248,250,252,0.9))] backdrop-blur shadow-[var(--shadow-2)]"
     >
-      <PlanHeader className="flex-col gap-2 pb-2">
+      <PlanHeader className="flex-col gap-4 pb-3">
         <div className="flex w-full items-center gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {status === "in_progress" || status === "queued" ? (
-              <Loader size={14} />
+              <div className="grid h-8 w-8 place-items-center rounded-full bg-primary/10 text-primary">
+                <Loader size={14} />
+              </div>
             ) : (
-              <Sparkles className="size-4 text-primary" />
+              <div className="grid h-8 w-8 place-items-center rounded-full bg-primary/10 text-primary">
+                <Sparkles className="size-4" />
+              </div>
             )}
             <div className="space-y-0.5">
-              <PlanTitle className="text-[13px] font-semibold">
+              <PlanTitle className="text-sm font-semibold tracking-tight">
                 {planData.plan_title || "New Learning Plan"}
               </PlanTitle>
               <PlanDescription className="text-[11px] text-muted-foreground">
@@ -80,29 +84,37 @@ export function PlanWorkbench({
               </PlanDescription>
             </div>
           </div>
-          <Badge
-            variant={status === "completed" ? "default" : "secondary"}
-            className="ml-auto text-[10px]"
-          >
-            {status === "completed" ? "Ready" : status.replace("_", " ")}
-          </Badge>
+          <div className="ml-auto flex items-center gap-2">
+            <Badge
+              variant={status === "completed" ? "default" : "secondary"}
+              className="text-[10px] uppercase tracking-[0.18em]"
+            >
+              {status === "completed" ? "Ready" : status.replace("_", " ")}
+            </Badge>
+          </div>
         </div>
-        <Progress value={progress} className="h-1" />
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-          <span>
-            {planData.task_count ? `${planData.task_count} tasks` : "Drafting tasks"}
-          </span>
-          <span className="truncate">
-            {statusMeta?.tool
-              ? `Using ${statusMeta.tool}`
-              : statusMeta?.agent
-                ? `Agent: ${statusMeta.agent}`
-                : "Building"}
-          </span>
+        <div className="space-y-3 rounded-2xl border border-white/70 bg-white/70 px-4 py-3 shadow-[var(--shadow-1)]">
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+            <span className="uppercase tracking-[0.22em]">Progress</span>
+            <span className="font-medium text-foreground">{Math.round(progress)}%</span>
+          </div>
+          <Progress value={progress} className="h-2 rounded-full" />
+          <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+            <span className="rounded-full border border-white/80 bg-white/70 px-2 py-1">
+              {planData.task_count ? `${planData.task_count} tasks` : "Drafting tasks"}
+            </span>
+            <span className="rounded-full border border-white/80 bg-white/70 px-2 py-1">
+              {statusMeta?.tool
+                ? `Using ${statusMeta.tool}`
+                : statusMeta?.agent
+                  ? `Agent: ${statusMeta.agent}`
+                  : "Building"}
+            </span>
+          </div>
         </div>
         {planData.learning_plan_id ? (
           <div className="flex justify-end">
-            <Button asChild size="sm" variant="ghost" className="h-7 gap-1 text-[11px]">
+            <Button asChild size="sm" variant="ghost" className="h-8 gap-1 text-[11px]">
               <Link href={`/plans?plan=${planData.learning_plan_id}`}>
                 Open <ArrowRight className="h-3 w-3" />
               </Link>

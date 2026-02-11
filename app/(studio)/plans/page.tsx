@@ -103,9 +103,10 @@ function PlansContent() {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-theme(spacing.16))] flex-col gap-4 overflow-hidden p-2">
-      <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card/70 p-4 shadow-sm">
+    <div className="flex min-h-[calc(100vh-theme(spacing.16))] flex-col gap-4 overflow-hidden bg-[radial-gradient(1200px_600px_at_0%_0%,rgba(56,189,248,0.06),transparent),radial-gradient(900px_500px_at_100%_10%,rgba(249,115,22,0.06),transparent)] p-4">
+      <header className="flex flex-wrap items-center justify-between gap-3 rounded-[28px] border border-white/80 bg-white/85 p-5 shadow-[var(--shadow-2)] backdrop-blur">
         <div>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Plan workbench</p>
           <h2 className="text-base font-semibold">Your learning plan</h2>
           <p className="text-xs text-muted-foreground">
             Pick a plan and focus on what’s next.
@@ -118,8 +119,8 @@ function PlansContent() {
               All plans
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-[360px] p-0 sm:w-[420px]">
-            <SheetHeader className="border-b px-4 py-3">
+            <SheetContent side="left" className="w-[360px] bg-white/95 p-0 shadow-[var(--shadow-2)] sm:w-[420px]">
+            <SheetHeader className="border-b bg-white/85 px-4 py-4">
               <SheetTitle>Learning plans</SheetTitle>
               <SheetDescription className="text-xs">
                 Switch between plans anytime.
@@ -146,7 +147,7 @@ function PlansContent() {
 
       <section className="flex h-full min-h-0 flex-1 flex-col gap-4 overflow-hidden">
         {planLoading || !plan ? (
-          <div className="grid flex-1 place-items-center rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
+          <div className="grid flex-1 place-items-center rounded-[28px] border border-dashed bg-white/70 p-6 text-sm text-muted-foreground shadow-[var(--shadow-1)] backdrop-blur">
             {selectedPlanId
               ? "Loading plan…"
               : "Select a plan to see its details."}
@@ -156,9 +157,9 @@ function PlansContent() {
             defaultValue="overview"
             className="flex min-h-0 flex-1 flex-col gap-4"
           >
-            <TabsList className="w-full justify-start">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="tasks">Tasks</TabsTrigger>
+            <TabsList className="w-full justify-start rounded-full border border-white/80 bg-white/85 p-1 shadow-[var(--shadow-1)] backdrop-blur">
+              <TabsTrigger value="overview" className="rounded-full text-xs">Overview</TabsTrigger>
+              <TabsTrigger value="tasks" className="rounded-full text-xs">Tasks</TabsTrigger>
             </TabsList>
             <TabsContent
               value="overview"
@@ -188,7 +189,7 @@ function PlansContent() {
                     actionStatus={actionStatus}
                   />
                 </div>
-                <div className="h-full self-start overflow-hidden lg:sticky lg:top-4">
+                <div className="h-full self-start lg:sticky lg:top-4">
                   <PlanIntelligencePanel
                     plan={plan}
                     onSessionComplete={(durationMinutes) => {
@@ -208,7 +209,7 @@ function PlansContent() {
               </div>
             </TabsContent>
             <TabsContent value="tasks" className="min-h-0 flex-1">
-              <div className="flex h-full min-h-0 flex-col rounded-xl border bg-card/80 p-4 shadow">
+              <div className="flex h-full min-h-0 flex-col rounded-[28px] border border-white/80 bg-white/85 p-5 shadow-[var(--shadow-2)] backdrop-blur">
                 <div className="mb-4 flex items-center justify-between">
                   <h3 className="text-sm font-semibold">All tasks</h3>
                   <span className="text-xs text-muted-foreground">

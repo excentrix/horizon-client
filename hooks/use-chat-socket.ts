@@ -692,7 +692,7 @@ export function useChatSocket(conversationId: string | null) {
     startHeartbeat,
     stopHeartbeat,
     updateMentorTyping,
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   ]);
 
   connectRef.current = connect;

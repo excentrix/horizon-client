@@ -113,7 +113,7 @@ export function TaskList({ tasks, onUpdateTask, isUpdating, planId }: TaskListPr
                 {section.items.length} tasks
               </span>
             </div>
-            <div className="grid gap-3">
+            <div className="grid gap-4">
               {section.items.map((task) => {
                 const isCompleted = task.status === "completed";
                 const isOverdue = grouped.overdueIds.has(task.id);
@@ -134,7 +134,7 @@ export function TaskList({ tasks, onUpdateTask, isUpdating, planId }: TaskListPr
                 return (
                   <div
                     key={task.id}
-                    className="rounded-xl border bg-muted/20 p-4 text-sm shadow-sm"
+                    className="rounded-2xl border border-transparent bg-white/80 p-4 text-sm shadow-[var(--shadow-1)] ring-1 ring-white/70"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-1">
@@ -189,7 +189,7 @@ export function TaskList({ tasks, onUpdateTask, isUpdating, planId }: TaskListPr
                       </div>
                     ) : null}
                     {completionTaskId === task.id && !isCompleted ? (
-                      <div className="mt-3 rounded-lg border bg-background px-3 py-3">
+                      <div className="mt-3 rounded-xl border border-white/70 bg-white/80 px-3 py-3">
                         <div className="grid gap-3 text-xs text-muted-foreground">
                           <div className="grid gap-2 sm:grid-cols-3">
                             <div>
