@@ -245,7 +245,7 @@ export function ArtifactDetailModal({
                 ) : (
                   <div>
                     <Link
-                      href={artifact.url}
+                      href={artifact.url || ""}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 text-primary hover:underline"

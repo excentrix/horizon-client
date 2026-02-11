@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -251,6 +251,21 @@ function RatingRow({
 }
 
 export default function PlanPlaygroundPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center p-8">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+          <p className="text-sm font-medium text-muted-foreground">Preparing your playground...</p>
+        </div>
+      </div>
+    }>
+      <PlanPlaygroundContent />
+    </Suspense>
+  );
+}
+
+function PlanPlaygroundContent() {
   const params = useParams<{ planId: string }>();
   const searchParams = useSearchParams();
   const planId = params.planId;

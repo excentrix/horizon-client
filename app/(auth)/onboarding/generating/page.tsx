@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Sparkles, CheckCircle, XCircle } from "lucide-react";
 
@@ -9,6 +9,18 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 type Status = "generating" | "completed" | "failed";
 
 export default function GeneratingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center px-4">
+        <Loader2 className="h-8 w-8 text-white animate-spin" />
+      </div>
+    }>
+      <GeneratingPageContent />
+    </Suspense>
+  );
+}
+
+function GeneratingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionKey = searchParams.get("session");
@@ -145,3 +157,4 @@ export default function GeneratingPage() {
     </div>
   );
 }
+

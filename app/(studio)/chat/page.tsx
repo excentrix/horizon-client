@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import posthog from "posthog-js";
 import { useAuth } from "@/context/AuthContext";
@@ -72,6 +72,18 @@ interface StageHistoryEntry {
 }
 
 export default function ChatPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen w-full items-center justify-center bg-background/50 backdrop-blur-sm">
+        <Brain className="h-8 w-8 animate-pulse text-primary" />
+      </div>
+    }>
+      <ChatContent />
+    </Suspense>
+  );
+}
+
+function ChatContent() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();

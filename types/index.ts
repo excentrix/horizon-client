@@ -15,6 +15,8 @@ export interface PaginatedResponse<T> {
 export interface SessionTokens {
   access_token: string;
   refresh_token: string;
+  access?: string;
+  refresh?: string;
   expires_at: number;
 }
 
@@ -617,8 +619,17 @@ export interface LearningPlan {
   user_preferences_snapshot?: Record<string, unknown> | null;
   available_resources_snapshot?: string[];
   target_competencies_data?: unknown;
-  daily_tasks_summary?: unknown;
-  progress_summary?: unknown;
+  daily_tasks_summary?: {
+    total: number;
+    completed: number;
+    completion_rate: number;
+  };
+  progress_summary?: {
+    current_streak: number;
+    best_streak: number;
+    total_completed_tasks: number;
+    time_invested_minutes: number;
+  };
   user_schedule?: unknown;
 }
 
