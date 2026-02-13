@@ -4,17 +4,16 @@ import { useMemo, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
   Plus,
   Settings,
   Eye,
-  Share2,
   Copy,
   Sparkles,
   ShieldCheck,
   Zap,
   Crown,
-  Trophy,
   QrCode,
 } from "lucide-react";
 import Link from "next/link";
@@ -38,6 +37,7 @@ export default function PortfolioPage() {
 
   const [selectedArtifact, setSelectedArtifact] = useState<PortfolioArtifact | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   // Queries
   const { data: artifacts = [] } = usePortfolioArtifacts();
@@ -64,7 +64,6 @@ export default function PortfolioPage() {
     a.verification_status && ["verified", "human_verified"].includes(a.verification_status)
   ).length;
   const featuredCount = artifacts.filter((a: PortfolioArtifact) => a.featured).length;
-  const [copied, setCopied] = useState(false);
   const [badgeCopied, setBadgeCopied] = useState(false);
   const publicUrl = useMemo(() => {
     if (!profile?.slug || typeof window === "undefined") return "";
@@ -106,10 +105,12 @@ export default function PortfolioPage() {
   }, [artifacts]);
 
   return (
-    <div className="container mx-auto py-8 space-y-8">
+    <div className="min-h-[calc(100vh-theme(spacing.16))] bg-[radial-gradient(1200px_600px_at_0%_0%,rgba(56,189,248,0.08),transparent),radial-gradient(900px_500px_at_100%_10%,rgba(249,115,22,0.06),transparent)] px-6 py-8">
+      <div className="container mx-auto space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/80 bg-white/85 p-6 shadow-[var(--shadow-2)] backdrop-blur">
         <div>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Portfolio</p>
           <h1 className="text-4xl font-bold tracking-tight">My Portfolio</h1>
           <p className="text-muted-foreground mt-2">
             Showcase your learning journey and achievements
@@ -124,13 +125,13 @@ export default function PortfolioPage() {
               </Link>
             </Button>
           )}
-          <Button variant="outline" asChild>
+          <Button variant="outline" asChild className="rounded-full">
             <Link href="/portfolio/settings">
               <Settings className="h-4 w-4 mr-2" />
               Settings
             </Link>
           </Button>
-          <Button asChild>
+          <Button asChild className="rounded-full">
             <Link href="/portfolio/create">
               <Plus className="h-4 w-4 mr-2" />
               New Artifact
@@ -141,7 +142,7 @@ export default function PortfolioPage() {
 
       {/* Share CTA */}
       <Card className="overflow-hidden border-0 bg-gradient-to-br from-slate-900 via-indigo-900 to-emerald-700 text-white shadow-xl">
-        <CardContent className="flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between">
+        <CardContent className="flex flex-col gap-6 p-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/80">
               <Sparkles className="h-3 w-3" />
@@ -163,35 +164,80 @@ export default function PortfolioPage() {
               </span>
             </div>
           </div>
-          <div className="w-full max-w-sm space-y-3 rounded-2xl border border-white/20 bg-white/10 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">
-              Public portfolio link
-            </p>
-            <div className="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs text-white/90">
-              <Share2 className="h-4 w-4" />
-              <span className="truncate">
-                {publicUrl || "Enable public portfolio in settings"}
-              </span>
+          <div className="flex w-full max-w-md flex-col gap-4 rounded-2xl border border-white/20 bg-white/10 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/70">
+                  Horizon Verified Learner
+                </p>
+                <p className="text-sm text-white">
+                  {verifiedCount} verified artifacts • {featuredCount} featured
+                </p>
+              </div>
+              <Dialog open={qrOpen} onOpenChange={setQrOpen}>
+                <DialogTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 text-white transition hover:bg-white/25"
+                    aria-label="Open QR share"
+                  >
+                    <QrCode className="h-6 w-6" />
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Share your portfolio</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="mx-auto flex w-full max-w-[240px] items-center justify-center rounded-2xl border border-border bg-muted/40 p-4">
+                      {publicUrl ? (
+                        <img
+                          alt="Portfolio QR"
+                          className="h-48 w-48"
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
+                            publicUrl
+                          )}`}
+                        />
+                      ) : (
+                        <div className="text-center text-xs text-muted-foreground">
+                          Enable your public portfolio to generate a QR code.
+                        </div>
+                      )}
+                    </div>
+                    <div className="rounded-2xl border border-dashed border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                      {publicUrl || "Enable your public portfolio to generate a share link."}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        disabled={!publicUrl}
+                        onClick={async () => {
+                          if (!publicUrl) return;
+                          await navigator.clipboard.writeText(publicUrl);
+                          setBadgeCopied(true);
+                          setTimeout(() => setBadgeCopied(false), 2000);
+                        }}
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        {badgeCopied ? "Copied" : "Copy link"}
+                      </Button>
+                      <Button size="sm" variant="outline" asChild disabled={!publicUrl}>
+                        <Link href={publicUrl || "#"} target="_blank">
+                          Open public
+                        </Link>
+                      </Button>
+                      <Button size="sm" variant="secondary" asChild>
+                        <Link href="/portfolio/settings">
+                          Manage sharing
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
-            <div className="flex gap-2">
-              <Button
-                className="w-full"
-                disabled={!publicUrl}
-                onClick={async () => {
-                  if (!publicUrl) return;
-                  await navigator.clipboard.writeText(publicUrl);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }}
-              >
-                <Copy className="h-4 w-4 mr-2" />
-                {copied ? "Copied!" : "Copy link"}
-              </Button>
-              <Button variant="secondary" className="w-full" asChild disabled={!publicUrl}>
-                <Link href={publicUrl || "#"} target="_blank">
-                  Open
-                </Link>
-              </Button>
+            <div className="rounded-2xl border border-white/20 bg-white/5 p-3 text-xs text-white/70">
+              The badge updates as you verify artifacts. Tap the QR to share instantly.
             </div>
           </div>
         </CardContent>
@@ -208,16 +254,21 @@ export default function PortfolioPage() {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="artifacts" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
-          <TabsTrigger value="artifacts">Artifacts</TabsTrigger>
-          <TabsTrigger value="competencies">Competencies</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="endorsements">Endorsements</TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between">
+          <TabsList className="grid w-full grid-cols-4 rounded-full bg-white/80 p-1.5 shadow-[var(--shadow-1)] backdrop-blur lg:w-[720px]">
+            <TabsTrigger value="artifacts" className="rounded-full text-xs font-semibold">Artifacts</TabsTrigger>
+            <TabsTrigger value="competencies" className="rounded-full text-xs font-semibold">Competencies</TabsTrigger>
+            <TabsTrigger value="timeline" className="rounded-full text-xs font-semibold">Timeline</TabsTrigger>
+            <TabsTrigger value="endorsements" className="rounded-full text-xs font-semibold">Endorsements</TabsTrigger>
+          </TabsList>
+          <span className="hidden rounded-full bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground shadow-[var(--shadow-1)] lg:inline-flex">
+            4 tabs
+          </span>
+        </div>
 
         {/* Artifacts Tab */}
         <TabsContent value="artifacts" className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="space-y-6">
             <Card className="border-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl">
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -266,97 +317,44 @@ export default function PortfolioPage() {
                   ))
                 )}
               </CardContent>
-          </Card>
+            </Card>
 
-          {milestoneCollections.length ? (
-            <Card className="border-0 bg-gradient-to-br from-white via-slate-50 to-slate-100 shadow-lg">
-              <CardHeader>
-                <CardTitle>Milestone collections</CardTitle>
-                <CardDescription>
-                  Objective → Approach → Outcome → Evidence, grouped by milestone.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {milestoneCollections.map((collection) => (
-                  <div key={collection.title} className="rounded-2xl border bg-white p-4 shadow-sm">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {collection.title}
-                    </p>
-                    <div className="mt-3 space-y-2">
-                      {collection.items.map((artifact: PortfolioArtifact) => (
-                        <button
-                          key={artifact.id}
-                          onClick={() => handleArtifactClick(artifact)}
-                          className="w-full rounded-xl border bg-muted/10 px-3 py-2 text-left text-xs transition hover:border-muted-foreground/40"
-                        >
-                          <div className="font-semibold text-foreground">{artifact.title}</div>
-                          <div className="text-[11px] text-muted-foreground">
-                            Evidence: {artifact.artifact_type.replace(/_/g, " ")}
-                          </div>
-                        </button>
-                      ))}
+            {milestoneCollections.length ? (
+              <Card className="border border-white/80 bg-white/85 shadow-[var(--shadow-2)] backdrop-blur">
+                <CardHeader>
+                  <CardTitle>Milestone collections</CardTitle>
+                  <CardDescription>
+                    Objective → Approach → Outcome → Evidence, grouped by milestone.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {milestoneCollections.map((collection) => (
+                    <div key={collection.title} className="rounded-2xl border border-white/70 bg-white/90 p-4 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {collection.title}
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {collection.items.map((artifact: PortfolioArtifact) => (
+                          <button
+                            key={artifact.id}
+                            onClick={() => handleArtifactClick(artifact)}
+                            className="w-full rounded-xl border border-white/70 bg-white/90 px-3 py-2 text-left text-xs transition hover:border-muted-foreground/40"
+                          >
+                            <div className="font-semibold text-foreground">{artifact.title}</div>
+                            <div className="text-[11px] text-muted-foreground">
+                              Evidence: {artifact.artifact_type.replace(/_/g, " ")}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          ) : null}
-
-            <Card className="border-0 bg-gradient-to-b from-white to-slate-50 shadow-xl">
-              <CardHeader>
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <Trophy className="h-4 w-4" />
-                  Trophy room
-                </div>
-                <CardTitle className="text-xl">Share your verified badge</CardTitle>
-                <CardDescription>
-                  A quick card you can drop into resumes, portfolios, and socials.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div>
-                    <p className="text-sm font-semibold">Horizon Verified Learner</p>
-                    <p className="text-xs text-muted-foreground">
-                      {verifiedCount} verified artifacts • {featuredCount} featured
-                    </p>
-                  </div>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-white">
-                    <QrCode className="h-6 w-6" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-[1fr_auto] gap-3 items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Share badge link
-                    </p>
-                    <p className="text-xs text-foreground break-all">
-                      {publicUrl || "Enable your public portfolio to generate a share link."}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    disabled={!publicUrl}
-                    onClick={async () => {
-                      if (!publicUrl) return;
-                      await navigator.clipboard.writeText(publicUrl);
-                      setBadgeCopied(true);
-                      setTimeout(() => setBadgeCopied(false), 2000);
-                    }}
-                  >
-                    <Copy className="h-4 w-4 mr-2" />
-                    {badgeCopied ? "Copied" : "Copy"}
-                  </Button>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 text-xs text-muted-foreground">
-                  Add this badge to your trophy room or link it in applications to highlight verified learning.
-                </div>
-              </CardContent>
-            </Card>
+                  ))}
+                </CardContent>
+              </Card>
+            ) : null}
           </div>
 
-          <Card className="border-0 bg-gradient-to-br from-white via-slate-50 to-slate-100 shadow-lg">
+          <Card className="border border-white/80 bg-white/85 shadow-[var(--shadow-2)] backdrop-blur">
             <CardHeader className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <CardTitle>Trophy Room Achievements</CardTitle>
@@ -382,7 +380,7 @@ export default function PortfolioPage() {
                       <button
                         key={artifact.id}
                         onClick={() => handleArtifactClick(artifact)}
-                        className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-1 hover:border-slate-300 hover:shadow-md"
+                        className="group rounded-2xl border border-white/70 bg-white p-4 text-left shadow-sm transition hover:-translate-y-1 hover:border-slate-300 hover:shadow-md"
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
@@ -455,6 +453,7 @@ export default function PortfolioPage() {
         onOpenChange={setDetailModalOpen}
         onReflectionSubmit={handleReflectionSubmit}
       />
+      </div>
     </div>
   );
 }

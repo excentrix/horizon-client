@@ -82,28 +82,30 @@ export default function PortfolioSettingsPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="outline" size="icon" asChild>
-          <Link href="/portfolio">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Portfolio Settings</h1>
-          <p className="text-muted-foreground">
-            Customize your professional portfolio
-          </p>
+    <div className="min-h-[calc(100vh-theme(spacing.16))] bg-[radial-gradient(1200px_600px_at_0%_0%,rgba(56,189,248,0.08),transparent),radial-gradient(900px_500px_at_100%_10%,rgba(249,115,22,0.06),transparent)] px-6 py-8">
+      <div className="container mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex flex-wrap items-center gap-4 rounded-[28px] border border-white/80 bg-white/85 p-6 shadow-[var(--shadow-2)] backdrop-blur">
+          <Button variant="outline" size="icon" asChild className="rounded-full">
+            <Link href="/portfolio">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <div className="flex-1">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Portfolio</p>
+            <h1 className="text-3xl font-bold tracking-tight">Portfolio Settings</h1>
+            <p className="text-muted-foreground">
+              Customize your professional portfolio
+            </p>
+          </div>
+          <Button onClick={handleSave} disabled={saving} className="rounded-full">
+            <Save className="h-4 w-4 mr-2" />
+            {saving ? "Saving..." : "Save Changes"}
+          </Button>
         </div>
-        <Button onClick={handleSave} disabled={saving} className="ml-auto">
-          <Save className="h-4 w-4 mr-2" />
-          {saving ? "Saving..." : "Save Changes"}
-        </Button>
-      </div>
 
       {/* Profile Information */}
-      <Card>
+      <Card className="rounded-[28px] border border-white/80 bg-white/85 shadow-[var(--shadow-2)] backdrop-blur">
         <CardHeader>
           <CardTitle>Profile Information</CardTitle>
           <CardDescription>
@@ -143,7 +145,7 @@ export default function PortfolioSettingsPage() {
       </Card>
 
       {/* Social Links */}
-      <Card>
+      <Card className="rounded-[28px] border border-white/80 bg-white/85 shadow-[var(--shadow-2)] backdrop-blur">
         <CardHeader>
           <CardTitle>Social Links</CardTitle>
           <CardDescription>
@@ -198,7 +200,7 @@ export default function PortfolioSettingsPage() {
       </Card>
 
       {/* Privacy Settings */}
-      <Card>
+      <Card className="rounded-[28px] border border-white/80 bg-white/85 shadow-[var(--shadow-2)] backdrop-blur">
         <CardHeader>
           <CardTitle>Privacy & Visibility</CardTitle>
           <CardDescription>
@@ -221,8 +223,8 @@ export default function PortfolioSettingsPage() {
           </div>
 
           {formData.is_public && (
-            <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4">
-              <p className="text-sm text-blue-900 dark:text-blue-200">
+            <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-[var(--shadow-1)]">
+              <p className="text-sm text-foreground">
                 <strong>Your public portfolio URL:</strong>
                 <br />
                 <code className="text-xs">
@@ -285,7 +287,7 @@ export default function PortfolioSettingsPage() {
       </Card>
 
       {/* SEO & Advanced */}
-      <Card>
+      <Card className="rounded-[28px] border border-white/80 bg-white/85 shadow-[var(--shadow-2)] backdrop-blur">
         <CardHeader>
           <CardTitle>SEO & Sharing</CardTitle>
           <CardDescription>
@@ -299,6 +301,7 @@ export default function PortfolioSettingsPage() {
           </p>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

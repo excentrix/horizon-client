@@ -153,11 +153,13 @@ export function PlanDetail({
       const completed = milestoneTasks.filter(
         (task) => task.status === "completed",
       ).length;
+      const percent = total ? Math.round((completed / total) * 100) : 0;
       return {
         ...milestone,
         index,
         total,
         completed,
+        percent,
         isComplete: total > 0 && completed === total,
       };
     });
@@ -271,14 +273,13 @@ export function PlanDetail({
   };
 
   return (
-    <Card className="h-auto min-h-0 rounded-[28px] border border-white/80 bg-white/85 shadow-[var(--shadow-2)] backdrop-blur">
-      <CardHeader className="space-y-4">
+    <Card className="h-auto min-h-0 rounded-[28px] border border-transparent bg-white/85 shadow-[var(--shadow-2)] ring-1 ring-white/70 backdrop-blur">
+      <CardHeader className="space-y-5">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
           <div className="space-y-2">
             <CardTitle className="text-xl">{plan.title}</CardTitle>
             <CardDescription className="text-xs text-muted-foreground">
-              {plan.plan_type} · {displayWeeks} weeks ·{" "}
-              {plan.total_estimated_hours} hrs · {plan.difficulty_level}
+              {plan.plan_type} · {displayWeeks} weeks · {plan.total_estimated_hours} hrs · {plan.difficulty_level}
             </CardDescription>
             {description ? (
               <div className="text-sm text-muted-foreground">
@@ -295,7 +296,7 @@ export function PlanDetail({
               </div>
             ) : null}
           </div>
-          <div className="flex flex-col justify-between rounded-2xl border border-white/70 bg-white/70 p-4 shadow-[var(--shadow-1)] aspect-square">
+          <div className="flex flex-col justify-between rounded-2xl border border-transparent bg-white/80 p-4 shadow-[var(--shadow-1)] ring-1 ring-white/60">
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Mentor support
@@ -320,7 +321,7 @@ export function PlanDetail({
             ) : null}
           </div>
         </div>
-        <div className="grid gap-2">
+        <div className="grid gap-3">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span
               className={cn(
@@ -339,17 +340,17 @@ export function PlanDetail({
               </span>
             ) : null}
           </div>
-          <div className="relative mt-1 rounded-2xl border border-white/70 bg-white/70 px-4 py-4 shadow-[var(--shadow-1)]">
+          <div className="rounded-2xl border border-transparent bg-white/80 px-4 py-4 shadow-[var(--shadow-1)] ring-1 ring-white/60">
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
               <span className="uppercase tracking-[0.2em]">Progress</span>
               <span className="font-medium text-foreground">
                 {plan.progress_percentage}%
               </span>
             </div>
-            <div className="relative mt-4">
-              <div className="h-1.5 w-full rounded-full bg-muted/50" />
+            <div className="relative mt-4 h-8">
+              <div className="absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted/50" />
               <div
-                className="absolute left-0 top-0 h-1.5 rounded-full bg-primary"
+                className="absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-primary"
                 style={{ width: `${Math.min(100, plan.progress_percentage)}%` }}
               />
               <div className="pointer-events-none absolute inset-0 flex items-center justify-between">
@@ -368,11 +369,13 @@ export function PlanDetail({
                     )
                 ).map((milestone, index, arr) => {
                   const stepPct =
-                    arr.length > 1 ? (index / (arr.length - 1)) * 100 : 0;
+                    arr.length > 0 ? ((index + 1) / (arr.length + 1)) * 100 : 0;
                   const completed =
-                    "isComplete" in milestone
-                      ? milestone.isComplete
-                      : plan.progress_percentage >= stepPct;
+                    "percent" in milestone
+                      ? milestone.percent >= 100
+                      : "isComplete" in milestone
+                        ? milestone.isComplete
+                        : plan.progress_percentage >= stepPct;
                   return (
                     <div
                       key={milestone.id ?? `step-${index}`}
@@ -382,7 +385,12 @@ export function PlanDetail({
                           ? "border-primary bg-primary text-white"
                           : "border-muted-foreground/30 bg-white text-muted-foreground",
                       )}
-                      style={{ transform: "translateY(-50%)" }}
+                      style={{ transform: "translateY(0)" }}
+                      title={
+                        "title" in milestone && milestone.title
+                          ? milestone.title
+                          : `Step ${index + 1}`
+                      }
                     >
                       {index + 1}
                     </div>
@@ -392,19 +400,20 @@ export function PlanDetail({
             </div>
           </div>
           {lastCompletedMilestone ? (
-            <div className="flex items-center gap-2 text-xs text-emerald-600">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
+            <div className="flex items-center gap-2 text-[11px] text-emerald-700">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 shadow-sm">
                 ✨
               </span>
-              <span className="font-medium">
-                Milestone reached: {lastCompletedMilestone.title}
+              <span className="font-semibold">
+                Milestone reached
               </span>
-              <span className="animate-bounce">🎉</span>
+              <span className="text-muted-foreground">•</span>
+              <span className="text-emerald-700">{lastCompletedMilestone.title}</span>
             </div>
           ) : null}
         </div>
         {(learningApproach || primaryStyle || maxDailyHours || motivationPatterns.length) ? (
-          <div className="rounded-2xl border border-white/70 bg-white/70 px-3 py-3 text-[11px] text-muted-foreground shadow-[var(--shadow-1)]">
+          <div className="rounded-2xl border border-transparent bg-white/80 px-3 py-3 text-[11px] text-muted-foreground shadow-[var(--shadow-1)] ring-1 ring-white/60">
             <p className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
               Why this plan fits you
             </p>
@@ -450,7 +459,7 @@ export function PlanDetail({
         </div>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
-        <div className="rounded-2xl border border-white/70 bg-white/70 p-4 shadow-[var(--shadow-1)]">
+        <div className="rounded-2xl border border-transparent bg-white/85 p-4 shadow-[var(--shadow-1)] ring-1 ring-white/60">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Focus today
           </h3>
@@ -459,7 +468,7 @@ export function PlanDetail({
               todayTasks.slice(0, 2).map((task) => (
                 <div
                   key={task.id}
-                  className="rounded-xl border border-white/70 bg-white/80 px-3 py-2 shadow-sm"
+                  className="rounded-xl border border-transparent bg-white/90 px-3 py-2 shadow-sm ring-1 ring-white/60"
                 >
                   <div className="flex items-center justify-between gap-2 text-sm font-medium">
                     <span>{task.title}</span>
@@ -474,7 +483,7 @@ export function PlanDetail({
                 </div>
               ))
             ) : nextTask ? (
-              <div className="rounded-xl border border-white/70 bg-white/80 px-3 py-2 shadow-sm">
+              <div className="rounded-xl border border-transparent bg-white/90 px-3 py-2 shadow-sm ring-1 ring-white/60">
                 <div className="flex items-center justify-between gap-2 text-sm font-medium">
                   <span>{nextTask.title}</span>
                   <span className="text-xs text-muted-foreground">
@@ -495,7 +504,7 @@ export function PlanDetail({
         </div>
 
         {milestones.length ? (
-          <div className="rounded-2xl border border-white/70 bg-white/70 p-4 shadow-[var(--shadow-1)]">
+          <div className="rounded-2xl border border-transparent bg-white/85 p-4 shadow-[var(--shadow-1)] ring-1 ring-white/60">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Milestones
@@ -514,7 +523,7 @@ export function PlanDetail({
               {visibleMilestones.map((milestone) => (
                 <div
                   key={milestone.id}
-                  className="rounded-xl border border-white/70 bg-white/80 px-3 py-2 shadow-sm"
+                  className="rounded-xl border border-transparent bg-white/90 px-3 py-2 shadow-sm ring-1 ring-white/60"
                 >
                   <div className="flex items-center justify-between gap-2 text-sm font-medium">
                     <span>{milestone.title}</span>
@@ -540,17 +549,13 @@ export function PlanDetail({
           </div>
         ) : null}
 
-        <Separator />
-
-        <div className="grid gap-2 text-xs text-muted-foreground">
-          <p>
-            <strong>Schedule snapshot:</strong>{" "}
-            {plan.user_schedule_snapshot ? "Captured" : "Not captured"}
-          </p>
-          <p>
-            <strong>Resources saved:</strong>{" "}
-            {plan.available_resources_snapshot?.length ?? 0}
-          </p>
+        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+          <span className="rounded-full border border-transparent bg-white/80 px-3 py-1 shadow-[var(--shadow-1)] ring-1 ring-white/60">
+            Schedule snapshot: {plan.user_schedule_snapshot ? "Captured" : "Not captured"}
+          </span>
+          <span className="rounded-full border border-transparent bg-white/80 px-3 py-1 shadow-[var(--shadow-1)] ring-1 ring-white/60">
+            Resources saved: {plan.available_resources_snapshot?.length ?? 0}
+          </span>
         </div>
       </CardContent>
     </Card>

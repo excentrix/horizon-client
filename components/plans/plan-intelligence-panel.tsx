@@ -77,20 +77,20 @@ export function PlanIntelligencePanel({
           {plan.difficulty_level} · {plan.estimated_duration_weeks} weeks
         </div>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
-        <section className="rounded-2xl border border-white/70 bg-gradient-to-br from-slate-50 to-white p-4 shadow-[var(--shadow-1)]">
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0">
+        <section className="rounded-2xl border border-transparent bg-gradient-to-br from-slate-50 to-white p-3 shadow-[var(--shadow-1)] ring-1 ring-white/60">
           <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
             <span>Focus timer</span>
             <span className="uppercase tracking-wide">{mode}</span>
           </div>
-          <div className="mt-5 flex items-center gap-3">
-            <div className="relative h-24 w-24 shrink-0">
+          <div className="mt-4 flex items-center gap-3">
+            <div className="relative h-20 w-20 shrink-0">
               <div
                 className="absolute inset-0 rounded-full p-1 shadow-inner"
                 style={ringStyle}
               >
                 <div className="flex h-full w-full items-center justify-center rounded-full bg-white">
-                  <div className="text-xl font-semibold text-slate-900">
+                  <div className="text-lg font-semibold text-slate-900">
                     {formattedTime}
                   </div>
                 </div>
@@ -110,7 +110,7 @@ export function PlanIntelligencePanel({
               </p>
             </div>
           </div>
-          <div className="flex gap-2 w-full mt-5">
+          <div className="flex gap-2 w-full mt-4">
             <Button
               // size=""
               variant={isTimerRunning ? "secondary" : "default"}
@@ -182,12 +182,12 @@ export function PlanIntelligencePanel({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-white/70 bg-gradient-to-br from-amber-50 via-white to-rose-50 p-4 shadow-[var(--shadow-1)]">
+        <section className="rounded-2xl border border-transparent bg-gradient-to-br from-amber-50 via-white to-rose-50 p-3 shadow-[var(--shadow-1)] ring-1 ring-white/60">
           <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
             <span>Streak tracker</span>
             <span className="uppercase tracking-wide">Gamify</span>
           </div>
-          <div className="mt-6 flex items-center justify-between">
+          <div className="mt-4 flex items-center justify-between">
             <div>
               <p className="text-xl font-semibold text-slate-900">
                 {currentStreak} days
@@ -215,7 +215,7 @@ export function PlanIntelligencePanel({
               </p>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-7 gap-2">
+          <div className="mt-3 grid grid-cols-7 gap-2">
             {Array.from({ length: 7 }).map((_, index) => (
               <div
                 key={`streak-${index}`}
@@ -236,7 +236,7 @@ export function PlanIntelligencePanel({
           </p>
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-4 text-white shadow-[var(--shadow-1)]">
+        <section className="rounded-2xl border border-white/10 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-3 text-white shadow-[var(--shadow-1)]">
           <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-white/70">
             <span>Lofi player</span>
             <span>Study mode</span>

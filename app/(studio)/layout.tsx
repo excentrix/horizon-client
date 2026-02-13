@@ -15,14 +15,16 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
     <GamificationProvider>
       <div
         className={cn(
-          "grid min-h-screen w-full",
+          "grid h-screen w-full overflow-hidden",
           hideSidebar ? "grid-cols-1" : "md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]",
         )}
       >
         {hideSidebar ? null : <Sidebar />}
         <div className="flex min-h-0 flex-col">
-          <main className="flex max-h-screen flex-1 flex-col gap-4 lg:gap-6">
-            {children}
+          <main className="flex min-h-0 flex-1 flex-col overflow-hidden gap-4 lg:gap-6">
+            <div className="flex-1 overflow-y-auto">
+              {children}
+            </div>
           </main>
         </div>
       </div>

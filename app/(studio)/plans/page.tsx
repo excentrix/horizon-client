@@ -157,10 +157,15 @@ function PlansContent() {
             defaultValue="overview"
             className="flex min-h-0 flex-1 flex-col gap-4"
           >
-            <TabsList className="w-full justify-start rounded-full border border-white/80 bg-white/85 p-1 shadow-[var(--shadow-1)] backdrop-blur">
-              <TabsTrigger value="overview" className="rounded-full text-xs">Overview</TabsTrigger>
-              <TabsTrigger value="tasks" className="rounded-full text-xs">Tasks</TabsTrigger>
-            </TabsList>
+            <div className="flex items-center justify-between">
+              <TabsList className="rounded-full bg-white/80 p-1.5 shadow-[var(--shadow-1)] backdrop-blur">
+                <TabsTrigger value="overview" className="rounded-full px-4 text-xs font-semibold">Overview</TabsTrigger>
+                <TabsTrigger value="tasks" className="rounded-full px-4 text-xs font-semibold">Tasks</TabsTrigger>
+              </TabsList>
+              <span className="hidden rounded-full bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground shadow-[var(--shadow-1)] md:inline-flex">
+                2 tabs
+              </span>
+            </div>
             <TabsContent
               value="overview"
               className="min-h-0 flex-1 overflow-hidden"
