@@ -191,22 +191,22 @@ export default function OnboardingFormPage() {
         
         {/* Progress */}
         <div className="mb-8 flex justify-center">
-            <div className="flex items-center space-x-2 text-sm font-semibold text-gray-900">
-                <span className="h-2 w-2 rounded-full bg-black"></span>
+            <div className="flex items-center space-x-2 text-sm font-semibold text-gray-900 dark:text-gray-300">
+                <span className="h-2 w-2 rounded-full bg-black dark:bg-white"></span>
                 <span>Preferences</span>
-                <span className="h-px w-8 bg-black/30"></span>
-                <span className="h-2 w-2 rounded-full bg-black/20"></span>
-                <span className="text-gray-600">Path Selection</span>
+                <span className="h-px w-8 bg-black/30 dark:bg-white/30"></span>
+                <span className="h-2 w-2 rounded-full bg-black/20 dark:bg-white/20"></span>
+                <span className="text-gray-600 dark:text-gray-500">Path Selection</span>
             </div>
         </div>
 
-        <Card className="border-2 border-black bg-white shadow-[10px_10px_0_0_#000]">
+        <Card className="border-2 border-black bg-white shadow-[10px_10px_0_0_#000] dark:border-white dark:bg-zinc-900 dark:shadow-[10px_10px_0_0_#fff]">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border-2 border-black bg-[#fcd34d]">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border-2 border-black bg-[#fcd34d] dark:border-white">
                 <BrainCircuit className="h-6 w-6 text-black" />
             </div>
-            <CardTitle className="text-2xl font-extrabold">Design Your Journey</CardTitle>
-            <CardDescription className="text-gray-700">
+            <CardTitle className="text-2xl font-extrabold dark:text-white">Design Your Journey</CardTitle>
+            <CardDescription className="text-gray-700 dark:text-gray-400">
                   If you uploaded a resume, we pre-filled some details. Otherwise, just answer a few quick questions.
                 </CardDescription>
               </CardHeader>
@@ -214,11 +214,11 @@ export default function OnboardingFormPage() {
                 <form onSubmit={handleSubmit} className="space-y-8">
 
               {!hasResumePrefill && (
-                <div className="rounded-xl border-2 border-black bg-[#e0f2fe] p-4 text-sm text-gray-900 shadow-[6px_6px_0_0_#000]">
-                  <div className="mb-2 font-semibold text-black">
+                <div className="rounded-xl border-2 border-black bg-[#e0f2fe] p-4 text-sm text-gray-900 shadow-[6px_6px_0_0_#000] dark:border-gray-500 dark:bg-blue-900/20 dark:text-gray-100 dark:shadow-none">
+                  <div className="mb-2 font-semibold text-black dark:text-blue-200">
                     Quick picks to get you started
                   </div>
-                  <div className="mb-3 text-xs text-gray-700">
+                  <div className="mb-3 text-xs text-gray-700 dark:text-blue-300">
                     Tap a role or skill to autofill. You can edit anytime.
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -227,7 +227,7 @@ export default function OnboardingFormPage() {
                         key={role}
                         type="button"
                         onClick={() => setFormData((prev) => ({ ...prev, target_role: role }))}
-                        className="rounded-full border-2 border-black bg-white px-3 py-1 text-xs font-semibold text-black shadow-[3px_3px_0_0_#000] transition hover:translate-y-0.5 hover:shadow-[1px_1px_0_0_#000]"
+                        className="rounded-full border-2 border-black bg-white px-3 py-1 text-xs font-semibold text-black shadow-[3px_3px_0_0_#000] transition hover:translate-y-0.5 hover:shadow-[1px_1px_0_0_#000] dark:border-blue-400 dark:bg-blue-950 dark:text-blue-100 dark:shadow-none dark:hover:bg-blue-900"
                       >
                         {role}
                       </button>
@@ -245,7 +245,7 @@ export default function OnboardingFormPage() {
                               : { ...prev, skills: [...prev.skills, skill] }
                           )
                         }
-                        className="rounded-full border-2 border-black bg-white px-3 py-1 text-xs font-semibold text-black shadow-[3px_3px_0_0_#000] transition hover:translate-y-0.5 hover:shadow-[1px_1px_0_0_#000]"
+                        className="rounded-full border-2 border-black bg-white px-3 py-1 text-xs font-semibold text-black shadow-[3px_3px_0_0_#000] transition hover:translate-y-0.5 hover:shadow-[1px_1px_0_0_#000] dark:border-blue-400 dark:bg-blue-950 dark:text-blue-100 dark:shadow-none dark:hover:bg-blue-900"
                       >
                         {skill}
                       </button>
@@ -256,23 +256,23 @@ export default function OnboardingFormPage() {
                   
                   {/* Target Role */}
                   <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-base font-semibold text-gray-900">
-                    <Target className="h-4 w-4 text-violet-600" />
+                <Label className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
+                    <Target className="h-4 w-4 text-violet-600 dark:text-violet-400" />
                     What is your target role?
                 </Label>
                 <Input
                   placeholder="e.g. Senior Backend Engineer, Data Scientist"
                   value={formData.target_role}
                   onChange={(e) => setFormData({ ...formData, target_role: e.target.value })}
-                  className="h-12 text-lg border-2 border-black shadow-[4px_4px_0_0_#000]"
+                  className="h-12 text-lg border-2 border-black shadow-[4px_4px_0_0_#000] dark:border-gray-500 dark:bg-zinc-800 dark:text-white dark:shadow-none dark:placeholder:text-gray-500"
                   required
                 />
                   </div>
     
                   {/* Experience Level */}
                   <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-base font-semibold text-gray-900">
-                    <Trophy className="h-4 w-4 text-violet-600" />
+                <Label className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
+                    <Trophy className="h-4 w-4 text-violet-600 dark:text-violet-400" />
                     Current Experience Level
                 </Label>
                 <div className="grid grid-cols-3 gap-3">
@@ -282,10 +282,10 @@ export default function OnboardingFormPage() {
                                 type="button"
                                 onClick={() => setFormData({ ...formData, experience_level: level as OnboardingData["experience_level"] })}
                             className={cn(
-                                "flex flex-col items-center justify-center rounded-lg border-2 border-black p-3 text-sm font-semibold transition-all",
+                                "flex flex-col items-center justify-center rounded-lg border-2 border-black p-3 text-sm font-semibold transition-all dark:border-gray-500",
                                 formData.experience_level === level
-                                    ? "bg-[#dcfce7] text-black shadow-[4px_4px_0_0_#000]"
-                                    : "bg-white text-black shadow-[3px_3px_0_0_#000] hover:translate-y-0.5 hover:shadow-[1px_1px_0_0_#000]"
+                                    ? "bg-[#dcfce7] text-black shadow-[4px_4px_0_0_#000] dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-500 dark:shadow-none"
+                                    : "bg-white text-black shadow-[3px_3px_0_0_#000] hover:translate-y-0.5 hover:shadow-[1px_1px_0_0_#000] dark:bg-zinc-800 dark:text-gray-300 dark:shadow-none dark:hover:bg-zinc-700"
                             )}
                         >
                             <span className="capitalize">{level}</span>
@@ -297,8 +297,8 @@ export default function OnboardingFormPage() {
                   {/* Mentor Tone (Coming Soon) */}
                   <div className="relative space-y-3 rounded-2xl border border-dashed border-violet-200 bg-violet-50/40 p-5 dark:border-violet-900/40 dark:bg-violet-900/10">
                     <div className="flex items-center justify-between">
-                      <Label className="flex items-center gap-2 text-base">
-                        <Sparkles className="h-4 w-4 text-violet-600" />
+                      <Label className="flex items-center gap-2 text-base dark:text-white">
+                        <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
                         Mentor Tone (Pro)
                       </Label>
                       <Badge className="border border-violet-300 bg-white text-violet-700 dark:border-violet-800 dark:bg-gray-900 dark:text-violet-200">
@@ -334,7 +334,7 @@ export default function OnboardingFormPage() {
                 </div>
                 {!toneOverrideEnabled && (
                   <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <span className="rounded-full bg-white/80 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-violet-600 shadow-sm dark:bg-gray-900/80">
+                    <span className="rounded-full bg-white/80 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-violet-600 shadow-sm dark:bg-gray-900/80 dark:text-violet-300">
                       Coming Soon
                     </span>
                   </div>
@@ -344,11 +344,11 @@ export default function OnboardingFormPage() {
               {/* Time Commitment */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                    <Label className="flex items-center gap-2 text-base font-semibold text-gray-900">
-                        <Clock className="h-4 w-4 text-violet-600" />
+                    <Label className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
+                        <Clock className="h-4 w-4 text-violet-600 dark:text-violet-400" />
                         Weekly Time Commitment
                     </Label>
-                    <span className="text-sm font-semibold text-black bg-[#fcd34d] px-2.5 py-0.5 rounded-full border-2 border-black shadow-[2px_2px_0_0_#000]">
+                    <span className="text-sm font-semibold text-black bg-[#fcd34d] px-2.5 py-0.5 rounded-full border-2 border-black shadow-[2px_2px_0_0_#000] dark:border-white">
                         {formData.hours_per_week} hours
                     </span>
                 </div>
@@ -360,22 +360,22 @@ export default function OnboardingFormPage() {
                   step={1}
                   className="py-4"
                 />
-                <p className="text-xs text-gray-700">
+                <p className="text-xs text-gray-700 dark:text-gray-400">
                     Recommended: 10-15 hours for steady progress.
                 </p>
               </div>
 
               {/* Skills */}
               <div className="space-y-3">
-                <Label className="text-base font-semibold text-gray-900">Top Skills (for placement)</Label>
-                <div className="flex flex-wrap gap-2 rounded-lg border-2 border-black bg-white p-4 min-h-[100px] shadow-[4px_4px_0_0_#000]">
+                <Label className="text-base font-semibold text-gray-900 dark:text-white">Top Skills (for placement)</Label>
+                <div className="flex flex-wrap gap-2 rounded-lg border-2 border-black bg-white p-4 min-h-[100px] shadow-[4px_4px_0_0_#000] dark:border-gray-500 dark:bg-zinc-800 dark:shadow-none">
                     {formData.skills.map((skill) => (
-                        <Badge variant="secondary" key={skill} className="gap-1 bg-[#e0f2fe] text-black border-2 border-black shadow-[2px_2px_0_0_#000] pl-2.5 pr-1 py-1 text-sm">
+                        <Badge variant="secondary" key={skill} className="gap-1 bg-[#e0f2fe] text-black border-2 border-black shadow-[2px_2px_0_0_#000] pl-2.5 pr-1 py-1 text-sm dark:bg-blue-900/40 dark:text-blue-100 dark:border-blue-400 dark:shadow-none">
                             {skill}
                             <button
                                 type="button"
                                 onClick={() => removeSkill(skill)}
-                                className="ml-1 rounded-full p-0.5 hover:bg-black/10"
+                                className="ml-1 rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                             </button>
@@ -387,14 +387,14 @@ export default function OnboardingFormPage() {
                         value={skillInput}
                         onChange={(e) => setSkillInput(e.target.value)}
                         onKeyDown={addSkill}
-                        className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-500 min-w-[150px]"
+                        className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-500 min-w-[150px] dark:text-white dark:placeholder:text-gray-500"
                     />
                 </div>
               </div>
 
               <Button 
                 type="submit" 
-                className="w-full text-lg h-12 bg-black text-white shadow-[4px_4px_0_0_#000] hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition"
+                className="w-full text-lg h-12 bg-black text-white shadow-[4px_4px_0_0_#000] hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition dark:bg-emerald-600 dark:shadow-[4px_4px_0_0_#000] dark:border-2 dark:border-emerald-400"
                 disabled={submitting}
               >
                 {submitting ? (
