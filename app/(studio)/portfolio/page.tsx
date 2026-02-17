@@ -111,9 +111,9 @@ export default function PortfolioPage() {
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/80 bg-white/85 p-6 shadow-[var(--shadow-2)] backdrop-blur">
         <div>
           <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Portfolio</p>
-          <h1 className="text-4xl font-bold tracking-tight">My Portfolio</h1>
+          <h1 className="text-4xl font-bold tracking-tight">Public Profile & Portfolio</h1>
           <p className="text-muted-foreground mt-2">
-            Showcase your learning journey and achievements
+            Manage the public-facing profile, links, and visibility settings for your portfolio.
           </p>
         </div>
         <div className="flex gap-2">
@@ -128,7 +128,7 @@ export default function PortfolioPage() {
           <Button variant="outline" asChild className="rounded-full">
             <Link href="/portfolio/settings">
               <Settings className="h-4 w-4 mr-2" />
-              Settings
+              Edit Public Profile
             </Link>
           </Button>
           <Button asChild className="rounded-full">

@@ -469,6 +469,57 @@ export interface PortfolioProfile extends UserSummary {
   verified_artifacts?: number;
 }
 
+export interface PublicPortfolioProfile {
+  id: UUID;
+  slug?: string;
+  headline?: string;
+  bio?: string;
+  theme?: string;
+  show_competency_chart?: boolean;
+  show_growth_timeline?: boolean;
+  show_learning_stats?: boolean;
+  view_count?: number;
+  linkedin_url?: string;
+  github_url?: string;
+  portfolio_url?: string;
+  twitter_url?: string;
+  resume_url?: string;
+  is_public?: boolean;
+  allow_downloads?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  user_username?: string;
+  user_full_name?: string;
+  user_avatar_url?: string;
+  user_type?: "student" | "parent" | "educator" | "admin";
+  user_created_at?: string;
+  verified_artifacts?: number;
+  featured_artifacts_count?: number;
+  total_artifacts?: number;
+}
+
+export interface PublicPortfolioResponse {
+  profile: PublicPortfolioProfile;
+  featured_artifacts: PortfolioArtifact[];
+  certifications?: Array<{
+    id: string;
+    title: string;
+    category?: string;
+    badge_type?: "verified" | "excellence" | "completion";
+    total_hours?: number;
+    completed_at?: string;
+    issued_date?: string;
+  }>;
+  competency_chart?: { competencies?: Array<Record<string, unknown>> };
+  growth_timeline?: Array<Record<string, unknown>>;
+  endorsements?: Array<Record<string, unknown>>;
+  stats: {
+    total_verified_artifacts: number;
+    featured_count: number;
+    profile_views: number;
+  };
+}
+
 export interface MentorEngagementNudge {
   type: "prereq" | "stuck" | "stretch" | "momentum" | "steady";
   title: string;
@@ -897,7 +948,9 @@ export interface ActivityItem {
 
 export interface HomeDashboard {
   today_task: TodayTask | null;
+  additional_tasks: TodayTask[];
   streak: DashboardStreak;
   weekly_stats: WeeklyStats;
   recent_activity: ActivityItem[];
+  generated_at: string;
 }

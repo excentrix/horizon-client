@@ -16,7 +16,7 @@ const badgesKey = ["gamification", "badges"];
 const earnedBadgesKey = ["gamification", "badges", "earned"];
 const leaderboardKey = ["gamification", "leaderboard"];
 
-export function useGamificationSummary() {
+export function useGamificationSummary(options?: { enabled?: boolean }) {
   return useQuery<GamificationSummary>({
     queryKey: summaryKey,
     queryFn: async () => {
@@ -27,6 +27,7 @@ export function useGamificationSummary() {
         throw error;
       }
     },
+    enabled: options?.enabled ?? true,
     staleTime: 60_000, // 1 minute - gamification changes frequently
     refetchOnWindowFocus: true, // Refresh on focus for up-to-date stats
   });

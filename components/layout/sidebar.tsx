@@ -10,6 +10,8 @@ import {
   MessageCircle,
   Radar,
   Trophy,
+  QrCode,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +24,9 @@ import {
 import { cn } from "@/lib/utils";
 import { AnalysisProgressPanel } from "@/components/progress/AnalysisProgressPanel";
 import { ProfileMenu } from "@/components/layout/profile-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { usePortfolioProfile } from "@/hooks/use-portfolio";
+import { useMemo, useState } from "react";
 
 const NAV_ITEMS = [
   {
@@ -70,6 +75,14 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: profileData } = usePortfolioProfile();
+  const [qrOpen, setQrOpen] = useState(false);
+  const [badgeCopied, setBadgeCopied] = useState(false);
+  const profile = profileData?.profile;
+  const publicUrl = useMemo(() => {
+    if (!profile?.slug || typeof window === "undefined") return "";
+    return `${window.location.origin}/p/${profile.slug}`;
+  }, [profile?.slug]);
 
   return (
     <aside className="hidden border-r bg-muted/40 md:block">
@@ -81,10 +94,59 @@ export function Sidebar() {
             </span>
             <span>Horizon Studio</span>
           </Link>
-          <Button variant="ghost" size="icon" className="ml-auto h-8 w-8">
-            <span className="sr-only">Notifications</span>
-            <Radar className="h-4 w-4" />
-          </Button>
+          <Dialog open={qrOpen} onOpenChange={setQrOpen}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="ml-auto h-8 w-8">
+                <span className="sr-only">Share profile</span>
+                <QrCode className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Share your portfolio</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="mx-auto flex w-full max-w-[240px] items-center justify-center rounded-2xl border border-border bg-muted/40 p-4">
+                  {publicUrl ? (
+                    <img
+                      alt="Portfolio QR"
+                      className="h-48 w-48"
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
+                        publicUrl
+                      )}`}
+                    />
+                  ) : (
+                    <div className="text-center text-xs text-muted-foreground">
+                      Enable your public portfolio to generate a QR code.
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-2xl border border-dashed border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                  {publicUrl || "Enable your public portfolio to generate a share link."}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    disabled={!publicUrl}
+                    onClick={async () => {
+                      if (!publicUrl) return;
+                      await navigator.clipboard.writeText(publicUrl);
+                      setBadgeCopied(true);
+                      setTimeout(() => setBadgeCopied(false), 2000);
+                    }}
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    {badgeCopied ? "Copied" : "Copy link"}
+                  </Button>
+                  <Button size="sm" variant="outline" asChild disabled={!publicUrl}>
+                    <Link href={publicUrl || "#"} target="_blank">
+                      Open public
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
         <nav className="flex-1 space-y-1 px-2 py-3 text-sm font-medium lg:px-4">

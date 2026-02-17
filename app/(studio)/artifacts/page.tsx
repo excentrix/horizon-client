@@ -84,7 +84,7 @@ export default function ArtifactsPage() {
   }, [artifacts]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-col gap-4 p-4">
       <header className="space-y-2">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           <Sparkles className="h-4 w-4" />

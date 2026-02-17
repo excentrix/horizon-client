@@ -1,6 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { portfolioApi } from "@/lib/api";
-import type { PortfolioArtifact, PortfolioProfile, PortfolioSkillTranscript } from "@/types";
+import type {
+  PortfolioArtifact,
+  PortfolioProfile,
+  PortfolioSkillTranscript,
+  PublicPortfolioResponse,
+} from "@/types";
 import { telemetry } from "@/lib/telemetry";
 
 const artifactsKey = ["portfolio-artifacts"];
@@ -158,7 +163,7 @@ export function useSetVisibility() {
 }
 
 export function usePublicPortfolio(username: string) {
-  return useQuery({
+  return useQuery<PublicPortfolioResponse>({
     queryKey: ["public-portfolio", username],
     queryFn: async () => {
       try {

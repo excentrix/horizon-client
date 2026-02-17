@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Settings, Shield } from "lucide-react";
+import { Eye, LogOut, Settings, Shield } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -75,30 +75,38 @@ export function ProfileMenu() {
             </span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel>
-            <div className="space-y-1">
-              <p className="text-sm font-medium">
-                {user.full_name ?? user.email}
-              </p>
-              <p className="text-xs text-muted-foreground">{user.email}</p>
-            </div>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => {
-              router.push("/dashboard");
-              setOpen(false);
-            }}
-          >
-            <Settings className="mr-2 h-4 w-4" /> Studio overview
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => {
-              setShowChangePassword(true);
-              setOpen(false);
-            }}
-          >
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel>
+          <div className="space-y-1">
+            <p className="text-sm font-medium">
+              {user.full_name ?? user.email}
+            </p>
+            <p className="text-xs text-muted-foreground">{user.email}</p>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => {
+            router.push("/dashboard");
+            setOpen(false);
+          }}
+        >
+          <Settings className="mr-2 h-4 w-4" /> Studio overview
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => {
+            router.push("/portfolio/settings");
+            setOpen(false);
+          }}
+        >
+          <Eye className="mr-2 h-4 w-4" /> Edit public profile
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => {
+            setShowChangePassword(true);
+            setOpen(false);
+          }}
+        >
             <Shield className="mr-2 h-4 w-4" /> Change password
           </DropdownMenuItem>
           <DropdownMenuSeparator />

@@ -92,10 +92,10 @@ export default function PortfolioSettingsPage() {
             </Link>
           </Button>
           <div className="flex-1">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Portfolio</p>
-            <h1 className="text-3xl font-bold tracking-tight">Portfolio Settings</h1>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Public profile</p>
+            <h1 className="text-3xl font-bold tracking-tight">Public Profile & Portfolio Settings</h1>
             <p className="text-muted-foreground">
-              Customize your professional portfolio
+              Manage what appears on your public profile, portfolio cards, and shared links.
             </p>
           </div>
           <Button onClick={handleSave} disabled={saving} className="rounded-full">

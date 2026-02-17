@@ -30,7 +30,10 @@ interface FlowSuggestionResponse {
 /**
  * Fetch a flow suggestion for the current user.
  */
-export function useFlowSuggestion(context: 'dashboard' | 'chat' | 'task_complete' = 'dashboard') {
+export function useFlowSuggestion(
+  context: 'dashboard' | 'chat' | 'task_complete' = 'dashboard',
+  options?: { enabled?: boolean }
+) {
   return useQuery<FlowSuggestionResponse>({
     queryKey: ['flow', 'suggestion', context],
     queryFn: async () => {
@@ -50,6 +53,7 @@ export function useFlowSuggestion(context: 'dashboard' | 'chat' | 'task_complete
       
       return response.data;
     },
+    enabled: options?.enabled ?? true,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     retry: 1,
   });

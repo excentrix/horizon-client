@@ -314,7 +314,7 @@ export const portfolioApi = {
       http.get("/portfolio/profiles/skills-transcript/")
     ),
   getPublicPortfolio: (username: string) =>
-    extract(
+    extract<import("@/types").PublicPortfolioResponse>(
       http.get(`/portfolio/public/${username}/`)
     ),
 };

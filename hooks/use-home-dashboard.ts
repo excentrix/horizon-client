@@ -5,7 +5,7 @@ import type { HomeDashboard } from "@/types";
 
 const homeKey = ["dashboard", "home"] as const;
 
-export function useHomeDashboard() {
+export function useHomeDashboard(options?: { enabled?: boolean }) {
   return useQuery<HomeDashboard>({
     queryKey: homeKey,
     queryFn: async () => {
@@ -16,6 +16,7 @@ export function useHomeDashboard() {
         throw error;
       }
     },
+    enabled: options?.enabled ?? true,
     staleTime: 60_000, // 1 minute - dashboard data changes moderately
     refetchOnWindowFocus: true, // Refresh when user returns
   });

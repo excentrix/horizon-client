@@ -73,48 +73,48 @@ function GeneratingPageContent() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0b0b0f] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#f6f4ff] flex items-center justify-center px-4">
       <div className="text-center max-w-lg">
         {/* Animated icon */}
         <div className="mb-8 relative">
           {status === "generating" && (
             <div className="relative">
-              <div className="absolute inset-0 animate-ping rounded-full h-24 w-24 mx-auto bg-white/10" />
-              <div className="relative mx-auto flex h-24 w-24 items-center justify-center rounded-full border-2 border-white bg-[#fcd34d] shadow-[6px_6px_0_0_#000]">
+              <div className="absolute inset-0 animate-ping rounded-full h-24 w-24 mx-auto bg-black/5" />
+              <div className="relative mx-auto flex h-24 w-24 items-center justify-center rounded-full border-2 border-black bg-[#fcd34d] shadow-[6px_6px_0_0_#000]">
                 <Sparkles className="h-12 w-12 text-black animate-pulse" />
               </div>
             </div>
           )}
           {status === "completed" && (
-            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border-2 border-white bg-[#dcfce7] shadow-[6px_6px_0_0_#000]">
+            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border-2 border-black bg-[#dcfce7] shadow-[6px_6px_0_0_#000]">
               <CheckCircle className="h-12 w-12 text-black" />
             </div>
           )}
           {status === "failed" && (
-            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border-2 border-white bg-[#fecaca] shadow-[6px_6px_0_0_#000]">
+            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border-2 border-black bg-[#fecaca] shadow-[6px_6px_0_0_#000]">
               <XCircle className="h-12 w-12 text-black" />
             </div>
           )}
         </div>
 
         {/* Title */}
-        <h1 className="text-3xl font-extrabold text-white mb-2">
+        <h1 className="text-3xl font-extrabold text-gray-900 mb-2">
           {status === "generating" && "Creating Your Learning Journey"}
           {status === "completed" && "All Set!"}
           {status === "failed" && "Something went wrong"}
         </h1>
 
-        <p className="text-gray-300 mb-8">{message}</p>
+        <p className="text-gray-600 mb-8">{message}</p>
 
         {/* Progress steps */}
         {status === "generating" && (
-          <div className="text-left space-y-3 bg-white/5 rounded-xl p-6 backdrop-blur-sm border-2 border-white/20 shadow-[6px_6px_0_0_#000]">
+          <div className="text-left space-y-3 bg-white rounded-xl p-6 border-2 border-black shadow-[6px_6px_0_0_#000]">
             {steps.map((step, i) => (
               <div key={i} className="flex items-center gap-3">
                 <div className={`h-6 w-6 rounded-full flex items-center justify-center ${
                   step.done 
-                    ? "bg-[#dcfce7] text-black border border-white/40" 
-                    : "bg-gray-500/20 text-gray-500"
+                    ? "bg-[#dcfce7] text-black border-2 border-black" 
+                    : "bg-gray-100 text-gray-400 border-2 border-gray-200"
                 }`}>
                   {step.done ? (
                     <CheckCircle className="h-4 w-4" />
@@ -122,7 +122,7 @@ function GeneratingPageContent() {
                     <Loader2 className="h-4 w-4 animate-spin" />
                   )}
                 </div>
-                <span className={step.done ? "text-white" : "text-gray-500"}>
+                <span className={step.done ? "text-gray-900 font-medium" : "text-gray-500"}>
                   {step.label}
                 </span>
               </div>
