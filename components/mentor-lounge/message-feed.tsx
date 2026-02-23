@@ -33,6 +33,20 @@ import { useStickToBottomContext } from "use-stick-to-bottom";
 import { FlowSuggestionChip } from "@/components/chat/flow-suggestion-chip";
 import { useFlowSuggestion } from "@/hooks/use-flow-suggestion";
 
+function normalizeMessageContent(raw: string) {
+  if (!raw) return raw;
+  const trimmed = raw.trim();
+
+  if (trimmed.startsWith("{") && /['"]text['"]\s*:/.test(trimmed)) {
+    const match = trimmed.match(/['"]text['"]\s*:\s*['"]([\s\S]*?)['"]\s*(,|})/);
+    if (match?.[1]) {
+      return match[1].replace(/\\n/g, "\n").replace(/\\"/g, "\"");
+    }
+  }
+
+  return raw;
+}
+
 interface MessageFeedProps {
   conversation?: Conversation;
   messages: ChatMessage[];
@@ -76,6 +90,20 @@ export function MessageFeed({
 }: MessageFeedProps) {
   const setMentorActions = useMentorLoungeStore((state) => state.setMentorActions);
   const streamingTimestampRef = useRef<string>(new Date().toISOString());
+
+  const normalizeMessageContent = useCallback((raw: string) => {
+    if (!raw) return raw;
+    const trimmed = raw.trim();
+
+    if (trimmed.startsWith("{") && /['"]text['"]\s*:/.test(trimmed)) {
+      const match = trimmed.match(/['"]text['"]\s*:\s*['"]([\s\S]*?)['"]\s*(,|})/);
+      if (match?.[1]) {
+        return match[1].replace(/\\n/g, "\n").replace(/\\"/g, "\"");
+      }
+    }
+
+    return raw;
+  }, []);
 
   // Update timestamp ref only when streaming message ID changes
   useEffect(() => {
@@ -377,7 +405,7 @@ function MessageFeedContent({
                       `${theme?.bubbleBg ?? "bg-white/80"} ${theme?.bubbleText ?? "text-foreground"} border border-white/70`,
                   )}
                 >
-                  <MessageResponse>{message.content}</MessageResponse>
+                  <MessageResponse>{normalizeMessageContent(message.content)}</MessageResponse>
 
                   {message.metadata?.graph_learning_snapshot && (
                     <LearningGraphPill snapshot={message.metadata.graph_learning_snapshot} />

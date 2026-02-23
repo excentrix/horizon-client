@@ -156,6 +156,8 @@ export interface Conversation {
   status: ConversationStatus;
   priority: ConversationPriority;
   is_pinned: boolean;
+  is_intake?: boolean;
+  intake_state?: Record<string, unknown>;
   notifications_enabled: boolean;
   context_window: number;
   message_count: number;
@@ -520,6 +522,48 @@ export interface PublicPortfolioResponse {
   };
 }
 
+export interface RoadmapLevel {
+  id: UUID;
+  level_index: number;
+  title: string;
+  description?: string;
+  objectives: string[];
+  duration_weeks: number;
+  status: "locked" | "available" | "in_progress" | "completed";
+  learning_plan_id?: UUID | null;
+  badge_slug?: string;
+  exam_required: boolean;
+  proof_required: boolean;
+  completed_at?: string | null;
+  position_x: number;
+  position_y: number;
+  stage_id: UUID | null;
+  criteria?: Record<string, unknown>;
+}
+
+export interface RoadmapStage {
+  id: UUID;
+  title: string;
+  description?: string;
+  order: number;
+  theme_color: string;
+  icon: string;
+  is_locked: boolean;
+  levels: RoadmapLevel[];
+}
+
+export interface Roadmap {
+  id: UUID;
+  target_role?: string;
+  created_at: string;
+  updated_at: string;
+  stages: RoadmapStage[];
+}
+
+export interface RoadmapResponse {
+  roadmap: Roadmap | null;
+}
+
 export interface MentorEngagementNudge {
   type: "prereq" | "stuck" | "stretch" | "momentum" | "steady";
   title: string;
@@ -681,6 +725,13 @@ export interface LearningPlan {
     total_completed_tasks: number;
     time_invested_minutes: number;
   };
+  roadmap_details?: {
+    roadmap_id: string;
+    stage_title?: string | null;
+    level_index: number;
+    level_title: string;
+    status: string;
+  } | null;
   user_schedule?: unknown;
 }
 

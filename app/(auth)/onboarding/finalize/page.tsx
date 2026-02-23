@@ -3,16 +3,20 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
+import Cookies from "js-cookie";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Rocket, Mail, Lock, User, Globe } from "lucide-react";
+import { authApi } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
 export default function FinalizePage() {
   const router = useRouter();
+  const { loginWithGoogle, isLoading: isAuthLoading } = useAuth();
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -89,11 +93,35 @@ export default function FinalizePage() {
         has_display_name: Boolean(formData.displayName),
       });
 
-      // Success! Clear session key and redirect to generating page
-      // localStorage.removeItem("onboarding_session_key"); // Keep for generating page
+      // Log in immediately so mentor lounge can load personalities and conversations
+      try {
+        const loginResponse = await authApi.login({
+          email: formData.email,
+          password: formData.password,
+          remember_me: true,
+        });
+        const access =
+          loginResponse.session.access_token ??
+          loginResponse.session.access ??
+          undefined;
+        const refresh =
+          loginResponse.session.refresh_token ??
+          loginResponse.session.refresh ??
+          undefined;
 
-      // Redirect to generating page (or dashboard if plan already done)
-      router.push(data.redirect_url || '/dashboard');
+        const cookieOptions = {
+          sameSite: "lax" as const,
+          secure: process.env.NODE_ENV === "production",
+          expires: 14,
+        };
+        if (access) Cookies.set("accessToken", access, cookieOptions);
+        if (refresh) Cookies.set("refreshToken", refresh, cookieOptions);
+      } catch (loginError) {
+        console.warn("Auto-login after onboarding failed", loginError);
+      }
+
+      // Redirect to mentor intake (or dashboard if plan already done)
+      router.push(data.redirect_url || "/dashboard");
       
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong";
@@ -215,6 +243,30 @@ export default function FinalizePage() {
                   Start My Learning Journey
                 </>
               )}
+            </Button>
+
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-gray-500">
+                  Or continue with
+                </span>
+              </div>
+            </div>
+
+            <Button
+              variant="outline"
+              type="button"
+              className="w-full border-2 border-black shadow-[4px_4px_0_0_#000] hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition"
+              onClick={() => loginWithGoogle()}
+              disabled={loading || isAuthLoading}
+            >
+              <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
+                <path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path>
+              </svg>
+              Sign up with Google
             </Button>
           </form>
           

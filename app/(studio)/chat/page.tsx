@@ -37,6 +37,15 @@ import { LearnerProfilePanel } from "@/components/mentor-lounge/learner-profile-
 import { PlanWorkbench } from "@/components/mentor-lounge/plan-workbench";
 import { PlanBuildHeaderBadge } from "@/components/mentor-lounge/plan-build-header-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Brain, User, PanelRightOpen } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlanSessionPoller } from "@/hooks/use-plan-poller";
@@ -89,6 +98,7 @@ function ChatContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
+  
   const selectedConversationId = useMentorLoungeStore(
     (state) => state.selectedConversationId,
   );
@@ -98,6 +108,7 @@ function ChatContent() {
   const setComposerDraft = useMentorLoungeStore(
     (state) => state.setComposerDraft,
   );
+  const composerDraft = useMentorLoungeStore((state) => state.composerDraft);
   const mentorActions = useMentorLoungeStore((state) => state.mentorActions);
   const setMentorActions = useMentorLoungeStore(
     (state) => state.setMentorActions,
@@ -122,6 +133,10 @@ function ChatContent() {
     (conversation) => conversation.id === selectedConversationId,
   );
 
+  const isMentorIntake =
+    searchParams.get("context") === "mentor_intake" ||
+    Boolean(activeConversation?.is_intake);
+
   const {
     status: socketStatus,
     error: socketError,
@@ -133,6 +148,7 @@ function ChatContent() {
 
   const personaTheme = getPersonaTheme(activeConversation?.ai_personality);
   const activeListClass = personaTheme.conversationActive;
+  
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [isReportModalOpen, setReportModalOpen] = useState(false);
   const [, setAnalysisTimedOut] = useState<string | null>(null);
@@ -161,6 +177,13 @@ function ChatContent() {
   const processedStageEventSeqRef = useRef<number>(-1);
   const stageHistoryLimit = 8;
   const analysisTimeoutRef = useRef<number | null>(null);
+  const [intakeSubmitting, setIntakeSubmitting] = useState(false);
+  const [intakeError, setIntakeError] = useState<string | null>(null);
+  const [intakeModalOpen, setIntakeModalOpen] = useState(false);
+  const [intakePreviewLoading, setIntakePreviewLoading] = useState(false);
+  const [intakePreview, setIntakePreview] = useState<Record<string, unknown> | null>(null);
+  const [intakeState, setIntakeState] = useState<Record<string, unknown> | null>(null);
+  const [intakeSubmitted, setIntakeSubmitted] = useState(false);
 
   const analyzeConversation = useAnalyzeConversation();
   const createPlan = useCreatePlanFromConversation();
@@ -171,6 +194,25 @@ function ChatContent() {
       analysisPollTimeoutRef.current = null;
     }
   }, []);
+
+  const intakeQuestionCount =
+    typeof intakeState?.question_count === "number"
+      ? (intakeState.question_count as number)
+      : 0;
+  const intakeReadinessRaw =
+    typeof intakeState?.readiness === "number"
+      ? (intakeState.readiness as number)
+      : 0;
+  const intakeReadiness = intakeQuestionCount > 0 ? intakeReadinessRaw : 0;
+  const intakeMissing = Array.isArray(intakeState?.missing_or_uncertain)
+    ? (intakeState?.missing_or_uncertain as string[]).length
+    : 0;
+  const intakeProgressLabel =
+    intakeReadiness >= 0.85
+      ? "Roadmap-ready"
+      : intakeMissing > 0
+        ? `${intakeMissing} details left`
+        : "Collecting insights";
 
   useEffect(() => {
     if (selectedConversationId) {
@@ -185,6 +227,127 @@ function ChatContent() {
       setSelectedConversationId(queryConversation);
     }
   }, [conversations, searchParams, selectedConversationId, setSelectedConversationId]);
+
+  useEffect(() => {
+    setIntakeState(
+      (activeConversation?.intake_state as Record<string, unknown> | undefined) ?? null,
+    );
+  }, [activeConversation?.id]);
+
+  useEffect(() => {
+    if (!messages.length) {
+      return;
+    }
+    const latestWithState = [...messages].reverse().find((message) => message.metadata?.intake_state);
+    if (latestWithState?.metadata?.intake_state) {
+      setIntakeState(latestWithState.metadata.intake_state as Record<string, unknown>);
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    if (!isMentorIntake) return;
+    if (composerDraft.trim()) return;
+    const key = `mentor_intake_prompt_set_${activeConversation?.id ?? "new"}`;
+    if (typeof window !== "undefined") {
+      if (window.sessionStorage.getItem(key)) return;
+      window.sessionStorage.setItem(key, "true");
+    }
+    setComposerDraft(
+      "I want to complete my mentor intake and build my roadmap. Please ask me the key questions."
+    );
+  }, [composerDraft, isMentorIntake, setComposerDraft, activeConversation?.id]);
+
+  useEffect(() => {
+    if (!isMentorIntake || !activeConversation?.id) {
+      return;
+    }
+    const hasMentorReply = messages.some((message) => message.sender_type === "ai");
+    if (hasMentorReply) {
+      return;
+    }
+    const key = `mentor_intake_autostart_${activeConversation.id}`;
+    if (typeof window !== "undefined") {
+      if (window.sessionStorage.getItem(key)) return;
+      window.sessionStorage.setItem(key, "true");
+    }
+    sendMessage("Please start mentor intake and ask the key questions.");
+  }, [activeConversation?.id, isMentorIntake, messages, sendMessage]);
+
+  const handleCompleteMentorIntake = useCallback(async () => {
+    if (!activeConversation?.id) return;
+    const sessionKey =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem("onboarding_session_key")
+        : null;
+    if (!sessionKey) {
+      setIntakeError("Onboarding session not found. Please restart onboarding.");
+      return;
+    }
+    setIntakeSubmitting(true);
+    setIntakeError(null);
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/onboarding/mentor-intake/extract/`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_key: sessionKey,
+            conversation_id: activeConversation.id,
+            complete: true,
+          }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to finalize mentor intake");
+      }
+      setIntakeSubmitted(true);
+      setIntakeModalOpen(false);
+    } catch (err: unknown) {
+      setIntakeError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setIntakeSubmitting(false);
+    }
+  }, [activeConversation?.id]);
+
+  const handlePreviewMentorIntake = useCallback(async () => {
+    if (!activeConversation?.id) return;
+    const sessionKey =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem("onboarding_session_key")
+        : null;
+    if (!sessionKey) {
+      setIntakeError("Onboarding session not found. Please restart onboarding.");
+      return;
+    }
+    setIntakePreviewLoading(true);
+    setIntakeError(null);
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/onboarding/mentor-intake/extract/`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_key: sessionKey,
+            conversation_id: activeConversation.id,
+            complete: false,
+          }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to extract mentor intake");
+      }
+      setIntakePreview(data.intake_data || {});
+      setIntakeModalOpen(true);
+    } catch (err: unknown) {
+      setIntakeError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setIntakePreviewLoading(false);
+    }
+  }, [activeConversation?.id]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1128,6 +1291,79 @@ useEffect(() => {
                   ) : null}
                   <div className="min-h-0 flex-1">
                     <div className="flex h-full min-h-0 flex-col overflow-hidden">
+                      {isMentorIntake && (
+                        <div className="mb-3 space-y-3 rounded-2xl border border-black/10 bg-gradient-to-r from-amber-50 via-white to-emerald-50 px-4 py-3 text-sm shadow-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <div className="font-semibold text-gray-900">
+                                Mentor Intake
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                This intake is required before your roadmap is generated.
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {!activeConversation ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setCreateModalOpen(true)}
+                                >
+                                  Start intake chat
+                                </Button>
+                              ) : (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      sendMessage(
+                                        "I’m ready for mentor intake. Please guide me through the key questions."
+                                      )
+                                    }
+                                  >
+                                    Ask intake questions
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => sendMessage("skip")}
+                                  >
+                                    Skip this question
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={handlePreviewMentorIntake}
+                                    disabled={intakePreviewLoading}
+                                  >
+                                    {intakePreviewLoading ? "Reviewing..." : "Review intake"}
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-white/70 bg-white/70 px-3 py-2">
+                            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                              <span>{intakeProgressLabel}</span>
+                              <span>{Math.round(intakeReadiness * 100)}%</span>
+                            </div>
+                            <Progress value={Math.round(intakeReadiness * 100)} className="mt-2 h-2" />
+                          </div>
+                          {intakeSubmitted || planUpdates.length ? (
+                            <div className="rounded-lg border border-emerald-200/60 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-900">
+                              <div className="font-semibold">Roadmap generation in progress</div>
+                              <div className="text-[11px] text-emerald-700/80">
+                                We&apos;re building your roadmap now. Updates will appear here.
+                              </div>
+                            </div>
+                          ) : null}
+                          {intakeError ? (
+                            <div className="rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                              {intakeError}
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
                       <MessageFeed
                         conversation={activeConversation}
                         messages={messages}
@@ -1147,6 +1383,61 @@ useEffect(() => {
                         theme={personaTheme}
                         variant="plain"
                       />
+                      <Dialog open={intakeModalOpen} onOpenChange={setIntakeModalOpen}>
+                        <DialogContent className="max-w-xl">
+                          <DialogHeader>
+                            <DialogTitle>Mentor Intake Summary</DialogTitle>
+                            <DialogDescription>
+                              Review what the mentor captured. If it looks good, generate your roadmap.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-3 text-sm">
+                            {intakePreview ? (
+                              <div className="grid gap-3 rounded-lg border bg-muted/40 p-4">
+                                {Object.entries(intakePreview).map(([key, value]) => (
+                                  <div key={key} className="flex flex-col gap-1">
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                      {key.replace(/_/g, " ")}
+                                    </div>
+                                    <div className="text-sm text-foreground">
+                                      {Array.isArray(value)
+                                        ? value.join(", ") || "—"
+                                        : value === null || value === ""
+                                          ? "—"
+                                          : String(value)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="rounded-lg border bg-muted/30 p-4 text-muted-foreground">
+                                No intake summary available yet.
+                              </div>
+                            )}
+                          </div>
+                          {intakeError ? (
+                            <div className="rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                              {intakeError}
+                            </div>
+                          ) : null}
+                          <DialogFooter className="gap-2">
+                            <Button
+                              variant="outline"
+                              onClick={() => setIntakeModalOpen(false)}
+                            >
+                              Go back
+                            </Button>
+                            <Button
+                              onClick={async () => {
+                                await handleCompleteMentorIntake();
+                              }}
+                              disabled={intakeSubmitting}
+                            >
+                              {intakeSubmitting ? "Saving..." : "Confirm & generate"}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                       <div className="space-y-3 border-t border-white/80 bg-white/65 px-4 pb-4 pt-3">
                         <AgentIndicator />
                         <MentorActionShelf

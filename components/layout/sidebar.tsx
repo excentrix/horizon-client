@@ -48,6 +48,18 @@ const NAV_ITEMS = [
     description: "Active learning campaigns",
   },
   {
+    href: "/roadmap",
+    label: "Roadmap",
+    icon: Compass,
+    description: "Levels toward job readiness",
+  },
+  {
+    href: "/insights",
+    label: "Your Mirror",
+    icon: Radar,
+    description: "Skills, proofs & career readiness",
+  },
+  {
     href: "/artifacts",
     label: "Artifacts",
     icon: Briefcase,

@@ -36,6 +36,7 @@ import {
   GamificationLeaderboard,
   GamificationActivity,
   HomeDashboard,
+  RoadmapResponse,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -48,6 +49,9 @@ const normalizeList = <T>(data: T[] | PaginatedResponse<T>): T[] =>
 export const authApi = {
   login: (payload: LoginPayload) =>
     extract<LoginResponse>(http.post("/auth/login/", payload)),
+
+  loginWithGoogle: (payload: { access_token: string; refresh_token: string; device_info?: Record<string, unknown> }) =>
+    extract<LoginResponse>(http.post("/auth/google/", payload)),
 
   register: (payload: RegisterPayload) =>
     extract<UserSummary>(http.post("/auth/register/", payload)),
@@ -439,6 +443,33 @@ export const intelligenceApi = {
   getProgressReport(params?: { period?: number }) {
     return this.getComprehensiveProgressReport(params);
   },
+
+  getCareerReadiness: (params?: {
+    target_career?: string;
+    include_gaps?: boolean;
+    include_recommendations?: boolean;
+  }) =>
+    extract<{
+      overall_readiness_score: number;
+      competency_breakdown: Record<string, Record<string, number>>;
+      career_stage_assessment: { stage: string; completed_roadmap_levels: number; advanced_competency_count: number };
+      industry_interest_analysis: { top_areas: { area: string; weight: number }[]; total_areas_detected: number };
+      skill_gaps?: Array<{ competency: string; competency_type: string; current_level: string; gap_size: number; related_goal: string }>;
+      professional_development_recommendations: Array<{ competency: string; action: string; priority: string; related_goal: string | null }>;
+      target_career_analysis?: { target: string; match_found: boolean; match_percentage?: number };
+    }>(
+      http.get("/intelligence/career_readiness_assessment/", { params })
+    ),
+
+  getCompetencyAssessments: () =>
+    extract<Array<{
+      id: string;
+      competency: { id: string; name: string; competency_type: string };
+      proficiency_level: string;
+      numeric_level: number;
+      evidence_count: number;
+      last_updated: string;
+    }>>(http.get("/intelligence/competency_assessments/")),
 };
 
 // GAMIFICATION ---------------------------------------------------------------
@@ -462,6 +493,13 @@ export const gamificationApi = {
 // DASHBOARDS --------------------------------------------------------------
 export const dashboardApi = {
   getHome: () => extract<HomeDashboard>(http.get("/dashboards/home/")),
+};
+
+// ROADMAP ---------------------------------------------------------------
+export const roadmapApi = {
+  getRoadmap: () => extract<RoadmapResponse>(http.get("/roadmap/")),
+  generateLevelPlan: (levelId: string) => 
+    extract<{ message: string; plan_id: string }>(http.post(`/roadmap/levels/${levelId}/generate_plan/`)),
 };
 
 // NOTIFICATIONS --------------------------------------------------------------

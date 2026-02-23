@@ -58,8 +58,8 @@ export default function OnboardingCustomPathPage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Failed to submit custom path preferences");
-      await res.json();
-      router.push("/onboarding/paths");
+      const data = await res.json();
+      router.push(data.redirect_url || "/onboarding/finalize");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {

@@ -36,7 +36,9 @@ export const telemetry = {
       console.error(payload);
       
       // Send to PostHog
-      posthog.capture("error_logged", { message: formatted, ...meta });
+      if (process.env.NEXT_PUBLIC_POSTHOG_DISABLED !== 'true') {
+        posthog.capture("error_logged", { message: formatted, ...meta });
+      }
       
       // Send to Sentry
       if (message instanceof Error) {
@@ -91,34 +93,42 @@ export const telemetry = {
 
   // Analytics tracking
   track(eventName: string, properties?: Record<string, unknown>) {
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_POSTHOG_DISABLED !== 'true') {
       posthog.capture(eventName, properties);
     }
   },
 
   identify(userId: string, properties?: Record<string, unknown>) {
     if (typeof window !== "undefined") {
-      posthog.identify(userId, properties);
+      if (process.env.NEXT_PUBLIC_POSTHOG_DISABLED !== 'true') {
+        posthog.identify(userId, properties);
+      }
       
       // Set Sentry user context
-      Sentry.setUser({
-        id: userId,
-        email: properties?.email as string,
-        username: properties?.username as string,
-      });
+      if (process.env.NEXT_PUBLIC_SENTRY_DISABLED !== 'true') {
+        Sentry.setUser({
+          id: userId,
+          email: properties?.email as string,
+          username: properties?.username as string,
+        });
+      }
     }
   },
 
   reset() {
     if (typeof window !== "undefined") {
-      posthog.reset();
-      Sentry.setUser(null);
+      if (process.env.NEXT_PUBLIC_POSTHOG_DISABLED !== 'true') {
+        posthog.reset();
+      }
+      if (process.env.NEXT_PUBLIC_SENTRY_DISABLED !== 'true') {
+        Sentry.setUser(null);
+      }
     }
   },
 
   // Page tracking
   pageView(pageName: string, properties?: Record<string, unknown>) {
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_POSTHOG_DISABLED !== 'true') {
       posthog.capture("$pageview", { page_name: pageName, ...properties });
     }
   },

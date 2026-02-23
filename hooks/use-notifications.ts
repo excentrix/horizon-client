@@ -395,6 +395,7 @@ export function useNotificationsSocket() {
                   (typeof crypto !== "undefined" && crypto.randomUUID
                     ? crypto.randomUUID()
                     : `plan-update-${Date.now()}`);
+                const planId = (data.plan_id as string | undefined) ?? (data.roadmap_id as string | undefined);
                 pushPlanUpdate({
                   type: "plan_update",
                   data: {
@@ -403,7 +404,7 @@ export function useNotificationsSocket() {
                     status: (data.status as PlanBuildStatus) ?? "in_progress",
                     message:
                       (data.message as string) ?? "Working on your plan...",
-                    plan_id: data.plan_id as string | undefined,
+                    plan_id: planId,
                     plan_title: data.plan_title as string | undefined,
                     task_count: data.task_count as number | undefined,
                     agent: data.agent as string | undefined,
@@ -424,7 +425,7 @@ export function useNotificationsSocket() {
                   setPlanBuildStatus(
                     mapped,
                     (data.message as string) ?? undefined,
-                    data.plan_id as string | undefined,
+                    planId,
                     data.plan_title as string | undefined,
                   );
                   updateLastPlanActivity();

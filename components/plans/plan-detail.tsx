@@ -12,11 +12,13 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import type { DailyTask, LearningPlan } from "@/types";
-import { planningApi } from "@/lib/api";
+import { planningApi, roadmapApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
 import { format, isAfter, isSameDay, parseISO, startOfDay } from "date-fns";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 interface PlanDetailProps {
   plan: LearningPlan;
@@ -98,6 +100,93 @@ export function PlanDetail({
     nextTask?.id ? `?task=${nextTask.id}` : ""
   }`;
   const [resourceRefreshing, setResourceRefreshing] = useState(false);
+  const [exportingRoadmap, setExportingRoadmap] = useState(false);
+
+  const handleExportRoadmap = async () => {
+    if (!plan.roadmap_details) return;
+    setExportingRoadmap(true);
+    try {
+      const { roadmap } = await roadmapApi.getRoadmap();
+      if (!roadmap) {
+        telemetry.toastError("Could not find roadmap data.");
+        return;
+      }
+      
+      const doc = new jsPDF();
+      
+      // Title
+      doc.setFontSize(22);
+      doc.text(`Roadmap: ${roadmap.target_role || "Learning Journey"}`, 14, 22);
+      
+      // Metadata
+      doc.setFontSize(11);
+      doc.setTextColor(100);
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 30);
+      
+      let startY = 40;
+      
+      const stages = [...(roadmap.stages || [])].sort((a, b) => a.order - b.order);
+      
+      for (const stage of stages) {
+        doc.setFontSize(16);
+        doc.setTextColor(0);
+        doc.text(`Stage: ${stage.title}`, 14, startY);
+        if (stage.description) {
+          doc.setFontSize(10);
+          doc.setTextColor(80);
+          const splitDesc = doc.splitTextToSize(stage.description, 180);
+          doc.text(splitDesc, 14, startY + 6);
+          startY += 6 + (splitDesc.length * 4);
+        } else {
+          startY += 6;
+        }
+        
+        const levels = [...(stage.levels || [])].sort((a, b) => a.level_index - b.level_index);
+        
+        const tableData = levels.map(level => {
+          const objectives = level.objectives?.map(obj => `• ${obj}`).join('\n') || "No objectives defined";
+          return [
+            `Level ${level.level_index}`,
+            level.title,
+            `${level.duration_weeks}w`,
+            objectives,
+            level.status.replace('_', ' ')
+          ];
+        });
+        
+        autoTable(doc, {
+          startY: startY + 4,
+          head: [['Level', 'Title', 'Duration', 'Objectives', 'Status']],
+          body: tableData,
+          theme: 'grid',
+          headStyles: { fillColor: [63, 63, 70] }, // Zinc-700
+          styles: { fontSize: 9, cellPadding: 4, valign: 'middle' },
+          columnStyles: {
+            0: { cellWidth: 20 },
+            1: { cellWidth: 40 },
+            2: { cellWidth: 20 },
+            3: { cellWidth: 80 },
+            4: { cellWidth: 20 }
+          },
+        });
+        
+        // Update startY to end of table
+        startY = (doc as any).lastAutoTable.finalY + 15;
+        
+        if (startY > doc.internal.pageSize.height - 40) {
+          doc.addPage();
+          startY = 20;
+        }
+      }
+      
+      doc.save(`Roadmap-${roadmap.target_role?.replace(/\s+/g, '-') || roadmap.id}.pdf`);
+      telemetry.toastSuccess("Roadmap exported as PDF successfully.");
+    } catch (error) {
+      telemetry.toastError("Failed to export roadmap", error instanceof Error ? error.message : undefined);
+    } finally {
+      setExportingRoadmap(false);
+    }
+  };
 
   const handleRecheckResources = async () => {
     setResourceRefreshing(true);
@@ -281,6 +370,34 @@ export function PlanDetail({
             <CardDescription className="text-xs text-muted-foreground">
               {plan.plan_type} · {displayWeeks} weeks · {plan.total_estimated_hours} hrs · {plan.difficulty_level}
             </CardDescription>
+            {plan.roadmap_details ? (
+              <div className="mt-2 flex flex-col gap-3 rounded-xl border border-primary/10 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-primary">Connected Roadmap</div>
+                  <div className="mt-0.5 text-sm text-muted-foreground">
+                    Level {plan.roadmap_details.level_index}: 
+                    <span className="font-medium text-foreground"> {plan.roadmap_details.level_title}</span>
+                    {plan.roadmap_details.stage_title && (
+                      <span className="opacity-75"> ({plan.roadmap_details.stage_title})</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button variant="outline" size="sm" asChild className="h-8 bg-white/50 text-xs">
+                    <Link href={`/roadmap?level=${plan.roadmap_details.level_index}`}>View Roadmap</Link>
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 bg-white/50 text-xs"
+                    onClick={handleExportRoadmap}
+                    disabled={exportingRoadmap}
+                  >
+                    {exportingRoadmap ? "Exporting..." : "Export"}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             {description ? (
               <div className="text-sm text-muted-foreground">
                 <p>{showFullDescription ? description : shortDescription}</p>
@@ -372,9 +489,9 @@ export function PlanDetail({
                     arr.length > 0 ? ((index + 1) / (arr.length + 1)) * 100 : 0;
                   const completed =
                     "percent" in milestone
-                      ? milestone.percent >= 100
+                      ? (milestone as any).percent >= 100
                       : "isComplete" in milestone
-                        ? milestone.isComplete
+                        ? (milestone as any).isComplete
                         : plan.progress_percentage >= stepPct;
                   return (
                     <div

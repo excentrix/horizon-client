@@ -140,10 +140,10 @@ function GeneratingPageContent() {
               Try Again
             </button>
             <button
-              onClick={() => router.push("/onboarding/paths")}
+              onClick={() => router.push("/onboarding")}
               className="px-6 py-3 bg-[#fcd34d] text-black border-2 border-black shadow-[4px_4px_0_0_#000] transition hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000]"
             >
-              Choose a Different Path
+              Restart onboarding
             </button>
             <button
               onClick={() => router.push("/dashboard")}
@@ -157,4 +157,3 @@ function GeneratingPageContent() {
     </div>
   );
 }
-
