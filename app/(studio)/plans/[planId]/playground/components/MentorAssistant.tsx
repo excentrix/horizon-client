@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Bot, User, Sparkles } from "lucide-react";
+import { Send, Bot, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage as Message } from "@/types";
 
@@ -18,6 +18,18 @@ const mentorSuggestions = [
   { id: "example", label: "Example" },
   { id: "quiz", label: "Quiz me" },
 ] as const;
+
+const createStreamingMessage = (id: string, content: string): Message => ({
+  id,
+  content,
+  message_type: "text",
+  sender_type: "ai",
+  sequence_number: 0,
+  is_edited: false,
+  is_flagged: false,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+});
 
 export function MentorAssistant({
   messages,
@@ -56,12 +68,7 @@ export function MentorAssistant({
     if (existingIdx >= 0) {
       allMessages[existingIdx] = { ...allMessages[existingIdx], content: streamContent };
     } else {
-      allMessages.push({
-        id: streamId,
-        sender_type: "ai",
-        content: streamContent,
-        created_at: new Date().toISOString(),
-      } as any);
+      allMessages.push(createStreamingMessage(streamId, streamContent));
     }
   }
 
@@ -81,7 +88,9 @@ export function MentorAssistant({
         {allMessages.length === 0 && !isTyping && (
           <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
             <Sparkles className="h-8 w-8 mb-3 opacity-20" />
-            <p className="text-sm px-8">I'm tracking your progress. Ask me if you get stuck!</p>
+            <p className="text-sm px-8">
+              {"I'm tracking your progress. Ask me if you get stuck!"}
+            </p>
           </div>
         )}
 

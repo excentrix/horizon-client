@@ -683,8 +683,12 @@ export function useChatSocket(conversationId: string | null) {
     }
   }, [
     conversationId,
+    pushInsight,
+    pushMissingInfo,
     pushPlanUpdate,
     pushRoutingDecision,
+    pushRuntimeStep,
+    setPlanBuildStatus,
     setActiveAgent,
     queryClient,
     resetSocket,
@@ -692,6 +696,7 @@ export function useChatSocket(conversationId: string | null) {
     startHeartbeat,
     stopHeartbeat,
     updateMentorTyping,
+    updateLastPlanActivity,
    
   ]);
 

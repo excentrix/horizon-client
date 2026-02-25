@@ -33,7 +33,7 @@ import { useStickToBottomContext } from "use-stick-to-bottom";
 import { FlowSuggestionChip } from "@/components/chat/flow-suggestion-chip";
 import { useFlowSuggestion } from "@/hooks/use-flow-suggestion";
 
-function normalizeMessageContent(raw: string) {
+const normalizeMessageContent = (raw: string) => {
   if (!raw) return raw;
   const trimmed = raw.trim();
 
@@ -45,7 +45,7 @@ function normalizeMessageContent(raw: string) {
   }
 
   return raw;
-}
+};
 
 interface MessageFeedProps {
   conversation?: Conversation;
@@ -90,20 +90,6 @@ export function MessageFeed({
 }: MessageFeedProps) {
   const setMentorActions = useMentorLoungeStore((state) => state.setMentorActions);
   const streamingTimestampRef = useRef<string>(new Date().toISOString());
-
-  const normalizeMessageContent = useCallback((raw: string) => {
-    if (!raw) return raw;
-    const trimmed = raw.trim();
-
-    if (trimmed.startsWith("{") && /['"]text['"]\s*:/.test(trimmed)) {
-      const match = trimmed.match(/['"]text['"]\s*:\s*['"]([\s\S]*?)['"]\s*(,|})/);
-      if (match?.[1]) {
-        return match[1].replace(/\\n/g, "\n").replace(/\\"/g, "\"");
-      }
-    }
-
-    return raw;
-  }, []);
 
   // Update timestamp ref only when streaming message ID changes
   useEffect(() => {

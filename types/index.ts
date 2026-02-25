@@ -45,6 +45,8 @@ export interface UserSummary {
   last_activity: string | null;
   created_at: string;
   profile_completion: number;
+  is_staff?: boolean;
+  is_superuser?: boolean;
 }
 
 export interface LoginResponse extends ApiMetadata {

@@ -9,8 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Progress } from "@/components/ui/progress";
 import type { DailyTask, LearningPlan } from "@/types";
 import { planningApi, roadmapApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
@@ -36,6 +34,22 @@ interface PlanDetailProps {
     switchingMentor: boolean;
   };
 }
+
+type PlanMilestone = NonNullable<LearningPlan["milestones"]>[number];
+type MilestoneProgress = PlanMilestone & {
+  index: number;
+  total: number;
+  completed: number;
+  percent: number;
+  isComplete: boolean;
+};
+type StepMilestone = {
+  id: string;
+  index: number;
+  title: string;
+  isComplete: boolean;
+};
+type MilestoneDisplay = MilestoneProgress | StepMilestone;
 
 export function PlanDetail({
   plan,
@@ -171,7 +185,9 @@ export function PlanDetail({
         });
         
         // Update startY to end of table
-        startY = (doc as any).lastAutoTable.finalY + 15;
+        const lastTableY = (doc as { lastAutoTable?: { finalY?: number } })
+          .lastAutoTable?.finalY;
+        startY = (lastTableY ?? startY) + 15;
         
         if (startY > doc.internal.pageSize.height - 40) {
           doc.addPage();
@@ -233,7 +249,7 @@ export function PlanDetail({
     if (!milestones.length) {
       return [];
     }
-    return milestones.map((milestone, index) => {
+    return milestones.map((milestone, index): MilestoneProgress => {
       const milestoneTasks = tasks.filter(
         (task) =>
           task.milestone_id && task.milestone_id === milestone.milestone_id,
@@ -253,17 +269,6 @@ export function PlanDetail({
       };
     });
   }, [milestones, tasks]);
-  const milestoneTrackWeeks = useMemo(() => {
-    if (!milestones.length) {
-      return displayWeeks || 1;
-    }
-    const maxWeek = Math.max(
-      1,
-      ...milestones.map((milestone) => Math.max(1, milestone.week || 1)),
-    );
-    return Math.max(maxWeek, 1);
-  }, [milestones, displayWeeks]);
-  const milestoneCount = milestoneProgress.length;
   const lastCompletedMilestone = useMemo(() => {
     return milestoneProgress
       .filter((milestone) => milestone.isComplete)
@@ -484,15 +489,13 @@ export function PlanDetail({
                             100,
                       }),
                     )
-                ).map((milestone, index, arr) => {
+                ).map((milestone: MilestoneDisplay, index, arr) => {
                   const stepPct =
                     arr.length > 0 ? ((index + 1) / (arr.length + 1)) * 100 : 0;
                   const completed =
                     "percent" in milestone
-                      ? (milestone as any).percent >= 100
-                      : "isComplete" in milestone
-                        ? (milestone as any).isComplete
-                        : plan.progress_percentage >= stepPct;
+                      ? milestone.percent >= 100
+                      : milestone.isComplete ?? plan.progress_percentage >= stepPct;
                   return (
                     <div
                       key={milestone.id ?? `step-${index}`}

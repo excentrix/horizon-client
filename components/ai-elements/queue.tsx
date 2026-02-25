@@ -151,13 +151,16 @@ export const QueueItemImage = ({
   className,
   ...props
 }: QueueItemImageProps) => (
-  <img
-    alt=""
-    className={cn("h-8 w-8 rounded border object-cover", className)}
-    height={32}
-    width={32}
-    {...props}
-  />
+  <>
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img
+      alt=""
+      className={cn("h-8 w-8 rounded border object-cover", className)}
+      height={32}
+      width={32}
+      {...props}
+    />
+  </>
 );
 
 export type QueueItemFileProps = ComponentProps<"span">;

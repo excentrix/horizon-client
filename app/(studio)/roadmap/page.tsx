@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useRoadmap, roadmapKey } from "@/hooks/use-roadmap";
 import RoadmapJourneyMap from "@/components/roadmap/RoadmapJourneyMap";
 
-import { Spinner } from "@/components/ui/spinner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
@@ -15,9 +14,9 @@ import { Brain, Sparkles, Loader2 } from "lucide-react";
 export default function RoadmapPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { data, isLoading, refetch } = useRoadmap();
+  const { data, isLoading } = useRoadmap();
   const roadmap = data?.roadmap;
-  const { planUpdates, planBuildStatus, planBuildMessage, resetPlanBuild } = useMentorLoungeStore();
+  const { planBuildStatus, planBuildMessage } = useMentorLoungeStore();
 
   // Re-fetch roadmap when generation completes
   useEffect(() => {

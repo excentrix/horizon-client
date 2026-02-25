@@ -8,7 +8,7 @@ import {
 } from "@codesandbox/sandpack-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Code2, Play, LayoutPanelLeft, RefreshCw, PenTool } from "lucide-react";
+import { Code2, LayoutPanelLeft, RefreshCw, PenTool } from "lucide-react";
 
 interface InteractiveWorkspaceProps {
   mode: "code" | "scratch";

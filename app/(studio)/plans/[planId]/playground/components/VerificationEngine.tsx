@@ -23,6 +23,7 @@ export function VerificationEngine({
   onProofSubmit,
   isSubmitting,
 }: VerificationEngineProps) {
+  void taskId;
   const allowedTypes = useMemo(() => {
     const v = verificationMethod.toLowerCase();
     if (v.includes("github") || v.includes("repo") || v.includes("link")) return ["link"] as string[];

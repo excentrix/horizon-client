@@ -79,7 +79,9 @@ export function generateEfficacyReportPDF(data: EfficacyReportData) {
   });
 
   // Footer / Final Remarks
-  const currentY = (doc as any).lastAutoTable.finalY + 15;
+  const lastTableY = (doc as { lastAutoTable?: { finalY?: number } })
+    .lastAutoTable?.finalY;
+  const currentY = (lastTableY ?? tableY) + 15;
   doc.setFont("helvetica", "italic");
   doc.setFontSize(10);
   doc.setTextColor(100, 116, 139);

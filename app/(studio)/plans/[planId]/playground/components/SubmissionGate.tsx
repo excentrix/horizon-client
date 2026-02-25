@@ -22,6 +22,7 @@ export function SubmissionGate({
   onSubmit,
   sandboxCode,
 }: SubmissionGateProps) {
+  void taskId;
   const [activeTab, setActiveTab] = useState<"link" | "text" | "file">(
     verificationMethod === "github_repo" ? "link" : "text"
   );

@@ -232,7 +232,7 @@ function ChatContent() {
     setIntakeState(
       (activeConversation?.intake_state as Record<string, unknown> | undefined) ?? null,
     );
-  }, [activeConversation?.id]);
+  }, [activeConversation?.id, activeConversation?.intake_state]);
 
   useEffect(() => {
     if (!messages.length) {

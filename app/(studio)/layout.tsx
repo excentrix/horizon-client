@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { GamificationProvider } from "@/components/gamification";
 import { cn } from "@/lib/utils";
+import { SupportFeedbackWidget } from "@/components/ui/support-feedback-widget";
 
 export default function StudioLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -27,6 +28,7 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
             </div>
           </main>
         </div>
+        <SupportFeedbackWidget />
       </div>
     </GamificationProvider>
   );

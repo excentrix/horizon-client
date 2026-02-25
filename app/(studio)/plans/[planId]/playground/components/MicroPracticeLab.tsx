@@ -1,21 +1,32 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { CopyCheck, BrainCircuit, CheckCircle2, ChevronRight, RefreshCw, XCircle } from "lucide-react";
+import { BrainCircuit, CheckCircle2, ChevronRight, RefreshCw, XCircle } from "lucide-react";
 import { telemetry } from "@/lib/telemetry";
+import type { DailyTask } from "@/types";
+
+type LessonBlock = NonNullable<DailyTask["lesson_blocks"]>[number];
+
+interface MicroPracticeQuestion {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+}
 
 interface MicroPracticeLabProps {
   taskId: string;
-  lessonBlocks: any[];
+  lessonBlocks: LessonBlock[];
   onComplete: () => void;
 }
 
 export function MicroPracticeLab({ taskId, lessonBlocks, onComplete }: MicroPracticeLabProps) {
   const [loading, setLoading] = useState(true);
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<MicroPracticeQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [scores, setScores] = useState<boolean[]>([]);
+  const lessonBlockCount = lessonBlocks.length;
 
   // Simulate AI generating micro-practice from lesson blocks
   useEffect(() => {
@@ -53,7 +64,7 @@ export function MicroPracticeLab({ taskId, lessonBlocks, onComplete }: MicroPrac
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [taskId]);
+  }, [taskId, lessonBlockCount]);
 
   const handleSelect = (index: number) => {
     if (showExplanation) return;

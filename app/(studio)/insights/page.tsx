@@ -41,6 +41,15 @@ interface ReadinessData {
   }>;
 }
 
+interface EvidenceReadiness {
+  score: number;
+  label: string;
+  top_competencies: string[];
+  next_tips: string[];
+  generated_at: string;
+  error?: string;
+}
+
 // ─── Level → numeric score map ───────────────────────────────────────────────
 const LEVEL_MAP: Record<string, number> = {
   developing: 1,
@@ -54,6 +63,7 @@ const LEVEL_MAP: Record<string, number> = {
 export default function InsightsPage() {
   const [competencies, setCompetencies] = useState<CompetencyPoint[]>([]);
   const [readiness, setReadiness] = useState<ReadinessData | null>(null);
+  const [evidenceReadiness, setEvidenceReadiness] = useState<EvidenceReadiness | null>(null);
   const [artifacts, setArtifacts] = useState<PortfolioArtifact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,9 +72,10 @@ export default function InsightsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [compData, readinessData, artifactsData] = await Promise.allSettled([
+      const [compData, readinessData, evidenceReadinessData, artifactsData] = await Promise.allSettled([
         intelligenceApi.getCompetencyAssessments(),
         intelligenceApi.getCareerReadiness({ include_gaps: true, include_recommendations: true }),
+        fetch("/api/portfolio/readiness/", { credentials: "include" }).then((r) => r.json()),
         portfolioApi.listArtifacts(),
       ]);
 
@@ -84,10 +95,14 @@ export default function InsightsPage() {
         setReadiness(readinessData.value as ReadinessData);
       }
 
+      if (evidenceReadinessData.status === "fulfilled") {
+        setEvidenceReadiness(evidenceReadinessData.value as EvidenceReadiness);
+      }
+
       if (artifactsData.status === "fulfilled" && Array.isArray(artifactsData.value)) {
         setArtifacts(artifactsData.value as PortfolioArtifact[]);
       }
-    } catch (e) {
+    } catch {
       setError("Failed to load your insights. Please try again.");
     } finally {
       setLoading(false);
@@ -95,6 +110,12 @@ export default function InsightsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Use the higher of the two readiness sources so verified work is always honoured
+  const gaugeScore = Math.max(
+    readiness?.overall_readiness_score ?? 0,
+    evidenceReadiness?.score ?? 0,
+  );
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
@@ -119,7 +140,7 @@ export default function InsightsPage() {
       {/* Top row: Readiness gauge + Skill gaps */}
       <div className="grid gap-4 lg:grid-cols-3">
         <ReadinessGauge
-          score={readiness?.overall_readiness_score ?? 0}
+          score={gaugeScore}
           careerStage={readiness?.career_stage_assessment}
           className="lg:col-span-1"
         />

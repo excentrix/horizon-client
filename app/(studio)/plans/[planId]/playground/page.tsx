@@ -5,13 +5,12 @@ import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlan, usePlanMutations } from "@/hooks/use-plans";
 import { useChatSocket } from "@/hooks/use-chat-socket";
-import { useConversationMessages, useConversations } from "@/hooks/use-conversations";
+import { useConversationMessages } from "@/hooks/use-conversations";
 import { chatApi, planningApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Award, BookOpen, Code2, ShieldCheck, ArrowRight, ArrowLeft, RefreshCw, FileDown } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { BookOpen, Code2, ShieldCheck, ArrowRight, ArrowLeft, RefreshCw } from "lucide-react";
 import { generateEfficacyReportPDF } from "@/lib/generate-efficacy-report";
 
 import { LearningPanel } from "./components/LearningPanel";
@@ -26,6 +25,26 @@ const STEPS = [
   { id: "omni", label: "Omni-Environment", icon: Code2 },
   { id: "verify", label: "Neural Verification", icon: ShieldCheck },
 ];
+
+const getInitialCode = (task: { ai_generated_examples?: unknown[] } | undefined) => {
+  const examples = task?.ai_generated_examples;
+  if (!Array.isArray(examples) || examples.length === 0) {
+    return undefined;
+  }
+  const first = examples[0];
+  if (typeof first === "string") {
+    return first;
+  }
+  if (
+    typeof first === "object" &&
+    first !== null &&
+    "content" in first &&
+    typeof (first as { content?: unknown }).content === "string"
+  ) {
+    return (first as { content: string }).content;
+  }
+  return undefined;
+};
 
 export default function PlanPlaygroundPage() {
   return (
@@ -75,12 +94,10 @@ function PlaygroundFlow() {
   
   // -- Workspace State --
   const [workspaceNotes, setWorkspaceNotes] = useState("");
-  const [workspaceCode, setWorkspaceCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lessonLoading, setLessonLoading] = useState(false);
 
   // -- Chat & Mentor State --
-  const { data: conversations = [] } = useConversations();
   const mentorConversationId = plan?.specialized_conversation_id ?? plan?.conversation_id ?? null;
   
   const {
@@ -164,7 +181,7 @@ function PlaygroundFlow() {
       queryClient.invalidateQueries({ queryKey: ["plan", planId] });
       
       router.push(`/plans/${planId}`);
-    } catch (e) {
+    } catch {
       telemetry.toastError("Submission failed. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -241,7 +258,7 @@ function PlaygroundFlow() {
             <div className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
               <OmniWorkspace 
                 notes={workspaceNotes}
-                initialCode={(activeTask?.ai_generated_examples as any)?.[0]?.content}
+                initialCode={getInitialCode(activeTask)}
                 onNotesChange={setWorkspaceNotes}
                 onSaveNotes={() => telemetry.toastSuccess("Notes saved locally.")}
                 taskTitle={activeTask?.title || "Coding Challenge"}

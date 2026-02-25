@@ -164,7 +164,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             description: response.user.full_name ?? response.user.email,
           });
           
-          router.push("/dashboard");
+          if (response.user.is_superuser) router.push("/hq");
+          else router.push("/dashboard");
           
         } catch (error) {
            console.error("Backend sync failed", error);
@@ -210,7 +211,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         toast.success("Welcome back!", {
           description: response.user.full_name ?? response.user.email,
         });
-        router.push("/dashboard");
+        const userType = response.user.user_type;
+        if (response.user.is_superuser) {
+          router.push("/hq");
+        } else if (userType === "admin" || userType === "educator") {
+          router.push("/institution/overview");
+        } else {
+          router.push("/dashboard");
+        }
       } catch (error) {
         toast.error("Unable to sign in", {
           description:

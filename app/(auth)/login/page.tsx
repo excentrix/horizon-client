@@ -42,7 +42,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user) {
-      router.replace("/dashboard");
+      if (user.is_superuser) router.replace("/hq");
+      else router.replace("/dashboard");
     }
   }, [router, user]);
 

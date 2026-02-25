@@ -8,23 +8,18 @@ import {
   Background,
   useNodesState,
   useEdgesState,
-  addEdge,
-  MiniMap,
   Node,
   Edge,
-  Connection,
-  Panel,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css'; // Import minimal styles
 
 import LevelNode from './nodes/LevelNode';
-import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Briefcase, Map as MapIcon, Trophy } from 'lucide-react';
 import { LevelDetailsSheet } from './LevelDetailsSheet';
-import { RoadmapLevel, Roadmap, RoadmapStage } from '@/types';
+import { Roadmap } from '@/types';
 
 // RoadmapLevel is imported from LevelDetailsSheet
 
@@ -66,7 +61,6 @@ const RoadmapJourneyMap = ({ roadmap }: RoadmapJourneyMapProps) => {
     // Process Stages
     roadmap.stages.forEach((stage, stageIndex) => {
       // Create Group Node for Stage
-      const stageNodeId = `stage-${stage.id}`;
       // Calculate height based on levels (simple vertical stack for now)
 
       // We will layout levels in a zig-zag or snake pattern

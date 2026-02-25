@@ -495,6 +495,239 @@ export const dashboardApi = {
   getHome: () => extract<HomeDashboard>(http.get("/dashboards/home/")),
 };
 
+type CohortStudentInsight = {
+  user_id: string;
+  email: string;
+  name: string;
+  plan_progress: number;
+  plan_title?: string | null;
+  plan_status?: string | null;
+  total_tasks: number;
+  completed_tasks: number;
+  completion_rate: number;
+  last_task_completed_at?: string | null;
+  days_inactive?: number | null;
+  last_activity: string | null;
+  engagement_trend: "up" | "down" | "flat";
+  engagement_last_7: number;
+  engagement_prev_7: number;
+  risk_flags: string[];
+  risk_level: "low" | "medium" | "high";
+  top_skill_gap?: string | null;
+  next_best_action?: string | null;
+  engagement_series?: { date: string; value: number }[];
+  completion_series?: { date: string; value: number }[];
+};
+
+export type StudentIntervention = {
+  id: string;
+  student: string;
+  action_type: "check_in" | "schedule_1on1" | "assign_remediation" | "pacing_review" | "celebrate_win";
+  notes?: string;
+  status: "queued" | "sent" | "completed" | "dismissed";
+  metadata?: Record<string, unknown>;
+  created_by?: string;
+  created_by_name?: string;
+  created_at: string;
+};
+
+export type OrgUser = {
+  id: string;
+  email: string;
+  name: string;
+  user_type: string;
+  role: "admin" | "educator" | "student";
+  is_active: boolean;
+  last_login: string | null;
+  last_activity: string | null;
+  cohorts: { id: string; name: string }[];
+};
+
+export type CohortReport = {
+  cohort_id: string;
+  cohort_name: string;
+  total_students: number;
+  avg_progress: number;
+  engagement_delta: number;
+  risk_distribution: { on_track: number; at_risk: number };
+  risk_levels: { low: number; medium: number; high: number };
+  progress_buckets: { range: string; count: number }[];
+  inactivity_buckets: { range: string; count: number }[];
+  engagement_trend_mix: { up: number; flat: number; down: number };
+  top_skill_gaps: { gap: string; count: number }[];
+};
+
+// INSTITUTIONS --------------------------------------------------------------
+export const institutionsApi = {
+  listCohorts: () =>
+    extract<{ id: string; name: string; mentor_name?: string | null; student_count?: number; is_active?: boolean }[]>(
+      http.get("/institutions/cohorts/")
+    ),
+  createCohort: (payload: { name: string; mentor_user?: string | null }) =>
+    extract<{ id: string; name: string }>(http.post("/institutions/cohorts/", payload)),
+  cohortDashboard: (cohortId: string) =>
+    extract<{ cohort_id: string; cohort_name: string; total_students: number; students: CohortStudentInsight[] }>(
+      http.get(`/institutions/cohorts/${cohortId}/dashboard/`)
+    ),
+  studentInsight: (studentId: string) =>
+    extract<CohortStudentInsight>(
+      http.get(`/institutions/students/${studentId}/insight/`)
+    ),
+  listStudentInterventions: (studentId: string) =>
+    extract<StudentIntervention[]>(
+      http.get(`/institutions/students/${studentId}/interventions/`)
+    ),
+  createStudentIntervention: (
+    studentId: string,
+    payload: { action_type: StudentIntervention["action_type"]; notes?: string }
+  ) =>
+    extract<StudentIntervention>(
+      http.post(`/institutions/students/${studentId}/interventions/`, payload)
+    ),
+  inviteCohortCSV: (cohortId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return extract<{ message: string; task_id: string }>(
+      http.post(`/institutions/cohorts/${cohortId}/invite-csv/`, formData)
+    );
+  },
+  createOrganization: (payload: { name: string; slug: string; domain?: string }) =>
+    extract<{ id: string; name: string; slug: string }>(
+      http.post("/institutions/orgs/", payload)
+    ),
+  getOrgSummary: () =>
+    extract<Organization>(http.get("/institutions/org/")),
+  listEducators: () =>
+    extract<{ id: string; email: string; name: string; role: string }[]>(http.get("/institutions/educators/")),
+  listOrgUsers: (params?: { role?: string }) =>
+    extract<OrgUser[]>(http.get("/institutions/users/", { params })),
+  updateOrgUser: (userId: string, payload: { role?: string; is_active?: boolean }) =>
+    extract<OrgUser>(http.patch(`/institutions/users/${userId}/`, payload)),
+  resetOrgUserPassword: (userId: string) =>
+    extract<{ message: string }>(http.post(`/institutions/users/${userId}/reset-password/`)),
+  getCohortReport: (cohortId: string) =>
+    extract<CohortReport>(http.get(`/institutions/cohorts/${cohortId}/report/`)),
+  getSupportTickets: () =>
+    extract<SupportTicket[]>(http.get("/institutions/support-tickets/")),
+  createSupportTicket: (payload: { subject: string; description: string; ticket_type: string; priority: string; metadata?: Record<string, unknown> }) =>
+    extract<SupportTicket>(http.post("/institutions/support-tickets/", payload)),
+  updateSupportTicketStatus: (ticketId: string, status: string) =>
+    extract<SupportTicket>(http.patch(`/institutions/support-tickets/${ticketId}/`, { status })),
+  exportCohortCSV: (cohortId: string) =>
+    http.get(`/institutions/cohorts/${cohortId}/export/`, { responseType: "blob" }),
+};
+
+export interface SupportTicket {
+  id: string;
+  user_email: string;
+  user_name: string;
+  ticket_type: string;
+  status: "open" | "in_progress" | "resolved" | "closed";
+  priority: "low" | "medium" | "high" | "critical";
+  subject: string;
+  description: string;
+  metadata: Record<string, unknown> | null;
+  attachment_url: string | null;
+  assigned_to?: string | null;
+  assigned_to_name?: string | null;
+  resolved_at?: string | null;
+  resolution_notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  domain: string;
+  logo_url?: string | null;
+  contact_email: string;
+  notes: string;
+  plan_tier: "free" | "starter" | "growth" | "enterprise";
+  plan_expires_at?: string | null;
+  is_active: boolean;
+  max_cohorts: number;
+  max_students_per_cohort: number;
+  max_educators: number;
+  cohort_count: number;
+  student_count: number;
+  educator_count: number;
+  cohort_usage_pct: number;
+  student_usage_pct: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HQPlatformStats {
+  users: { total: number; active: number; students: number; educators: number; new_last_7_days: number };
+  organizations: { total: number; active: number; by_tier: Record<string, number> };
+  tickets: { open: number; critical: number; total: number };
+  plans: { active: number; completed: number };
+}
+
+export interface GlobalUser {
+  id: string;
+  email: string;
+  username: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  user_type: string;
+  is_active: boolean;
+  is_staff: boolean;
+  is_superuser: boolean;
+  last_activity: string | null;
+  created_at: string;
+}
+
+export interface InviteAuditLog {
+  id: string;
+  email: string;
+  result: "created" | "existing" | "quota_exceeded" | "failed";
+  error_detail: string;
+  invited_by_email: string;
+  cohort_name?: string | null;
+  created_at: string;
+}
+
+// HQ MASTER ADMIN API ---------------------------------------------------
+export const hqApi = {
+  getPlatformStats: () =>
+    extract<HQPlatformStats>(http.get("/institutions/hq/stats/")),
+
+  listOrganizations: (params?: { search?: string; tier?: string; active?: string; page?: number }) =>
+    extract<{ count: number; results: Organization[] }>(http.get("/institutions/hq/orgs/", { params })),
+
+  getOrganization: (orgId: string) =>
+    extract<Organization>(http.get(`/institutions/hq/orgs/${orgId}/`)),
+
+  updateOrganization: (orgId: string, payload: Partial<Organization>) =>
+    extract<Organization>(http.patch(`/institutions/hq/orgs/${orgId}/`, payload)),
+
+  createOrganization: (payload: { name: string; slug: string; domain?: string; contact_email?: string; plan_tier?: string; max_cohorts?: number; max_students_per_cohort?: number; max_educators?: number }) =>
+    extract<Organization>(http.post("/institutions/orgs/", payload)),
+
+  listUsers: (params?: { search?: string; user_type?: string; is_active?: string; page?: number }) =>
+    extract<{ count: number; results: GlobalUser[] }>(http.get("/institutions/hq/users/", { params })),
+
+  updateUser: (userId: string, payload: { is_active?: boolean; is_staff?: boolean; is_superuser?: boolean; user_type?: string }) =>
+    extract<GlobalUser>(http.patch(`/institutions/hq/users/${userId}/`, payload)),
+
+  getInviteAuditLog: (params?: { org?: string; result?: string; page?: number }) =>
+    extract<{ count: number; results: InviteAuditLog[] }>(http.get("/institutions/hq/invite-logs/", { params })),
+
+  // Tickets with HQ filters
+  getSupportTickets: (params?: { status?: string; priority?: string; ticket_type?: string; page?: number }) =>
+    extract<{ count: number; results: SupportTicket[] }>(http.get("/institutions/support-tickets/", { params })),
+
+  resolveTicket: (ticketId: string, resolution_notes: string) =>
+    extract<SupportTicket>(http.post(`/institutions/support-tickets/${ticketId}/resolve/`, { resolution_notes })),
+
+  updateTicket: (ticketId: string, payload: Partial<Pick<SupportTicket, "status" | "priority" | "assigned_to">>) =>
+    extract<SupportTicket>(http.patch(`/institutions/support-tickets/${ticketId}/`, payload)),
+};
+
 // ROADMAP ---------------------------------------------------------------
 export const roadmapApi = {
   getRoadmap: () => extract<RoadmapResponse>(http.get("/roadmap/")),

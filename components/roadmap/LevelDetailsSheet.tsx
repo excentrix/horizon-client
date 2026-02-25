@@ -4,7 +4,6 @@ import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Loader2, Play, Lock, CheckCircle, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
 
 import {
   Sheet,
@@ -12,7 +11,6 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetFooter,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,8 +31,12 @@ import { roadmapApi } from "@/lib/api";
 async function startLevelPlan(levelId: string) {
   try {
     return await roadmapApi.generateLevelPlan(levelId);
-  } catch (error: any) {
-    throw new Error(error?.response?.data?.error || "Failed to start plan");
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to start plan";
+    throw new Error(message);
   }
 }
 
@@ -43,7 +45,7 @@ export function LevelDetailsSheet({ level, isOpen, onClose }: LevelDetailsSheetP
 
   const { mutate: requestPlan, isPending } = useMutation({
     mutationFn: startLevelPlan,
-    onSuccess: (data) => {
+    onSuccess: () => {
       toast.success("Plan generation started!", {
         description: "Your AI mentor is crafting a custom plan for this level.",
       });

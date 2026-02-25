@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { DailyTask } from "@/types";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen, Video, ExternalLink, Lightbulb } from "lucide-react";
 
@@ -8,6 +8,13 @@ interface LearningPanelProps {
   activeTask: DailyTask | undefined;
   lessonLoading: boolean;
 }
+
+type LessonBlock = NonNullable<DailyTask["lesson_blocks"]>[number];
+
+const getStringProp = (value: Record<string, unknown>, key: string) => {
+  const candidate = value[key];
+  return typeof candidate === "string" ? candidate : undefined;
+};
 
 function getVideoEmbedUrl(url: string) {
   try {
@@ -47,24 +54,28 @@ export function LearningPanel({ activeTask, lessonLoading }: LearningPanelProps)
   >;
 
   const primaryResource = resources[0];
+  const primaryResourceRecord =
+    typeof primaryResource === "object" && primaryResource !== null
+      ? (primaryResource as Record<string, unknown>)
+      : null;
   const primaryResourceHref =
     typeof primaryResource === "string"
       ? primaryResource
-      : (primaryResource as Record<string, unknown>)?.url ??
-        (primaryResource as Record<string, unknown>)?.link ??
-        (primaryResource as Record<string, unknown>)?.href;
+      : primaryResourceRecord?.url ??
+        primaryResourceRecord?.link ??
+        primaryResourceRecord?.href;
   const primaryResourceTitle: string =
     typeof primaryResource === "string"
       ? primaryResource
-      : typeof (primaryResource as any)?.title === "string" 
-        ? (primaryResource as any).title 
+      : primaryResourceRecord
+        ? getStringProp(primaryResourceRecord, "title") ?? "Primary Resource"
         : "Primary Resource";
 
   const videoEmbed = primaryResourceHref
     ? getVideoEmbedUrl(String(primaryResourceHref))
     : null;
 
-  const contentBlocks = useMemo(() => {
+  const contentBlocks = useMemo<LessonBlock[]>(() => {
     if (activeTask?.lesson_blocks?.length) {
       return activeTask.lesson_blocks;
     }
@@ -128,7 +139,17 @@ export function LearningPanel({ activeTask, lessonLoading }: LearningPanelProps)
             <div className="flex-1">
               <h4 className="font-semibold text-blue-950">{primaryResourceTitle}</h4>
               <p className="text-sm text-blue-800/80 mt-1 line-clamp-2">
-                {((resourceMetadata[String(primaryResourceHref)] as any)?.excerpt as string) || "Click to read the recommended material for this concept."}
+                {(() => {
+                  const meta = resourceMetadata[String(primaryResourceHref)];
+                  const excerpt =
+                    meta && typeof meta.excerpt === "string"
+                      ? meta.excerpt
+                      : null;
+                  return (
+                    excerpt ||
+                    "Click to read the recommended material for this concept."
+                  );
+                })()}
               </p>
               <a 
                 href={String(primaryResourceHref)} 
@@ -153,7 +174,9 @@ export function LearningPanel({ activeTask, lessonLoading }: LearningPanelProps)
           <div className="relative rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-400 to-indigo-500"></div>
             <div className="px-8 py-6 space-y-8">
-              {contentBlocks.filter((b: any) => b.type !== 'exercise').map((block: any, i: number) => (
+              {contentBlocks
+                .filter((block) => block.type !== "exercise")
+                .map((block, i) => (
                 <div key={block.id || i} className="group">
                   <h3 className="flex items-center gap-2 text-lg font-bold capitalize text-slate-800 mb-4 border-b pb-2">
                     <Lightbulb className="h-5 w-5 text-indigo-500" />
@@ -161,7 +184,9 @@ export function LearningPanel({ activeTask, lessonLoading }: LearningPanelProps)
                   </h3>
                   <div className="prose prose-sm prose-slate md:prose-base max-w-none text-slate-600 leading-relaxed font-serif">
                     {/* Render raw strings, assuming it might be markdown but for now just text */}
-                    {block.content.split('\\n').map((paragraph: string, pIdx: number) => (
+                    {(block.content ?? "")
+                      .split("\\n")
+                      .map((paragraph, pIdx) => (
                       <p key={pIdx} className="mb-4">{paragraph}</p>
                     ))}
                   </div>
