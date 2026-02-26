@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import {
   hqApi,
   type HQPlatformStats,
+  type HQOrgPerformance,
+  type HQRiskRetention,
+  type HQEducatorEffectiveness,
   type Organization,
   type GlobalUser,
   type SupportTicket,
@@ -60,6 +63,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  Legend,
 } from "recharts";
 import { cn } from "@/lib/utils";
 
@@ -132,7 +136,17 @@ function StatCard({
 // OVERVIEW TAB
 // ══════════════════════════════════════════════════════════════════
 
-function OverviewTab({ stats }: { stats: HQPlatformStats | null }) {
+function OverviewTab({
+  stats,
+  orgPerformance,
+  riskRetention,
+  educatorEffectiveness,
+}: {
+  stats: HQPlatformStats | null;
+  orgPerformance: HQOrgPerformance[] | null;
+  riskRetention: HQRiskRetention | null;
+  educatorEffectiveness: HQEducatorEffectiveness[] | null;
+}) {
   if (!stats) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -151,6 +165,62 @@ function OverviewTab({ stats }: { stats: HQPlatformStats | null }) {
     { name: "Educators", count: stats.users.educators },
     { name: "Others", count: stats.users.total - stats.users.students - stats.users.educators },
   ];
+
+  const topOrgPerformance = (orgPerformance ?? []).slice(0, 8);
+  const riskMixData = riskRetention
+    ? [
+        { name: "Low", value: riskRetention.risk_mix.low, color: "#22c55e" },
+        { name: "Medium", value: riskRetention.risk_mix.medium, color: "#f59e0b" },
+        { name: "High", value: riskRetention.risk_mix.high, color: "#ef4444" },
+      ]
+    : [];
+
+  const exportOrgPerformance = () => {
+    if (!orgPerformance) return;
+    const lines = [
+      ["org_name", "plan_tier", "total_students", "avg_progress", "at_risk_ratio", "engagement_delta", "inactive_7d"],
+      ...orgPerformance.map((org) => [
+        org.org_name,
+        org.plan_tier,
+        String(org.total_students),
+        String(org.avg_progress),
+        String(org.at_risk_ratio),
+        String(org.engagement_delta),
+        String(org.inactive_7d),
+      ]),
+    ];
+    const csv = lines.map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "hq_org_performance.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportEducatorEffectiveness = () => {
+    if (!educatorEffectiveness) return;
+    const lines = [
+      ["educator", "organization", "students", "avg_progress", "at_risk", "interventions_14d"],
+      ...educatorEffectiveness.map((row) => [
+        row.educator_name,
+        row.org_name,
+        String(row.students),
+        String(row.avg_progress),
+        String(row.at_risk),
+        String(row.interventions_14d),
+      ]),
+    ];
+    const csv = lines.map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "hq_educator_effectiveness.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
@@ -220,6 +290,135 @@ function OverviewTab({ stats }: { stats: HQPlatformStats | null }) {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Institution Performance */}
+      <div className="rounded-xl border bg-card p-5 space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <p className="text-sm font-semibold flex items-center gap-2"><Building2 className="h-4 w-4" /> Institution Performance</p>
+          <Button size="sm" variant="outline" onClick={exportOrgPerformance} disabled={!orgPerformance || orgPerformance.length === 0}>
+            Export CSV
+          </Button>
+        </div>
+        {orgPerformance && orgPerformance.length > 0 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground mb-2">Average Progress by Institution</p>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={topOrgPerformance} margin={{ left: -20 }}>
+                  <XAxis dataKey="org_name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={50} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Bar dataKey="avg_progress" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground mb-2">At-Risk Ratio (%) by Institution</p>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={topOrgPerformance} margin={{ left: -20 }}>
+                  <XAxis dataKey="org_name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={50} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Bar dataKey="at_risk_ratio" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        ) : (
+          <div className="text-sm text-muted-foreground">No institution performance data available.</div>
+        )}
+      </div>
+
+      {/* Risk & Retention */}
+      <div className="rounded-xl border bg-card p-5 space-y-4">
+        <p className="text-sm font-semibold flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Risk & Retention</p>
+        {riskRetention ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground mb-2">Risk Mix</p>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={riskMixData} dataKey="value" nameKey="name" outerRadius={70}>
+                    {riskMixData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Legend verticalAlign="bottom" height={36} />
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground mb-2">Inactivity Buckets</p>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={riskRetention.inactivity_buckets}>
+                  <XAxis dataKey="range" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={45} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#f97316" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground mb-2">Top Declining Institutions</p>
+              <div className="space-y-2 text-sm">
+                {riskRetention.top_declining_orgs.length === 0 ? (
+                  <div className="text-muted-foreground">No declines detected.</div>
+                ) : (
+                  riskRetention.top_declining_orgs.map((org) => (
+                    <div key={org.org_id} className="flex items-center justify-between">
+                      <span>{org.org_name}</span>
+                      <span className="text-xs text-muted-foreground">{org.engagement_delta}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-sm text-muted-foreground">Risk retention data is loading.</div>
+        )}
+      </div>
+
+      {/* Educator Effectiveness */}
+      <div className="rounded-xl border bg-card p-5 space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <p className="text-sm font-semibold flex items-center gap-2"><Users className="h-4 w-4" /> Educator Effectiveness</p>
+          <Button size="sm" variant="outline" onClick={exportEducatorEffectiveness} disabled={!educatorEffectiveness || educatorEffectiveness.length === 0}>
+            Export CSV
+          </Button>
+        </div>
+        {educatorEffectiveness && educatorEffectiveness.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-muted/50 border-b">
+                <tr>
+                  <th className="px-4 py-2 font-medium text-muted-foreground">Educator</th>
+                  <th className="px-4 py-2 font-medium text-muted-foreground">Organization</th>
+                  <th className="px-4 py-2 font-medium text-muted-foreground">Students</th>
+                  <th className="px-4 py-2 font-medium text-muted-foreground">Avg Progress</th>
+                  <th className="px-4 py-2 font-medium text-muted-foreground">At Risk</th>
+                  <th className="px-4 py-2 font-medium text-muted-foreground">Interventions (14d)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {educatorEffectiveness.slice(0, 10).map((row) => (
+                  <tr key={row.educator_id} className="hover:bg-muted/30">
+                    <td className="px-4 py-2 font-medium">{row.educator_name}</td>
+                    <td className="px-4 py-2 text-muted-foreground">{row.org_name}</td>
+                    <td className="px-4 py-2">{row.students}</td>
+                    <td className="px-4 py-2">{row.avg_progress}%</td>
+                    <td className="px-4 py-2">{row.at_risk}</td>
+                    <td className="px-4 py-2">{row.interventions_14d}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-sm text-muted-foreground">No educator effectiveness data available.</div>
+        )}
       </div>
     </div>
   );
@@ -904,6 +1103,9 @@ export default function MasterHQPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [stats, setStats] = useState<HQPlatformStats | null>(null);
+  const [orgPerformance, setOrgPerformance] = useState<HQOrgPerformance[] | null>(null);
+  const [riskRetention, setRiskRetention] = useState<HQRiskRetention | null>(null);
+  const [educatorEffectiveness, setEducatorEffectiveness] = useState<HQEducatorEffectiveness[] | null>(null);
 
   useEffect(() => {
     if (user && !user.is_superuser) {
@@ -913,6 +1115,9 @@ export default function MasterHQPage() {
 
   useEffect(() => {
     hqApi.getPlatformStats().then(setStats).catch(() => {});
+    hqApi.getOrgPerformance().then(setOrgPerformance).catch(() => {});
+    hqApi.getRiskRetention().then(setRiskRetention).catch(() => {});
+    hqApi.getEducatorEffectiveness().then(setEducatorEffectiveness).catch(() => {});
   }, []);
 
   if (!user?.is_superuser) {
@@ -981,7 +1186,14 @@ export default function MasterHQPage() {
 
       {/* Tab content */}
       <div className="min-h-[400px]">
-        {activeTab === "overview" && <OverviewTab stats={stats} />}
+        {activeTab === "overview" && (
+          <OverviewTab
+            stats={stats}
+            orgPerformance={orgPerformance}
+            riskRetention={riskRetention}
+            educatorEffectiveness={educatorEffectiveness}
+          />
+        )}
         {activeTab === "institutions" && <InstitutionsTab />}
         {activeTab === "users" && <UsersTab />}
         {activeTab === "support" && <SupportQueueTab />}

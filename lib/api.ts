@@ -666,6 +666,35 @@ export interface HQPlatformStats {
   plans: { active: number; completed: number };
 }
 
+export interface HQOrgPerformance {
+  org_id: string;
+  org_name: string;
+  plan_tier: string;
+  is_active: boolean;
+  total_students: number;
+  avg_progress: number;
+  at_risk_ratio: number;
+  engagement_delta: number;
+  inactive_7d: number;
+}
+
+export interface HQRiskRetention {
+  risk_mix: { low: number; medium: number; high: number };
+  inactivity_buckets: { range: string; count: number }[];
+  top_declining_orgs: { org_id: string; org_name: string; engagement_delta: number; avg_progress: number; at_risk_ratio: number }[];
+}
+
+export interface HQEducatorEffectiveness {
+  educator_id: string;
+  educator_name: string;
+  org_id: string;
+  org_name: string;
+  students: number;
+  avg_progress: number;
+  at_risk: number;
+  interventions_14d: number;
+}
+
 export interface GlobalUser {
   id: string;
   email: string;
@@ -695,6 +724,15 @@ export interface InviteAuditLog {
 export const hqApi = {
   getPlatformStats: () =>
     extract<HQPlatformStats>(http.get("/institutions/hq/stats/")),
+
+  getOrgPerformance: () =>
+    extract<HQOrgPerformance[]>(http.get("/institutions/hq/org-performance/")),
+
+  getRiskRetention: () =>
+    extract<HQRiskRetention>(http.get("/institutions/hq/risk-retention/")),
+
+  getEducatorEffectiveness: () =>
+    extract<HQEducatorEffectiveness[]>(http.get("/institutions/hq/educator-effectiveness/")),
 
   listOrganizations: (params?: { search?: string; tier?: string; active?: string; page?: number }) =>
     extract<{ count: number; results: Organization[] }>(http.get("/institutions/hq/orgs/", { params })),

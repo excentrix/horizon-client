@@ -34,7 +34,12 @@ function UsageBar({ used, max, label }: { used: number; max: number; label: stri
 
 export default function InstitutionSettingsPage() {
   const [org, setOrg] = useState<Organization | null>(null);
-  const [form, setForm] = useState({ name: "", domain: "", contact_email: "", logo_url: "" });
+  const [form, setForm] = useState<{ name: string; domain: string; contact_email: string; logo_url: string }>({
+    name: "",
+    domain: "",
+    contact_email: "",
+    logo_url: "",
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -80,7 +85,7 @@ export default function InstitutionSettingsPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">Update your institution's public profile.</p>
+        <p className="text-sm text-muted-foreground mt-1">Update your institution public profile.</p>
       </div>
 
       {/* Profile editor */}
@@ -90,18 +95,20 @@ export default function InstitutionSettingsPage() {
           <h2 className="font-semibold">Institution Profile</h2>
         </div>
 
-        {[
-          { key: "name", label: "Institution Name", placeholder: "Acme University" },
-          { key: "domain", label: "Email Domain", placeholder: "acme.edu" },
-          { key: "contact_email", label: "Contact Email", placeholder: "admin@acme.edu" },
-          { key: "logo_url", label: "Logo URL", placeholder: "https://..." },
-        ].map(({ key, label, placeholder }) => (
+        {(
+          [
+            { key: "name", label: "Institution Name", placeholder: "Acme University" },
+            { key: "domain", label: "Email Domain", placeholder: "acme.edu" },
+            { key: "contact_email", label: "Contact Email", placeholder: "admin@acme.edu" },
+            { key: "logo_url", label: "Logo URL", placeholder: "https://..." },
+          ] as const
+        ).map(({ key, label, placeholder }) => (
           <div key={key}>
             <label className="text-xs text-muted-foreground">{label}</label>
             <Input
               className="mt-1"
               placeholder={placeholder}
-              value={(form as any)[key]}
+              value={form[key]}
               onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
             />
           </div>

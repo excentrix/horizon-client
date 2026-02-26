@@ -5,7 +5,6 @@ import { institutionsApi, type OrgUser } from "@/lib/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +20,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   CheckCircle,
-  ChevronDown,
   Loader2,
   MoreVertical,
   Search,
@@ -38,7 +36,7 @@ const ROLE_COLORS: Record<string, string> = {
   student: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
 };
 
-function AddMemberDialog({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+function AddMemberDialog({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"student" | "educator" | "admin">("student");
   const [saving, setSaving] = useState(false);
@@ -238,7 +236,7 @@ export default function MembersPage() {
       )}
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        {showAdd && <AddMemberDialog onClose={() => setShowAdd(false)} onAdded={load} />}
+        {showAdd && <AddMemberDialog onClose={() => setShowAdd(false)} />}
       </Dialog>
     </div>
   );
