@@ -46,6 +46,21 @@ const getInitialCode = (task: { ai_generated_examples?: unknown[] } | undefined)
   return undefined;
 };
 
+const inferDefaultLanguage = (task: { title?: string; description?: string } | undefined, recommendedEnv?: string) => {
+  const text = `${task?.title ?? ""} ${task?.description ?? ""}`.toLowerCase();
+  if (text.includes("python") || recommendedEnv === "colab") return "python";
+  if (text.includes("javascript") || text.includes("typescript") || recommendedEnv === "web") return "javascript";
+  if (text.includes("java ")) return "java";
+  if (text.includes("c++") || text.includes("cpp")) return "cpp";
+  if (text.includes("rust")) return "rust";
+  if (text.includes("ruby")) return "ruby";
+  if (text.includes("php")) return "php";
+  if (text.includes("go ") || text.includes("golang")) return "go";
+  return "python";
+};
+
+type EnvMode = "web" | "colab" | "local" | "canvas" | "code_runner" | "diagram";
+
 export default function PlanPlaygroundPage() {
   return (
     <Suspense fallback={
@@ -96,6 +111,7 @@ function PlaygroundFlow() {
   const [workspaceNotes, setWorkspaceNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lessonLoading, setLessonLoading] = useState(false);
+  const [diagramAttachment, setDiagramAttachment] = useState<File | null>(null);
 
   // -- Chat & Mentor State --
   const mentorConversationId = plan?.specialized_conversation_id ?? plan?.conversation_id ?? null;
@@ -117,6 +133,10 @@ function PlaygroundFlow() {
       }
     }
   }, [activeTask, sessionStartTime, updateTaskStatus]);
+
+  useEffect(() => {
+    setDiagramAttachment(null);
+  }, [activeTask?.id]);
 
   // Load Lessons if missing
   // Using a ref to prevent infinite loops from refetchPlan dependency triggers
@@ -210,6 +230,9 @@ function PlaygroundFlow() {
 
   const currentStep = STEPS[activeStepIndex];
   const progressPercent = ((activeStepIndex + 1) / STEPS.length) * 100;
+  const recommendedEnvRaw = (activeTask?.environment_requirements as Record<string, unknown> | undefined)?.recommended_environment as EnvMode | undefined;
+  const recommendedEnv = recommendedEnvRaw ?? "code_runner";
+  const defaultLanguage = inferDefaultLanguage(activeTask, recommendedEnv);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col gap-4 p-4 lg:p-6 bg-slate-50">
@@ -262,6 +285,12 @@ function PlaygroundFlow() {
                 onNotesChange={setWorkspaceNotes}
                 onSaveNotes={() => telemetry.toastSuccess("Notes saved locally.")}
                 taskTitle={activeTask?.title || "Coding Challenge"}
+                initialEnvMode={recommendedEnv}
+                defaultCodeLanguage={defaultLanguage}
+                onDiagramExport={(file) => {
+                  setDiagramAttachment(file);
+                  telemetry.toastSuccess("Diagram attached for verification.");
+                }}
               />
             </div>
           )}
@@ -276,6 +305,7 @@ function PlaygroundFlow() {
                 verificationDetailedInstructions={activeTask?.verification?.detailed_instructions}
                 isSubmitting={isSubmitting}
                 onProofSubmit={handleProofSubmit}
+                prefilledFile={diagramAttachment}
               />
             </div>
           )}

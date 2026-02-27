@@ -28,6 +28,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { usePortfolioProfile } from "@/hooks/use-portfolio";
 import { useAuth } from "@/context/AuthContext";
 import { useMemo, useState } from "react";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 
 const STUDENT_NAV_ITEMS = [
   {
@@ -207,9 +208,11 @@ export function Sidebar() {
             </span>
             <span>Horizon Studio</span>
           </Link>
+          <div className="ml-auto flex items-center gap-1">
+            <NotificationBell />
           <Dialog open={qrOpen} onOpenChange={setQrOpen}>
             <DialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="ml-auto h-8 w-8">
+              <Button variant="ghost" size="icon" className="h-8 w-8">
                 <span className="sr-only">Share profile</span>
                 <QrCode className="h-4 w-4" />
               </Button>
@@ -263,14 +266,12 @@ export function Sidebar() {
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
-
         <nav className="flex-1 space-y-1 px-2 py-3 text-sm font-medium lg:px-4">
-          {activeNavItems.map(({ href, label, icon: Icon, requiresInstitutionRole }) => {
-            if (requiresInstitutionRole && !canAccessInstitution && !isSuperUser) {
-              return null;
-            }
+          {activeNavItems.map(({ href, label, icon: Icon }) => {
             const isActive =
+
               pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Link

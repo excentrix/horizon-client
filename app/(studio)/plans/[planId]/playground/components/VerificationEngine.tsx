@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ interface VerificationEngineProps {
   verificationDetailedInstructions?: string; // AI-generated, specific step-by-step instructions
   onProofSubmit: (type: "link" | "text" | "file", content: string | File) => Promise<void>;
   isSubmitting: boolean;
+  prefilledFile?: File | null;
 }
 
 export function VerificationEngine({
@@ -22,6 +23,7 @@ export function VerificationEngine({
   verificationDetailedInstructions,
   onProofSubmit,
   isSubmitting,
+  prefilledFile,
 }: VerificationEngineProps) {
   void taskId;
   const allowedTypes = useMemo(() => {
@@ -38,6 +40,13 @@ export function VerificationEngine({
   const [linkUrl, setLinkUrl] = useState("");
   const [textContent, setTextContent] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    if (prefilledFile && allowedTypes.includes("file")) {
+      setSelectedFile(prefilledFile);
+      setActiveTab("file");
+    }
+  }, [prefilledFile, allowedTypes]);
 
   // Dynamic Rule Parsing
   const rules = useMemo(() => {

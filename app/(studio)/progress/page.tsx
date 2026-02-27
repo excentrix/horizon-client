@@ -11,6 +11,7 @@ import {
 } from "@/hooks/use-intelligence";
 import { usePortfolioArtifacts, usePortfolioSkillsTranscript } from "@/hooks/use-portfolio";
 import { useGamificationSummary } from "@/hooks/use-gamification";
+import { useWeeklyVelocity } from "@/hooks/use-weekly-velocity";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
@@ -18,6 +19,10 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { telemetry } from "@/lib/telemetry";
+import {
+  AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from "recharts";
 
 const formatPercent = (value?: number) => {
   if (typeof value !== "number" || Number.isNaN(value)) {
@@ -124,6 +129,7 @@ export default function ProgressPage() {
     error: skillsError,
   } = usePortfolioSkillsTranscript();
   const { data: gamificationSummary } = useGamificationSummary();
+  const { data: velocityData = [] } = useWeeklyVelocity(8);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -203,6 +209,17 @@ export default function ProgressPage() {
     });
   }, [artifacts]);
 
+  // Skill radar data derived from skillsTranscript (PortfolioSkillTranscript type)
+  const skillRadarData = useMemo(() => {
+    if (!skillsTranscript || !skillsTranscript.length) return [];
+    const levelToScore: Record<string, number> = { exposure: 33, application: 67, mastery: 100 };
+    return skillsTranscript.slice(0, 8).map((s) => ({
+      skill: String(s.competency ?? "").slice(0, 18),
+      current: Math.round((s.avg_quality ?? 0) * 100),
+      target: levelToScore[s.best_level] ?? 50,
+    }));
+  }, [skillsTranscript]);
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 p-4">
       <header className="space-y-2">
@@ -211,6 +228,64 @@ export default function ProgressPage() {
           Track your academic, career, and wellness journey in one adaptive hub.
         </p>
       </header>
+
+      {/* ── Chart row: Velocity + Skill Radar ───────────────────────── */}
+      {(velocityData.length > 0 || skillRadarData.length > 0) && (
+        <section className="grid gap-4 lg:grid-cols-2">
+          {velocityData.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Learning Velocity</CardTitle>
+                <CardDescription>Tasks completed vs. scheduled, last 8 weeks</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={velocityData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+                    <defs>
+                      <linearGradient id="velCompleted" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="velScheduled" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.22} />
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip />
+                    <Legend />
+                    <Area type="monotone" dataKey="scheduled" stroke="#6366f1" fill="url(#velScheduled)" strokeWidth={2} dot={false} name="Scheduled" />
+                    <Area type="monotone" dataKey="completed" stroke="#10b981" fill="url(#velCompleted)" strokeWidth={2} dot={false} name="Completed" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {skillRadarData.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Competency Radar</CardTitle>
+                <CardDescription>Current vs. target proficiency per skill</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={220}>
+                  <RadarChart data={skillRadarData}>
+                    <PolarGrid stroke="hsl(var(--border))" />
+                    <PolarAngleAxis dataKey="skill" tick={{ fontSize: 10 }} />
+                    <Radar name="Target" dataKey="target" stroke="#6366f1" fill="#6366f1" fillOpacity={0.12} strokeWidth={1.5} />
+                    <Radar name="Current" dataKey="current" stroke="#10b981" fill="#10b981" fillOpacity={0.3} strokeWidth={2} />
+                    <Legend />
+                    <Tooltip />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+        </section>
+      )}
 
       {isLoading ? (
         <div className="grid gap-4 lg:grid-cols-3">

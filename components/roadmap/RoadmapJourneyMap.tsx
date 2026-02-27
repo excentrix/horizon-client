@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Briefcase, Map as MapIcon, Trophy } from 'lucide-react';
 import { LevelDetailsSheet } from './LevelDetailsSheet';
 import { Roadmap } from '@/types';
+import { useGamificationSummary } from '@/hooks/use-gamification';
 
 // RoadmapLevel is imported from LevelDetailsSheet
 
@@ -33,6 +34,8 @@ const nodeTypes = {
 
 const RoadmapJourneyMap = ({ roadmap }: RoadmapJourneyMapProps) => {
   const [selectedLevelId, setSelectedLevelId] = React.useState<string | null>(null);
+  const { data: gamificationSummary } = useGamificationSummary();
+  const badgeCount = gamificationSummary?.badge_count ?? gamificationSummary?.recent_badges?.length ?? 0;
   
   const selectedLevel = useMemo(() => {
     if (!selectedLevelId) return null;
@@ -181,7 +184,7 @@ const RoadmapJourneyMap = ({ roadmap }: RoadmapJourneyMapProps) => {
             <div className="flex gap-2 pointer-events-auto">
                 <Badge variant="outline" className="bg-background/95 backdrop-blur px-3 py-1.5 gap-2 border-primary/20">
                     <Trophy className="w-4 h-4 text-amber-500" />
-                    <span>0 Badges</span>
+                    <span>{badgeCount} {badgeCount === 1 ? 'Badge' : 'Badges'}</span>
                 </Badge>
                 <Badge variant="outline" className="bg-background/95 backdrop-blur px-3 py-1.5 gap-2 border-primary/20">
                     <MapIcon className="w-4 h-4 text-blue-500" />

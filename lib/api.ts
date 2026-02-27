@@ -277,6 +277,32 @@ export const planningApi = {
       tasks?: DailyTask[];
     }>(http.post(`/planning/tasks/${taskId}/generate-lesson/`, payload ?? {})),
 
+  generateMicroPractice: (taskId: string, force = false) =>
+    extract<{
+      task_id: string;
+      questions: Array<{
+        id: string;
+        question: string;
+        options: string[];
+        correct_index: number;
+        explanation: string;
+      }>;
+      generated_at: string;
+      cached: boolean;
+    }>(http.post(`/planning/tasks/${taskId}/generate-micro-practice/`, { force })),
+  generateFlashcards: (taskId: string, force = false) =>
+    extract<{
+      task_id: string;
+      cards: Array<{
+        id: string;
+        front: string;
+        back: string;
+        hint?: string | null;
+      }>;
+      generated_at: string;
+      cached: boolean;
+    }>(http.post(`/planning/tasks/${taskId}/generate-flashcards/`, { force })),
+
   getPlanSession: (sessionId: string) =>
     extract<{
       id: string;
@@ -293,6 +319,26 @@ export const planningApi = {
     extract<{ success: boolean; requirements_gathered?: Record<string, unknown> }>(
       http.post(`/planning/plan-sessions/${sessionId}/missing-info/`, payload)
     ),
+};
+
+// PLAYGROUND ----------------------------------------------------------------
+export const playgroundApi = {
+  executeCode: (payload: {
+    language: string;
+    source_code: string;
+    stdin?: string;
+    args?: string[];
+  }) =>
+    extract<{
+      status: "queued" | "completed" | "error";
+      stdout?: string;
+      stderr?: string;
+      compile_output?: string;
+      time?: number;
+      memory?: number;
+      exit_code?: number;
+      message?: string;
+    }>(http.post("/playground/execute/", payload)),
 };
 
 // PORTFOLIO ------------------------------------------------------------------

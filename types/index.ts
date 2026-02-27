@@ -392,6 +392,14 @@ export interface DailyTask {
       rationale?: string;
     }>;
   };
+  flashcard_payload?: {
+    cards?: Array<{
+      id: string;
+      front: string;
+      back: string;
+      hint?: string | null;
+    }>;
+  };
   quiz_response?: {
     answers?: Record<string, number>;
     score?: number;

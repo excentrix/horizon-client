@@ -3,6 +3,7 @@ import type { DailyTask } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen, Video, ExternalLink, Lightbulb } from "lucide-react";
+import { MathMarkdown } from "@/components/markdown/MathMarkdown";
 
 interface LearningPanelProps {
   activeTask: DailyTask | undefined;
@@ -183,12 +184,7 @@ export function LearningPanel({ activeTask, lessonLoading }: LearningPanelProps)
                     {block.title || block.type}
                   </h3>
                   <div className="prose prose-sm prose-slate md:prose-base max-w-none text-slate-600 leading-relaxed font-serif">
-                    {/* Render raw strings, assuming it might be markdown but for now just text */}
-                    {(block.content ?? "")
-                      .split("\\n")
-                      .map((paragraph, pIdx) => (
-                      <p key={pIdx} className="mb-4">{paragraph}</p>
-                    ))}
+                    <MathMarkdown>{block.content ?? ""}</MathMarkdown>
                   </div>
                 </div>
               ))}

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   SandpackProvider,
   SandpackLayout,
@@ -7,9 +7,11 @@ import {
   SandpackConsole,
 } from "@codesandbox/sandpack-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Code2, LayoutPanelLeft, RefreshCw, PenTool, Terminal, FileCode2, Copy, ExternalLink, Check } from "lucide-react";
+import { Code2, LayoutPanelLeft, RefreshCw, PenTool, Terminal, FileCode2, Copy, ExternalLink, Check, TerminalSquare, Spline } from "lucide-react";
 import { telemetry } from "@/lib/telemetry";
+import { RichTextCanvas } from "./RichTextCanvas";
+import { CodeRunner } from "./CodeRunner";
+import { DiagramWorkspace } from "./DiagramWorkspace";
 
 interface OmniWorkspaceProps {
   initialCode?: string;
@@ -17,21 +19,33 @@ interface OmniWorkspaceProps {
   onNotesChange: (notes: string) => void;
   onSaveNotes: () => void;
   taskTitle: string;
+  initialEnvMode?: EnvMode;
+  onDiagramExport?: (file: File) => void;
+  defaultCodeLanguage?: string;
 }
 
-type EnvMode = "web" | "colab" | "local" | "canvas";
+type EnvMode = "web" | "colab" | "local" | "canvas" | "code_runner" | "diagram";
 
 export function OmniWorkspace({
   initialCode,
   notes,
   onNotesChange,
   onSaveNotes,
-  taskTitle
+  taskTitle,
+  initialEnvMode,
+  onDiagramExport,
+  defaultCodeLanguage
 }: OmniWorkspaceProps) {
-  const [envMode, setEnvMode] = useState<EnvMode>("web");
+  const [envMode, setEnvMode] = useState<EnvMode>(initialEnvMode || "web");
   const [showConsole, setShowConsole] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (initialEnvMode) {
+      setEnvMode(initialEnvMode);
+    }
+  }, [initialEnvMode]);
 
   const defaultReactCode = useMemo(() => {
     return initialCode || `// Write your code here
@@ -105,6 +119,22 @@ code .
             className={`h-7 px-3 text-xs ${envMode === "local" ? "bg-white shadow-sm font-semibold text-emerald-600" : "text-slate-500"}`}
           >
             <Terminal className="mr-1.5 h-3.5 w-3.5" /> Local CLI
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setEnvMode("code_runner")}
+            className={`h-7 px-3 text-xs ${envMode === "code_runner" ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}
+          >
+            <TerminalSquare className="mr-1.5 h-3.5 w-3.5" /> Code Runner
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setEnvMode("diagram")}
+            className={`h-7 px-3 text-xs ${envMode === "diagram" ? "bg-white shadow-sm font-semibold text-indigo-600" : "text-slate-500"}`}
+          >
+            <Spline className="mr-1.5 h-3.5 w-3.5" /> Diagram
           </Button>
           <Button 
             variant="ghost" 
@@ -254,10 +284,24 @@ code .
           </div>
         )}
 
+        {/* Code Runner Mode */}
+        {envMode === "code_runner" && (
+          <div className="h-full p-2">
+            <CodeRunner defaultLanguage={defaultCodeLanguage} initialCode={initialCode} />
+          </div>
+        )}
+
+        {/* Diagram Mode */}
+        {envMode === "diagram" && (
+          <div className="h-full p-2">
+            <DiagramWorkspace onExport={(file) => onDiagramExport?.(file)} />
+          </div>
+        )}
+
         {/* Canvas Mode */}
         {envMode === "canvas" && (
-          <div className="flex h-full flex-col p-6 bg-slate-50">
-            <div className="max-w-3xl mx-auto w-full h-full flex flex-col gap-4">
+          <div className="flex h-full flex-col p-4 bg-slate-50 dark:bg-background">
+            <div className="max-w-3xl mx-auto w-full h-full flex flex-col gap-3">
               <div className="flex items-center gap-2 text-amber-600">
                 <PenTool className="h-5 w-5" />
                 <h3 className="text-lg font-semibold">Reflective Canvas</h3>
@@ -265,18 +309,19 @@ code .
               <p className="text-sm text-slate-500">
                 Use this rich text space to draft architecture documents, write marketing copy, or brainstorm non-code solutions.
               </p>
-              <Textarea
+              <RichTextCanvas
+                storageKey={taskTitle}
                 value={notes}
-                onChange={(e) => onNotesChange(e.target.value)}
-                placeholder="Start drafting here..."
-                className="flex-1 resize-none border-amber-200/60 bg-white p-6 font-mono text-sm leading-relaxed shadow-sm focus-visible:ring-amber-400"
+                onChange={onNotesChange}
+                placeholder="Start writing here…"
+                className="flex-1"
               />
               <div className="flex justify-end gap-3 shrink-0">
                 <Button variant="outline" className="border-slate-200 text-slate-600" onClick={() => onNotesChange("")}>
                   Clear Canvas
                 </Button>
                 <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={onSaveNotes}>
-                  Save Draft 
+                  Save Draft
                 </Button>
               </div>
             </div>

@@ -667,9 +667,30 @@ export function useChatSocket(conversationId: string | null) {
                }
                break;
             }
+            case "level_completed": {
+              const levelTitle = (payload?.level_title as string) ?? "Level";
+              const xpAwarded = (payload?.xp_awarded as number) ?? 100;
+              // Lazy-import canvas-confetti to keep bundle lean
+              import("canvas-confetti").then(({ default: confetti }) => {
+                confetti({
+                  particleCount: 120,
+                  spread: 80,
+                  origin: { y: 0.6 },
+                  colors: ["#10b981", "#3b82f6", "#f59e0b", "#8b5cf6"],
+                });
+              }).catch(() => {/* ignore if confetti not available */});
+              telemetry.toastSuccess(
+                `🎉 Level Completed: ${levelTitle}`,
+                `+${xpAwarded} XP earned — next level unlocked!`,
+              );
+              // Invalidate roadmap queries so the journey map refreshes
+              queryClient.invalidateQueries({ queryKey: ["roadmap"] });
+              break;
+            }
             default:
               telemetry.info("Unhandled chat socket event", { type });
               break;
+
           }
         } catch (parseError) {
           telemetry.warn("Failed to parse chat socket message", { parseError });
