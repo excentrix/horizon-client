@@ -35,8 +35,10 @@ import {
   GamificationUserBadge,
   GamificationLeaderboard,
   GamificationActivity,
+  GamificationPointsProfile,
   HomeDashboard,
   RoadmapResponse,
+  SpacedRepetitionCard,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -50,8 +52,13 @@ export const authApi = {
   login: (payload: LoginPayload) =>
     extract<LoginResponse>(http.post("/auth/login/", payload)),
 
-  loginWithGoogle: (payload: { access_token: string; refresh_token: string; device_info?: Record<string, unknown> }) =>
-    extract<LoginResponse>(http.post("/auth/google/", payload)),
+  loginWithGoogle: (payload: { 
+    access_token: string; 
+    refresh_token: string; 
+    provider_token?: string;
+    provider_refresh_token?: string;
+    device_info?: Record<string, unknown> 
+  }) => extract<LoginResponse>(http.post("/auth/google/", payload)),
 
   register: (payload: RegisterPayload) =>
     extract<UserSummary>(http.post("/auth/register/", payload)),
@@ -243,6 +250,32 @@ export const planningApi = {
     extract<{ message: string; mentor_id: string }>(
       http.post(`/planning/plans/${planId}/switch_mentor/`, payload)
     ),
+  activateExamMode: (
+    planId: string,
+    payload: { exam_date: string; exam_topic: string }
+  ) =>
+    extract<{ success: boolean; message: string; is_exam_mode: boolean }>(
+      http.post(`/planning/plans/${planId}/activate_exam_mode/`, payload)
+    ),
+  deactivateExamMode: (planId: string) =>
+    extract<{ success: boolean; message: string }>(
+      http.post(`/planning/plans/${planId}/deactivate_exam_mode/`)
+    ),
+  syncGoogleCalendar: (planId: string) =>
+    extract<{
+      connected: boolean;
+      auth_url?: string;
+      success?: boolean;
+      message?: string;
+      created?: number;
+      updated?: number;
+      failed?: number;
+      error?: string;
+    }>(http.post(`/planning/plans/${planId}/sync_google_calendar/`)),
+  getGoogleCalendarStatus: () =>
+    extract<{ connected: boolean }>(
+      http.get("/integrations/google-calendar/status/")
+    ),
   submitMilestoneCheck: (
     planId: string,
     milestoneId: string,
@@ -302,6 +335,44 @@ export const planningApi = {
       generated_at: string;
       cached: boolean;
     }>(http.post(`/planning/tasks/${taskId}/generate-flashcards/`, { force })),
+
+  getPreAssessment: (planId: string) =>
+    extract<{
+      generated_at: string;
+      questions: Array<{
+        id: string;
+        question: string;
+        options: string[];
+        correct_index: number | null;
+        explanation: string;
+        competency_name: string;
+        question_type?: string | null;
+      }>;
+    }>(http.get(`/planning/plans/${planId}/pre-assessment/`)),
+
+  submitPreAssessment: (planId: string, answers: Record<string, number>) =>
+    extract<{
+      competency_results: Array<{
+        competency_name: string;
+        score_pct: number;
+        correct: number;
+        total: number;
+        proficiency_level: string;
+        self_rating?: boolean;
+      }>;
+      tasks_marked_skippable: number;
+      pre_assessed: boolean;
+    }>(http.post(`/planning/plans/${planId}/pre-assessment/`, { answers })),
+
+  getSpacedRepetitionDue: (params?: { plan_id?: string; task_id?: string; limit?: number }) =>
+    extract<{ cards: SpacedRepetitionCard[]; count: number; generated_at: string }>(
+      http.get("/planning/spaced-repetition/due/", { params })
+    ),
+
+  reviewSpacedRepetitionCard: (payload: { card_id: string; quality: number }) =>
+    extract<{ card: SpacedRepetitionCard }>(
+      http.post("/planning/spaced-repetition/review/", payload)
+    ),
 
   getPlanSession: (sessionId: string) =>
     extract<{
@@ -533,6 +604,14 @@ export const gamificationApi = {
   getHistory: (page = 1) =>
     extract<{ entries: GamificationActivity[]; page: number; per_page: number; total: number; has_more: boolean }>(
       http.get("/gamification/points/history/", { params: { page } })
+    ),
+  getLedger: (page = 1) =>
+    extract<{ entries: GamificationActivity[]; page: number; per_page: number; total: number; has_more: boolean }>(
+      http.get("/gamification/points/ledger/", { params: { page } })
+    ),
+  useStreakFreeze: () =>
+    extract<{ profile: GamificationPointsProfile }>(
+      http.post("/gamification/points/use_streak_freeze/")
     ),
 };
 

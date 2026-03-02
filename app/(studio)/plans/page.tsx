@@ -7,6 +7,7 @@ import { usePlans, usePlan, usePlanMutations } from "@/hooks/use-plans";
 import { PlanList } from "@/components/plans/plan-list";
 import { PlanDetail } from "@/components/plans/plan-detail";
 import { PlanIntelligencePanel } from "@/components/plans/plan-intelligence-panel";
+import { PlanScheduleView } from "@/components/plans/plan-schedule-view";
 import { TaskList } from "@/components/plans/task-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Layers } from "lucide-react";
 import { Suspense } from "react";
+import { toast } from "sonner";
 
 function PlansContent() {
   const router = useRouter();
@@ -160,6 +162,7 @@ function PlansContent() {
             <div className="flex items-center justify-between">
               <TabsList className="rounded-full bg-white/80 p-1.5 shadow-[var(--shadow-1)] backdrop-blur">
                 <TabsTrigger value="overview" className="rounded-full px-4 text-xs font-semibold">Overview</TabsTrigger>
+                <TabsTrigger value="schedule" className="rounded-full px-4 text-xs font-semibold">Schedule</TabsTrigger>
                 <TabsTrigger value="tasks" className="rounded-full px-4 text-xs font-semibold">Tasks</TabsTrigger>
               </TabsList>
               <span className="hidden rounded-full bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground shadow-[var(--shadow-1)] md:inline-flex">
@@ -176,6 +179,11 @@ function PlansContent() {
                     plan={plan}
                     tasks={tasks}
                     onStart={() => {
+                      if (!plan.pre_assessed) {
+                        toast.info("Take the pre-assessment to personalize your plan first.");
+                        router.push(`/plans/${plan.id}/assessment`);
+                        return;
+                      }
                       startPlan.mutate();
                       // Capture plan started event
                       posthog.capture('plan_started', {
@@ -212,6 +220,9 @@ function PlansContent() {
                   />
                 </div>
               </div>
+            </TabsContent>
+            <TabsContent value="schedule" className="min-h-0 flex-1">
+              <PlanScheduleView plan={plan} tasks={tasks} />
             </TabsContent>
             <TabsContent value="tasks" className="min-h-0 flex-1">
               <div className="flex h-full min-h-0 flex-col rounded-[28px] border border-white/80 bg-white/85 p-5 shadow-[var(--shadow-2)] backdrop-blur">

@@ -1,5 +1,6 @@
 "use client";
 
+import "tldraw/tldraw.css";
 import { useEffect } from "react";
 import { Tldraw, type Editor } from "tldraw";
 

@@ -423,6 +423,7 @@ export interface DailyTask {
   }>;
   lesson_generated_at?: string | null;
   adaptive_difficulty: boolean;
+  is_skippable: boolean;
   status: TaskStatus;
   started_at?: string | null;
   completed_at?: string | null;
@@ -532,6 +533,18 @@ export interface PublicPortfolioResponse {
   };
 }
 
+export interface SpacedRepetitionCard {
+  id: UUID;
+  front: string;
+  back: string;
+  hint?: string | null;
+  next_review_date: string;
+  repetitions: number;
+  interval_days: number;
+  ease_factor: number;
+  source_task_id?: UUID | null;
+}
+
 export interface RoadmapLevel {
   id: UUID;
   level_index: number;
@@ -619,6 +632,8 @@ export interface GamificationPointsProfile {
   current_streak: number;
   longest_streak: number;
   last_activity_date: string | null;
+  streak_freezes_available: number;
+  streak_freeze_expires_at: string | null;
   updated_at: string;
 }
 
@@ -695,6 +710,9 @@ export interface LearningPlan {
   total_estimated_hours: number;
   status: PlanStatus;
   progress_percentage: number;
+  is_exam_mode?: boolean;
+  exam_date?: string | null;
+  exam_topic?: string | null;
   plan_generation_method: string;
   ai_confidence_score: number;
   industry_standards_validated: boolean;
@@ -743,6 +761,7 @@ export interface LearningPlan {
     status: string;
   } | null;
   user_schedule?: unknown;
+  pre_assessed?: boolean;
 }
 
 export interface ToastNotification {

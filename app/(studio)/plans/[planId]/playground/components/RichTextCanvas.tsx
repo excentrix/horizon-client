@@ -65,6 +65,7 @@ export function RichTextCanvas({
   className,
 }: RichTextCanvasProps) {
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         codeBlock: false, // replaced by CodeBlockLowlight

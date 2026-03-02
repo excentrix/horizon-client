@@ -12,6 +12,7 @@ import {
 import { usePortfolioArtifacts, usePortfolioSkillsTranscript } from "@/hooks/use-portfolio";
 import { useGamificationSummary } from "@/hooks/use-gamification";
 import { useWeeklyVelocity } from "@/hooks/use-weekly-velocity";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
@@ -19,10 +20,12 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { telemetry } from "@/lib/telemetry";
+import { gamificationApi } from "@/lib/api";
 import {
   AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
+import { Button } from "@/components/ui/button";
 
 const formatPercent = (value?: number) => {
   if (typeof value !== "number" || Number.isNaN(value)) {
@@ -130,6 +133,17 @@ export default function ProgressPage() {
   } = usePortfolioSkillsTranscript();
   const { data: gamificationSummary } = useGamificationSummary();
   const { data: velocityData = [] } = useWeeklyVelocity(8);
+  const queryClient = useQueryClient();
+  const useFreezeMutation = useMutation({
+    mutationFn: () => gamificationApi.useStreakFreeze(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["gamification", "summary"] });
+      toast.success("Streak freeze used.");
+    },
+    onError: () => {
+      toast.error("We couldn't use your streak freeze.");
+    },
+  });
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -195,6 +209,11 @@ export default function ProgressPage() {
       { domain: "Wellness", score: wellnessScore ?? 0 },
     ];
   }, [dashboard]);
+
+  const streakFreezes = gamificationSummary?.profile?.streak_freezes_available ?? 0;
+  const freezeExpiry = gamificationSummary?.profile?.streak_freeze_expires_at;
+  const freezeExpiryDate = freezeExpiry ? new Date(freezeExpiry) : null;
+  const canUseFreeze = streakFreezes > 0 && (!freezeExpiryDate || freezeExpiryDate >= new Date());
 
   const insights = insightsFeed?.insights ?? [];
   const crisisAlerts = wellness?.crisis_alerts ?? [];
@@ -580,6 +599,40 @@ export default function ProgressPage() {
                   )}
                 </div>
               </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Streak Freeze</CardTitle>
+              <CardDescription>Hold your streak if you miss a day.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-base font-semibold text-foreground">
+                    {streakFreezes} available
+                  </div>
+                  {freezeExpiryDate ? (
+                    <div className="text-xs text-muted-foreground">
+                      Expires {freezeExpiryDate.toLocaleDateString()}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">No expiration set</div>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  disabled={!canUseFreeze || useFreezeMutation.isPending}
+                  onClick={() => useFreezeMutation.mutate()}
+                >
+                  Use freeze
+                </Button>
+              </div>
+              {!canUseFreeze && (
+                <p className="text-xs">
+                  Keep your streak going to unlock a freeze after 7 consecutive days.
+                </p>
+              )}
             </CardContent>
           </Card>
           <Card>

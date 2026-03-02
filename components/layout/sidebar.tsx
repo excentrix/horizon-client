@@ -80,6 +80,12 @@ const STUDENT_NAV_ITEMS = [
     description: "Milestones, streaks, and wins",
   },
   {
+    href: "/xp-history",
+    label: "XP Ledger",
+    icon: Trophy,
+    description: "Every point you've earned",
+  },
+  {
     href: "/institution/overview",
     label: "Institution Overview",
     icon: Radar,

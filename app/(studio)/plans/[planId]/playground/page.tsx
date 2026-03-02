@@ -271,6 +271,7 @@ function PlaygroundFlow() {
             <div className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
               <MicroPracticeLab 
                 taskId={activeTask?.id || ""}
+                planId={planId}
                 lessonBlocks={activeTask?.lesson_blocks || []}
                 onComplete={() => changeStep(2)}
               />

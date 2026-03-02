@@ -17,6 +17,7 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { Sparkles } from "lucide-react";
 
 interface PlanDetailProps {
   plan: LearningPlan;
@@ -279,6 +280,13 @@ export function PlanDetail({
   const renderControls = () => {
     switch (plan.status) {
       case "draft":
+        if (!plan.pre_assessed) {
+          return (
+            <Button asChild>
+              <Link href={`/plans/${plan.id}/assessment`}>Take quiz to start</Link>
+            </Button>
+          );
+        }
         return (
           <Button onClick={onStart} disabled={actionStatus.starting}>
             {actionStatus.starting ? "Starting…" : "Start plan"}
@@ -332,6 +340,17 @@ export function PlanDetail({
       return { label, href };
     }
     return { label: "Resource", href: undefined };
+  };
+
+  const getPersonalizationBadge = (task: DailyTask) => {
+    const env = task.environment_requirements ?? {};
+    const level = (env as Record<string, string>).user_competency_level;
+    if (!level) return null;
+    return (
+      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+        Tailored · {level}
+      </span>
+    );
   };
 
   const renderTaskResources = (task?: DailyTask) => {
@@ -403,6 +422,25 @@ export function PlanDetail({
                 </div>
               </div>
             ) : null}
+            {/* Pre-assessment banner — shown for draft plans not yet assessed */}
+            {plan.status === "draft" && !plan.pre_assessed && (
+              <div className="mt-2 flex items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 p-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-violet-900">Personalise this plan</p>
+                  <p className="text-xs text-violet-700">Take a 5-minute quiz to skip tasks you already know.</p>
+                </div>
+                <Button
+                  asChild
+                  size="sm"
+                  className="h-7 shrink-0 bg-violet-600 text-xs text-white hover:bg-violet-700"
+                >
+                  <Link href={`/plans/${plan.id}/assessment`}>Start Quiz</Link>
+                </Button>
+              </div>
+            )}
             {description ? (
               <div className="text-sm text-muted-foreground">
                 <p>{showFullDescription ? description : shortDescription}</p>
@@ -595,6 +633,15 @@ export function PlanDetail({
                     <span className="text-xs text-muted-foreground">
                       {task.estimated_duration_minutes} min
                     </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span>Difficulty: {task.difficulty_level}</span>
+                    {getPersonalizationBadge(task)}
+                    {task.is_skippable ? (
+                      <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-violet-700">
+                        Skippable
+                      </span>
+                    ) : null}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {task.description}

@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -14,6 +14,7 @@ import { planningApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
 import type { DailyTask } from "@/types";
 import { FlashcardDeck, type Flashcard } from "./FlashcardDeck";
+import { SpacedRepetitionReview } from "./SpacedRepetitionReview";
 
 type LessonBlock = NonNullable<DailyTask["lesson_blocks"]>[number];
 
@@ -27,12 +28,14 @@ interface MicroPracticeQuestion {
 
 interface MicroPracticeLabProps {
   taskId: string;
+  planId?: string;
   lessonBlocks: LessonBlock[];
   onComplete: () => void;
 }
 
 export function MicroPracticeLab({
   taskId,
+  planId,
   lessonBlocks,
   onComplete,
 }: MicroPracticeLabProps) {
@@ -40,7 +43,8 @@ export function MicroPracticeLab({
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [scores, setScores] = useState<boolean[]>([]);
-  const [mode, setMode] = useState<"quiz" | "flashcards">("quiz");
+  const [mode, setMode] = useState<"quiz" | "flashcards" | "review">("quiz");
+  const queryClient = useQueryClient();
 
   // Fetch questions from the AI endpoint.
   // Enabled only when lessonBlocks are available so we have content to generate from.
@@ -74,6 +78,35 @@ export function MicroPracticeLab({
   });
 
   const flashcards: Flashcard[] = flashcardData?.cards ?? [];
+
+  const {
+    data: reviewData,
+    isLoading: reviewLoading,
+    isError: reviewError,
+    refetch: refetchReview,
+  } = useQuery({
+    queryKey: ["spaced-repetition", "due", taskId],
+    queryFn: () =>
+      planningApi.getSpacedRepetitionDue(
+        planId ? { plan_id: planId } : { task_id: taskId }
+      ),
+    enabled: !!taskId && mode === "review",
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: (payload: { card_id: string; quality: number }) =>
+      planningApi.reviewSpacedRepetitionCard(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["spaced-repetition", "due", taskId] });
+    },
+    onError: () => {
+      telemetry.toastError("Couldn't save your review. Try again.");
+    },
+  });
+
+  const dueCards = reviewData?.cards ?? [];
 
   const handleSelect = useCallback((index: number) => {
     if (showExplanation) return;
@@ -207,6 +240,50 @@ export function MicroPracticeLab({
     );
   }
 
+  if (reviewLoading && mode === "review") {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 border rounded-xl bg-slate-50 border-slate-200">
+        <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mb-4" />
+        <h3 className="text-lg font-semibold text-slate-700">
+          Checking due reviews…
+        </h3>
+        <p className="text-sm text-slate-500 text-center max-w-sm mt-2">
+          Loading your spaced repetition queue.
+        </p>
+      </div>
+    );
+  }
+
+  if (reviewError && mode === "review") {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 border border-orange-100 rounded-xl bg-orange-50 gap-3">
+        <AlertTriangle className="w-8 h-8 text-orange-400" />
+        <p className="text-sm text-orange-700 font-medium text-center max-w-xs">
+          Couldn't load review cards right now.
+        </p>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetchReview()}
+            className="border-orange-200 text-orange-700 hover:bg-orange-100"
+          >
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+            Retry
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setMode("quiz")}
+            className="text-slate-500"
+          >
+            Back to quiz
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   // ── Quiz UI ────────────────────────────────────────────────────────────────
   const currentQ = questions[currentIndex] ?? {
     id: "",
@@ -244,11 +321,21 @@ export function MicroPracticeLab({
           >
             Flashcards
           </Button>
+          <Button
+            variant={mode === "review" ? "default" : "outline"}
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setMode("review")}
+          >
+            Review
+          </Button>
         </div>
         <span className="ml-1 text-xs text-indigo-400">
           {mode === "quiz"
             ? `${currentIndex + 1} / ${questions.length}`
-            : `${flashcards.length} cards`}
+            : mode === "flashcards"
+            ? `${flashcards.length} cards`
+            : `${dueCards.length} due`}
         </span>
         {/* Progress dots */}
         <div className="ml-auto flex gap-1">
@@ -272,6 +359,12 @@ export function MicroPracticeLab({
       <div className="p-6">
         {mode === "flashcards" ? (
           <FlashcardDeck cards={flashcards} />
+        ) : mode === "review" ? (
+          <SpacedRepetitionReview
+            cards={dueCards}
+            onReview={(cardId, quality) => reviewMutation.mutate({ card_id: cardId, quality })}
+            isSubmitting={reviewMutation.isPending}
+          />
         ) : (
           <>
             <h4 className="text-base font-medium text-slate-800 mb-4">

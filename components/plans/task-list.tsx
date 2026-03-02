@@ -149,8 +149,18 @@ export function TaskList({ tasks, onUpdateTask, isUpdating, planId }: TaskListPr
                           {isOverdue ? (
                             <Badge variant="destructive">Overdue</Badge>
                           ) : null}
+                          {task.is_skippable ? (
+                            <Badge className="bg-violet-50 text-violet-700 border-violet-200">
+                              Skippable
+                            </Badge>
+                          ) : null}
                           <Badge variant="secondary">{statusLabels[task.status]}</Badge>
                           <Badge variant="outline">{task.task_type}</Badge>
+                          {envRequirements?.user_competency_level ? (
+                            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                              Tailored · {String(envRequirements.user_competency_level)}
+                            </Badge>
+                          ) : null}
                           <span>{task.estimated_duration_minutes} min</span>
                           <span>Difficulty: {task.difficulty_level}</span>
                         </div>

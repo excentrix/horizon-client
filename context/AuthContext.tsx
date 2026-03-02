@@ -103,9 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logger: console.log("Supabase Auth Event:", event);
       if (event === 'SIGNED_IN' && session) {
         // We are signed in with Supabase, now sync with Backend
-        // Check if we already have a backend session (to avoid double login loops if possible, though strict sync is better)
         const currentAccess = Cookies.get("accessToken");
-        if (currentAccess) return; // Already logged in to backend?
+        const isGcalCallback = typeof window !== 'undefined' && window.location.search.includes('gcal=connected');
+
+        if (currentAccess && !isGcalCallback) return; // Already logged in and not a re-auth for Calendar
         
         // Defensive check: Ensure we have an access token
         const token = session.access_token;
@@ -124,10 +125,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         try {
           // Sync with backend
-          // We need to pass the Supabase tokens to the backend
+          // We need to pass the Supabase tokens to the backend, 
+          // AND the raw Google provider tokens for Calendar Sync.
           const payload = {
              access_token: session.access_token,
              refresh_token: session.refresh_token,
+             provider_token: session.provider_token ?? undefined,
+             provider_refresh_token: session.provider_refresh_token ?? undefined,
              device_info: {
                  device_type: "web",
                  browser: navigator.userAgent,
@@ -137,7 +141,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log("Syncing with backend, payload:", { 
               ...payload, 
               access_token: payload.access_token?.substring(0, 10) + '...',
-              refresh_token: payload.refresh_token?.substring(0, 10) + '...'
+              refresh_token: payload.refresh_token?.substring(0, 10) + '...',
+              provider_token: payload.provider_token?.substring(0, 10) + '...'
           });
 
           const response = await authApi.loginWithGoogle(payload);
@@ -164,6 +169,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             description: response.user.full_name ?? response.user.email,
           });
           
+          // Redirect: if this was a Google Calendar re-auth, go back to plans
+          if (typeof window !== 'undefined' && window.location.search.includes('gcal=connected')) {
+            toast.success("Google Calendar connected!", {
+              description: "Your learning plan tasks will now sync automatically.",
+            });
+            router.push("/plans");
+            return;
+          }
+
           if (response.user.is_superuser) router.push("/hq");
           else router.push("/dashboard");
           
@@ -239,6 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             provider: 'google',
             options: {
                 redirectTo: `${window.location.origin}/auth/callback`,
+                scopes: 'https://www.googleapis.com/auth/calendar',
                 queryParams: {
                     access_type: 'offline', // ensures we get a refresh token
                     prompt: 'consent',
