@@ -687,6 +687,11 @@ export function useChatSocket(conversationId: string | null) {
               queryClient.invalidateQueries({ queryKey: ["roadmap"] });
               break;
             }
+            case "artifact_verified": {
+              // Dispatch to window so the playground page can show results without prop drilling
+              window.dispatchEvent(new CustomEvent("artifact_verified", { detail: payload }));
+              break;
+            }
             default:
               telemetry.info("Unhandled chat socket event", { type });
               break;

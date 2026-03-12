@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 interface LearningPanelProps {
   activeTask: DailyTask | undefined;
   lessonLoading: boolean;
+  blockFeedback: FeedbackState;
+  onFeedbackChange: (feedback: FeedbackState) => void;
 }
 
 type LessonBlock = NonNullable<DailyTask["lesson_blocks"]>[number];
@@ -112,8 +114,7 @@ function BlockFeedback({
   );
 }
 
-export function LearningPanel({ activeTask, lessonLoading }: LearningPanelProps) {
-  const [blockFeedback, setBlockFeedback] = useState<FeedbackState>({});
+export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeedbackChange }: LearningPanelProps) {
   const panelMountTime = useRef(Date.now());
 
   const resources = (activeTask?.online_resources ?? []) as Array<
@@ -167,10 +168,10 @@ export function LearningPanel({ activeTask, lessonLoading }: LearningPanelProps)
   }, [activeTask]);
 
   const handleFeedback = (blockId: string, helpful: boolean) => {
-    setBlockFeedback((prev) => ({
-      ...prev,
+    onFeedbackChange({
+      ...blockFeedback,
       [blockId]: helpful ? "helpful" : "unhelpful",
-    }));
+    });
   };
 
   if (!activeTask) {

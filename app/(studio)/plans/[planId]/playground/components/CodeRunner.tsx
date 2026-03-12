@@ -5,7 +5,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { loadLanguage, type LanguageName } from "@uiw/codemirror-extensions-langs";
 import { Button } from "@/components/ui/button";
 import { playgroundApi } from "@/lib/api";
-import { Loader2, Play } from "lucide-react";
+import { Loader2, MessageSquare, Play } from "lucide-react";
 
 const LANGUAGE_OPTIONS = [
   { id: "python", label: "Python" },
@@ -43,9 +43,10 @@ const DEFAULT_SNIPPETS: Record<string, string> = {
 interface CodeRunnerProps {
   defaultLanguage?: string;
   initialCode?: string;
+  onRequestMentorReview?: (content: string) => void;
 }
 
-export function CodeRunner({ defaultLanguage = "python", initialCode }: CodeRunnerProps) {
+export function CodeRunner({ defaultLanguage = "python", initialCode, onRequestMentorReview }: CodeRunnerProps) {
   const language = defaultLanguage in DEFAULT_SNIPPETS ? defaultLanguage : "python";
   const [selectedLanguage, setSelectedLanguage] = useState(language);
   const [code, setCode] = useState(initialCode || DEFAULT_SNIPPETS[language]);
@@ -113,15 +114,28 @@ export function CodeRunner({ defaultLanguage = "python", initialCode }: CodeRunn
             ))}
           </select>
         </div>
-        <Button
-          onClick={handleRun}
-          size="sm"
-          disabled={isRunning}
-          className="h-8 bg-slate-900 text-white hover:bg-slate-800"
-        >
-          {isRunning ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Play className="mr-2 h-3.5 w-3.5" />}
-          Run
-        </Button>
+        <div className="flex items-center gap-2">
+          {onRequestMentorReview && (
+            <Button
+              onClick={() => onRequestMentorReview(code)}
+              size="sm"
+              variant="outline"
+              className="h-8 border-blue-200 text-blue-600 hover:bg-blue-50"
+            >
+              <MessageSquare className="mr-2 h-3.5 w-3.5" />
+              Review My Code
+            </Button>
+          )}
+          <Button
+            onClick={handleRun}
+            size="sm"
+            disabled={isRunning}
+            className="h-8 bg-slate-900 text-white hover:bg-slate-800"
+          >
+            {isRunning ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Play className="mr-2 h-3.5 w-3.5" />}
+            Run
+          </Button>
+        </div>
       </div>
 
       <div className="grid flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-2">

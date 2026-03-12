@@ -26,11 +26,17 @@ interface MicroPracticeQuestion {
   explanation: string;
 }
 
+export interface QuizResults {
+  correct: number;
+  total: number;
+  weakTopics: string[];
+}
+
 interface MicroPracticeLabProps {
   taskId: string;
   planId?: string;
   lessonBlocks: LessonBlock[];
-  onComplete: () => void;
+  onComplete: (results: QuizResults) => void;
 }
 
 export function MicroPracticeLab({
@@ -43,6 +49,7 @@ export function MicroPracticeLab({
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [scores, setScores] = useState<boolean[]>([]);
+  const [weakTopics, setWeakTopics] = useState<string[]>([]);
   const [mode, setMode] = useState<"quiz" | "flashcards" | "review">("quiz");
   const queryClient = useQueryClient();
 
@@ -127,6 +134,10 @@ export function MicroPracticeLab({
     if (isCorrect) {
       telemetry.toastSuccess("Correct!");
     } else {
+      const questionText = questions[currentIndex]?.question?.slice(0, 60) ?? "";
+      if (questionText) {
+        setWeakTopics((prev) => prev.includes(questionText) ? prev : [...prev, questionText]);
+      }
       telemetry.toastError("Not quite — review the explanation.");
     }
   }, [selectedAnswer, currentIndex, questions]);
@@ -137,9 +148,17 @@ export function MicroPracticeLab({
       setSelectedAnswer(null);
       setShowExplanation(false);
     } else {
-      onComplete();
+      const finalScores = [...scores];
+      if (selectedAnswer !== null) {
+        finalScores[currentIndex] = selectedAnswer === questions[currentIndex]?.correct_index;
+      }
+      onComplete({
+        correct: finalScores.filter(Boolean).length,
+        total: questions.length,
+        weakTopics,
+      });
     }
-  }, [currentIndex, questions.length, onComplete]);
+  }, [currentIndex, questions, scores, selectedAnswer, weakTopics, onComplete]);
 
   // ── Loading state ──────────────────────────────────────────────────────────
   if (isLoading && mode === "quiz") {
@@ -182,7 +201,7 @@ export function MicroPracticeLab({
           <Button
             variant="ghost"
             size="sm"
-            onClick={onComplete}
+            onClick={() => onComplete({ correct: 0, total: 0, weakTopics: [] })}
             className="text-slate-500"
           >
             Skip for now

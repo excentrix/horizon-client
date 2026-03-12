@@ -744,6 +744,7 @@ export interface LearningPlan {
   user_schedule_snapshot?: Record<string, unknown> | null;
   user_preferences_snapshot?: Record<string, unknown> | null;
   available_resources_snapshot?: string[];
+  source_analysis?: Record<string, unknown> | null;
   target_competencies_data?: unknown;
   daily_tasks_summary?: {
     total: number;
@@ -1044,6 +1045,10 @@ export type AuditStatus =
   | "unverified_claim";
 
 export type AuditType = "repo" | "narrative";
+export type VeloOnboardingTrack = "resume_track" | "builder_track" | "domain_track";
+export type VeloAuditMode = "full_forensic" | "starter_diagnostic" | "domain_narrative";
+export type VeloRoadmapEligibility = "not_ready" | "starter_ready" | "full_ready";
+export type VeloVerificationTier = "starter" | "full";
 
 export interface ExperienceAudit {
   id: UUID;
@@ -1068,6 +1073,12 @@ export interface ExperienceAudit {
     readiness_narrative?: string;
   };
   active_for_planning?: boolean;
+  onboarding_track?: VeloOnboardingTrack;
+  audit_mode?: VeloAuditMode;
+  domain_family?: "tech" | "business" | "marketing" | "design" | "finance" | "other";
+  roadmap_eligibility?: VeloRoadmapEligibility;
+  verification_tier?: VeloVerificationTier;
+  evidence_completeness_score?: number;
   created_at: string;
   updated_at: string;
   retention_expires_at?: string | null;
@@ -1108,8 +1119,33 @@ export interface AuditReport {
     mentor_questions?: string[];
     readiness_narrative?: string;
   };
+  onboarding_track?: VeloOnboardingTrack;
+  audit_mode?: VeloAuditMode;
+  domain_family?: "tech" | "business" | "marketing" | "design" | "finance" | "other";
+  roadmap_eligibility?: VeloRoadmapEligibility;
+  verification_tier?: VeloVerificationTier;
+  evidence_completeness_score?: number;
   generated_at: string;
   public?: boolean;
+}
+
+export interface VeloOnboardingSession {
+  id: UUID;
+  current_step:
+    | "discovery"
+    | "evidence_intake"
+    | "audit_readiness"
+    | "audit_session"
+    | "insight_brief"
+    | "mentor_personalization"
+    | "roadmap_launch";
+  chosen_track: VeloOnboardingTrack;
+  completion_flags: Record<string, boolean>;
+  latest_audit?: UUID | null;
+  latest_conversation?: UUID | null;
+  metadata?: Record<string, unknown>;
+  updated_at: string;
+  created_at: string;
 }
 
 export interface AuditQueueSlot {
@@ -1123,8 +1159,14 @@ export interface AuditInstitutionOverview {
   total_students: number;
   verified_profile_rate: number;
   career_ready_count: number;
+  starter_ready_count: number;
+  full_verified_count: number;
+  mentor_context_completion_rate: number;
   readiness_distribution: Record<string, number>;
+  track_mix: Record<string, number>;
+  readiness_by_domain_family: Record<string, number>;
   top_skill_gaps: Array<{ gap: string; count: number }>;
+  top_skill_gaps_by_domain?: Record<string, Array<{ gap: string; count: number }>>;
   avg_readiness_score: number;
 }
 
@@ -1139,6 +1181,12 @@ export interface AuditInstitutionStudentRow {
   top_strengths: string[];
   flags: string[];
   audit_id: UUID;
+  onboarding_track?: VeloOnboardingTrack;
+  audit_mode?: VeloAuditMode;
+  roadmap_eligibility?: VeloRoadmapEligibility;
+  verification_tier?: VeloVerificationTier;
+  domain_family?: string;
+  gap_coverage_progress?: number;
   generated_at: string;
 }
 
@@ -1154,6 +1202,11 @@ export interface AuditInstitutionStudentDetail {
     top_strengths: string[];
     flags: string[];
     audit_id: UUID;
+    onboarding_track?: VeloOnboardingTrack;
+    audit_mode?: VeloAuditMode;
+    roadmap_eligibility?: VeloRoadmapEligibility;
+    verification_tier?: VeloVerificationTier;
+    domain_family?: string;
   };
   trend: Array<{
     generated_at: string;
@@ -1165,5 +1218,11 @@ export interface AuditInstitutionStudentDetail {
     status: AuditStatus;
     mentor_context_status: "pending" | "confirmed";
     hm_score?: number | null;
+  };
+  gap_coverage?: {
+    plan_id?: UUID | null;
+    total_gaps: number;
+    covered_gaps: number;
+    progress: number;
   };
 }

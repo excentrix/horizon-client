@@ -5,13 +5,18 @@ import {
   SandpackCodeEditor,
   SandpackPreview,
   SandpackConsole,
+  useSandpack,
 } from "@codesandbox/sandpack-react";
 import { Button } from "@/components/ui/button";
-import { Code2, LayoutPanelLeft, RefreshCw, PenTool, Terminal, FileCode2, Copy, ExternalLink, Check, TerminalSquare, Spline } from "lucide-react";
+import { Code2, LayoutPanelLeft, RefreshCw, PenTool, Terminal, FileCode2, Copy, ExternalLink, Check, TerminalSquare, Spline, MessageSquare } from "lucide-react";
 import { telemetry } from "@/lib/telemetry";
 import { RichTextCanvas } from "./RichTextCanvas";
 import { CodeRunner } from "./CodeRunner";
 import { DiagramWorkspace } from "./DiagramWorkspace";
+
+export type EnvMode = "web" | "colab" | "local" | "canvas" | "code_runner" | "diagram";
+
+const ALL_ENV_MODES: EnvMode[] = ["web", "colab", "local", "code_runner", "diagram", "canvas"];
 
 interface OmniWorkspaceProps {
   initialCode?: string;
@@ -22,9 +27,25 @@ interface OmniWorkspaceProps {
   initialEnvMode?: EnvMode;
   onDiagramExport?: (file: File) => void;
   defaultCodeLanguage?: string;
+  visibleEnvModes?: EnvMode[];
+  onRequestMentorReview?: (content: string) => void;
 }
 
-type EnvMode = "web" | "colab" | "local" | "canvas" | "code_runner" | "diagram";
+/** Inner component to access sandpack state for mentor review */
+function SandpackReviewButton({ onReview }: { onReview: (code: string) => void }) {
+  const { sandpack } = useSandpack();
+  const handleClick = () => {
+    const code = Object.entries(sandpack.files)
+      .map(([file, { code: c }]) => `// ${file}\n${c}`)
+      .join("\n\n");
+    onReview(code);
+  };
+  return (
+    <Button variant="outline" size="sm" className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50" onClick={handleClick}>
+      <MessageSquare className="mr-1 h-3 w-3" /> Ask Mentor to Review
+    </Button>
+  );
+}
 
 export function OmniWorkspace({
   initialCode,
@@ -34,17 +55,27 @@ export function OmniWorkspace({
   taskTitle,
   initialEnvMode,
   onDiagramExport,
-  defaultCodeLanguage
+  defaultCodeLanguage,
+  visibleEnvModes,
+  onRequestMentorReview,
 }: OmniWorkspaceProps) {
-  const [envMode, setEnvMode] = useState<EnvMode>(initialEnvMode || "web");
+  const visible = visibleEnvModes ?? ALL_ENV_MODES;
+
+  const resolvedInitialMode: EnvMode =
+    initialEnvMode && visible.includes(initialEnvMode)
+      ? initialEnvMode
+      : visible[0] ?? "canvas";
+
+  const [envMode, setEnvMode] = useState<EnvMode>(resolvedInitialMode);
   const [showConsole, setShowConsole] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (initialEnvMode) {
-      setEnvMode(initialEnvMode);
+      setEnvMode(visible.includes(initialEnvMode) ? initialEnvMode : (visible[0] ?? "canvas"));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialEnvMode]);
 
   const defaultReactCode = useMemo(() => {
@@ -96,70 +127,82 @@ code .
       {/* Omni-Toolbar */}
       <div className="flex items-center justify-between border-b bg-white px-4 py-2 text-sm text-slate-700">
         <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setEnvMode("web")}
-            className={`h-7 px-3 text-xs ${envMode === "web" ? "bg-white shadow-sm font-semibold text-blue-600" : "text-slate-500"}`}
-          >
-            <Code2 className="mr-1.5 h-3.5 w-3.5" /> Web Sandpack
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setEnvMode("colab")}
-            className={`h-7 px-3 text-xs ${envMode === "colab" ? "bg-white shadow-sm font-semibold text-orange-600" : "text-slate-500"}`}
-          >
-            <FileCode2 className="mr-1.5 h-3.5 w-3.5" /> Colab (Python)
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setEnvMode("local")}
-            className={`h-7 px-3 text-xs ${envMode === "local" ? "bg-white shadow-sm font-semibold text-emerald-600" : "text-slate-500"}`}
-          >
-            <Terminal className="mr-1.5 h-3.5 w-3.5" /> Local CLI
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setEnvMode("code_runner")}
-            className={`h-7 px-3 text-xs ${envMode === "code_runner" ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}
-          >
-            <TerminalSquare className="mr-1.5 h-3.5 w-3.5" /> Code Runner
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setEnvMode("diagram")}
-            className={`h-7 px-3 text-xs ${envMode === "diagram" ? "bg-white shadow-sm font-semibold text-indigo-600" : "text-slate-500"}`}
-          >
-            <Spline className="mr-1.5 h-3.5 w-3.5" /> Diagram
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setEnvMode("canvas")}
-            className={`h-7 px-3 text-xs ${envMode === "canvas" ? "bg-white shadow-sm font-semibold text-amber-600" : "text-slate-500"}`}
-          >
-            <PenTool className="mr-1.5 h-3.5 w-3.5" /> Canvas
-          </Button>
+          {visible.includes("web") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEnvMode("web")}
+              className={`h-7 px-3 text-xs ${envMode === "web" ? "bg-white shadow-sm font-semibold text-blue-600" : "text-slate-500"}`}
+            >
+              <Code2 className="mr-1.5 h-3.5 w-3.5" /> Web Sandpack
+            </Button>
+          )}
+          {visible.includes("colab") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEnvMode("colab")}
+              className={`h-7 px-3 text-xs ${envMode === "colab" ? "bg-white shadow-sm font-semibold text-orange-600" : "text-slate-500"}`}
+            >
+              <FileCode2 className="mr-1.5 h-3.5 w-3.5" /> Colab (Python)
+            </Button>
+          )}
+          {visible.includes("local") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEnvMode("local")}
+              className={`h-7 px-3 text-xs ${envMode === "local" ? "bg-white shadow-sm font-semibold text-emerald-600" : "text-slate-500"}`}
+            >
+              <Terminal className="mr-1.5 h-3.5 w-3.5" /> Local CLI
+            </Button>
+          )}
+          {visible.includes("code_runner") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEnvMode("code_runner")}
+              className={`h-7 px-3 text-xs ${envMode === "code_runner" ? "bg-white shadow-sm font-semibold text-slate-900" : "text-slate-500"}`}
+            >
+              <TerminalSquare className="mr-1.5 h-3.5 w-3.5" /> Code Runner
+            </Button>
+          )}
+          {visible.includes("diagram") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEnvMode("diagram")}
+              className={`h-7 px-3 text-xs ${envMode === "diagram" ? "bg-white shadow-sm font-semibold text-indigo-600" : "text-slate-500"}`}
+            >
+              <Spline className="mr-1.5 h-3.5 w-3.5" /> Diagram
+            </Button>
+          )}
+          {visible.includes("canvas") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEnvMode("canvas")}
+              className={`h-7 px-3 text-xs ${envMode === "canvas" ? "bg-white shadow-sm font-semibold text-amber-600" : "text-slate-500"}`}
+            >
+              <PenTool className="mr-1.5 h-3.5 w-3.5" /> Canvas
+            </Button>
+          )}
         </div>
 
         {envMode === "web" && (
           <div className="flex items-center gap-2">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-7 text-xs" 
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
               onClick={() => setShowConsole(!showConsole)}
             >
               <LayoutPanelLeft className="mr-1 h-3 w-3" />
               {showConsole ? "Hide Console" : "Show Console"}
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               className="h-7 text-xs border-slate-300 bg-slate-100 hover:bg-slate-200"
               onClick={() => setEditorKey(prev => prev + 1)}
             >
@@ -167,6 +210,16 @@ code .
               Reset
             </Button>
           </div>
+        )}
+        {envMode === "canvas" && onRequestMentorReview && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
+            onClick={() => onRequestMentorReview(notes)}
+          >
+            <MessageSquare className="mr-1 h-3 w-3" /> Ask Mentor to Review
+          </Button>
         )}
       </div>
 
@@ -187,15 +240,20 @@ code .
               },
             }}
           >
+            {onRequestMentorReview && (
+              <div className="absolute top-2 right-2 z-10">
+                <SandpackReviewButton onReview={onRequestMentorReview} />
+              </div>
+            )}
             <SandpackLayout className="h-full border-none">
-              <SandpackCodeEditor 
+              <SandpackCodeEditor
                 showLineNumbers
                 showTabs
                 closableTabs={false}
                 className="h-full border-r border-slate-700/50 flex-1"
               />
               <div className="flex flex-1 flex-col h-full bg-slate-50">
-                <SandpackPreview 
+                <SandpackPreview
                   showOpenInCodeSandbox={false}
                   showRefreshButton={true}
                   className="flex-1 border-none"
@@ -287,7 +345,11 @@ code .
         {/* Code Runner Mode */}
         {envMode === "code_runner" && (
           <div className="h-full p-2">
-            <CodeRunner defaultLanguage={defaultCodeLanguage} initialCode={initialCode} />
+            <CodeRunner
+              defaultLanguage={defaultCodeLanguage}
+              initialCode={initialCode}
+              onRequestMentorReview={onRequestMentorReview}
+            />
           </div>
         )}
 

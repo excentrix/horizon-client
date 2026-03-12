@@ -45,6 +45,10 @@ import {
   AuditInstitutionOverview,
   AuditInstitutionStudentRow,
   AuditInstitutionStudentDetail,
+  VeloOnboardingSession,
+  VeloOnboardingTrack,
+  VeloAuditMode,
+  VeloRoadmapEligibility,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -947,6 +951,16 @@ export const auditApi = {
   getReport: (auditId: string) =>
     extract<AuditReport>(http.get(`/audits/${auditId}/report/`)),
 
+  getEligibility: (auditId: string) =>
+    extract<{
+      audit_id: string;
+      roadmap_eligibility: VeloRoadmapEligibility;
+      verification_tier: "starter" | "full";
+      mentor_context_status: "pending" | "confirmed";
+      can_generate_roadmap: boolean;
+      can_promote_public: boolean;
+    }>(http.get(`/audits/${auditId}/eligibility/`)),
+
   getPublicReport: (auditId: string) =>
     extract<AuditReport>(http.get(`/audits/${auditId}/public/`)),
 
@@ -970,6 +984,40 @@ export const auditApi = {
       mentor_context_status: "pending" | "confirmed";
       mentor_context_confirmed_at?: string | null;
     }>(http.post(`/audits/${auditId}/mentor-context/confirm/`, payload)),
+
+  onboardingDiscovery: (payload: {
+    answers: {
+      has_resume?: boolean;
+      education_stage?: string;
+      domain_family?: string;
+      has_projects?: boolean;
+    };
+  }) =>
+    extract<{
+      track: VeloOnboardingTrack;
+      audit_mode: VeloAuditMode;
+      domain_family: string;
+      next_step: string;
+    }>(http.post("/audits/onboarding/discovery/", payload)),
+
+  onboardingEvidence: (payload: FormData | Record<string, unknown>) =>
+    extract<{
+      audit_id: string;
+      track: VeloOnboardingTrack;
+      audit_mode: VeloAuditMode;
+      roadmap_eligibility: VeloRoadmapEligibility;
+      verification_tier: "starter" | "full";
+      next_step: string;
+      domain_rubric?: Record<string, unknown>;
+    }>(http.post("/audits/onboarding/evidence/", payload)),
+
+  getOnboardingSession: () =>
+    extract<VeloOnboardingSession>(http.get("/audits/onboarding/session/")),
+
+  advanceOnboardingSession: (nextStep: VeloOnboardingSession["current_step"]) =>
+    extract<{ status: string; current_step: string }>(
+      http.post("/audits/onboarding/session/advance/", { next_step: nextStep })
+    ),
 
   getQueueSlots: () =>
     extract<AuditQueueSlot>(http.get("/audit-queue/slots/")),

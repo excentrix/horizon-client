@@ -6,7 +6,6 @@ import {
   BrainCircuit,
   Briefcase,
   Compass,
-  FolderOpen,
   MessageCircle,
   Radar,
   Trophy,
@@ -27,7 +26,7 @@ import { ProfileMenu } from "@/components/layout/profile-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { usePortfolioProfile } from "@/hooks/use-portfolio";
 import { useAuth } from "@/context/AuthContext";
-import { useMemo, useState } from "react";
+import { type ComponentType, useMemo, useState } from "react";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 
 const STUDENT_NAV_ITEMS = [
@@ -62,10 +61,10 @@ const STUDENT_NAV_ITEMS = [
     description: "Skills, portfolio & analytics",
   },
   {
-    href: "/audit",
-    label: "Audit Terminal",
+    href: "/onboarding/velo",
+    label: "VELO Onboarding",
     icon: QrCode,
-    description: "Flagship project verification",
+    description: "Readiness audit and mentor handoff",
   },
   {
     href: "/institution/overview",
@@ -155,13 +154,15 @@ export function Sidebar() {
   const [qrOpen, setQrOpen] = useState(false);
   const [badgeCopied, setBadgeCopied] = useState(false);
   const profile = profileData?.profile;
-  const canAccessInstitution = profile?.user_type === "educator" || profile?.user_type === "admin";
   const isSuperUser = user?.is_superuser;
   const isAdmin = profile?.user_type === "admin";
   const isEducator = profile?.user_type === "educator";
   const isStudent = profile?.user_type === "student";
+  const isStudentOnboardingPending = Boolean(
+    isStudent && user && !user.onboarding_completed
+  );
 
-  const activeNavItems = isSuperUser
+  const baseNavItems = isSuperUser
     ? [
         {
           href: "/hq",
@@ -187,6 +188,23 @@ export function Sidebar() {
       : isEducator
         ? EDUCATOR_NAV_ITEMS
         : STUDENT_NAV_ITEMS;
+  const activeNavItems = (
+    baseNavItems as Array<{
+      href: string;
+      label: string;
+      description: string;
+      icon: ComponentType<{ className?: string }>;
+      requiresInstitutionRole?: boolean;
+    }>
+  ).filter((item) => {
+    if (item.requiresInstitutionRole && !(isAdmin || isEducator || isSuperUser)) {
+      return false;
+    }
+    if (isStudentOnboardingPending) {
+      return item.href === "/onboarding/velo";
+    }
+    return true;
+  });
   const publicUrl = useMemo(() => {
     if (!profile?.slug || typeof window === "undefined") return "";
     return `${window.location.origin}/p/${profile.slug}`;

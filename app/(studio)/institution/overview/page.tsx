@@ -260,7 +260,8 @@ export default function InstitutionOverviewPage() {
           </div>
 
           {veloOverview ? (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium">Verified Profile Rate</CardTitle>
@@ -277,6 +278,32 @@ export default function InstitutionOverviewPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{veloOverview.career_ready_count}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Starter Ready</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{veloOverview.starter_ready_count}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Full Verified</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{veloOverview.full_verified_count}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Mentor Context Complete</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {Math.round((veloOverview.mentor_context_completion_rate || 0) * 100)}%
+                  </div>
                 </CardContent>
               </Card>
               <Card>
@@ -299,6 +326,43 @@ export default function InstitutionOverviewPage() {
                   </div>
                 </CardContent>
               </Card>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Onboarding Track Mix</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1 text-sm">
+                    {Object.entries(veloOverview.track_mix || {}).length ? (
+                      Object.entries(veloOverview.track_mix || {}).map(([trackName, count]) => (
+                        <div key={trackName} className="flex items-center justify-between">
+                          <span className="text-muted-foreground">{trackName.replace(/_/g, " ")}</span>
+                          <span className="font-medium">{count}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-muted-foreground">No track data.</p>
+                    )}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Domain Readiness Mix</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1 text-sm">
+                    {Object.entries(veloOverview.readiness_by_domain_family || {}).length ? (
+                      Object.entries(veloOverview.readiness_by_domain_family || {}).map(([domain, count]) => (
+                        <div key={domain} className="flex items-center justify-between">
+                          <span className="text-muted-foreground">{domain}</span>
+                          <span className="font-medium">{count}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-muted-foreground">No domain data.</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           ) : null}
 

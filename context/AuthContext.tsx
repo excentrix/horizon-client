@@ -178,8 +178,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
           }
 
-          if (response.user.is_superuser) router.push("/hq");
-          else router.push("/dashboard");
+          if (
+            response.user.user_type === "student" &&
+            !response.user.onboarding_completed
+          ) {
+            router.push("/onboarding/velo");
+          } else if (response.user.is_superuser) {
+            router.push("/hq");
+          } else if (
+            response.user.user_type === "admin" ||
+            response.user.user_type === "educator"
+          ) {
+            router.push("/institution/overview");
+          } else {
+            router.push("/dashboard");
+          }
           
         } catch (error) {
            console.error("Backend sync failed", error);
@@ -226,7 +239,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           description: response.user.full_name ?? response.user.email,
         });
         const userType = response.user.user_type;
-        if (response.user.is_superuser) {
+        if (
+          response.user.user_type === "student" &&
+          !response.user.onboarding_completed
+        ) {
+          router.push("/onboarding/velo");
+        } else if (response.user.is_superuser) {
           router.push("/hq");
         } else if (userType === "admin" || userType === "educator") {
           router.push("/institution/overview");
@@ -274,6 +292,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       try {
         await authApi.register(payload);
+        const loginResponse = await authApi.login({
+          email: payload.email,
+          password: payload.password,
+          remember_me: true,
+        });
+        const access =
+          loginResponse.session.access_token ??
+          loginResponse.session.access ??
+          undefined;
+        const refresh =
+          loginResponse.session.refresh_token ??
+          loginResponse.session.refresh ??
+          undefined;
+        setSessionTokens(access, refresh, true);
+        setUser(loginResponse.user);
 
         // Capture signup event
         telemetry.track('user_signed_up', {
@@ -281,8 +314,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           username: payload.username,
         });
 
-        toast.success("Account created! Sign in to continue.");
-        router.push("/login");
+        toast.success("Account created.");
+        if (
+          loginResponse.user.user_type === "student" &&
+          !loginResponse.user.onboarding_completed
+        ) {
+          router.push("/onboarding/velo");
+        } else if (
+          loginResponse.user.user_type === "admin" ||
+          loginResponse.user.user_type === "educator"
+        ) {
+          router.push("/institution/overview");
+        } else {
+          router.push("/dashboard");
+        }
       } catch (error) {
         toast.error("Registration failed", {
           description:
@@ -295,6 +340,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [router],
   );
+
+  useEffect(() => {
+    if (!user || !pathname) return;
+    if (user.user_type !== "student" || user.onboarding_completed) return;
+    const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/register");
+    const isVeloPage = pathname.startsWith("/onboarding/velo");
+    const isMentorChat = pathname.startsWith("/chat");
+    if (!isAuthPage && !isVeloPage && !isMentorChat) {
+      router.replace("/onboarding/velo");
+    }
+  }, [pathname, router, user]);
 
   const handleLogout = useCallback(async () => {
     try {

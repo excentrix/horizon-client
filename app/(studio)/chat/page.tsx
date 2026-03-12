@@ -13,7 +13,9 @@ import { useChatSocket } from "@/hooks/use-chat-socket";
 import { getPersonaTheme } from "@/lib/persona-theme";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { useCreatePlanFromConversation, usePlan } from "@/hooks/use-plans";
@@ -189,6 +191,17 @@ function ChatContent() {
   const [veloConfirming, setVeloConfirming] = useState(false);
   const [veloConfirmed, setVeloConfirmed] = useState(false);
   const [veloConfirmError, setVeloConfirmError] = useState<string | null>(null);
+  const [veloIntakeDraft, setVeloIntakeDraft] = useState<{
+    target_role: string;
+    timeline: string;
+    constraints: string;
+    priority_gaps: string;
+  }>({
+    target_role: "",
+    timeline: "",
+    constraints: "",
+    priority_gaps: "",
+  });
 
   const analyzeConversation = useAnalyzeConversation();
   const createPlan = useCreatePlanFromConversation();
@@ -248,6 +261,43 @@ function ChatContent() {
       setIntakeState(latestWithState.metadata.intake_state as Record<string, unknown>);
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (!isVeloIntake) return;
+    const slots = ((intakeState?.slots as Record<string, unknown> | undefined) ?? {});
+    const mentor = ((intakeState?.mentor_context as Record<string, unknown> | undefined) ?? {});
+    const role =
+      String(
+        mentor.target_role ??
+          slots.target_role ??
+          slots.portfolio_goals ??
+          ""
+      ).trim();
+    const timeline = String(mentor.timeline ?? slots.timeline ?? slots.goals ?? "").trim();
+    const constraints = String(mentor.constraints ?? slots.constraints ?? "").trim();
+    const gapArray =
+      (Array.isArray(mentor.priority_gaps) ? mentor.priority_gaps : null) ??
+      (Array.isArray(slots.priority_gaps) ? slots.priority_gaps : null) ??
+      [];
+    const gaps = gapArray.map((item) => String(item).trim()).filter(Boolean).join(", ");
+    setVeloIntakeDraft((prev) => ({
+      target_role: prev.target_role || role,
+      timeline: prev.timeline || timeline,
+      constraints: prev.constraints || constraints,
+      priority_gaps: prev.priority_gaps || gaps,
+    }));
+  }, [intakeState, isVeloIntake]);
+
+  useEffect(() => {
+    if (!veloConfirmError) return;
+    if (
+      veloIntakeDraft.target_role.trim() &&
+      veloIntakeDraft.timeline.trim() &&
+      veloIntakeDraft.constraints.trim()
+    ) {
+      setVeloConfirmError(null);
+    }
+  }, [veloConfirmError, veloIntakeDraft]);
 
   useEffect(() => {
     if (!isMentorIntake) return;
@@ -917,6 +967,13 @@ useEffect(() => {
       telemetry.toastError("Select a conversation first");
       return;
     }
+    if (isVeloIntake && !veloConfirmed) {
+      telemetry.toastError(
+        "Complete VELO mentor context first",
+        "Fill role, timeline, constraints, and gaps, then confirm VELO context."
+      );
+      return;
+    }
     let analysisReady = hasAnalysisResults;
     if (!analysisReady) {
       telemetry.toastInfo("Checking latest analysis snapshot...");
@@ -964,20 +1021,40 @@ useEffect(() => {
     );
   };
 
+  useEffect(() => {
+    if (!isVeloIntake || !veloAuditId) return;
+    let mounted = true;
+    const loadEligibility = async () => {
+      try {
+        const eligibility = await auditApi.getEligibility(veloAuditId);
+        if (!mounted) return;
+        const confirmed = eligibility.mentor_context_status === "confirmed";
+        setVeloConfirmed(confirmed);
+      } catch {
+        // ignore eligibility fetch errors
+      }
+    };
+    void loadEligibility();
+    return () => {
+      mounted = false;
+    };
+  }, [isVeloIntake, veloAuditId]);
+
   const handleConfirmVeloContext = useCallback(async () => {
     if (!veloAuditId) return;
-    const slots = (intakeState?.slots as Record<string, unknown> | undefined) ?? {};
-    const veloContext = (intakeState?.velo_context as Record<string, unknown> | undefined) ?? {};
+    const gaps = veloIntakeDraft.priority_gaps
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (!veloIntakeDraft.target_role.trim() || !veloIntakeDraft.timeline.trim() || !veloIntakeDraft.constraints.trim()) {
+      setVeloConfirmError("Please fill target role, timeline, and constraints before confirming.");
+      return;
+    }
     const payload = {
-      target_role: slots.target_role || slots.portfolio_goals || "",
-      timeline: slots.timeline || slots.goals || "",
-      constraints: slots.constraints || "",
-      priority_gaps: Array.isArray(slots.priority_gaps)
-        ? slots.priority_gaps
-        : Array.isArray(veloContext.gaps)
-          ? veloContext.gaps
-          : [],
-      ...slots,
+      target_role: veloIntakeDraft.target_role.trim(),
+      timeline: veloIntakeDraft.timeline.trim(),
+      constraints: veloIntakeDraft.constraints.trim(),
+      priority_gaps: gaps,
     };
     setVeloConfirming(true);
     setVeloConfirmError(null);
@@ -987,6 +1064,9 @@ useEffect(() => {
         source: "chat",
       });
       setVeloConfirmed(true);
+      sendMessage(
+        `Confirmed VELO mentor context:\\n- Target role: ${payload.target_role}\\n- Timeline: ${payload.timeline}\\n- Constraints: ${payload.constraints}\\n- Priority gaps: ${payload.priority_gaps.join(", ") || "None listed"}`
+      );
       telemetry.toastSuccess("VELO mentor context confirmed");
     } catch (error) {
       const message =
@@ -997,7 +1077,7 @@ useEffect(() => {
     } finally {
       setVeloConfirming(false);
     }
-  }, [intakeState, veloAuditId]);
+  }, [sendMessage, veloAuditId, veloIntakeDraft]);
 
   const planWorkbenchData = useMemo(() => {
     if (planRecord) {
@@ -1288,12 +1368,14 @@ useEffect(() => {
                           : undefined
                       }
                     >
-                      {createPlan.isPending ? "Creating plan..." : "Create plan"}
+                      {createPlan.isPending ? "Generating roadmap..." : "Generate roadmap"}
                     </Button>
                   </div>
                   {!hasAnalysisResults && selectedConversationId ? (
                     <p className="text-[11px] text-muted-foreground">
-                      Run analysis to unlock plans and reports.
+                      {isVeloIntake
+                        ? "Run analysis and confirm VELO context to unlock roadmap generation."
+                        : "Run analysis to unlock plans and reports."}
                     </p>
                   ) : null}
                 </div>
@@ -1302,8 +1384,62 @@ useEffect(() => {
                     <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">
                       <p className="font-medium">Using VELO audit context for roadmap personalization.</p>
                       <p className="mt-1">
-                        Capture role, timeline, constraints, and priority gaps, then confirm mentor context.
+                        Answer these intake questions. This context is used to generate your roadmap from this chat.
                       </p>
+                      <div className="mt-3 grid gap-2 md:grid-cols-2">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                            1. What role are you targeting?
+                          </label>
+                          <Input
+                            value={veloIntakeDraft.target_role}
+                            onChange={(event) =>
+                              setVeloIntakeDraft((prev) => ({ ...prev, target_role: event.target.value }))
+                            }
+                            placeholder="e.g., Backend Engineer Intern"
+                            className="h-8 border-emerald-200 bg-white text-[12px]"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                            2. What is your timeline?
+                          </label>
+                          <Input
+                            value={veloIntakeDraft.timeline}
+                            onChange={(event) =>
+                              setVeloIntakeDraft((prev) => ({ ...prev, timeline: event.target.value }))
+                            }
+                            placeholder="e.g., 4 months"
+                            className="h-8 border-emerald-200 bg-white text-[12px]"
+                          />
+                        </div>
+                        <div className="space-y-1 md:col-span-2">
+                          <label className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                            3. What constraints should we respect?
+                          </label>
+                          <Textarea
+                            value={veloIntakeDraft.constraints}
+                            onChange={(event) =>
+                              setVeloIntakeDraft((prev) => ({ ...prev, constraints: event.target.value }))
+                            }
+                            placeholder="e.g., 8 hrs/week, college exams in May, no weekends"
+                            className="min-h-[64px] border-emerald-200 bg-white text-[12px]"
+                          />
+                        </div>
+                        <div className="space-y-1 md:col-span-2">
+                          <label className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                            4. Priority gaps (comma separated)
+                          </label>
+                          <Input
+                            value={veloIntakeDraft.priority_gaps}
+                            onChange={(event) =>
+                              setVeloIntakeDraft((prev) => ({ ...prev, priority_gaps: event.target.value }))
+                            }
+                            placeholder="e.g., DSA, system design, communication"
+                            className="h-8 border-emerald-200 bg-white text-[12px]"
+                          />
+                        </div>
+                      </div>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <Button
                           size="sm"
@@ -1389,24 +1525,32 @@ useEffect(() => {
                                 </Button>
                               ) : (
                                 <>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      sendMessage(
-                                        "I’m ready for mentor intake. Please guide me through the key questions."
-                                      )
-                                    }
-                                  >
-                                    Ask intake questions
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => sendMessage("skip")}
-                                  >
-                                    Skip this question
-                                  </Button>
+                                  {!isVeloIntake ? (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                          sendMessage(
+                                            "I’m ready for mentor intake. Please guide me through the key questions."
+                                          )
+                                        }
+                                      >
+                                        Ask intake questions
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => sendMessage("skip")}
+                                      >
+                                        Skip this question
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700">
+                                      Complete the VELO intake form above and confirm context.
+                                    </span>
+                                  )}
                                   <Button
                                     size="sm"
                                     onClick={handlePreviewMentorIntake}

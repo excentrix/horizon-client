@@ -222,7 +222,21 @@ export default function StudentInsightPage() {
               Mentor context: <span className="font-medium text-foreground">{veloDetail.latest_audit_summary.mentor_context_status}</span>
             </p>
             <p>
+              Track / mode: <span className="font-medium text-foreground">{`${veloDetail.latest.onboarding_track || "resume_track"} / ${veloDetail.latest.audit_mode || "full_forensic"}`}</span>
+            </p>
+            <p>
+              Eligibility: <span className="font-medium text-foreground">{veloDetail.latest.roadmap_eligibility || "not_ready"}</span>
+            </p>
+            <p>
               Top 3 gaps: {veloDetail.latest.top_skill_gaps.slice(0, 3).join(", ") || "None"}
+            </p>
+            <p>
+              Gap coverage: <span className="font-medium text-foreground">
+                {Math.round((veloDetail.gap_coverage?.progress || 0) * 100)}%
+              </span>
+              {veloDetail.gap_coverage
+                ? ` (${veloDetail.gap_coverage.covered_gaps}/${veloDetail.gap_coverage.total_gaps})`
+                : ""}
             </p>
           </CardContent>
         </Card>

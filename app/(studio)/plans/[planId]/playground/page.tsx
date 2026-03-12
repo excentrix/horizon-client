@@ -14,9 +14,9 @@ import { BookOpen, Code2, ShieldCheck, ArrowRight, ArrowLeft, RefreshCw } from "
 import { generateEfficacyReportPDF } from "@/lib/generate-efficacy-report";
 
 import { LearningPanel } from "./components/LearningPanel";
-import { MicroPracticeLab } from "./components/MicroPracticeLab";
-import { OmniWorkspace } from "./components/OmniWorkspace";
-import { VerificationEngine } from "./components/VerificationEngine";
+import { MicroPracticeLab, type QuizResults } from "./components/MicroPracticeLab";
+import { OmniWorkspace, type EnvMode as OmniEnvMode } from "./components/OmniWorkspace";
+import { VerificationEngine, type ArtifactVerifiedEvent } from "./components/VerificationEngine";
 import { MentorAssistant } from "./components/MentorAssistant";
 
 const STEPS = [
@@ -59,7 +59,17 @@ const inferDefaultLanguage = (task: { title?: string; description?: string } | u
   return "python";
 };
 
-type EnvMode = "web" | "colab" | "local" | "canvas" | "code_runner" | "diagram";
+type EnvMode = OmniEnvMode;
+
+const ALL_ENV_MODES: EnvMode[] = ["web", "colab", "local", "code_runner", "diagram", "canvas"];
+
+function computeVisibleEnvs(category: string | undefined, recommended: EnvMode | undefined): EnvMode[] {
+  if (!category || category === "stem") return ALL_ENV_MODES;
+  const base = new Set<EnvMode>(["canvas", "diagram"]);
+  if (recommended) base.add(recommended);
+  if (category === "health" || category === "general") base.add("code_runner");
+  return ALL_ENV_MODES.filter((m) => base.has(m));
+}
 
 export default function PlanPlaygroundPage() {
   return (
@@ -113,6 +123,16 @@ function PlaygroundFlow() {
   const [lessonLoading, setLessonLoading] = useState(false);
   const [diagramAttachment, setDiagramAttachment] = useState<File | null>(null);
 
+  // -- Quiz & Block Feedback State (lifted for mentor context) --
+  const [quizResults, setQuizResults] = useState<QuizResults | null>(null);
+  const [quizBannerDismissed, setQuizBannerDismissed] = useState(false);
+  const [blockFeedback, setBlockFeedback] = useState<Record<string, "helpful" | "unhelpful" | null>>({});
+
+  // -- Verification Result State --
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<ArtifactVerifiedEvent | null>(null);
+  const verifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // -- Chat & Mentor State --
   const mentorConversationId = plan?.specialized_conversation_id ?? plan?.conversation_id ?? null;
   
@@ -136,6 +156,25 @@ function PlaygroundFlow() {
 
   useEffect(() => {
     setDiagramAttachment(null);
+    setQuizResults(null);
+    setQuizBannerDismissed(false);
+    setBlockFeedback({});
+    setIsVerifying(false);
+    setVerificationResult(null);
+  }, [activeTask?.id]);
+
+  // Listen for artifact_verified WebSocket event dispatched by use-chat-socket.ts
+  useEffect(() => {
+    const handleArtifactVerified = (e: Event) => {
+      const event = (e as CustomEvent<ArtifactVerifiedEvent>).detail;
+      if (event?.task_id === activeTask?.id) {
+        setVerificationResult(event);
+        setIsVerifying(false);
+        if (verifyTimeoutRef.current) clearTimeout(verifyTimeoutRef.current);
+      }
+    };
+    window.addEventListener("artifact_verified", handleArtifactVerified);
+    return () => window.removeEventListener("artifact_verified", handleArtifactVerified);
   }, [activeTask?.id]);
 
   // Load Lessons if missing
@@ -196,11 +235,19 @@ function PlaygroundFlow() {
         proofType: type
       });
 
-      telemetry.toastSuccess("Proof verified and task completed! Session report downloaded.");
       queryClient.invalidateQueries({ queryKey: ["portfolio-artifacts"] });
       queryClient.invalidateQueries({ queryKey: ["plan", planId] });
-      
-      router.push(`/plans/${planId}`);
+
+      // Show verifying state — WS will fire artifact_verified when done
+      setIsVerifying(true);
+      telemetry.toastSuccess("Submitted! AI is reviewing your proof…");
+
+      // 30s fallback: redirect if WS never arrives
+      verifyTimeoutRef.current = setTimeout(() => {
+        setIsVerifying(false);
+        telemetry.toastSuccess("Submission received. Check your portfolio for results.");
+        router.push(`/plans/${planId}`);
+      }, 30_000);
     } catch {
       telemetry.toastError("Submission failed. Please try again.");
     } finally {
@@ -208,9 +255,31 @@ function PlaygroundFlow() {
     }
   };
 
+  const buildMentorContext = (): string => {
+    const parts: string[] = [
+      `Task: ${activeTask?.title ?? ""}`,
+      `Phase: ${STEPS[activeStepIndex]?.label ?? ""}`,
+    ];
+    if (quizResults) {
+      parts.push(`Quiz score: ${quizResults.correct}/${quizResults.total}`);
+      if (quizResults.weakTopics.length)
+        parts.push(`Struggling with: ${quizResults.weakTopics.slice(0, 3).join(", ")}`);
+    }
+    const unhelpful = Object.entries(blockFeedback)
+      .filter(([, v]) => v === "unhelpful")
+      .map(([k]) => k);
+    if (unhelpful.length) parts.push(`Found confusing: lesson blocks ${unhelpful.join(", ")}`);
+    if (activeStepIndex === 2) {
+      const envReqs = activeTask?.environment_requirements as Record<string, unknown> | undefined;
+      const env = envReqs?.recommended_environment as string | undefined;
+      if (env) parts.push(`Working in: ${env} environment`);
+    }
+    return parts.join(". ");
+  };
+
   const handleMentorSend = async (message: string, actionType: string = "mentor_chat") => {
     if (!mentorConversationId) return;
-    const context = `ALPP Step: ${STEPS[activeStepIndex].label}. Task: ${activeTask?.title}.`;
+    const context = buildMentorContext();
     if (mentorSocketStatus === "open") {
       await sendMessage(message, {
         context,
@@ -226,13 +295,24 @@ function PlaygroundFlow() {
     }
   };
 
+  const handleMentorReviewRequest = (content: string) => {
+    const criteria = activeTask?.check_in_question || activeTask?.description || "";
+    handleMentorSend(
+      `Please review this work against the task criteria: "${criteria.slice(0, 200)}"\n\nHere is what I have done so far:\n\n${content.slice(0, 2000)}`
+    );
+  };
+
   if (!plan) return null;
 
   const currentStep = STEPS[activeStepIndex];
   const progressPercent = ((activeStepIndex + 1) / STEPS.length) * 100;
-  const recommendedEnvRaw = (activeTask?.environment_requirements as Record<string, unknown> | undefined)?.recommended_environment as EnvMode | undefined;
+  const envReqs = activeTask?.environment_requirements as Record<string, unknown> | undefined;
+  const recommendedEnvRaw = envReqs?.recommended_environment as EnvMode | undefined;
+  const subjectCategory = envReqs?.subject_category as string | undefined;
   const recommendedEnv = recommendedEnvRaw ?? "code_runner";
   const defaultLanguage = inferDefaultLanguage(activeTask, recommendedEnv);
+  const visibleEnvModes = computeVisibleEnvs(subjectCategory, recommendedEnv);
+  const quizFailed = quizResults && (quizResults.correct / quizResults.total) < 0.6;
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col gap-4 p-4 lg:p-6 bg-slate-50">
@@ -263,24 +343,51 @@ function PlaygroundFlow() {
         <div className="flex flex-col gap-4 md:col-span-2 overflow-y-auto pr-2 custom-scrollbar">
           {activeStepIndex === 0 && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
-              <LearningPanel activeTask={activeTask} lessonLoading={lessonLoading} />
+              <LearningPanel
+                activeTask={activeTask}
+                lessonLoading={lessonLoading}
+                blockFeedback={blockFeedback}
+                onFeedbackChange={setBlockFeedback}
+              />
             </div>
           )}
-          
+
           {activeStepIndex === 1 && (
             <div className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
-              <MicroPracticeLab 
+              <MicroPracticeLab
                 taskId={activeTask?.id || ""}
                 planId={planId}
                 lessonBlocks={activeTask?.lesson_blocks || []}
-                onComplete={() => changeStep(2)}
+                onComplete={(results) => {
+                  setQuizResults(results);
+                  setQuizBannerDismissed(false);
+                  changeStep(2);
+                }}
               />
             </div>
           )}
 
           {activeStepIndex === 2 && (
-            <div className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
-              <OmniWorkspace 
+            <div className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both flex flex-col gap-3">
+              {quizFailed && !quizBannerDismissed && (
+                <div className="shrink-0 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <span className="text-amber-600 text-sm font-medium flex-1">
+                    ⚠ You scored {quizResults!.correct}/{quizResults!.total} on the practice quiz.
+                    {quizResults!.weakTopics.length > 0 && (
+                      <> Consider reviewing: {quizResults!.weakTopics.slice(0, 3).map((t) => `"${t}"`).join(" · ")}</>
+                    )}
+                  </span>
+                  <div className="flex gap-2 shrink-0">
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setActiveStepIndex(0); }}>
+                      ← Review Lesson
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setQuizBannerDismissed(true)}>
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <OmniWorkspace
                 notes={workspaceNotes}
                 initialCode={getInitialCode(activeTask)}
                 onNotesChange={setWorkspaceNotes}
@@ -288,17 +395,19 @@ function PlaygroundFlow() {
                 taskTitle={activeTask?.title || "Coding Challenge"}
                 initialEnvMode={recommendedEnv}
                 defaultCodeLanguage={defaultLanguage}
+                visibleEnvModes={visibleEnvModes}
                 onDiagramExport={(file) => {
                   setDiagramAttachment(file);
                   telemetry.toastSuccess("Diagram attached for verification.");
                 }}
+                onRequestMentorReview={handleMentorReviewRequest}
               />
             </div>
           )}
 
           {activeStepIndex === 3 && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both h-full">
-              <VerificationEngine 
+              <VerificationEngine
                 taskId={activeTask?.id || ""}
                 verificationMethod={activeTask?.verification?.method || "manual_rubric"}
                 verificationCriteria={activeTask?.verification?.criteria || activeTask?.check_in_question || ""}
@@ -307,6 +416,9 @@ function PlaygroundFlow() {
                 isSubmitting={isSubmitting}
                 onProofSubmit={handleProofSubmit}
                 prefilledFile={diagramAttachment}
+                isVerifying={isVerifying}
+                verificationResult={verificationResult}
+                onNextTask={() => router.push(`/plans/${planId}`)}
               />
             </div>
           )}

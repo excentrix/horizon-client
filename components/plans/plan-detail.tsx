@@ -17,7 +17,13 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { Sparkles } from "lucide-react";
+import { CalendarDays, Sparkles } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface PlanDetailProps {
   plan: LearningPlan;
@@ -116,6 +122,37 @@ export function PlanDetail({
   }`;
   const [resourceRefreshing, setResourceRefreshing] = useState(false);
   const [exportingRoadmap, setExportingRoadmap] = useState(false);
+  const veloContext = (plan.source_analysis as Record<string, unknown> | null)?.velo_context as
+    | Record<string, unknown>
+    | undefined;
+  const hasVeloContext = Boolean(veloContext && Object.keys(veloContext).length);
+  const gapCoverage = useMemo(() => {
+    const gapTasks = tasks.filter((task) => {
+      const env = (task.environment_requirements || {}) as Record<string, unknown>;
+      return Boolean(env.velo_origin) && typeof env.gap_category === "string" && String(env.gap_category).trim();
+    });
+    if (!gapTasks.length) {
+      return { total: 0, completed: 0, progress: 0 };
+    }
+    const totalGaps = new Set<string>();
+    const coveredGaps = new Set<string>();
+    gapTasks.forEach((task) => {
+      const env = (task.environment_requirements || {}) as Record<string, unknown>;
+      const gap = String(env.gap_category || "").trim();
+      if (!gap) return;
+      totalGaps.add(gap);
+      if (task.status === "completed") {
+        coveredGaps.add(gap);
+      }
+    });
+    const total = totalGaps.size;
+    const completed = coveredGaps.size;
+    return {
+      total,
+      completed,
+      progress: total ? Math.round((completed / total) * 100) : 0,
+    };
+  }, [tasks]);
 
   const handleExportRoadmap = async () => {
     if (!plan.roadmap_details) return;
@@ -614,9 +651,41 @@ export function PlanDetail({
           <Button asChild variant="outline">
             <Link href={playgroundHref}>Enter playground</Link>
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="default" className="gap-2">
+                <CalendarDays className="h-4 w-4" /> Export Calendar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => {
+                const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api";
+                window.open(`${apiBase}/plans/${plan.id}/calendar.ics/`, "_blank");
+              }}>
+                Download .ics file
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => {
+                const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api";
+                const icsUrl = encodeURIComponent(`${apiBase}/plans/${plan.id}/calendar.ics/`);
+                window.open(`https://calendar.google.com/calendar/r/settings/addbyurl?url=${icsUrl}`, "_blank");
+              }}>
+                Add to Google Calendar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
+        {hasVeloContext ? (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
+              Personalized using VELO + Mentor Intake
+            </p>
+            <p className="mt-1 text-xs text-emerald-800">
+              Gap coverage progress: {gapCoverage.progress}% ({gapCoverage.completed}/{gapCoverage.total})
+            </p>
+          </div>
+        ) : null}
         <div className="rounded-2xl border border-transparent bg-white/85 p-4 shadow-[var(--shadow-1)] ring-1 ring-white/60">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Focus today
