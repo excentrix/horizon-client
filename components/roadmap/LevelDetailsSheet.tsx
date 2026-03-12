@@ -32,10 +32,14 @@ async function startLevelPlan(levelId: string) {
   try {
     return await roadmapApi.generateLevelPlan(levelId);
   } catch (error: unknown) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Failed to start plan";
+    const payload = (error as { response?: { data?: { error?: string; message?: string; handoff_url?: string } } })?.response?.data;
+    if (payload?.error === "mentor_context_required") {
+      const err = new Error(payload.message || "Mentor context required before plan generation.");
+      (err as Error & { handoff_url?: string; code?: string }).handoff_url = payload.handoff_url;
+      (err as Error & { handoff_url?: string; code?: string }).code = payload.error;
+      throw err;
+    }
+    const message = error instanceof Error ? error.message : "Failed to start plan";
     throw new Error(message);
   }
 }
@@ -53,6 +57,14 @@ export function LevelDetailsSheet({ level, isOpen, onClose }: LevelDetailsSheetP
       onClose();
     },
     onError: (error) => {
+      const handoffUrl = (error as Error & { handoff_url?: string; code?: string }).handoff_url;
+      if (handoffUrl) {
+        toast.error("Mentor context required", {
+          description: error.message,
+        });
+        router.push(handoffUrl);
+        return;
+      }
       toast.error("Failed to start level", {
         description: error.message,
       });

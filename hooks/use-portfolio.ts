@@ -183,16 +183,17 @@ export function useSetVisibility() {
         credentials: "include",
         body: JSON.stringify({ visibility }),
       });
-      if (!response.ok) throw new Error("Failed to update visibility");
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error || "Failed to update visibility");
+      }
       return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: artifactsKey });
-      telemetry.toastSuccess("Visibility updated!");
     },
     onError: (error) => {
       telemetry.error("Failed to update visibility", { error });
-      telemetry.toastError("Couldn't update visibility.");
     },
   });
 }

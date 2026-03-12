@@ -18,13 +18,18 @@ export function DiagramWorkspace({ onExport }: DiagramWorkspaceProps) {
   const handleExport = useCallback(async () => {
     if (!editor) return;
     const shapeIds = editor.getCurrentPageShapeIds();
-    const blob = await editor.toImage(shapeIds.size ? Array.from(shapeIds) : undefined, {
+    const shapesArray = shapeIds.size ? Array.from(shapeIds) : undefined;
+    
+    // cast to any to suppress tldraw version mismatch type errors if any
+    const imageInfo: any = await editor.toImage(shapesArray as any, {
       format: "png",
       background: true,
       scale: 2,
     });
 
-    const file = new File([blob], `diagram-${Date.now()}.png`, {
+    if (!imageInfo || !imageInfo.blob) return;
+
+    const file = new File([imageInfo.blob], `diagram-${Date.now()}.png`, {
       type: "image/png",
     });
     onExport(file);

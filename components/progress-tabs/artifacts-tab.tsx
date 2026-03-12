@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { usePortfolioArtifacts } from "@/hooks/use-portfolio";
+import { usePortfolioArtifacts, useVerifyArtifact } from "@/hooks/use-portfolio";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,13 +17,20 @@ const statusLabel = (status?: string) => {
   return status.replace(/_/g, " ");
 };
 
-export default function ArtifactsPage() {
+const isVeloPendingArtifact = (artifact: { metadata?: Record<string, unknown>; verification_status?: string }) =>
+  artifact.metadata?.source === "velo_resume" &&
+  artifact.verification_status !== "verified" &&
+  artifact.verification_status !== "human_verified";
+
+export function ArtifactsTab() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const { data: artifacts = [], isLoading, error } = usePortfolioArtifacts();
+  const { mutateAsync: verifyArtifact, isPending: verificationPending } = useVerifyArtifact();
   const [tab, setTab] = useState<"submitted" | "verified" | "promoted">("submitted");
   const [selectedArtifact, setSelectedArtifact] = useState<typeof artifacts[number] | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [verifyingArtifactId, setVerifyingArtifactId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -82,6 +89,25 @@ export default function ArtifactsPage() {
       items: items.slice(0, 4),
     }));
   }, [artifacts]);
+
+  const veloVerificationQueue = useMemo(
+    () =>
+      artifacts.filter(
+        (artifact) =>
+          isVeloPendingArtifact(artifact) &&
+          ["pending", "needs_revision", "rejected"].includes(artifact.verification_status ?? "pending"),
+      ),
+    [artifacts],
+  );
+
+  const handleRunVerification = async (artifactId: string) => {
+    setVerifyingArtifactId(artifactId);
+    try {
+      await verifyArtifact(artifactId);
+    } finally {
+      setVerifyingArtifactId(null);
+    }
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 p-4">
@@ -158,6 +184,41 @@ export default function ArtifactsPage() {
           Promoted
         </Button>
       </div>
+
+      {veloVerificationQueue.length ? (
+        <Card className="border-amber-200 bg-amber-50/40 dark:border-amber-900/40 dark:bg-amber-950/20">
+          <CardHeader>
+            <CardTitle>VELO verification queue</CardTitle>
+            <CardDescription>
+              These resume-imported artifacts must be verified before employer/public promotion.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {veloVerificationQueue.map((artifact) => (
+              <div
+                key={artifact.id}
+                className="flex flex-col gap-3 rounded-xl border border-amber-200/70 bg-white p-3 md:flex-row md:items-center md:justify-between dark:border-amber-900/40 dark:bg-background"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{artifact.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Status: {statusLabel(artifact.verification_status ?? "pending")}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => handleRunVerification(artifact.id)}
+                  disabled={verificationPending && verifyingArtifactId === artifact.id}
+                >
+                  {verificationPending && verifyingArtifactId === artifact.id
+                    ? "Verifying..."
+                    : "Run verification"}
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {milestoneCollections.length ? (
         <Card className="border-0 bg-gradient-to-br from-white via-slate-50 to-slate-100 shadow-lg">
@@ -250,6 +311,11 @@ export default function ArtifactsPage() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Badge variant="outline">{artifact.artifact_type.replace(/_/g, " ")}</Badge>
                     {artifact.featured ? <Badge variant="secondary">Promoted</Badge> : null}
+                    {isVeloPendingArtifact(artifact) ? (
+                      <Badge variant="outline" className="border-amber-300 text-amber-700">
+                        VELO pending
+                      </Badge>
+                    ) : null}
                   </div>
                   {artifact.url ? (
                     <a

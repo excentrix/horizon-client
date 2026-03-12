@@ -17,6 +17,7 @@ interface ArtifactCardProps {
   visibility: "private" | "mentors" | "employers" | "public";
   featured: boolean;
   tags?: string[];
+  metadata?: Record<string, unknown>;
   createdAt: string;
   className?: string;
   onClick?: () => void;
@@ -57,6 +58,7 @@ export function ArtifactCard({
   visibility,
   featured,
   tags = [],
+  metadata,
   createdAt,
   className,
   onClick,
@@ -67,6 +69,10 @@ export function ArtifactCard({
     day: "numeric",
     year: "numeric",
   });
+  const isVeloPending =
+    metadata?.source === "velo_resume" &&
+    verificationStatus !== "verified" &&
+    verificationStatus !== "human_verified";
 
   return (
     <Card
@@ -138,6 +144,11 @@ export function ArtifactCard({
             </div>
           )}
         </div>
+        {isVeloPending ? (
+          <Badge variant="outline" className="mb-3 border-amber-300 text-amber-700">
+            VELO verification required
+          </Badge>
+        ) : null}
 
         {/* Tags */}
         {tags.length > 0 && (

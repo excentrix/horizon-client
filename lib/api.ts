@@ -39,6 +39,12 @@ import {
   HomeDashboard,
   RoadmapResponse,
   SpacedRepetitionCard,
+  ExperienceAudit,
+  AuditReport,
+  AuditQueueSlot,
+  AuditInstitutionOverview,
+  AuditInstitutionStudentRow,
+  AuditInstitutionStudentDetail,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -76,6 +82,15 @@ export const authApi = {
   updateProfileDetail: (payload: Partial<UserProfileDetail>) =>
     extract<UserProfileDetail>(
       http.patch("/auth/profile/detail/", payload ?? {})
+    ),
+
+  uploadResume: (payload: FormData) =>
+    extract<{ status: string; resume_url: string; resume_payload?: Record<string, unknown>; parsed_at?: string }>(
+      http.post("/auth/profile/resume/", payload)
+    ),
+  confirmResume: (payload: { resume_payload: Record<string, unknown>; projects?: Array<Record<string, unknown>> }) =>
+    extract<{ status: string; projects_synced?: string[] }>(
+      http.post("/auth/profile/resume/confirm/", payload)
     ),
 
   getPreferences: () =>
@@ -336,6 +351,13 @@ export const planningApi = {
       cached: boolean;
     }>(http.post(`/planning/tasks/${taskId}/generate-flashcards/`, { force })),
 
+  getTodaysTasks: () =>
+    extract<{
+      date: string;
+      count: number;
+      tasks: DailyTask[];
+    }>(http.get("/planning/tasks/today/")),
+
   getPreAssessment: (planId: string) =>
     extract<{
       generated_at: string;
@@ -363,6 +385,14 @@ export const planningApi = {
       tasks_marked_skippable: number;
       pre_assessed: boolean;
     }>(http.post(`/planning/plans/${planId}/pre-assessment/`, { answers })),
+
+  submitBlockFeedback: (
+    taskId: string,
+    blocks: Array<{ block_id: string; helpful: boolean; time_spent_seconds?: number }>
+  ) =>
+    extract<{ saved: number }>(
+      http.post(`/planning/tasks/${taskId}/block-feedback/`, { blocks })
+    ),
 
   getSpacedRepetitionDue: (params?: { plan_id?: string; task_id?: string; limit?: number }) =>
     extract<{ cards: SpacedRepetitionCard[]; count: number; generated_at: string }>(
@@ -904,4 +934,76 @@ export const notificationApi = {
     extract<{ notifications: ToastNotification[] }>(
       http.get("/notifications/feed/")
     ),
+};
+
+// AUDIT ----------------------------------------------------------------------
+export const auditApi = {
+  createAudit: (payload: FormData | Record<string, unknown>) =>
+    extract<ExperienceAudit>(http.post("/audits/", payload)),
+
+  getAudit: (auditId: string) =>
+    extract<ExperienceAudit>(http.get(`/audits/${auditId}/`)),
+
+  getReport: (auditId: string) =>
+    extract<AuditReport>(http.get(`/audits/${auditId}/report/`)),
+
+  getPublicReport: (auditId: string) =>
+    extract<AuditReport>(http.get(`/audits/${auditId}/public/`)),
+
+  submitNarrative: (auditId: string, payload: FormData) =>
+    extract<{ status: string }>(
+      http.post(`/audits/${auditId}/submit-narrative/`, payload)
+    ),
+  mentorHandoff: (auditId: string) =>
+    extract<{
+      audit_id: string;
+      conversation_id: string;
+      chat_url: string;
+      mentor_context_status: "pending" | "confirmed";
+    }>(http.post(`/audits/${auditId}/mentor-handoff/`)),
+  confirmMentorContext: (
+    auditId: string,
+    payload: { intake_payload: Record<string, unknown>; source?: "chat" | "manual" }
+  ) =>
+    extract<{
+      audit_id: string;
+      mentor_context_status: "pending" | "confirmed";
+      mentor_context_confirmed_at?: string | null;
+    }>(http.post(`/audits/${auditId}/mentor-context/confirm/`, payload)),
+
+  getQueueSlots: () =>
+    extract<AuditQueueSlot>(http.get("/audit-queue/slots/")),
+
+  claimQueueSlot: (payload: { audit_id: string; quiz_score: number; quiz_payload?: Record<string, unknown> }) =>
+    extract<{ status: string; message?: string; remaining?: number }>(
+      http.post("/audit-queue/claim/", payload)
+    ),
+
+  startInterrogation: (auditId: string) =>
+    extract<{ session_id: string; question: string | null; question_index: number; total_questions: number }>(
+      http.post("/interrogations/start/", { audit_id: auditId })
+    ),
+
+  answerInterrogation: (sessionId: string, payload: { answer: string; latency_ms?: number }) =>
+    extract<{ status: string; next_question: string | null; question_index?: number; total_questions?: number }>(
+      http.post(`/interrogations/${sessionId}/answer/`, payload)
+    ),
+
+  completeInterrogation: (sessionId: string) =>
+    extract<{ status: string; audit_id: string; hm_score?: number | null; audit_status?: string }>(
+      http.post(`/interrogations/${sessionId}/complete/`)
+    ),
+
+  getAdminMetrics: () =>
+    extract<{ total_audits: number; verified: number; narrative_validated: number; unverified: number; completion_rate: number }>(
+      http.get("/audits/admin/metrics/")
+    ),
+  getInstitutionOverview: () =>
+    extract<AuditInstitutionOverview>(http.get("/audits/institutions/overview/")),
+  getInstitutionStudents: (params?: { page?: number; page_size?: number }) =>
+    extract<{ count: number; page: number; page_size: number; results: AuditInstitutionStudentRow[] }>(
+      http.get("/audits/institutions/students/", { params })
+    ),
+  getInstitutionStudentDetail: (studentId: string) =>
+    extract<AuditInstitutionStudentDetail>(http.get(`/audits/institutions/students/${studentId}/`)),
 };

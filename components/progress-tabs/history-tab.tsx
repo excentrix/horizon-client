@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
-export default function XpHistoryPage() {
+export function HistoryTab() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [page, setPage] = useState(1);

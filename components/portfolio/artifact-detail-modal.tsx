@@ -47,6 +47,7 @@ interface ArtifactDetail {
   visibility: string;
   featured: boolean;
   tags?: string[];
+  metadata?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -74,6 +75,10 @@ export function ArtifactDetailModal({
   const isPdf = artifact.url?.toLowerCase().endsWith(".pdf");
   const showContent = Boolean(artifact.content);
   const showEmbed = Boolean(artifact.url);
+  const isVeloPending =
+    artifact.metadata?.source === "velo_resume" &&
+    artifact.verification_status !== "verified" &&
+    artifact.verification_status !== "human_verified";
 
   const handleReflectionSubmit = async () => {
     if (!reflection.trim()) {
@@ -99,8 +104,8 @@ export function ArtifactDetailModal({
     try {
       await setVisibility({ artifactId: artifact.id, visibility });
       toast.success("Visibility updated");
-    } catch {
-      toast.error("Failed to update visibility");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update visibility");
     } finally {
       setVisibilityUpdating(false);
     }
@@ -137,18 +142,26 @@ export function ArtifactDetailModal({
             ))}
           </div>
           <div className="flex flex-wrap gap-2 text-xs">
-            {["private", "mentors", "employers", "public"].map((visibility) => (
+            {["private", "mentors", "employers", "public"].map((visibility) => {
+              const promotionBlocked = isVeloPending && ["employers", "public"].includes(visibility);
+              return (
               <Button
                 key={visibility}
                 size="sm"
                 variant={artifact.visibility === visibility ? "default" : "outline"}
-                disabled={visibilityUpdating}
+                disabled={visibilityUpdating || promotionBlocked}
                 onClick={() => handleVisibilityChange(visibility)}
               >
                 {visibility}
               </Button>
-            ))}
+              );
+            })}
           </div>
+          {isVeloPending ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Needs VELO verification before promoting to employers/public.
+            </p>
+          ) : null}
 
           {/* Verification Summary */}
           {artifact.verification_summary && (

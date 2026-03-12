@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,6 +23,8 @@ import {
 } from "recharts";
 import { AlertTriangle, Activity, Users, Zap } from "lucide-react";
 import { useInstitutionCohort } from "../_lib/useInstitutionCohort";
+import { auditApi } from "@/lib/api";
+import type { AuditInstitutionOverview } from "@/types";
 
 const RISK_COLORS: Record<"low" | "medium" | "high", string> = {
   low: "#22c55e",
@@ -32,6 +35,19 @@ const RISK_COLORS: Record<"low" | "medium" | "high", string> = {
 export default function InstitutionOverviewPage() {
   const { user } = useAuth();
   const { cohorts, selectedCohort, setSelectedCohort, dashboard, loading } = useInstitutionCohort();
+  const [veloOverview, setVeloOverview] = useState<AuditInstitutionOverview | null>(null);
+
+  useEffect(() => {
+    const loadVeloOverview = async () => {
+      try {
+        const data = await auditApi.getInstitutionOverview();
+        setVeloOverview(data);
+      } catch {
+        setVeloOverview(null);
+      }
+    };
+    void loadVeloOverview();
+  }, []);
 
   const studentCount = dashboard?.total_students ?? 0;
 
@@ -242,6 +258,49 @@ export default function InstitutionOverviewPage() {
               </CardContent>
             </Card>
           </div>
+
+          {veloOverview ? (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Verified Profile Rate</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {Math.round((veloOverview.verified_profile_rate || 0) * 100)}%
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Career-Ready Count</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{veloOverview.career_ready_count}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Avg VELO Readiness</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {Math.round((veloOverview.avg_readiness_score || 0) * 100)}%
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Top VELO Skill Gap</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-sm font-semibold">
+                    {veloOverview.top_skill_gaps[0]?.gap || "No gap data"}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>

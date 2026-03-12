@@ -1,9 +1,13 @@
-import { useMemo } from "react";
+"use client";
+
+import { useMemo, useRef, useState } from "react";
 import type { DailyTask } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Video, ExternalLink, Lightbulb } from "lucide-react";
+import { BookOpen, Video, ExternalLink, Lightbulb, ThumbsUp, ThumbsDown } from "lucide-react";
 import { MathMarkdown } from "@/components/markdown/MathMarkdown";
+import { planningApi } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 interface LearningPanelProps {
   activeTask: DailyTask | undefined;
@@ -11,6 +15,7 @@ interface LearningPanelProps {
 }
 
 type LessonBlock = NonNullable<DailyTask["lesson_blocks"]>[number];
+type FeedbackState = Record<string, "helpful" | "unhelpful" | null>;
 
 const getStringProp = (value: Record<string, unknown>, key: string) => {
   const candidate = value[key];
@@ -39,7 +44,78 @@ function getVideoEmbedUrl(url: string) {
   return null;
 }
 
+function BlockFeedback({
+  block,
+  taskId,
+  feedback,
+  onFeedback,
+  blockStartTime,
+}: {
+  block: LessonBlock;
+  taskId: string;
+  feedback: "helpful" | "unhelpful" | null;
+  onFeedback: (blockId: string, helpful: boolean) => void;
+  blockStartTime: number;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleClick = async (helpful: boolean) => {
+    if (submitting || feedback !== null) return;
+    setSubmitting(true);
+    const timeSpent = Math.round((Date.now() - blockStartTime) / 1000);
+    if (!block.id) return;
+    
+    try {
+      await planningApi.submitBlockFeedback(taskId, [
+        { block_id: block.id, helpful, time_spent_seconds: timeSpent },
+      ]);
+      onFeedback(block.id, helpful);
+    } catch (err) {
+      // silent — preference inference is best-effort
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1 mt-3 pt-2 border-t border-slate-100">
+      <span className="text-[10px] text-slate-400 mr-1">Helpful?</span>
+      <button
+        onClick={() => handleClick(true)}
+        disabled={submitting || feedback !== null}
+        aria-label="Mark block helpful"
+        className={cn(
+          "flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors",
+          feedback === "helpful"
+            ? "bg-emerald-100 text-emerald-700"
+            : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 disabled:opacity-40"
+        )}
+      >
+        <ThumbsUp className="w-3 h-3" />
+        {feedback === "helpful" && <span>Yes</span>}
+      </button>
+      <button
+        onClick={() => handleClick(false)}
+        disabled={submitting || feedback !== null}
+        aria-label="Mark block unhelpful"
+        className={cn(
+          "flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors",
+          feedback === "unhelpful"
+            ? "bg-red-100 text-red-600"
+            : "text-slate-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-40"
+        )}
+      >
+        <ThumbsDown className="w-3 h-3" />
+        {feedback === "unhelpful" && <span>No</span>}
+      </button>
+    </div>
+  );
+}
+
 export function LearningPanel({ activeTask, lessonLoading }: LearningPanelProps) {
+  const [blockFeedback, setBlockFeedback] = useState<FeedbackState>({});
+  const panelMountTime = useRef(Date.now());
+
   const resources = (activeTask?.online_resources ?? []) as Array<
     string | Record<string, unknown>
   >;
@@ -89,6 +165,13 @@ export function LearningPanel({ activeTask, lessonLoading }: LearningPanelProps)
       },
     ];
   }, [activeTask]);
+
+  const handleFeedback = (blockId: string, helpful: boolean) => {
+    setBlockFeedback((prev) => ({
+      ...prev,
+      [blockId]: helpful ? "helpful" : "unhelpful",
+    }));
+  };
 
   if (!activeTask) {
     return (
@@ -152,9 +235,9 @@ export function LearningPanel({ activeTask, lessonLoading }: LearningPanelProps)
                   );
                 })()}
               </p>
-              <a 
-                href={String(primaryResourceHref)} 
-                target="_blank" 
+              <a
+                href={String(primaryResourceHref)}
+                target="_blank"
                 rel="noreferrer"
                 className="inline-flex mt-3 bg-white border border-blue-200 px-3 py-1.5 rounded-md items-center gap-2 text-xs font-semibold text-blue-700 hover:text-blue-800 hover:bg-blue-50 transition-colors shadow-sm"
               >
@@ -186,6 +269,15 @@ export function LearningPanel({ activeTask, lessonLoading }: LearningPanelProps)
                   <div className="prose prose-sm prose-slate md:prose-base max-w-none text-slate-600 leading-relaxed font-serif">
                     <MathMarkdown>{block.content ?? ""}</MathMarkdown>
                   </div>
+                  {block.id && block.id !== "desc" && (
+                    <BlockFeedback
+                      block={block}
+                      taskId={activeTask.id}
+                      feedback={blockFeedback[block.id] ?? null}
+                      onFeedback={handleFeedback}
+                      blockStartTime={panelMountTime.current}
+                    />
+                  )}
                 </div>
               ))}
             </div>

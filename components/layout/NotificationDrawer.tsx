@@ -11,8 +11,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+import { http } from "@/lib/http-client";
 
 type InboxNotification = {
   id: number;
@@ -44,14 +43,6 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-async function apiFetch(path: string, options?: RequestInit) {
-  const token = typeof localStorage !== "undefined" ? localStorage.getItem("access_token") : "";
-  return fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(options?.headers ?? {}) },
-  });
-}
-
 interface NotificationDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -67,13 +58,10 @@ export function NotificationDrawer({ open, onOpenChange, onCountChange }: Notifi
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await apiFetch("/api/notifications/inbox/");
-      if (res.ok) {
-        const data = await res.json();
-        setNotifications(data.results ?? []);
-        const unread = (data.results ?? []).filter((n: InboxNotification) => !n.is_read).length;
-        onCountChange?.(unread);
-      }
+      const { data } = await http.get("/notifications/inbox/");
+      setNotifications(data.results ?? []);
+      const unread = (data.results ?? []).filter((n: InboxNotification) => !n.is_read).length;
+      onCountChange?.(unread);
     } catch {
       /* ignore */
     } finally {
@@ -93,13 +81,13 @@ export function NotificationDrawer({ open, onOpenChange, onCountChange }: Notifi
     setNotifications((prev) => prev.map((n) => n.id === notif.id ? { ...n, is_read: true } : n));
     const newUnread = notifications.filter((n) => n.id !== notif.id && !n.is_read).length;
     onCountChange?.(newUnread);
-    await apiFetch(`/api/notifications/inbox/${notif.id}/read/`, { method: "POST" });
+    await http.post(`/notifications/inbox/${notif.id}/read/`);
     if (notif.link) { router.push(notif.link); onOpenChange(false); }
   };
 
   const markAll = async () => {
     setMarkingAll(true);
-    await apiFetch("/api/notifications/inbox/read_all/", { method: "POST" });
+    await http.post("/notifications/inbox/read_all/");
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     onCountChange?.(0);
     setMarkingAll(false);

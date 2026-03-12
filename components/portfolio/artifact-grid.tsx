@@ -25,6 +25,7 @@ interface Artifact {
   visibility: "private" | "mentors" | "employers" | "public";
   featured: boolean;
   tags?: string[];
+  metadata?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -171,6 +172,7 @@ export function ArtifactGrid({
               verificationScore={artifact.verification_score}
               visibility={artifact.visibility}
               featured={artifact.featured}
+              metadata={artifact.metadata}
               tags={artifact.tags}
               createdAt={artifact.created_at}
               onClick={() => onArtifactClick?.(artifact)}

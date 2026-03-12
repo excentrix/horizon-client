@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { NotificationDrawer } from "./NotificationDrawer";
 import { cn } from "@/lib/utils";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+import { http } from "@/lib/http-client";
 
 export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
@@ -15,19 +15,13 @@ export function NotificationBell() {
 
   const fetchUnread = async () => {
     try {
-      const token = typeof localStorage !== "undefined" ? localStorage.getItem("access_token") : "";
-      const res = await fetch(`${API_BASE}/api/notifications/inbox/unread_count/`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUnreadCount(data.count ?? 0);
-      }
+      const { data } = await http.get("/notifications/inbox/unread_count/");
+      setUnreadCount(data.count ?? 0);
     } catch {
       // Silently ignore — non-critical feature
     }
   };
+
 
   useEffect(() => {
     fetchUnread();

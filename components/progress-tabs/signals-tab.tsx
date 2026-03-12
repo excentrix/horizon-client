@@ -20,7 +20,7 @@ const statusColors: Record<string, string> = {
   idle: "bg-muted text-muted-foreground",
 };
 
-export default function SignalsPage() {
+export function SignalsTab() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
 

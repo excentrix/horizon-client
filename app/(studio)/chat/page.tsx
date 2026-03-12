@@ -29,7 +29,7 @@ import { PersonalitySelector } from "@/components/mentor-lounge/personality-sele
 import { MentorActionShelf } from "@/components/mentor-lounge/mentor-action-shelf";
 import { AgentIndicator } from "@/components/mentor-lounge/agent-indicator";
 import { CortexDebugDrawer } from "@/components/mentor-lounge/cortex-debug-drawer";
-import { intelligenceApi } from "@/lib/api";
+import { intelligenceApi, auditApi } from "@/lib/api";
 import { describeStageEvent } from "@/lib/analysis-stage";
 import { MissingInfoForm } from "@/components/mentor-lounge/missing-info-form";
 import { AnalysisHistory } from "@/components/mentor-lounge/analysis-history";
@@ -136,6 +136,8 @@ function ChatContent() {
   const isMentorIntake =
     searchParams.get("context") === "mentor_intake" ||
     Boolean(activeConversation?.is_intake);
+  const isVeloIntake = searchParams.get("context") === "velo_intake";
+  const veloAuditId = searchParams.get("audit");
 
   const {
     status: socketStatus,
@@ -184,6 +186,9 @@ function ChatContent() {
   const [intakePreview, setIntakePreview] = useState<Record<string, unknown> | null>(null);
   const [intakeState, setIntakeState] = useState<Record<string, unknown> | null>(null);
   const [intakeSubmitted, setIntakeSubmitted] = useState(false);
+  const [veloConfirming, setVeloConfirming] = useState(false);
+  const [veloConfirmed, setVeloConfirmed] = useState(false);
+  const [veloConfirmError, setVeloConfirmError] = useState<string | null>(null);
 
   const analyzeConversation = useAnalyzeConversation();
   const createPlan = useCreatePlanFromConversation();
@@ -945,11 +950,54 @@ useEffect(() => {
           setLatestPlan(data);
         },
         onError: (error) => {
+          const guardPayload = (error as { response?: { data?: { error?: string; handoff_url?: string; message?: string } } })?.response?.data;
+          if (guardPayload?.error === "mentor_context_required") {
+            telemetry.toastError("Mentor context required", guardPayload.message || "Continue with mentor to personalize roadmap.");
+            if (guardPayload.handoff_url && typeof window !== "undefined") {
+              window.location.href = guardPayload.handoff_url;
+              return;
+            }
+          }
           telemetry.error("Plan creation request failed", { error });
         },
       },
     );
   };
+
+  const handleConfirmVeloContext = useCallback(async () => {
+    if (!veloAuditId) return;
+    const slots = (intakeState?.slots as Record<string, unknown> | undefined) ?? {};
+    const veloContext = (intakeState?.velo_context as Record<string, unknown> | undefined) ?? {};
+    const payload = {
+      target_role: slots.target_role || slots.portfolio_goals || "",
+      timeline: slots.timeline || slots.goals || "",
+      constraints: slots.constraints || "",
+      priority_gaps: Array.isArray(slots.priority_gaps)
+        ? slots.priority_gaps
+        : Array.isArray(veloContext.gaps)
+          ? veloContext.gaps
+          : [],
+      ...slots,
+    };
+    setVeloConfirming(true);
+    setVeloConfirmError(null);
+    try {
+      await auditApi.confirmMentorContext(veloAuditId, {
+        intake_payload: payload,
+        source: "chat",
+      });
+      setVeloConfirmed(true);
+      telemetry.toastSuccess("VELO mentor context confirmed");
+    } catch (error) {
+      const message =
+        (error as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        "Unable to confirm VELO context. Complete more intake details.";
+      setVeloConfirmError(message);
+      telemetry.toastError("VELO confirmation failed", message);
+    } finally {
+      setVeloConfirming(false);
+    }
+  }, [intakeState, veloAuditId]);
 
   const planWorkbenchData = useMemo(() => {
     if (planRecord) {
@@ -1249,6 +1297,34 @@ useEffect(() => {
                     </p>
                   ) : null}
                 </div>
+                {isVeloIntake ? (
+                  <div className="px-4 pb-3">
+                    <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">
+                      <p className="font-medium">Using VELO audit context for roadmap personalization.</p>
+                      <p className="mt-1">
+                        Capture role, timeline, constraints, and priority gaps, then confirm mentor context.
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={veloConfirmed ? "secondary" : "default"}
+                          onClick={() => void handleConfirmVeloContext()}
+                          disabled={veloConfirming || veloConfirmed || !veloAuditId}
+                          className="h-7 text-xs"
+                        >
+                          {veloConfirmed
+                            ? "Roadmap context confirmed"
+                            : veloConfirming
+                              ? "Confirming..."
+                              : "Confirm VELO Context"}
+                        </Button>
+                        {veloConfirmError ? (
+                          <span className="text-[11px] text-rose-700">{veloConfirmError}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 {socketError ? (
                   <div className="px-4 pb-3">
                     <p className="rounded-md bg-rose-50 px-3 py-2 text-[11px] text-rose-700">

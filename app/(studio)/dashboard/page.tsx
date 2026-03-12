@@ -21,6 +21,7 @@ import {
   Award,
   Zap,
   Flame,
+  Clock,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -34,13 +35,30 @@ export default function DashboardPage() {
   const { data: flowData } = useFlowSuggestion('dashboard', { enabled: canQuery });
   const [flowShownAt] = useState(new Date());
 
+  const [todaysTasksData, setTodaysTasksData] = useState<{tasks: any[], count: number} | null>(null);
+  const [tasksLoading, setTasksLoading] = useState(true);
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace("/login");
     }
   }, [authLoading, router, user]);
 
-  const isLoading = authLoading || homeLoading;
+  useEffect(() => {
+    if (canQuery) {
+      import("@/lib/api").then(({ planningApi }) => {
+        planningApi.getTodaysTasks().then(data => {
+          setTodaysTasksData(data);
+          setTasksLoading(false);
+        }).catch(err => {
+          console.error("Failed to load today's tasks", err);
+          setTasksLoading(false);
+        });
+      });
+    }
+  }, [canQuery]);
+
+  const isLoading = authLoading || tasksLoading;
   const profile = gamificationData?.profile;
   const currentLevel = profile?.level ?? 1;
   const totalXP = profile?.total_points ?? 0;
@@ -50,11 +68,9 @@ export default function DashboardPage() {
   const currentStreak = profile?.current_streak ?? 0;
   const longestStreak = profile?.longest_streak ?? 0;
   const badgeCount = gamificationData?.badge_count ?? 0;
-  const tasksThisWeek = homeData?.weekly_stats?.tasks_completed ?? 0;
-  const hasPlan = !!homeData?.today_task || tasksThisWeek > 0;
-  const updatedAt = homeData?.generated_at
-    ? formatDistanceToNow(new Date(homeData.generated_at), { addSuffix: true })
-    : null;
+  const tasksThisWeek = 0; // Removing weekly stats for simplicity
+  const hasPlan = todaysTasksData && todaysTasksData.count > 0;
+  const updatedAt = new Date().toLocaleTimeString();
 
   return (
     <div className="space-y-6 p-4 lg:p-6">
@@ -118,54 +134,89 @@ export default function DashboardPage() {
               />
             </div>
           </div>
-
-          {/* Quick Stats Pills */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 rounded-full border border-violet-200/60 bg-white/80 px-4 py-2 text-sm shadow-sm">
-              <Award className="h-4 w-4 text-violet-600" />
-              <span className="font-medium text-slate-900">{badgeCount} Badges</span>
-            </div>
-            <div className="flex items-center gap-2 rounded-full border border-emerald-200/60 bg-white/80 px-4 py-2 text-sm shadow-sm">
-              <TrendingUp className="h-4 w-4 text-emerald-600" />
-              <span className="font-medium text-slate-900">{tasksThisWeek} Tasks This Week</span>
-            </div>
-            {longestStreak > 0 && (
-              <div className="flex items-center gap-2 rounded-full border border-orange-200/60 bg-white/80 px-4 py-2 text-sm shadow-sm">
-                <Flame className="h-4 w-4 text-orange-500" />
-                <span className="font-medium text-slate-900">{longestStreak} Day Best Streak</span>
-              </div>
-            )}
-            {updatedAt && (
-              <span className="text-xs text-muted-foreground">
-                Updated {updatedAt}
-              </span>
-            )}
-          </div>
         </div>
       </div>
 
-      {/* Flow Suggestion - Hero CTA */}
-      {flowData?.suggestion && (
-        <FlowStarter 
-          suggestion={flowData.suggestion} 
-          shownAt={flowShownAt}
-        />
-      )}
-
-      {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <TodayFocusCard
-            task={homeData?.today_task}
-            additionalTasks={homeData?.additional_tasks}
-            isLoading={isLoading}
-          />
-        </div>
-        <WeeklyMomentumCard
-          stats={homeData?.weekly_stats}
-          hasPlan={hasPlan}
-          isLoading={isLoading}
-        />
+      {/* Main Content: Today's Tasks */}
+      <div className="grid gap-6">
+        <Card className="border-primary/20 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-2xl flex items-center gap-2">
+                  <Calendar className="h-6 w-6 text-violet-600" />
+                  Today&apos;s Tasks
+                </CardTitle>
+                <CardDescription>All your scheduled tasks for today</CardDescription>
+              </div>
+              {todaysTasksData && (
+                <div className="rounded-full bg-violet-100 px-3 py-1 text-sm font-medium text-violet-800">
+                  {todaysTasksData.count} tasks
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-20 animate-pulse rounded-lg bg-muted" />
+                ))}
+              </div>
+            ) : todaysTasksData?.count === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <div className="mb-4 rounded-full bg-slate-100 p-4">
+                  <Sparkles className="h-8 w-8 text-slate-400" />
+                </div>
+                <h3 className="text-lg font-semibold">You&apos;re all caught up!</h3>
+                <p className="text-muted-foreground mt-2 max-w-sm">
+                  There are no scheduled tasks for today. You can take a break or explore your learning plans for tomorrow.
+                </p>
+                <Button className="mt-6" onClick={() => router.push("/plans")}>
+                  View Learning Plans
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {todaysTasksData?.tasks.map((task: any) => (
+                  <div 
+                    key={task.id} 
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border p-4 transition-all hover:border-violet-300 hover:shadow-md bg-white"
+                  >
+                    <div>
+                      <h4 className="font-semibold text-lg">{task.title}</h4>
+                      <p className="text-sm text-muted-foreground mt-1">{task.plan_title}</p>
+                      
+                      <div className="flex flex-wrap items-center gap-4 mt-3">
+                        {task.estimated_duration && (
+                          <div className="flex items-center text-xs text-slate-500 gap-1.5">
+                            <Clock className="h-3.5 w-3.5" />
+                            <span>{task.estimated_duration} min</span>
+                          </div>
+                        )}
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          task.status === "completed" ? "bg-emerald-100 text-emerald-700" :
+                          task.status === "in_progress" ? "bg-amber-100 text-amber-700" :
+                          "bg-slate-100 text-slate-700"
+                        }`}>
+                          {task.status.replace("_", " ")}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <Button 
+                      onClick={() => router.push(`/plans/${task.plan_id}/playground?task=${task.id}`)}
+                      className={task.status === "completed" ? "bg-slate-100 text-slate-700 hover:bg-slate-200" : ""}
+                      variant={task.status === "completed" ? "secondary" : "default"}
+                    >
+                      {task.status === "completed" ? "Review" : "Start Task"}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Quick Actions */}
@@ -226,62 +277,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
-
-      {/* Activity & Insights */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ActivityFeed items={homeData?.recent_activity} isLoading={isLoading} />
-
-        {/* Recent Badges */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Award className="h-5 w-5 text-violet-600" />
-              Recent Achievements
-            </CardTitle>
-            <CardDescription>Badges you&apos;ve unlocked on your journey</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {gamificationData?.recent_badges?.length ? (
-              gamificationData.recent_badges.slice(0, 4).map((item) => {
-                const badge = "badge" in item ? item.badge : item;
-                return (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-3 rounded-lg border bg-gradient-to-r from-violet-50/50 to-fuchsia-50/50 p-3 dark:from-violet-950/20 dark:to-fuchsia-950/20"
-                  >
-                    <div className="text-2xl">{badge.icon || "🏆"}</div>
-                    <div className="flex-1">
-                      <p className="font-medium">{badge.name}</p>
-                      {"description" in badge && badge.description && (
-                        <p className="text-xs text-muted-foreground">
-                          {badge.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="py-8 text-center">
-                <div className="mb-2 inline-flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                  <Sparkles className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Complete your first task to earn your first badge!
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3"
-                  onClick={() => router.push("/plans")}
-                >
-                  Explore Learning Plans
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

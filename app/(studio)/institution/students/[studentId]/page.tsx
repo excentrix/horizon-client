@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { institutionsApi } from "@/lib/api";
+import { institutionsApi, auditApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Clock, ShieldCheck, Target } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import type { AuditInstitutionStudentDetail } from "@/types";
 
 type StudentInsight = {
   user_id: string;
@@ -44,6 +45,7 @@ export default function StudentInsightPage() {
   const [interventions, setInterventions] = useState<
     { id: string; action_type: string; status: string; notes?: string; created_at: string; created_by_name?: string }[]
   >([]);
+  const [veloDetail, setVeloDetail] = useState<AuditInstitutionStudentDetail | null>(null);
   const seriesData = useMemo(() => {
     const engagement = student?.engagement_series ?? [];
     const completion = student?.completion_series ?? [];
@@ -74,6 +76,14 @@ export default function StudentInsightPage() {
     institutionsApi.listStudentInterventions(params.studentId)
       .then((data) => setInterventions(data))
       .catch((err) => telemetry.error("Failed to load interventions", { err }));
+  }, [params.studentId]);
+
+  useEffect(() => {
+    if (!params.studentId) return;
+    auditApi
+      .getInstitutionStudentDetail(params.studentId)
+      .then((data) => setVeloDetail(data))
+      .catch(() => setVeloDetail(null));
   }, [params.studentId]);
 
   const handleIntervention = async (action: "check_in" | "schedule_1on1" | "assign_remediation") => {
@@ -195,6 +205,28 @@ export default function StudentInsightPage() {
           {student.top_skill_gap ?? "No gap detected yet."}
         </CardContent>
       </Card>
+
+      {veloDetail ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">VELO Readiness Profile</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              Readiness: <span className="font-medium text-foreground">{Math.round(veloDetail.latest.readiness_score * 100)}%</span> ({veloDetail.latest.readiness_label})
+            </p>
+            <p>
+              Audit status: <span className="font-medium text-foreground">{veloDetail.latest_audit_summary.status.replace(/_/g, " ")}</span>
+            </p>
+            <p>
+              Mentor context: <span className="font-medium text-foreground">{veloDetail.latest_audit_summary.mentor_context_status}</span>
+            </p>
+            <p>
+              Top 3 gaps: {veloDetail.latest.top_skill_gaps.slice(0, 3).join(", ") || "None"}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

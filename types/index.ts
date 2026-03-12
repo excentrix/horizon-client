@@ -109,6 +109,9 @@ export interface UserProfileDetail {
   preferred_communication_hours: Record<string, unknown>;
   mentor_preferences: Record<string, unknown>;
   resume_url?: string;
+  resume_payload?: Record<string, unknown>;
+  resume_parsed_at?: string;
+  resume_source?: string;
   transcript_url?: string;
   portfolio_url?: string;
   created_at?: string;
@@ -1033,4 +1036,134 @@ export interface HomeDashboard {
   weekly_stats: WeeklyStats;
   recent_activity: ActivityItem[];
   generated_at: string;
+}
+
+export type AuditStatus =
+  | "verified_truth"
+  | "narrative_validated"
+  | "unverified_claim";
+
+export type AuditType = "repo" | "narrative";
+
+export interface ExperienceAudit {
+  id: UUID;
+  status: AuditStatus;
+  audit_type: AuditType;
+  flagship_artifact?: UUID | null;
+  project_title?: string;
+  resume_payload?: Record<string, unknown>;
+  resume_source?: string;
+  hm_score?: number | null;
+  code_signature_score?: number | null;
+  interrogation_depth?: number | null;
+  evidence_validity?: number | null;
+  mentor_context_status?: "pending" | "confirmed";
+  mentor_context_confirmed_at?: string | null;
+  mentor_conversation?: UUID | null;
+  mentor_context_payload?: Record<string, unknown>;
+  direction_overview?: {
+    focus_areas?: string[];
+    risk_areas?: string[];
+    mentor_questions?: string[];
+    readiness_narrative?: string;
+  };
+  active_for_planning?: boolean;
+  created_at: string;
+  updated_at: string;
+  retention_expires_at?: string | null;
+  slot_expires_at?: string | null;
+  evidence?: AuditEvidence[];
+}
+
+export interface AuditEvidence {
+  id: UUID;
+  source_type: AuditType;
+  repo_metadata: Record<string, unknown>;
+  narrative_text?: string;
+  narrative_diagram?: string | null;
+  evidence_summary: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AuditReport {
+  audit_id: UUID;
+  status: AuditStatus;
+  audit_type: AuditType;
+  project_title: string;
+  scores: {
+    hm_score?: number | null;
+    code_signature?: number | null;
+    interrogation_depth?: number | null;
+    evidence_validity?: number | null;
+  };
+  evidence_summary?: Record<string, unknown>;
+  resume_summary?: Record<string, unknown>;
+  mentor_handoff_required?: boolean;
+  mentor_context_status?: "pending" | "confirmed";
+  mentor_context_confirmed_at?: string | null;
+  chat_handoff_url?: string | null;
+  direction_overview?: {
+    focus_areas?: string[];
+    risk_areas?: string[];
+    mentor_questions?: string[];
+    readiness_narrative?: string;
+  };
+  generated_at: string;
+  public?: boolean;
+}
+
+export interface AuditQueueSlot {
+  week_start: string;
+  max_slots: number;
+  used_slots: number;
+  remaining: number;
+}
+
+export interface AuditInstitutionOverview {
+  total_students: number;
+  verified_profile_rate: number;
+  career_ready_count: number;
+  readiness_distribution: Record<string, number>;
+  top_skill_gaps: Array<{ gap: string; count: number }>;
+  avg_readiness_score: number;
+}
+
+export interface AuditInstitutionStudentRow {
+  student_id: UUID;
+  name: string;
+  email: string;
+  readiness_score: number;
+  readiness_label: string;
+  verified_evidence_ratio: number;
+  top_skill_gaps: string[];
+  top_strengths: string[];
+  flags: string[];
+  audit_id: UUID;
+  generated_at: string;
+}
+
+export interface AuditInstitutionStudentDetail {
+  student_id: UUID;
+  name: string;
+  email: string;
+  latest: {
+    readiness_score: number;
+    readiness_label: string;
+    verified_evidence_ratio: number;
+    top_skill_gaps: string[];
+    top_strengths: string[];
+    flags: string[];
+    audit_id: UUID;
+  };
+  trend: Array<{
+    generated_at: string;
+    readiness_score: number;
+    readiness_label: string;
+  }>;
+  latest_audit_summary: {
+    audit_id: UUID;
+    status: AuditStatus;
+    mentor_context_status: "pending" | "confirmed";
+    hm_score?: number | null;
+  };
 }

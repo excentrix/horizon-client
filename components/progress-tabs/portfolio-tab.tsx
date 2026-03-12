@@ -34,7 +34,7 @@ import {
 import type { PortfolioArtifact } from "@/types";
 
 
-export default function PortfolioPage() {
+export function PortfolioTab() {
 
   const [selectedArtifact, setSelectedArtifact] = useState<PortfolioArtifact | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);

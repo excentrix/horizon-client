@@ -56,34 +56,16 @@ const STUDENT_NAV_ITEMS = [
     description: "Levels toward job readiness",
   },
   {
-    href: "/insights",
-    label: "Your Mirror",
-    icon: Radar,
-    description: "Skills, proofs & career readiness",
-  },
-  {
-    href: "/artifacts",
-    label: "Artifacts",
-    icon: Briefcase,
-    description: "Submitted, verified, and promoted work",
-  },
-  {
-    href: "/portfolio",
-    label: "Portfolio",
-    icon: FolderOpen,
-    description: "Your professional portfolio showcase",
-  },
-  {
     href: "/progress",
-    label: "Progress Mural",
+    label: "Your Mirror",
     icon: Trophy,
-    description: "Milestones, streaks, and wins",
+    description: "Skills, portfolio & analytics",
   },
   {
-    href: "/xp-history",
-    label: "XP Ledger",
-    icon: Trophy,
-    description: "Every point you've earned",
+    href: "/audit",
+    label: "Audit Terminal",
+    icon: QrCode,
+    description: "Flagship project verification",
   },
   {
     href: "/institution/overview",
@@ -91,12 +73,6 @@ const STUDENT_NAV_ITEMS = [
     icon: Radar,
     description: "Cohorts, invites, educator insights",
     requiresInstitutionRole: true,
-  },
-  {
-    href: "/signals",
-    label: "Signals & Alerts",
-    icon: Radar,
-    description: "Wellness & intelligence feed",
   },
 ];
 
@@ -106,6 +82,12 @@ const EDUCATOR_NAV_ITEMS = [
     label: "Institution Overview",
     icon: Radar,
     description: "Cohorts, invites, educator insights",
+  },
+  {
+    href: "/audit/admin/dashboard",
+    label: "Audit Dashboard",
+    icon: QrCode,
+    description: "Audit completion and verification",
   },
   {
     href: "/institution/students",
@@ -127,6 +109,12 @@ const ADMIN_NAV_ITEMS = [
     label: "Institution Overview",
     icon: Briefcase,
     description: "Cohorts, invites, educator insights",
+  },
+  {
+    href: "/audit/admin/dashboard",
+    label: "Audit Dashboard",
+    icon: QrCode,
+    description: "Audit completion and verification",
   },
   {
     href: "/institution/cohorts",

@@ -60,7 +60,7 @@ const LEVEL_MAP: Record<string, number> = {
 };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-export default function InsightsPage() {
+export function IntelligenceTab() {
   const [competencies, setCompetencies] = useState<CompetencyPoint[]>([]);
   const [readiness, setReadiness] = useState<ReadinessData | null>(null);
   const [evidenceReadiness, setEvidenceReadiness] = useState<EvidenceReadiness | null>(null);
