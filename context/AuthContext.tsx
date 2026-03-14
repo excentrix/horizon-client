@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // handled in fetchProfile
     });
   }, [fetchProfile]);
-  
+
   // Listen for Supabase auth changes (handling Google Login redirect)
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -154,7 +154,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           setSessionTokens(access, refresh, true); // persistent by default for social login
           setUser(response.user);
-          
           telemetry.identify(response.user.id ?? response.user.email, {
              email: response.user.email,
              name: response.user.full_name,
@@ -182,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             response.user.user_type === "student" &&
             !response.user.onboarding_completed
           ) {
-            router.push("/onboarding/start");
+            router.push("/onboarding");
           } else if (response.user.is_superuser) {
             router.push("/hq");
           } else if (
@@ -221,7 +220,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           response.session.refresh_token ?? response.session.refresh ?? undefined;
         setSessionTokens(access, refresh, Boolean(payload.remember_me));
         setUser(response.user);
-
         // Identify user in PostHog
         telemetry.identify(response.user.id ?? response.user.email, {
           email: response.user.email,
@@ -243,7 +241,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           response.user.user_type === "student" &&
           !response.user.onboarding_completed
         ) {
-          router.push("/onboarding/start");
+          router.push("/onboarding");
         } else if (response.user.is_superuser) {
           router.push("/hq");
         } else if (userType === "admin" || userType === "educator") {
@@ -307,7 +305,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           undefined;
         setSessionTokens(access, refresh, true);
         setUser(loginResponse.user);
-
         // Capture signup event
         telemetry.track('user_signed_up', {
           email: payload.email,
@@ -319,7 +316,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           loginResponse.user.user_type === "student" &&
           !loginResponse.user.onboarding_completed
         ) {
-          router.push("/onboarding/start");
+          router.push("/onboarding");
         } else if (
           loginResponse.user.user_type === "admin" ||
           loginResponse.user.user_type === "educator"
@@ -348,7 +345,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isOnboardingPage = pathname.startsWith("/onboarding");
     const isMentorChat = pathname.startsWith("/chat");
     if (!isAuthPage && !isOnboardingPage && !isMentorChat) {
-      router.replace("/onboarding/start");
+      router.replace("/onboarding");
     }
   }, [pathname, router, user]);
 

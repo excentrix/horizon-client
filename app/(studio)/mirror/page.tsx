@@ -117,7 +117,7 @@ export default function MirrorPage() {
             <p className="text-sm text-rose-700">
               {data?.analysis_job?.error ?? "Analysis failed. You can re-upload your resume from the onboarding page."}
             </p>
-            <Button className="mt-3" variant="outline" size="sm" onClick={() => router.push("/onboarding/start")}>
+            <Button className="mt-3" variant="outline" size="sm" onClick={() => router.push("/onboarding")}>
               Re-upload resume
             </Button>
           </CardContent>
@@ -131,7 +131,7 @@ export default function MirrorPage() {
             <p className="text-sm text-muted-foreground">
               No resume analysis found yet. Upload your resume to get started.
             </p>
-            <Button className="mt-3" size="sm" onClick={() => router.push("/onboarding/start")}>
+            <Button className="mt-3" size="sm" onClick={() => router.push("/onboarding")}>
               Upload resume
             </Button>
           </CardContent>

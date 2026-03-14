@@ -102,6 +102,16 @@ export const authApi = {
       completed_at?: string | null;
       mirror_snapshot_id?: string | null;
     }>(http.get(`/auth/profile/resume/status/${jobId}/`)),
+  initResumeFromOnboarding: (payload: {
+    session_key: string;
+    target_role?: string;
+    target_company?: string;
+    timeline?: string;
+    constraints?: string;
+  }) =>
+    extract<{ status: "queued"; job_id: string; resume_url: string }>(
+      http.post("/auth/profile/resume/init-from-onboarding/", payload)
+    ),
   confirmResume: (payload: { resume_payload: Record<string, unknown>; projects?: Array<Record<string, unknown>> }) =>
     extract<{ status: string; projects_synced?: string[] }>(
       http.post("/auth/profile/resume/confirm/", payload)

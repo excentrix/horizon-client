@@ -28,6 +28,7 @@ import { usePortfolioProfile } from "@/hooks/use-portfolio";
 import { useAuth } from "@/context/AuthContext";
 import { type ComponentType, useMemo, useState } from "react";
 import { NotificationBell } from "@/components/layout/NotificationBell";
+import { VeloAnalysisStatusPill } from "@/components/layout/velo-analysis-status-pill";
 
 const STUDENT_NAV_ITEMS = [
   {
@@ -303,6 +304,7 @@ export function Sidebar() {
           })}
         </nav>
 
+        {isStudent && <VeloAnalysisStatusPill />}
         {isStudent && <AnalysisProgressPanel />}
 
         <div className="mt-auto space-y-4 p-4">
