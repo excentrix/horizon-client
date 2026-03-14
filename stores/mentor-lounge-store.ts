@@ -42,6 +42,10 @@ interface MentorLoungeState {
   setPlanSessionId: (sessionId: string | null) => void;
   updateLastPlanActivity: () => void;
   resetPlanBuild: () => void;
+
+  // Mirror Analysis
+  mirrorAnalysisReady: string | null; // snapshot_id when analysis is complete, null otherwise
+  setMirrorAnalysisReady: (snapshotId: string | null) => void;
 }
 
 export interface RoutingDecision {
@@ -125,4 +129,8 @@ export const useMentorLoungeStore = create<MentorLoungeState>((set) => ({
       planSessionId: null,
       lastPlanActivityAt: null,
     }),
+
+  // Mirror Analysis
+  mirrorAnalysisReady: null,
+  setMirrorAnalysisReady: (snapshotId) => set({ mirrorAnalysisReady: snapshotId }),
 }));

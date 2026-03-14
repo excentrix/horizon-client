@@ -18,7 +18,28 @@ export type VeloStep =
   | "audit_session"
   | "insight_brief"
   | "mentor_personalization"
-  | "roadmap_launch";
+  | "roadmap_launch"
+  | "mentor_and_roadmap";
+
+const normalizeStep = (step: string | null | undefined): VeloStep => {
+  if (step === "mentor_personalization" || step === "roadmap_launch") {
+    return "mentor_and_roadmap";
+  }
+  if (step === "audit_readiness") {
+    return "audit_session";
+  }
+  if (
+    step === "discovery" ||
+    step === "evidence_intake" ||
+    step === "audit_readiness" ||
+    step === "audit_session" ||
+    step === "insight_brief" ||
+    step === "mentor_and_roadmap"
+  ) {
+    return step;
+  }
+  return "discovery";
+};
 
 export function useVeloOnboardingFlow() {
   const searchParams = useSearchParams();
@@ -46,7 +67,7 @@ export function useVeloOnboardingFlow() {
     try {
       const data = await auditApi.getOnboardingSession();
       setSession(data);
-      setCurrentStep(queryStep || (data.current_step as VeloStep));
+      setCurrentStep(normalizeStep(queryStep || data.current_step));
       setTrack(data.chosen_track);
       if (data.latest_audit) {
         setAuditId(String(data.latest_audit));
@@ -54,7 +75,7 @@ export function useVeloOnboardingFlow() {
         setAuditId(queryAudit);
       }
     } catch {
-      if (queryStep) setCurrentStep(queryStep);
+      if (queryStep) setCurrentStep(normalizeStep(queryStep));
       if (queryAudit) setAuditId(queryAudit);
     } finally {
       setIsLoadingSession(false);
@@ -76,8 +97,9 @@ export function useVeloOnboardingFlow() {
       setTrack(result.track);
       setAuditMode(result.audit_mode);
       setDomainFamily(result.domain_family);
-      setCurrentStep(result.next_step as VeloStep);
-      await auditApi.advanceOnboardingSession(result.next_step as VeloStep);
+      const nextStep = normalizeStep(result.next_step);
+      setCurrentStep(nextStep);
+      await auditApi.advanceOnboardingSession(nextStep);
     },
     []
   );
@@ -88,7 +110,7 @@ export function useVeloOnboardingFlow() {
       setAuditId(result.audit_id);
       setTrack(result.track);
       setAuditMode(result.audit_mode);
-      setCurrentStep(result.next_step as VeloStep);
+      setCurrentStep(normalizeStep(result.next_step));
       return result;
     },
     []
@@ -107,9 +129,35 @@ export function useVeloOnboardingFlow() {
   }, []);
 
   const advanceStep = useCallback(async (nextStep: VeloStep) => {
-    await auditApi.advanceOnboardingSession(nextStep);
-    setCurrentStep(nextStep);
+    const normalized = normalizeStep(nextStep);
+    await auditApi.advanceOnboardingSession(normalized);
+    setCurrentStep(normalized);
   }, []);
+
+  const saveDraft = useCallback(
+    async (step: VeloStep, payload: Record<string, unknown>) => {
+      await auditApi.saveOnboardingDraft({
+        step,
+        payload,
+        client_saved_at: new Date().toISOString(),
+      });
+      setSession((prev) =>
+        prev
+          ? {
+              ...prev,
+              step_state: {
+                ...(prev.step_state || {}),
+                [step]: {
+                  ...((prev.step_state || {})[step] || {}),
+                  ...payload,
+                },
+              },
+            }
+          : prev
+      );
+    },
+    []
+  );
 
   const checklist = useMemo(() => {
     const flags = session?.completion_flags || {};
@@ -143,6 +191,7 @@ export function useVeloOnboardingFlow() {
     loadReport,
     loadEligibility,
     advanceStep,
+    saveDraft,
     reloadSession: loadSession,
   };
 }

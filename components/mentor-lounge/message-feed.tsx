@@ -214,7 +214,7 @@ export function MessageFeed({
       ) : null}
 
       <ConversationContainer
-        className="flex-1 overflow-hidden"
+        className="flex-1 overflow-y-auto"
         key={conversation.id}
       >
         <ConversationContent className="gap-4 px-5 pt-4 pb-2">

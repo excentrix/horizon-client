@@ -139,6 +139,7 @@ export function useChatSocket(conversationId: string | null) {
     pushRuntimeStep,
     pushInsight,
     pushMissingInfo,
+    setMirrorAnalysisReady,
   } = useMentorLoungeStore();
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -690,6 +691,16 @@ export function useChatSocket(conversationId: string | null) {
             case "artifact_verified": {
               // Dispatch to window so the playground page can show results without prop drilling
               window.dispatchEvent(new CustomEvent("artifact_verified", { detail: payload }));
+              break;
+            }
+            case "mirror_analysis_ready": {
+              const snapshotId = payload?.mirror_snapshot_id as string | undefined;
+              setMirrorAnalysisReady(snapshotId ?? null);
+              queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
+              telemetry.toastSuccess(
+                "Profile analysis ready",
+                "Your mentor now has full context about your background."
+              );
               break;
             }
             default:

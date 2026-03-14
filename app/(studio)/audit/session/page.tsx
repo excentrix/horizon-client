@@ -12,7 +12,7 @@ export default function LegacyAuditSessionRedirectPage() {
     if (!params.get("step")) {
       params.set("step", "audit_session");
     }
-    router.replace(`/onboarding/velo?${params.toString()}`);
+    router.replace(`/onboarding?${params.toString()}`);
   }, [router, searchParams]);
 
   return <div className="p-6 text-sm text-muted-foreground">Redirecting to VELO audit session...</div>;

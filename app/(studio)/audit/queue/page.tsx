@@ -12,7 +12,7 @@ export default function LegacyAuditQueueRedirectPage() {
     if (!params.get("step")) {
       params.set("step", "audit_readiness");
     }
-    router.replace(`/onboarding/velo?${params.toString()}`);
+    router.replace(`/onboarding?${params.toString()}`);
   }, [router, searchParams]);
 
   return <div className="p-6 text-sm text-muted-foreground">Redirecting to VELO readiness check...</div>;

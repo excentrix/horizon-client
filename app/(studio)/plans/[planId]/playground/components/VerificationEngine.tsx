@@ -16,6 +16,8 @@ export interface ArtifactVerifiedEvent {
   passed: boolean;
   strengths: string[];
   suggestions: string[];
+  verdict_summary?: string;
+  criteria_count?: number;
 }
 
 interface VerificationEngineProps {
@@ -281,6 +283,11 @@ export function VerificationEngine({
               </div>
             </div>
           </div>
+          {verificationResult.verdict_summary && (
+            <p className="text-sm text-slate-600 italic leading-relaxed border-l-2 border-slate-200 pl-3">
+              {verificationResult.verdict_summary}
+            </p>
+          )}
           {verificationResult.strengths.length > 0 && (
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-1">Strengths</p>

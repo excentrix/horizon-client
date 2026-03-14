@@ -16,37 +16,31 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useVeloOnboardingFlow, type VeloStep } from "@/hooks/use-velo-onboarding-flow";
+import { StepLoader } from "@/components/velo/step-loader";
+import { StepFooterActions } from "@/components/velo/step-footer-actions";
+import { StatusBanner } from "@/components/velo/status-banner";
+import { ResumeReviewPanel } from "@/components/velo/resume-review-panel";
+import { MentorReadinessCard } from "@/components/velo/mentor-readiness-card";
+import { telemetry } from "@/lib/telemetry";
+
+const STEP_ORDER: VeloStep[] = [
+  "discovery",
+  "evidence_intake",
+  "audit_session",
+  "insight_brief",
+  "mentor_and_roadmap",
+];
 
 const STEP_LABELS: Record<VeloStep, string> = {
   discovery: "Discovery",
   evidence_intake: "Evidence Intake",
-  audit_readiness: "Audit Readiness Check",
+  audit_readiness: "Readiness",
   audit_session: "Audit Session",
-  insight_brief: "VELO Insight Brief",
-  mentor_personalization: "Mentor Personalization",
-  roadmap_launch: "Roadmap Launch",
+  insight_brief: "Insight Brief",
+  mentor_personalization: "Mentor Context",
+  roadmap_launch: "Roadmap",
+  mentor_and_roadmap: "Mentor + Roadmap",
 };
-
-const READINESS_QUIZ = [
-  {
-    id: "logic_1",
-    question: "Which answer best reflects evidence-backed work?",
-    options: ["I can show artifacts and outcomes", "I watched tutorials", "I skimmed docs"],
-    correctIndex: 0,
-  },
-  {
-    id: "logic_2",
-    question: "What should happen before roadmap generation?",
-    options: ["Mentor context confirmation", "Skip to plan", "Public publish"],
-    correctIndex: 0,
-  },
-  {
-    id: "logic_3",
-    question: "When is full verification required?",
-    options: ["Public employer-facing promotion", "Private learning only", "Never"],
-    correctIndex: 0,
-  },
-];
 
 export default function VeloOnboardingPage() {
   const router = useRouter();
@@ -58,18 +52,20 @@ export default function VeloOnboardingPage() {
     auditId,
     report,
     eligibility,
-    checklist,
+    session,
     isLoadingSession,
     runDiscovery,
     submitEvidence,
     loadReport,
     loadEligibility,
     advanceStep,
-    setCurrentStep,
+    saveDraft,
   } = useVeloOnboardingFlow();
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusTone, setStatusTone] = useState<"info" | "success" | "error">("info");
   const [submitting, setSubmitting] = useState(false);
+
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumePayload, setResumePayload] = useState<Record<string, unknown>>({});
   const [resumeProjects, setResumeProjects] = useState<Array<Record<string, unknown>>>([]);
@@ -77,11 +73,24 @@ export default function VeloOnboardingPage() {
   const [summary, setSummary] = useState("");
   const [projectTitle, setProjectTitle] = useState("Flagship Project");
 
+  const [resumeParseState, setResumeParseState] = useState<"idle" | "uploading" | "analyzing" | "success" | "error">("idle");
+  const [resumeJobId, setResumeJobId] = useState<string | null>(null);
+  const [resumeJobStatus, setResumeJobStatus] = useState<"queued" | "running" | "completed" | "failed" | null>(null);
+  const hydratedDraftRef = useRef(false);
+  const lastDraftSignatureRef = useRef<string>("");
+  const lastDraftSavedAtMsRef = useRef<number>(0);
+
   const [discovery, setDiscovery] = useState({
     has_resume: true,
     education_stage: "year_2",
     domain_family: "tech",
     has_projects: true,
+  });
+  const [profileBasics, setProfileBasics] = useState({
+    target_role: "",
+    target_company: "",
+    timeline: "",
+    constraints: "",
   });
 
   const [starterAnswers, setStarterAnswers] = useState<Record<string, number>>({
@@ -90,8 +99,6 @@ export default function VeloOnboardingPage() {
     q3: 2,
   });
 
-  const [readinessAnswers, setReadinessAnswers] = useState<Record<string, number>>({});
-  const [claimingSlot, setClaimingSlot] = useState(false);
   const [interrogation, setInterrogation] = useState<{
     sessionId: string;
     question: string | null;
@@ -102,6 +109,8 @@ export default function VeloOnboardingPage() {
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
   const questionStartRef = useRef<number | null>(null);
   const [startingHandoff, setStartingHandoff] = useState(false);
+
+  const stepIndex = useMemo(() => Math.max(STEP_ORDER.indexOf(currentStep), 0), [currentStep]);
 
   useEffect(() => {
     const hydrate = async () => {
@@ -114,24 +123,53 @@ export default function VeloOnboardingPage() {
             ? (payload.projects as Array<Record<string, unknown>>)
             : [];
           setResumeProjects(parsedProjects);
-          if (parsedProjects[0]?.repo_url) {
-            setRepoUrl(String(parsedProjects[0].repo_url));
-          }
-          if (parsedProjects[0]?.description) {
-            setSummary(String(parsedProjects[0].description));
-          }
-          if (parsedProjects[0]?.title) {
-            setProjectTitle(String(parsedProjects[0].title));
-          }
+          if (parsedProjects[0]?.repo_url) setRepoUrl(String(parsedProjects[0].repo_url));
+          if (parsedProjects[0]?.description) setSummary(String(parsedProjects[0].description));
+          if (parsedProjects[0]?.title) setProjectTitle(String(parsedProjects[0].title));
         }
       } catch {
         // ignore bootstrap failures
       }
     };
-    if (!isLoadingSession) {
-      void hydrate();
-    }
+    if (!isLoadingSession) void hydrate();
   }, [isLoadingSession]);
+
+  useEffect(() => {
+    const stepState = session?.step_state || {};
+    const discoveryState = (stepState.discovery as Record<string, unknown> | undefined) ?? {};
+    const evidenceState = (stepState.evidence_intake as Record<string, unknown> | undefined) ?? (stepState.evidence as Record<string, unknown> | undefined) ?? {};
+
+    if (Object.keys(discoveryState).length) {
+      setDiscovery((prev) => ({
+        ...prev,
+        ...(discoveryState.answers as Record<string, unknown>),
+      }) as typeof prev);
+      const basics = (discoveryState.profile_basics as Record<string, unknown> | undefined) ?? {};
+      setProfileBasics((prev) => ({
+        ...prev,
+        target_role: String(basics.target_role ?? prev.target_role),
+        target_company: String(basics.target_company ?? prev.target_company),
+        timeline: String(basics.timeline ?? prev.timeline),
+        constraints: String(basics.constraints ?? prev.constraints),
+      }));
+    }
+
+    if (!hydratedDraftRef.current && Object.keys(evidenceState).length) {
+      setProjectTitle((prev) => String(evidenceState.project_title || prev));
+      setRepoUrl((prev) => String(evidenceState.repo_url || prev));
+      setSummary((prev) => String(evidenceState.summary || prev));
+      const payload = evidenceState.resume_payload;
+      if (payload && typeof payload === "object") {
+        setResumePayload(payload as Record<string, unknown>);
+        const parsedProjects = Array.isArray((payload as Record<string, unknown>).projects)
+          ? ((payload as Record<string, unknown>).projects as Array<Record<string, unknown>>)
+          : [];
+        setResumeProjects(parsedProjects);
+      }
+      hydratedDraftRef.current = true;
+    }
+
+  }, [session?.step_state]);
 
   useEffect(() => {
     const syncAuditState = async () => {
@@ -139,26 +177,42 @@ export default function VeloOnboardingPage() {
       try {
         const eligibilitySnapshot = await loadEligibility(auditId);
         await loadReport(auditId);
-        if (eligibilitySnapshot.can_generate_roadmap && currentStep === "mentor_personalization") {
-          await advanceStep("roadmap_launch");
+        if (eligibilitySnapshot.can_generate_roadmap && currentStep !== "mentor_and_roadmap") {
+          await advanceStep("mentor_and_roadmap");
         }
       } catch {
         // report may not exist before audit completion
       }
     };
-    if (auditId) {
-      void syncAuditState();
-    }
+    if (auditId) void syncAuditState();
   }, [advanceStep, auditId, currentStep, loadEligibility, loadReport]);
 
-  const readinessScore = useMemo(
-    () =>
-      READINESS_QUIZ.reduce((acc, q) => {
-        if (readinessAnswers[q.id] === q.correctIndex) return acc + 1;
-        return acc;
-      }, 0),
-    [readinessAnswers]
-  );
+  useEffect(() => {
+    if (currentStep !== "evidence_intake") return;
+    const draftPayload = {
+      project_title: projectTitle,
+      repo_url: repoUrl,
+      summary,
+      resume_payload: {
+        ...resumePayload,
+        projects: resumeProjects,
+      },
+    };
+    const signature = JSON.stringify(draftPayload);
+    if (signature === lastDraftSignatureRef.current) return;
+    const timeout = window.setTimeout(async () => {
+      if (Date.now() - lastDraftSavedAtMsRef.current < 4000) return;
+      try {
+        await saveDraft("evidence_intake", draftPayload);
+        lastDraftSignatureRef.current = signature;
+        lastDraftSavedAtMsRef.current = Date.now();
+      } catch {
+        // ignore autosave errors in UI loop
+      }
+    }, 2200);
+    return () => window.clearTimeout(timeout);
+  }, [currentStep, projectTitle, repoUrl, summary, resumePayload, resumeProjects, saveDraft]);
+
 
   const trustBanner = useMemo(() => {
     if (!eligibility) return "Learning allowed";
@@ -169,42 +223,95 @@ export default function VeloOnboardingPage() {
 
   const handleAnalyzeResume = async () => {
     if (!resumeFile) return;
+    telemetry.track("velo_resume_analyze_started", { step: currentStep });
     setSubmitting(true);
+    setResumeParseState("uploading");
     setStatusMessage(null);
     try {
       const form = new FormData();
       form.append("resume", resumeFile);
+      if (profileBasics.target_role.trim()) form.append("target_role", profileBasics.target_role.trim());
+      if (profileBasics.target_company.trim()) form.append("target_company", profileBasics.target_company.trim());
+      if (profileBasics.timeline.trim()) form.append("timeline", profileBasics.timeline.trim());
+      if (profileBasics.constraints.trim()) form.append("constraints", profileBasics.constraints.trim().slice(0, 500));
+      else if (summary.trim()) form.append("constraints", summary.trim().slice(0, 500));
+      setResumeParseState("analyzing");
       const uploaded = await authApi.uploadResume(form);
-      const payload = (uploaded.resume_payload || {}) as Record<string, unknown>;
-      setResumePayload(payload);
-      const parsedProjects = Array.isArray(payload.projects)
-        ? (payload.projects as Array<Record<string, unknown>>)
-        : [];
-      setResumeProjects(parsedProjects);
-      if (!projectTitle && parsedProjects[0]?.title) {
-        setProjectTitle(String(parsedProjects[0].title));
+      if (!uploaded.job_id) {
+        throw new Error("Resume analysis job was not created.");
       }
-      if (!repoUrl && (parsedProjects[0]?.repo_url || parsedProjects[0]?.github_url)) {
-        setRepoUrl(String(parsedProjects[0].repo_url || parsedProjects[0].github_url));
-      }
-      if (!summary && (parsedProjects[0]?.description || payload.professional_summary)) {
-        setSummary(String(parsedProjects[0]?.description || payload.professional_summary || ""));
-      }
-      setStatusMessage("Resume parsed. Review and continue.");
+      setResumeJobId(uploaded.job_id);
+      setResumeJobStatus("queued");
+      telemetry.track("velo_resume_analyze_queued", { job_id: uploaded.job_id });
+      setStatusTone("info");
+      setStatusMessage("Resume uploaded. Analysis is running in the background. You can continue to mentor.");
     } catch {
-      setStatusMessage("Resume parsing failed. Continue with manual builder.");
+      telemetry.track("velo_resume_analyze_failed");
+      setResumeParseState("error");
+      setStatusTone("error");
+      setStatusMessage("Resume parsing failed. You can continue manually.");
     } finally {
       setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (!resumeJobId) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const status = await authApi.getResumeAnalysisStatus(resumeJobId);
+        if (cancelled) return;
+        setResumeJobStatus(status.status);
+        if (status.status === "completed") {
+          telemetry.track("velo_resume_analyze_completed", { job_id: status.job_id });
+          const profile = await authApi.getProfileDetail();
+          const payload = (profile.resume_payload || {}) as Record<string, unknown>;
+          setResumePayload(payload);
+          const parsedProjects = Array.isArray(payload.projects)
+            ? (payload.projects as Array<Record<string, unknown>>)
+            : [];
+          setResumeProjects(parsedProjects);
+          if (!projectTitle && parsedProjects[0]?.title) setProjectTitle(String(parsedProjects[0].title));
+          if (!repoUrl && (parsedProjects[0]?.repo_url || parsedProjects[0]?.github_url)) {
+            setRepoUrl(String(parsedProjects[0].repo_url || parsedProjects[0].github_url));
+          }
+          if (!summary && (parsedProjects[0]?.description || payload.professional_summary)) {
+            setSummary(String(parsedProjects[0]?.description || payload.professional_summary || ""));
+          }
+          setResumeParseState("success");
+          setStatusTone("success");
+          setStatusMessage("Resume analysis completed. Review extracted context or continue.");
+          return;
+        }
+        if (status.status === "failed") {
+          telemetry.track("velo_resume_analyze_failed", { job_id: status.job_id });
+          setResumeParseState("error");
+          setStatusTone("error");
+          setStatusMessage(status.error || "Resume analysis failed. Continue manually.");
+          return;
+        }
+        window.setTimeout(poll, 2500);
+      } catch {
+        if (!cancelled) window.setTimeout(poll, 3000);
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeJobId, projectTitle, repoUrl, summary]);
 
   const handleDiscovery = async () => {
     setSubmitting(true);
     setStatusMessage(null);
     try {
       await runDiscovery(discovery);
-      setStatusMessage("Track selected. Continue with evidence intake.");
+      await saveDraft("discovery", { answers: discovery, profile_basics: profileBasics });
+      setStatusTone("success");
+      setStatusMessage("Track selected. Continue to evidence intake.");
     } catch {
+      setStatusTone("error");
       setStatusMessage("Unable to resolve onboarding track.");
     } finally {
       setSubmitting(false);
@@ -219,13 +326,20 @@ export default function VeloOnboardingPage() {
       form.append("track", track);
       form.append("audit_mode", auditMode);
       form.append("domain_family", domainFamily);
+      if (profileBasics.target_role.trim()) form.append("target_role", profileBasics.target_role.trim());
+      if (profileBasics.target_company.trim()) form.append("target_company", profileBasics.target_company.trim());
+      if (profileBasics.timeline.trim()) form.append("timeline", profileBasics.timeline.trim());
+      if (profileBasics.constraints.trim()) form.append("constraints", profileBasics.constraints.trim());
       form.append("project_title", projectTitle);
       if (repoUrl.trim()) form.append("repo_url", repoUrl.trim());
       if (summary.trim()) {
         form.append("summary", summary.trim());
         form.append("narrative_text", summary.trim());
+      } else if (resumeJobId) {
+        const pendingNarrative = "Resume analysis is running. Mentor intake will refine additional evidence.";
+        form.append("summary", pendingNarrative);
+        form.append("narrative_text", pendingNarrative);
       }
-      if (resumeFile) form.append("resume", resumeFile);
       form.append(
         "resume_payload",
         JSON.stringify({
@@ -238,38 +352,22 @@ export default function VeloOnboardingPage() {
       }
 
       const result = await submitEvidence(form);
+      await saveDraft("evidence_intake", {
+        project_title: projectTitle,
+        repo_url: repoUrl,
+        summary,
+      });
+      setStatusTone("success");
       setStatusMessage("Evidence mapped successfully.");
       if (result.next_step === "insight_brief" && result.audit_id) {
         await loadReport(result.audit_id);
         await loadEligibility(result.audit_id);
       }
     } catch {
-      setStatusMessage("Evidence intake failed. Check required fields.");
+      setStatusTone("error");
+      setStatusMessage("Evidence intake failed. Fill required fields and retry.");
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleClaimSlot = async () => {
-    if (!auditId) return;
-    setClaimingSlot(true);
-    setStatusMessage(null);
-    try {
-      const response = await auditApi.claimQueueSlot({
-        audit_id: auditId,
-        quiz_score: readinessScore,
-        quiz_payload: { answers: readinessAnswers },
-      });
-      if (response.status !== "claimed") {
-        setStatusMessage(response.message || "Slot claim failed.");
-        return;
-      }
-      await advanceStep("audit_session");
-      setStatusMessage("Slot claimed. Start your 5-minute VELO session.");
-    } catch {
-      setStatusMessage("Slot claim failed.");
-    } finally {
-      setClaimingSlot(false);
     }
   };
 
@@ -278,6 +376,12 @@ export default function VeloOnboardingPage() {
     setStatusMessage(null);
     try {
       const started = await auditApi.startInterrogation(auditId);
+      if (started.question_generation) {
+        telemetry.track("velo_interrogation_question_source", {
+          source: started.question_generation.source,
+          fallback_reason: started.question_generation.fallback_reason,
+        });
+      }
       setInterrogation({
         sessionId: started.session_id,
         question: started.question,
@@ -286,7 +390,8 @@ export default function VeloOnboardingPage() {
       });
       questionStartRef.current = Date.now();
     } catch {
-      setStatusMessage("Unable to start VELO session.");
+      setStatusTone("error");
+      setStatusMessage("Unable to start audit session.");
     }
   };
 
@@ -295,9 +400,7 @@ export default function VeloOnboardingPage() {
     setSubmittingAnswer(true);
     setStatusMessage(null);
     try {
-      const latency = questionStartRef.current
-        ? Date.now() - questionStartRef.current
-        : undefined;
+      const latency = questionStartRef.current ? Date.now() - questionStartRef.current : undefined;
       const response = await auditApi.answerInterrogation(interrogation.sessionId, {
         answer,
         latency_ms: latency,
@@ -305,9 +408,17 @@ export default function VeloOnboardingPage() {
       setAnswer("");
       if (response.status === "complete") {
         const completed = await auditApi.completeInterrogation(interrogation.sessionId);
+        if (completed.question_generation) {
+          telemetry.track("velo_interrogation_question_source", {
+            source: completed.question_generation.source,
+            fallback_reason: completed.question_generation.fallback_reason,
+            stage: "complete",
+          });
+        }
         await loadReport(completed.audit_id);
         await loadEligibility(completed.audit_id);
         await advanceStep("insight_brief");
+        setStatusTone("success");
         setStatusMessage("Audit completed. Review your VELO insight brief.");
         return;
       }
@@ -323,6 +434,7 @@ export default function VeloOnboardingPage() {
       );
       questionStartRef.current = Date.now();
     } catch {
+      setStatusTone("error");
       setStatusMessage("Failed to submit answer.");
     } finally {
       setSubmittingAnswer(false);
@@ -335,44 +447,85 @@ export default function VeloOnboardingPage() {
     setStatusMessage(null);
     try {
       const handoff = await auditApi.mentorHandoff(auditId);
-      await advanceStep("mentor_personalization");
+      await advanceStep("mentor_and_roadmap");
       router.push(handoff.chat_url);
     } catch {
+      setStatusTone("error");
       setStatusMessage("Unable to start mentor handoff.");
     } finally {
       setStartingHandoff(false);
     }
   };
 
+  const openMentorConversation = async () => {
+    if (!auditId) return;
+    const sessionConversation = session?.active_conversation_id;
+    if (sessionConversation) {
+      router.push(`/chat?context=velo_intake&audit=${auditId}&conversation=${sessionConversation}`);
+      return;
+    }
+    await handleMentorHandoff();
+  };
+
   const renderDiscovery = () => (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Discovery</h2>
-      <p className="text-sm text-muted-foreground">Answer 3 quick questions so VELO can choose the right onboarding track.</p>
+      <p className="text-sm text-muted-foreground">Set your target first, then VELO will choose your onboarding track.</p>
       <div className="grid gap-3 md:grid-cols-2">
-        <label className="space-y-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+        <label className="space-y-2 text-sm text-foreground">
+          Target role
+          <Input
+            value={profileBasics.target_role}
+            onChange={(event) => setProfileBasics((prev) => ({ ...prev, target_role: event.target.value }))}
+            placeholder="e.g., SDE-1 / Data Analyst"
+          />
+        </label>
+        <label className="space-y-2 text-sm text-foreground">
+          Target company (optional)
+          <Input
+            value={profileBasics.target_company}
+            onChange={(event) => setProfileBasics((prev) => ({ ...prev, target_company: event.target.value }))}
+            placeholder="e.g., Google / Deloitte"
+          />
+        </label>
+        <label className="space-y-2 text-sm text-foreground">
+          Timeline
+          <Input
+            value={profileBasics.timeline}
+            onChange={(event) => setProfileBasics((prev) => ({ ...prev, timeline: event.target.value }))}
+            placeholder="e.g., 3 months"
+          />
+        </label>
+        <label className="space-y-2 text-sm text-foreground md:col-span-2">
+          Constraints
+          <Textarea
+            value={profileBasics.constraints}
+            onChange={(event) => setProfileBasics((prev) => ({ ...prev, constraints: event.target.value }))}
+            placeholder="e.g., 2 hrs/day, exams in May, weekdays only"
+            className="min-h-[90px]"
+          />
+        </label>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="space-y-2 text-sm text-foreground">
           Do you have a resume?
           <Select
             value={discovery.has_resume ? "yes" : "no"}
             onValueChange={(value) => setDiscovery((prev) => ({ ...prev, has_resume: value === "yes" }))}
           >
-            <SelectTrigger className="bg-background border-border text-foreground">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="yes">Yes</SelectItem>
               <SelectItem value="no">No</SelectItem>
             </SelectContent>
           </Select>
         </label>
-        <label className="space-y-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+        <label className="space-y-2 text-sm text-foreground">
           Primary domain
           <Select
             value={discovery.domain_family}
             onValueChange={(value) => setDiscovery((prev) => ({ ...prev, domain_family: value }))}
           >
-            <SelectTrigger className="bg-background border-border text-foreground">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="tech">Tech</SelectItem>
               <SelectItem value="business">Business</SelectItem>
@@ -383,15 +536,13 @@ export default function VeloOnboardingPage() {
             </SelectContent>
           </Select>
         </label>
-        <label className="space-y-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+        <label className="space-y-2 text-sm text-foreground">
           Education stage
           <Select
             value={discovery.education_stage}
             onValueChange={(value) => setDiscovery((prev) => ({ ...prev, education_stage: value }))}
           >
-            <SelectTrigger className="bg-background border-border text-foreground">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="first_year">First year</SelectItem>
               <SelectItem value="year_2">Second year</SelectItem>
@@ -401,15 +552,13 @@ export default function VeloOnboardingPage() {
             </SelectContent>
           </Select>
         </label>
-        <label className="space-y-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          Do you already have project evidence?
+        <label className="space-y-2 text-sm text-foreground">
+          Do you have project evidence?
           <Select
             value={discovery.has_projects ? "yes" : "no"}
             onValueChange={(value) => setDiscovery((prev) => ({ ...prev, has_projects: value === "yes" }))}
           >
-            <SelectTrigger className="bg-background border-border text-foreground">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="yes">Yes</SelectItem>
               <SelectItem value="no">No</SelectItem>
@@ -417,139 +566,119 @@ export default function VeloOnboardingPage() {
           </Select>
         </label>
       </div>
-      <Button onClick={handleDiscovery} disabled={submitting} className="border-[3px] border-primary/30 bg-primary/10 text-foreground hover:bg-primary/15">
-        {submitting ? "Routing..." : "Continue"}
-      </Button>
+      <StepFooterActions
+        onContinue={handleDiscovery}
+        continueDisabled={submitting || !profileBasics.target_role.trim() || !profileBasics.timeline.trim()}
+        continueLabel={submitting ? "Routing..." : "Continue"}
+      />
     </div>
   );
 
   const renderEvidence = () => (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Evidence Intake</h2>
-      <p className="text-sm text-muted-foreground">
-        Track: <span className="font-medium">{track}</span> · Mode: <span className="font-medium">{auditMode}</span>
-      </p>
+      <div className="rounded-lg border bg-muted/20 p-3">
+        <p className="text-sm font-medium text-foreground">Upload resume or continue manually</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          You can open mentor immediately while analysis runs in background.
+        </p>
+      </div>
 
       {track === "resume_track" ? (
-        <div className="space-y-3 rounded-md border-[2px] border-border p-4">
-          <p className="text-sm text-muted-foreground">Upload resume (optional if already parsed in profile).</p>
-          <Input
-            type="file"
-            onChange={(event) => setResumeFile(event.target.files?.[0] || null)}
-            className="bg-background border-border text-foreground"
-          />
-          <Button onClick={handleAnalyzeResume} disabled={!resumeFile || submitting} variant="outline" className="border-[2px] border-border text-foreground">
-            Analyze Resume
+        <div className="space-y-3 rounded-lg border bg-background p-4">
+          <p className="text-sm text-muted-foreground">Resume upload</p>
+          <Input type="file" onChange={(event) => setResumeFile(event.target.files?.[0] || null)} />
+          <Button onClick={handleAnalyzeResume} disabled={!resumeFile || submitting || resumeJobStatus === "running"}>
+            {resumeParseState === "uploading"
+              ? "Uploading..."
+              : resumeParseState === "analyzing"
+                ? "Analyzing with AI..."
+                : resumeJobStatus === "queued"
+                  ? "Queued for analysis"
+                  : resumeJobStatus === "running"
+                    ? "Analysis running..."
+                    : resumeJobStatus === "completed"
+                      ? "Analysis completed"
+                      : resumeJobStatus === "failed"
+                        ? "Retry analysis"
+                        : "Analyze resume"}
           </Button>
+          {resumeJobStatus && resumeJobStatus !== "completed" && resumeJobStatus !== "failed" ? (
+            <p className="text-sm text-muted-foreground">
+              Analysis status: {resumeJobStatus === "queued" ? "Queued" : "Running"}...
+            </p>
+          ) : null}
+          {resumeParseState === "success" ? (
+            <p className="text-sm text-emerald-700">Resume parsed successfully. Continue below.</p>
+          ) : null}
           {Object.keys(resumePayload).length ? (
-            <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Extracted Resume Data</p>
-              <p className="text-sm text-muted-foreground">
-                Skills: {Array.isArray(resumePayload.skills) && (resumePayload.skills as string[]).length
-                  ? (resumePayload.skills as string[]).slice(0, 8).join(", ")
-                  : "Not detected"}
+            <div className="rounded-md border bg-muted/20 p-3 space-y-2 text-sm">
+              <p>Skills: {Array.isArray(resumePayload.skills) && (resumePayload.skills as string[]).length
+                ? (resumePayload.skills as string[]).slice(0, 8).join(", ")
+                : "Not detected"}</p>
+              <p>Experience entries: {Array.isArray(resumePayload.experience) ? (resumePayload.experience as unknown[]).length : 0}</p>
+              <p>Projects detected: {resumeProjects.length}</p>
+            </div>
+          ) : null}
+          {(resumeJobStatus === "queued" || resumeJobStatus === "running" || resumeJobStatus === "completed") ? (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+              <p className="text-xs font-medium text-emerald-800">
+                Analysis is running asynchronously. You can continue now and open mentor.
               </p>
-              <p className="text-sm text-muted-foreground">
-                Experience entries: {Array.isArray(resumePayload.experience) ? (resumePayload.experience as unknown[]).length : 0}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Projects detected: {resumeProjects.length}
-              </p>
+              <div className="mt-2">
+                <Button variant="outline" size="sm" onClick={() => void openMentorConversation()} disabled={startingHandoff || !auditId}>
+                  Open Mentor
+                </Button>
+              </div>
             </div>
           ) : null}
         </div>
       ) : null}
 
-      <label className="space-y-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">
+      <label className="space-y-2 block text-sm text-foreground">
         Flagship project / artifact title
-        <Input
-          value={projectTitle}
-          onChange={(event) => setProjectTitle(event.target.value)}
-          className="bg-background border-border text-foreground"
-        />
+        <Input value={projectTitle} onChange={(event) => setProjectTitle(event.target.value)} />
       </label>
 
-      {track === "resume_track" && resumeProjects.length ? (
-        <div className="rounded-md border-[2px] border-border p-4 space-y-3">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Review & Edit Extracted Projects</p>
-          {resumeProjects.slice(0, 3).map((project, index) => (
-            <div key={`resume-project-${index}`} className="rounded-md border border-border p-3 space-y-2">
-              <Input
-                value={String(project.title || "")}
-                onChange={(event) =>
-                  setResumeProjects((prev) =>
-                    prev.map((item, idx) =>
-                      idx === index ? { ...item, title: event.target.value } : item
-                    )
-                  )
-                }
-                placeholder="Project title"
-                className="bg-background border-border text-foreground"
-              />
-              <Input
-                value={String(project.repo_url || project.github_url || "")}
-                onChange={(event) =>
-                  setResumeProjects((prev) =>
-                    prev.map((item, idx) =>
-                      idx === index ? { ...item, repo_url: event.target.value } : item
-                    )
-                  )
-                }
-                placeholder="GitHub / artifact URL"
-                className="bg-background border-border text-foreground"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="border-border"
-                onClick={() => {
-                  setProjectTitle(String(project.title || "Flagship Project"));
-                  setRepoUrl(String(project.repo_url || project.github_url || ""));
-                  setSummary(String(project.description || ""));
-                }}
-              >
-                Use as flagship
-              </Button>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <ResumeReviewPanel
+        projects={resumeProjects}
+        onProjectsChange={setResumeProjects}
+        onUseFlagship={(project) => {
+          setProjectTitle(String(project.title || "Flagship Project"));
+          setRepoUrl(String(project.repo_url || project.github_url || ""));
+          setSummary(String(project.description || ""));
+        }}
+      />
 
-      <label className="space-y-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">
+      <label className="space-y-2 block text-sm text-foreground">
         GitHub / artifact URL (optional)
         <Input
           value={repoUrl}
           onChange={(event) => setRepoUrl(event.target.value)}
           placeholder="https://github.com/... or portfolio artifact URL"
-          className="bg-background border-border text-foreground"
         />
       </label>
 
-      <label className="space-y-2 block text-xs uppercase tracking-[0.2em] text-muted-foreground">
+      <label className="space-y-2 block text-sm text-foreground">
         Technical / domain deep dive
         <Textarea
           value={summary}
           onChange={(event) => setSummary(event.target.value)}
           placeholder="Describe what you built, your decisions, trade-offs, and impact."
-          className="min-h-[120px] bg-background border-border text-foreground"
+          className="min-h-[120px]"
         />
       </label>
 
       {track === "builder_track" ? (
-        <div className="rounded-md border-[2px] border-border p-4 space-y-3">
-          <p className="text-sm text-muted-foreground">Starter diagnostic (lightweight):</p>
-          {["q1", "q2", "q3"].map((qid, idx) => (
-            <label key={qid} className="space-y-1 block text-xs uppercase tracking-[0.2em] text-muted-foreground">
+        <div className="rounded-lg border p-4 space-y-3">
+          <p className="text-sm text-muted-foreground">Starter diagnostic (lightweight)</p>
+          {(["q1", "q2", "q3"] as const).map((qid, idx) => (
+            <label key={qid} className="space-y-1 block text-sm text-foreground">
               Scenario {idx + 1} confidence (0-3)
               <Select
                 value={String(starterAnswers[qid] ?? 2)}
-                onValueChange={(value) =>
-                  setStarterAnswers((prev) => ({ ...prev, [qid]: Number(value) }))
-                }
+                onValueChange={(value) => setStarterAnswers((prev) => ({ ...prev, [qid]: Number(value) }))}
               >
-                <SelectTrigger className="bg-background border-border text-foreground">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="0">0</SelectItem>
                   <SelectItem value="1">1</SelectItem>
@@ -562,107 +691,72 @@ export default function VeloOnboardingPage() {
         </div>
       ) : null}
 
-      <Button
-        onClick={handleEvidenceSubmit}
-        disabled={submitting || (!summary.trim() && !repoUrl.trim() && !Object.keys(resumePayload).length)}
-        className="border-[3px] border-primary/30 bg-primary/10 text-foreground hover:bg-primary/15"
-      >
-        {submitting ? "Saving..." : "Continue"}
-      </Button>
-    </div>
-  );
-
-  const renderAuditReadiness = () => (
-    <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Audit Readiness Check</h2>
-      <p className="text-sm text-muted-foreground">Claim your audit slot before entering the VELO session.</p>
-      {READINESS_QUIZ.map((question) => (
-        <div key={question.id} className="rounded-md border-[2px] border-border p-3">
-          <p className="text-sm text-foreground">{question.question}</p>
-          <div className="mt-2 grid gap-2">
-            {question.options.map((option, index) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => setReadinessAnswers((prev) => ({ ...prev, [question.id]: index }))}
-                className={`rounded border px-3 py-2 text-left text-sm ${
-                  readinessAnswers[question.id] === index
-                    ? "border-primary/30 bg-primary/10"
-                    : "border-border"
-                }`}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">Score: {readinessScore}/{READINESS_QUIZ.length}</span>
-        <Button onClick={handleClaimSlot} disabled={claimingSlot || !auditId} className="border-[3px] border-primary/30 bg-primary/10 text-foreground hover:bg-primary/15">
-          {claimingSlot ? "Claiming..." : "Claim Slot"}
-        </Button>
-      </div>
+      <StepFooterActions
+        onBack={() => void advanceStep("discovery")}
+        onContinue={handleEvidenceSubmit}
+        continueDisabled={
+          submitting ||
+          (!summary.trim() && !repoUrl.trim() && !Object.keys(resumePayload).length && !resumeJobId)
+        }
+        continueLabel={submitting ? "Saving..." : "Continue"}
+      />
     </div>
   );
 
   const renderAuditSession = () => (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Audit Session</h2>
+      <p className="text-sm text-muted-foreground">Complete the short interrogation to generate your VELO insight brief.</p>
       {!interrogation ? (
-        <Button onClick={handleStartInterrogation} disabled={!auditId} className="border-[3px] border-primary/30 bg-primary/10 text-foreground hover:bg-primary/15">
-          Start 5-minute Interrogation
-        </Button>
+        <Button onClick={handleStartInterrogation} disabled={!auditId}>Start 5-minute interrogation</Button>
       ) : (
-        <div className="space-y-3 rounded-md border-[2px] border-border p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Question {interrogation.questionIndex + 1}/{interrogation.totalQuestions}
-          </p>
+        <div className="space-y-3 rounded-lg border p-4">
+          <p className="text-xs text-muted-foreground">Question {interrogation.questionIndex + 1}/{interrogation.totalQuestions}</p>
           <p className="text-sm text-foreground">{interrogation.question}</p>
           <Textarea
             value={answer}
             onChange={(event) => setAnswer(event.target.value)}
-            className="min-h-[120px] bg-background border-border text-foreground"
+            className="min-h-[120px]"
             placeholder="Answer with concrete choices and trade-offs."
           />
-          <Button onClick={handleSubmitAnswer} disabled={submittingAnswer || !answer.trim()} className="border-[3px] border-primary/30 bg-primary/10 text-foreground hover:bg-primary/15">
-            {submittingAnswer ? "Submitting..." : "Submit Answer"}
+          <Button onClick={handleSubmitAnswer} disabled={submittingAnswer || !answer.trim()}>
+            {submittingAnswer ? "Submitting..." : "Submit answer"}
           </Button>
         </div>
       )}
+      <StepFooterActions onBack={() => void advanceStep("evidence_intake")} continueDisabled />
     </div>
   );
 
   const renderInsightBrief = () => (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">VELO Insight Brief</h2>
+      <p className="text-sm text-muted-foreground">Here is your VELO diagnostic snapshot before mentor handoff.</p>
       {report ? (
         <>
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-md border-[2px] border-border p-3">
-              <p className="text-xs uppercase text-muted-foreground">H_m Score</p>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">H_m Score</p>
               <p className="text-2xl font-semibold">{report.scores.hm_score ?? "-"}</p>
             </div>
-            <div className="rounded-md border-[2px] border-border p-3">
-              <p className="text-xs uppercase text-muted-foreground">Eligibility</p>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Eligibility</p>
               <p className="text-sm text-foreground">{report.roadmap_eligibility}</p>
             </div>
-            <div className="rounded-md border-[2px] border-border p-3">
-              <p className="text-xs uppercase text-muted-foreground">Verification Tier</p>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Verification Tier</p>
               <p className="text-sm text-foreground">{report.verification_tier}</p>
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-md border-[2px] border-border p-3">
-              <p className="text-xs uppercase text-muted-foreground">Focus areas</p>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Focus areas</p>
               <ul className="mt-2 list-disc pl-4 text-sm text-foreground/90">
                 {(report.direction_overview?.focus_areas || []).map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>
             </div>
-            <div className="rounded-md border-[2px] border-border p-3">
-              <p className="text-xs uppercase text-muted-foreground">Risk areas</p>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Risk areas</p>
               <ul className="mt-2 list-disc pl-4 text-sm text-foreground/90">
                 {(report.direction_overview?.risk_areas || []).map((item) => (
                   <li key={item}>{item}</li>
@@ -670,11 +764,11 @@ export default function VeloOnboardingPage() {
               </ul>
             </div>
           </div>
-          <div className="rounded-md border-[2px] border-border p-3 space-y-3">
-            <p className="text-xs uppercase text-muted-foreground">Readiness narrative</p>
+          <div className="rounded-lg border p-3 space-y-3">
+            <p className="text-xs text-muted-foreground">Readiness narrative</p>
             <p className="text-sm text-foreground/90">{report.direction_overview?.readiness_narrative}</p>
-            <Button onClick={handleMentorHandoff} disabled={startingHandoff || !auditId} className="border-[3px] border-primary/30 bg-primary/10 text-foreground hover:bg-primary/15">
-              {startingHandoff ? "Opening mentor..." : "Continue with Mentor"}
+            <Button onClick={handleMentorHandoff} disabled={startingHandoff || !auditId}>
+              {startingHandoff ? "Opening mentor..." : "Continue with mentor"}
             </Button>
           </div>
         </>
@@ -684,130 +778,66 @@ export default function VeloOnboardingPage() {
     </div>
   );
 
-  const renderMentorAndLaunch = () => (
+  const renderMentorRoadmap = () => (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">
-        {currentStep === "roadmap_launch" ? "Roadmap Launch" : "Mentor Personalization"}
-      </h2>
       <p className="text-sm text-muted-foreground">
-        Complete mentor intake in chat first. Once mentor context is confirmed, roadmap generation is unlocked.
+        VELO context + resume context are already loaded in chat. Mentor asks only missing details.
       </p>
-      <div className="rounded-md border-[2px] border-border p-4 space-y-2 text-sm">
-        <p>Mentor context status: <span className="font-medium">{eligibility?.mentor_context_status || report?.mentor_context_status || "pending"}</span></p>
-        <p>Roadmap eligibility: <span className="font-medium">{eligibility?.roadmap_eligibility || report?.roadmap_eligibility || "not_ready"}</span></p>
-      </div>
       <div className="flex flex-wrap gap-2">
-        <Button
-          onClick={() => router.push(`/chat?context=velo_intake&audit=${auditId || ""}`)}
-          className="border-[3px] border-primary/30 bg-primary/10 text-foreground hover:bg-primary/15"
-        >
-          Continue with Mentor
-        </Button>
-        <Button
-          variant="outline"
-          disabled={!eligibility?.can_generate_roadmap}
-          onClick={() => router.push("/chat")}
-          className="border-[2px] border-border text-foreground disabled:opacity-50"
-        >
-          Generate Roadmap in Chat
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={async () => {
-            if (!auditId) return;
-            const refreshed = await loadEligibility(auditId);
-            if (refreshed.can_generate_roadmap) {
-              await advanceStep("roadmap_launch");
-              setStatusMessage("Mentor context confirmed. You can now generate roadmap.");
-            } else {
-              setStatusMessage("Mentor context still pending. Finish chat intake first.");
-            }
-          }}
-          className="text-muted-foreground"
-        >
-          Refresh Status
+        <Button variant="outline" onClick={() => router.push("/mirror")}>
+          View Your Mirror
         </Button>
       </div>
-      {eligibility?.can_generate_roadmap ? (
-        <p className="text-sm text-emerald-700">
-          You are ready. Next step: generate your personalized roadmap in chat.
-        </p>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          You’ll stop seeing redirects after mentor context is confirmed.
-        </p>
-      )}
+      <MentorReadinessCard
+        mentorContextStatus={eligibility?.mentor_context_status || report?.mentor_context_status || "pending"}
+        roadmapEligibility={eligibility?.roadmap_eligibility || report?.roadmap_eligibility || "not_ready"}
+        canGenerateRoadmap={Boolean(eligibility?.can_generate_roadmap)}
+        onOpenMentor={() => void openMentorConversation()}
+        onGenerateRoadmap={() => void openMentorConversation()}
+      />
     </div>
   );
 
   const renderStep = () => {
     if (isLoadingSession) {
-      return <p className="text-sm text-muted-foreground">Loading VELO onboarding...</p>;
+      return <p className="text-sm text-muted-foreground">Loading onboarding...</p>;
     }
     switch (currentStep) {
       case "discovery":
         return renderDiscovery();
       case "evidence_intake":
         return renderEvidence();
-      case "audit_readiness":
-        return renderAuditReadiness();
       case "audit_session":
         return renderAuditSession();
       case "insight_brief":
         return renderInsightBrief();
       case "mentor_personalization":
       case "roadmap_launch":
-        return renderMentorAndLaunch();
+      case "mentor_and_roadmap":
+        return renderMentorRoadmap();
       default:
         return renderDiscovery();
     }
   };
 
-  const manualStepJump = (step: VeloStep) => {
-    setCurrentStep(step);
-    void advanceStep(step);
-  };
-
   return (
     <VeloShell>
-      <div className="rounded-md border-[3px] border-border p-4 space-y-3">
+      <div className="rounded-md border p-4 space-y-3 bg-background">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold">Universal Onboarding 2.0</h2>
+          <h2 className="text-base font-semibold text-foreground">Onboarding</h2>
           <Badge variant="secondary" className="bg-primary/10 text-foreground">{trustBanner}</Badge>
         </div>
-        <div className="grid gap-2 md:grid-cols-5 text-xs">
-          <StatusChip label="Profile Captured" done={checklist.profileCaptured} />
-          <StatusChip label="Evidence Mapped" done={checklist.evidenceMapped} />
-          <StatusChip label="Audit Completed" done={checklist.auditCompleted} />
-          <StatusChip label="Mentor Context Confirmed" done={checklist.mentorContextConfirmed} />
-          <StatusChip label="Roadmap Generated" done={checklist.roadmapGenerated} />
-        </div>
+        <StepLoader
+          currentStep={currentStep}
+          steps={STEP_ORDER.map((step) => ({ key: step, label: STEP_LABELS[step] }))}
+        />
       </div>
 
-      <div className="rounded-md border-[3px] border-border p-4 space-y-4">
-        <div className="flex flex-wrap gap-2">
-          {(Object.keys(STEP_LABELS) as VeloStep[]).map((step) => (
-            <button
-              key={step}
-              type="button"
-              onClick={() => manualStepJump(step)}
-              className={`rounded border px-2 py-1 text-[11px] ${currentStep === step ? "border-primary/30 bg-primary/10" : "border-border"}`}
-            >
-              {STEP_LABELS[step]}
-            </button>
-          ))}
-        </div>
+      <div className="rounded-md border p-4 bg-background">
+        <p className="mb-3 text-sm text-muted-foreground">Step {stepIndex + 1} of {STEP_ORDER.length}: {STEP_LABELS[currentStep]}</p>
         {renderStep()}
-        {statusMessage ? <p className="text-sm text-muted-foreground">{statusMessage}</p> : null}
+        {statusMessage ? <StatusBanner tone={statusTone} message={statusMessage} /> : null}
       </div>
     </VeloShell>
-  );
-}
-
-function StatusChip({ label, done }: { label: string; done: boolean }) {
-  return (
-    <div className={`rounded border px-2 py-1 ${done ? "border-primary/30 bg-primary/10 text-foreground" : "border-border text-muted-foreground"}`}>
-      {label}
-    </div>
   );
 }

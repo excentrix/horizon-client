@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, LogOut, Settings, Shield } from "lucide-react";
+import { Eye, LogOut, Settings } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ChangePasswordDialog } from "@/components/profile/change-password-dialog";
 import { cn } from "@/lib/utils";
 import { telemetry } from "@/lib/telemetry";
 
@@ -23,7 +22,6 @@ export function ProfileMenu() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [showChangePassword, setShowChangePassword] = useState(false);
 
   if (!user) {
     return null;
@@ -87,39 +85,26 @@ export function ProfileMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => {
-            router.push("/dashboard");
+            router.push("/settings");
             setOpen(false);
           }}
         >
-          <Settings className="mr-2 h-4 w-4" /> Studio overview
+          <Settings className="mr-2 h-4 w-4" /> Settings
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => {
-            router.push("/portfolio/settings");
+            router.push("/settings/portfolio");
             setOpen(false);
           }}
         >
-          <Eye className="mr-2 h-4 w-4" /> Edit public profile
+          <Eye className="mr-2 h-4 w-4" /> Public Portfolio
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() => {
-            setShowChangePassword(true);
-            setOpen(false);
-          }}
-        >
-            <Shield className="mr-2 h-4 w-4" /> Change password
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+        <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleLogout}>
             <LogOut className="mr-2 h-4 w-4" /> Sign out
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-
-      <ChangePasswordDialog
-        open={showChangePassword}
-        onOpenChange={setShowChangePassword}
-      />
     </>
   );
 }

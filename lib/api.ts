@@ -46,6 +46,7 @@ import {
   AuditInstitutionStudentRow,
   AuditInstitutionStudentDetail,
   VeloOnboardingSession,
+  VeloMentorReviewResponse,
   VeloOnboardingTrack,
   VeloAuditMode,
   VeloRoadmapEligibility,
@@ -89,9 +90,18 @@ export const authApi = {
     ),
 
   uploadResume: (payload: FormData) =>
-    extract<{ status: string; resume_url: string; resume_payload?: Record<string, unknown>; parsed_at?: string }>(
+    extract<{ status: "queued" | "parsed"; resume_url: string; job_id?: string }>(
       http.post("/auth/profile/resume/", payload)
     ),
+  getResumeAnalysisStatus: (jobId: string) =>
+    extract<{
+      job_id: string;
+      status: "queued" | "running" | "completed" | "failed";
+      error?: string | null;
+      started_at?: string | null;
+      completed_at?: string | null;
+      mirror_snapshot_id?: string | null;
+    }>(http.get(`/auth/profile/resume/status/${jobId}/`)),
   confirmResume: (payload: { resume_payload: Record<string, unknown>; projects?: Array<Record<string, unknown>> }) =>
     extract<{ status: string; projects_synced?: string[] }>(
       http.post("/auth/profile/resume/confirm/", payload)
@@ -958,6 +968,7 @@ export const auditApi = {
       verification_tier: "starter" | "full";
       mentor_context_status: "pending" | "confirmed";
       can_generate_roadmap: boolean;
+      roadmap_unlocked: boolean;
       can_promote_public: boolean;
     }>(http.get(`/audits/${auditId}/eligibility/`)),
 
@@ -977,13 +988,27 @@ export const auditApi = {
     }>(http.post(`/audits/${auditId}/mentor-handoff/`)),
   confirmMentorContext: (
     auditId: string,
-    payload: { intake_payload: Record<string, unknown>; source?: "chat" | "manual" }
+    payload: {
+      intake_payload: Record<string, unknown>;
+      source?: "chat" | "chat_auto" | "chat_button" | "manual";
+    }
   ) =>
     extract<{
       audit_id: string;
       mentor_context_status: "pending" | "confirmed";
       mentor_context_confirmed_at?: string | null;
+      roadmap_unlocked?: boolean;
     }>(http.post(`/audits/${auditId}/mentor-context/confirm/`, payload)),
+
+  autoConfirmMentorContext: (auditId: string, payload: { message: string }) =>
+    extract<{
+      confirmed: boolean;
+      reason?: string;
+      error?: string;
+      missing_fields?: string[];
+      mentor_context_status?: "pending" | "confirmed";
+      roadmap_unlocked?: boolean;
+    }>(http.post(`/audits/${auditId}/mentor-context/auto-confirm/`, payload)),
 
   onboardingDiscovery: (payload: {
     answers: {
@@ -1019,6 +1044,11 @@ export const auditApi = {
       http.post("/audits/onboarding/session/advance/", { next_step: nextStep })
     ),
 
+  saveOnboardingDraft: (payload: { step: string; payload: Record<string, unknown>; client_saved_at?: string }) =>
+    extract<{ status: string; step: string; saved_at: string; reason?: string }>(
+      http.post("/audits/onboarding/session/save-draft/", payload)
+    ),
+
   getQueueSlots: () =>
     extract<AuditQueueSlot>(http.get("/audit-queue/slots/")),
 
@@ -1028,7 +1058,13 @@ export const auditApi = {
     ),
 
   startInterrogation: (auditId: string) =>
-    extract<{ session_id: string; question: string | null; question_index: number; total_questions: number }>(
+    extract<{
+      session_id: string;
+      question: string | null;
+      question_index: number;
+      total_questions: number;
+      question_generation?: { source: "ai" | "template" | "static"; fallback_reason: string };
+    }>(
       http.post("/interrogations/start/", { audit_id: auditId })
     ),
 
@@ -1038,9 +1074,41 @@ export const auditApi = {
     ),
 
   completeInterrogation: (sessionId: string) =>
-    extract<{ status: string; audit_id: string; hm_score?: number | null; audit_status?: string }>(
+    extract<{
+      status: string;
+      audit_id: string;
+      hm_score?: number | null;
+      audit_status?: string;
+      question_generation?: { source: "ai" | "template" | "static"; fallback_reason: string };
+    }>(
       http.post(`/interrogations/${sessionId}/complete/`)
     ),
+
+  getMirrorLatest: () =>
+    extract<{
+      status: "empty" | "running" | "ready" | "failed";
+      analysis_job?: {
+        job_id: string;
+        status: "queued" | "running" | "completed" | "failed";
+        error?: string | null;
+      };
+      mirror: null | {
+        id: string;
+        analysis_job_id?: string | null;
+        source_resume_payload: Record<string, unknown>;
+        normalized_profile: Record<string, unknown>;
+        skill_gaps: string[];
+        strengths: string[];
+        confidence: Record<string, number>;
+        missing_prompts: string[];
+        role_readiness_narrative: string;
+        created_at: string;
+        updated_at: string;
+      };
+    }>(http.get("/mirror/latest/")),
+
+  reviewVeloMentorIntake: (auditId: string) =>
+    extract<VeloMentorReviewResponse>(http.post(`/audits/${auditId}/mentor-intake/review/`)),
 
   getAdminMetrics: () =>
     extract<{ total_audits: number; verified: number; narrative_validated: number; unverified: number; completion_rate: number }>(

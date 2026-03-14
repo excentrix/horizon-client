@@ -11,7 +11,7 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const hideSidebar =
     (pathname.includes("/plans/") && pathname.includes("/playground")) ||
-    pathname.startsWith("/onboarding/velo");
+    pathname.startsWith("/onboarding");
 
   return (
     <GamificationProvider>

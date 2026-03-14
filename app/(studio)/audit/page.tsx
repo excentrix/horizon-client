@@ -9,8 +9,8 @@ export default function LegacyAuditRedirectPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
-    router.replace(`/onboarding/velo${params.toString() ? `?${params.toString()}` : ""}`);
+    router.replace(`/onboarding${params.toString() ? `?${params.toString()}` : ""}`);
   }, [router, searchParams]);
 
-  return <div className="p-6 text-sm text-muted-foreground">Redirecting to VELO onboarding...</div>;
+  return <div className="p-6 text-sm text-muted-foreground">Redirecting to onboarding...</div>;
 }

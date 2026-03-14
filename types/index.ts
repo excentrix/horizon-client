@@ -453,6 +453,19 @@ export interface PortfolioArtifact {
   metadata?: Record<string, unknown>;
   status: "draft" | "needs_review" | "verified";
   verification_status?: "pending" | "verified" | "human_verified" | "rejected" | "needs_revision";
+  verification_score?: number;
+  verification_feedback?: {
+    verdict_summary?: string;
+    criteria_results?: Array<{
+      criterion: string;
+      met: boolean;
+      score: number;
+      evidence: string;
+    }>;
+    strengths?: string[];
+    suggestions?: string[];
+    method?: "llm" | "heuristic";
+  };
   featured?: boolean;
   tags?: string[];
   visibility?: "private" | "mentors" | "employers" | "public";
@@ -1138,14 +1151,67 @@ export interface VeloOnboardingSession {
     | "audit_session"
     | "insight_brief"
     | "mentor_personalization"
-    | "roadmap_launch";
+    | "roadmap_launch"
+    | "mentor_and_roadmap";
   chosen_track: VeloOnboardingTrack;
   completion_flags: Record<string, boolean>;
   latest_audit?: UUID | null;
   latest_conversation?: UUID | null;
+  active_conversation_id?: UUID | null;
   metadata?: Record<string, unknown>;
+  step_state?: Record<string, Record<string, unknown>>;
+  last_error?: Record<string, unknown>;
+  analysis_job_status?: {
+    job_id: UUID;
+    status: "queued" | "running" | "completed" | "failed";
+    started_at?: string | null;
+    completed_at?: string | null;
+    error?: string | null;
+  } | null;
   updated_at: string;
   created_at: string;
+}
+
+export interface ResumeAnalysisJob {
+  job_id: UUID;
+  status: "queued" | "running" | "completed" | "failed";
+  error?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  mirror_snapshot_id?: UUID | null;
+}
+
+export interface MirrorSnapshot {
+  id: UUID;
+  analysis_job_id?: UUID | null;
+  source_resume_payload: Record<string, unknown>;
+  normalized_profile: Record<string, unknown>;
+  skill_gaps: string[];
+  strengths: string[];
+  confidence: Record<string, number>;
+  missing_prompts: string[];
+  role_readiness_narrative: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VeloMentorReviewResponse {
+  audit_id: UUID;
+  conversation_id: UUID;
+  mentor_context_status: "pending" | "confirmed";
+  roadmap_unlocked: boolean;
+  intake_state: {
+    slots?: Record<string, unknown>;
+    missing_or_uncertain?: string[];
+    readiness?: number;
+  };
+  context_enrichment?: Record<string, unknown>;
+  latest_messages?: Array<{
+    id: UUID;
+    sender_type: "user" | "ai" | "system";
+    content: string;
+    created_at: string;
+  }>;
 }
 
 export interface AuditQueueSlot {

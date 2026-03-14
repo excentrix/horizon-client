@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { usePortfolioArtifacts, useVerifyArtifact } from "@/hooks/use-portfolio";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +26,7 @@ const isVeloPendingArtifact = (artifact: { metadata?: Record<string, unknown>; v
 export function ArtifactsTab() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: artifacts = [], isLoading, error } = usePortfolioArtifacts();
   const { mutateAsync: verifyArtifact, isPending: verificationPending } = useVerifyArtifact();
   const [tab, setTab] = useState<"submitted" | "verified" | "promoted">("submitted");
@@ -43,6 +45,15 @@ export function ArtifactsTab() {
       telemetry.error("Artifacts load error", { error });
     }
   }, [error]);
+
+  // Live refresh when any artifact_verified WS event fires (e.g. VELO verification completes)
+  useEffect(() => {
+    const handleVerified = () => {
+      queryClient.invalidateQueries({ queryKey: ["portfolio-artifacts"] });
+    };
+    window.addEventListener("artifact_verified", handleVerified);
+    return () => window.removeEventListener("artifact_verified", handleVerified);
+  }, [queryClient]);
 
   const filteredArtifacts = useMemo(() => {
     if (!artifacts.length) return [];

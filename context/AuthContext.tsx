@@ -182,7 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             response.user.user_type === "student" &&
             !response.user.onboarding_completed
           ) {
-            router.push("/onboarding/velo");
+            router.push("/onboarding/start");
           } else if (response.user.is_superuser) {
             router.push("/hq");
           } else if (
@@ -243,7 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           response.user.user_type === "student" &&
           !response.user.onboarding_completed
         ) {
-          router.push("/onboarding/velo");
+          router.push("/onboarding/start");
         } else if (response.user.is_superuser) {
           router.push("/hq");
         } else if (userType === "admin" || userType === "educator") {
@@ -319,7 +319,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           loginResponse.user.user_type === "student" &&
           !loginResponse.user.onboarding_completed
         ) {
-          router.push("/onboarding/velo");
+          router.push("/onboarding/start");
         } else if (
           loginResponse.user.user_type === "admin" ||
           loginResponse.user.user_type === "educator"
@@ -345,10 +345,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user || !pathname) return;
     if (user.user_type !== "student" || user.onboarding_completed) return;
     const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/register");
-    const isVeloPage = pathname.startsWith("/onboarding/velo");
+    const isOnboardingPage = pathname.startsWith("/onboarding");
     const isMentorChat = pathname.startsWith("/chat");
-    if (!isAuthPage && !isVeloPage && !isMentorChat) {
-      router.replace("/onboarding/velo");
+    if (!isAuthPage && !isOnboardingPage && !isMentorChat) {
+      router.replace("/onboarding/start");
     }
   }, [pathname, router, user]);
 

@@ -13,9 +13,7 @@ import { useChatSocket } from "@/hooks/use-chat-socket";
 import { getPersonaTheme } from "@/lib/persona-theme";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { useCreatePlanFromConversation, usePlan } from "@/hooks/use-plans";
@@ -31,7 +29,7 @@ import { PersonalitySelector } from "@/components/mentor-lounge/personality-sele
 import { MentorActionShelf } from "@/components/mentor-lounge/mentor-action-shelf";
 import { AgentIndicator } from "@/components/mentor-lounge/agent-indicator";
 import { CortexDebugDrawer } from "@/components/mentor-lounge/cortex-debug-drawer";
-import { intelligenceApi, auditApi } from "@/lib/api";
+import { intelligenceApi, authApi } from "@/lib/api";
 import { describeStageEvent } from "@/lib/analysis-stage";
 import { MissingInfoForm } from "@/components/mentor-lounge/missing-info-form";
 import { AnalysisHistory } from "@/components/mentor-lounge/analysis-history";
@@ -110,7 +108,6 @@ function ChatContent() {
   const setComposerDraft = useMentorLoungeStore(
     (state) => state.setComposerDraft,
   );
-  const composerDraft = useMentorLoungeStore((state) => state.composerDraft);
   const mentorActions = useMentorLoungeStore((state) => state.mentorActions);
   const setMentorActions = useMentorLoungeStore(
     (state) => state.setMentorActions,
@@ -138,8 +135,6 @@ function ChatContent() {
   const isMentorIntake =
     searchParams.get("context") === "mentor_intake" ||
     Boolean(activeConversation?.is_intake);
-  const isVeloIntake = searchParams.get("context") === "velo_intake";
-  const veloAuditId = searchParams.get("audit");
 
   const {
     status: socketStatus,
@@ -173,6 +168,28 @@ function ChatContent() {
   }>>([]);
   const [analysisByConversation, setAnalysisByConversation] = useState<Record<string, Record<string, unknown>>>({});
   const [latestPlan, setLatestPlan] = useState<PlanCreationResponse | null>(null);
+  const [analysisJobRunning, setAnalysisJobRunning] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return Boolean(localStorage.getItem("resumeAnalysisJobId"));
+  });
+
+  // Poll resume analysis job until it completes, then dismiss the banner
+  useEffect(() => {
+    if (!analysisJobRunning) return;
+    const jobId = localStorage.getItem("resumeAnalysisJobId");
+    if (!jobId) { setAnalysisJobRunning(false); return; }
+    // WS event will also dismiss it; this is the polling fallback
+    const interval = window.setInterval(async () => {
+      try {
+        const status = await authApi.getResumeAnalysisStatus(jobId);
+        if (status.status === "completed" || status.status === "failed") {
+          localStorage.removeItem("resumeAnalysisJobId");
+          setAnalysisJobRunning(false);
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+    return () => window.clearInterval(interval);
+  }, [analysisJobRunning]);
   const [lastPlanId, setLastPlanId] = useState<string | null>(null);
   const processedAnalysisRef = useRef<Map<string, string>>(new Map());
   const stageTrackerRef = useRef<Map<string, Set<string>>>(new Map());
@@ -181,6 +198,7 @@ function ChatContent() {
   const processedStageEventSeqRef = useRef<number>(-1);
   const stageHistoryLimit = 8;
   const analysisTimeoutRef = useRef<number | null>(null);
+  const autoPromptedMentorRef = useRef(false);
   const [intakeSubmitting, setIntakeSubmitting] = useState(false);
   const [intakeError, setIntakeError] = useState<string | null>(null);
   const [intakeModalOpen, setIntakeModalOpen] = useState(false);
@@ -188,20 +206,6 @@ function ChatContent() {
   const [intakePreview, setIntakePreview] = useState<Record<string, unknown> | null>(null);
   const [intakeState, setIntakeState] = useState<Record<string, unknown> | null>(null);
   const [intakeSubmitted, setIntakeSubmitted] = useState(false);
-  const [veloConfirming, setVeloConfirming] = useState(false);
-  const [veloConfirmed, setVeloConfirmed] = useState(false);
-  const [veloConfirmError, setVeloConfirmError] = useState<string | null>(null);
-  const [veloIntakeDraft, setVeloIntakeDraft] = useState<{
-    target_role: string;
-    timeline: string;
-    constraints: string;
-    priority_gaps: string;
-  }>({
-    target_role: "",
-    timeline: "",
-    constraints: "",
-    priority_gaps: "",
-  });
 
   const analyzeConversation = useAnalyzeConversation();
   const createPlan = useCreatePlanFromConversation();
@@ -247,6 +251,13 @@ function ChatContent() {
   }, [conversations, searchParams, selectedConversationId, setSelectedConversationId]);
 
   useEffect(() => {
+    if (selectedConversationId || conversations.length > 0 || !analysisJobRunning) return;
+    if (autoPromptedMentorRef.current) return;
+    autoPromptedMentorRef.current = true;
+    setCreateModalOpen(true);
+  }, [analysisJobRunning, conversations.length, selectedConversationId]);
+
+  useEffect(() => {
     setIntakeState(
       (activeConversation?.intake_state as Record<string, unknown> | undefined) ?? null,
     );
@@ -262,71 +273,7 @@ function ChatContent() {
     }
   }, [messages]);
 
-  useEffect(() => {
-    if (!isVeloIntake) return;
-    const slots = ((intakeState?.slots as Record<string, unknown> | undefined) ?? {});
-    const mentor = ((intakeState?.mentor_context as Record<string, unknown> | undefined) ?? {});
-    const role =
-      String(
-        mentor.target_role ??
-          slots.target_role ??
-          slots.portfolio_goals ??
-          ""
-      ).trim();
-    const timeline = String(mentor.timeline ?? slots.timeline ?? slots.goals ?? "").trim();
-    const constraints = String(mentor.constraints ?? slots.constraints ?? "").trim();
-    const gapArray =
-      (Array.isArray(mentor.priority_gaps) ? mentor.priority_gaps : null) ??
-      (Array.isArray(slots.priority_gaps) ? slots.priority_gaps : null) ??
-      [];
-    const gaps = gapArray.map((item) => String(item).trim()).filter(Boolean).join(", ");
-    setVeloIntakeDraft((prev) => ({
-      target_role: prev.target_role || role,
-      timeline: prev.timeline || timeline,
-      constraints: prev.constraints || constraints,
-      priority_gaps: prev.priority_gaps || gaps,
-    }));
-  }, [intakeState, isVeloIntake]);
 
-  useEffect(() => {
-    if (!veloConfirmError) return;
-    if (
-      veloIntakeDraft.target_role.trim() &&
-      veloIntakeDraft.timeline.trim() &&
-      veloIntakeDraft.constraints.trim()
-    ) {
-      setVeloConfirmError(null);
-    }
-  }, [veloConfirmError, veloIntakeDraft]);
-
-  useEffect(() => {
-    if (!isMentorIntake) return;
-    if (composerDraft.trim()) return;
-    const key = `mentor_intake_prompt_set_${activeConversation?.id ?? "new"}`;
-    if (typeof window !== "undefined") {
-      if (window.sessionStorage.getItem(key)) return;
-      window.sessionStorage.setItem(key, "true");
-    }
-    setComposerDraft(
-      "I want to complete my mentor intake and build my roadmap. Please ask me the key questions."
-    );
-  }, [composerDraft, isMentorIntake, setComposerDraft, activeConversation?.id]);
-
-  useEffect(() => {
-    if (!isMentorIntake || !activeConversation?.id) {
-      return;
-    }
-    const hasMentorReply = messages.some((message) => message.sender_type === "ai");
-    if (hasMentorReply) {
-      return;
-    }
-    const key = `mentor_intake_autostart_${activeConversation.id}`;
-    if (typeof window !== "undefined") {
-      if (window.sessionStorage.getItem(key)) return;
-      window.sessionStorage.setItem(key, "true");
-    }
-    sendMessage("Please start mentor intake and ask the key questions.");
-  }, [activeConversation?.id, isMentorIntake, messages, sendMessage]);
 
   const handleCompleteMentorIntake = useCallback(async () => {
     if (!activeConversation?.id) return;
@@ -364,7 +311,11 @@ function ChatContent() {
     } finally {
       setIntakeSubmitting(false);
     }
-  }, [activeConversation?.id]);
+  }, [
+    activeConversation?.id,
+    intakePreview?.slots,
+    intakeState?.slots,
+  ]);
 
   const handlePreviewMentorIntake = useCallback(async () => {
     if (!activeConversation?.id) return;
@@ -559,6 +510,7 @@ useEffect(() => {
   const planBuildStatus = useMentorLoungeStore(state => state.planBuildStatus);
   const planBuildId = useMentorLoungeStore(state => state.planBuildId);
   const planBuildTitle = useMentorLoungeStore(state => state.planBuildTitle);
+  const mirrorAnalysisReady = useMentorLoungeStore(state => state.mirrorAnalysisReady);
   const planIdFromQuery = searchParams.get("plan");
   const effectivePlanId =
     planBuildId ?? planIdFromQuery ?? latestPlan?.learning_plan_id ?? undefined;
@@ -864,6 +816,7 @@ useEffect(() => {
   const isPlanBuilding = ["queued", "in_progress", "warning"].includes(planBuildStatus);
   const disablePlanButton =
     !selectedConversationId || createPlan.isPending || isPlanBuilding;
+  const disableRoadmapButton = disablePlanButton;
 
   const handleAnalyzeConversation = (forceOverride?: boolean) => {
     if (!selectedConversationId) {
@@ -967,14 +920,7 @@ useEffect(() => {
       telemetry.toastError("Select a conversation first");
       return;
     }
-    if (isVeloIntake && !veloConfirmed) {
-      telemetry.toastError(
-        "Complete VELO mentor context first",
-        "Fill role, timeline, constraints, and gaps, then confirm VELO context."
-      );
-      return;
-    }
-    let analysisReady = hasAnalysisResults;
+    const analysisReady = hasAnalysisResults || Boolean(mirrorAnalysisReady);
     if (!analysisReady) {
       telemetry.toastInfo("Checking latest analysis snapshot...");
       const latest = await fetchLatestAnalysis(selectedConversationId, {
@@ -982,11 +928,13 @@ useEffect(() => {
       });
       const latestMetadata =
         latest?.analysis_metadata ?? latest?.analysis_results ?? {};
-      analysisReady =
+      const latestReady =
         Boolean(latestMetadata) && Object.keys(latestMetadata).length > 0;
-      if (!analysisReady) {
-        telemetry.toastError("Run intelligence analysis before creating a plan");
-        return;
+      if (!latestReady) {
+        telemetry.toastInfo(
+          "Generating roadmap",
+          "Your mentor has enough context to get started."
+        );
       }
     }
     setLatestPlan(null);
@@ -1009,6 +957,10 @@ useEffect(() => {
         onError: (error) => {
           const guardPayload = (error as { response?: { data?: { error?: string; handoff_url?: string; message?: string } } })?.response?.data;
           if (guardPayload?.error === "mentor_context_required") {
+            telemetry.track("plan_generation_blocked_by_guard", {
+              conversation_id: selectedConversationId,
+              context: "general",
+            });
             telemetry.toastError("Mentor context required", guardPayload.message || "Continue with mentor to personalize roadmap.");
             if (guardPayload.handoff_url && typeof window !== "undefined") {
               window.location.href = guardPayload.handoff_url;
@@ -1021,63 +973,13 @@ useEffect(() => {
     );
   };
 
-  useEffect(() => {
-    if (!isVeloIntake || !veloAuditId) return;
-    let mounted = true;
-    const loadEligibility = async () => {
-      try {
-        const eligibility = await auditApi.getEligibility(veloAuditId);
-        if (!mounted) return;
-        const confirmed = eligibility.mentor_context_status === "confirmed";
-        setVeloConfirmed(confirmed);
-      } catch {
-        // ignore eligibility fetch errors
-      }
-    };
-    void loadEligibility();
-    return () => {
-      mounted = false;
-    };
-  }, [isVeloIntake, veloAuditId]);
 
-  const handleConfirmVeloContext = useCallback(async () => {
-    if (!veloAuditId) return;
-    const gaps = veloIntakeDraft.priority_gaps
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-    if (!veloIntakeDraft.target_role.trim() || !veloIntakeDraft.timeline.trim() || !veloIntakeDraft.constraints.trim()) {
-      setVeloConfirmError("Please fill target role, timeline, and constraints before confirming.");
-      return;
-    }
-    const payload = {
-      target_role: veloIntakeDraft.target_role.trim(),
-      timeline: veloIntakeDraft.timeline.trim(),
-      constraints: veloIntakeDraft.constraints.trim(),
-      priority_gaps: gaps,
-    };
-    setVeloConfirming(true);
-    setVeloConfirmError(null);
-    try {
-      await auditApi.confirmMentorContext(veloAuditId, {
-        intake_payload: payload,
-        source: "chat",
-      });
-      setVeloConfirmed(true);
-      sendMessage(
-        `Confirmed VELO mentor context:\\n- Target role: ${payload.target_role}\\n- Timeline: ${payload.timeline}\\n- Constraints: ${payload.constraints}\\n- Priority gaps: ${payload.priority_gaps.join(", ") || "None listed"}`
-      );
-      telemetry.toastSuccess("VELO mentor context confirmed");
-    } catch (error) {
-      const message =
-        (error as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        "Unable to confirm VELO context. Complete more intake details.";
-      setVeloConfirmError(message);
-      telemetry.toastError("VELO confirmation failed", message);
-    } finally {
-      setVeloConfirming(false);
-    }
-  }, [sendMessage, veloAuditId, veloIntakeDraft]);
+  const handleSendMessage = useCallback(
+    async (content: string) => {
+      await sendMessage(content);
+    },
+    [sendMessage]
+  );
 
   const planWorkbenchData = useMemo(() => {
     if (planRecord) {
@@ -1115,8 +1017,28 @@ useEffect(() => {
 
   const planDisplayStatus =
     planRecord && planBuildStatus === "idle" ? "completed" : planBuildStatus;
+  const [planWorkbenchDismissed, setPlanWorkbenchDismissed] = useState(false);
   const showPlanWorkbench =
-    ["queued", "in_progress", "warning"].includes(planBuildStatus) || createPlan.isPending;
+    (["queued", "in_progress", "warning", "completed"].includes(planBuildStatus) || createPlan.isPending) &&
+    !planWorkbenchDismissed;
+
+  useEffect(() => {
+    if (planBuildStatus !== "completed") return;
+    const timer = window.setTimeout(() => setPlanWorkbenchDismissed(true), 8000);
+    return () => window.clearTimeout(timer);
+  }, [planBuildStatus]);
+
+  // Dismiss the analysis banner when the WS event fires
+  useEffect(() => {
+    if (mirrorAnalysisReady) {
+      localStorage.removeItem("resumeAnalysisJobId");
+      setAnalysisJobRunning(false);
+    }
+  }, [mirrorAnalysisReady]);
+
+  useEffect(() => {
+    setPlanWorkbenchDismissed(false);
+  }, [selectedConversationId]);
 
   const planProgress = useMemo(() => {
     if (planDisplayStatus === "completed") {
@@ -1142,7 +1064,7 @@ useEffect(() => {
   }, [planDisplayStatus, planUpdates.length]);
 
   return (
-    <div className="flex min-h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-[radial-gradient(1200px_600px_at_0%_0%,rgba(56,189,248,0.06),transparent),radial-gradient(900px_500px_at_100%_10%,rgba(249,115,22,0.06),transparent)]">
+    <div className="flex h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-[radial-gradient(1200px_600px_at_0%_0%,rgba(56,189,248,0.06),transparent),radial-gradient(900px_500px_at_100%_10%,rgba(249,115,22,0.06),transparent)]">
       <CreateConversationModal
         isOpen={isCreateModalOpen}
         onOpenChange={setCreateModalOpen}
@@ -1336,24 +1258,26 @@ useEffect(() => {
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 px-4 pb-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => handleAnalyzeConversation()}
-                      disabled={!selectedConversationId || analyzeConversation.isPending}
-                    >
-                      {analyzeConversation.isPending ? "Analyzing..." : "Run analysis"}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => handleAnalyzeConversation(true)}
-                      disabled={!selectedConversationId || analyzeConversation.isPending}
-                    >
-                      Force reanalysis
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => handleAnalyzeConversation()}
+                        disabled={!selectedConversationId || analyzeConversation.isPending}
+                      >
+                        {analyzeConversation.isPending ? "Analyzing..." : "Run analysis"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => handleAnalyzeConversation(true)}
+                        disabled={!selectedConversationId || analyzeConversation.isPending}
+                      >
+                        Force reanalysis
+                      </Button>
+                    </>
                     <Button
                       variant="outline"
                       size="sm"
@@ -1361,103 +1285,27 @@ useEffect(() => {
                       onClick={() => {
                         void handleCreatePlan();
                       }}
-                      disabled={disablePlanButton}
+                      disabled={disableRoadmapButton}
                       title={
-                        !hasAnalysisResults
-                          ? "Run analysis to unlock plan creation"
+                        !hasAnalysisResults && !mirrorAnalysisReady
+                          ? "Run analysis or upload resume to unlock roadmap generation"
                           : undefined
                       }
                     >
-                      {createPlan.isPending ? "Generating roadmap..." : "Generate roadmap"}
+                      {createPlan.isPending ? "Generating roadmap..." : "Generate Roadmap"}
                     </Button>
                   </div>
-                  {!hasAnalysisResults && selectedConversationId ? (
+                  {!hasAnalysisResults && !mirrorAnalysisReady && selectedConversationId ? (
                     <p className="text-[11px] text-muted-foreground">
-                      {isVeloIntake
-                        ? "Run analysis and confirm VELO context to unlock roadmap generation."
-                        : "Run analysis to unlock plans and reports."}
+                      Run analysis or upload your resume to unlock roadmap generation.
                     </p>
                   ) : null}
                 </div>
-                {isVeloIntake ? (
+                {analysisJobRunning ? (
                   <div className="px-4 pb-3">
-                    <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">
-                      <p className="font-medium">Using VELO audit context for roadmap personalization.</p>
-                      <p className="mt-1">
-                        Answer these intake questions. This context is used to generate your roadmap from this chat.
-                      </p>
-                      <div className="mt-3 grid gap-2 md:grid-cols-2">
-                        <div className="space-y-1">
-                          <label className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
-                            1. What role are you targeting?
-                          </label>
-                          <Input
-                            value={veloIntakeDraft.target_role}
-                            onChange={(event) =>
-                              setVeloIntakeDraft((prev) => ({ ...prev, target_role: event.target.value }))
-                            }
-                            placeholder="e.g., Backend Engineer Intern"
-                            className="h-8 border-emerald-200 bg-white text-[12px]"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
-                            2. What is your timeline?
-                          </label>
-                          <Input
-                            value={veloIntakeDraft.timeline}
-                            onChange={(event) =>
-                              setVeloIntakeDraft((prev) => ({ ...prev, timeline: event.target.value }))
-                            }
-                            placeholder="e.g., 4 months"
-                            className="h-8 border-emerald-200 bg-white text-[12px]"
-                          />
-                        </div>
-                        <div className="space-y-1 md:col-span-2">
-                          <label className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
-                            3. What constraints should we respect?
-                          </label>
-                          <Textarea
-                            value={veloIntakeDraft.constraints}
-                            onChange={(event) =>
-                              setVeloIntakeDraft((prev) => ({ ...prev, constraints: event.target.value }))
-                            }
-                            placeholder="e.g., 8 hrs/week, college exams in May, no weekends"
-                            className="min-h-[64px] border-emerald-200 bg-white text-[12px]"
-                          />
-                        </div>
-                        <div className="space-y-1 md:col-span-2">
-                          <label className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
-                            4. Priority gaps (comma separated)
-                          </label>
-                          <Input
-                            value={veloIntakeDraft.priority_gaps}
-                            onChange={(event) =>
-                              setVeloIntakeDraft((prev) => ({ ...prev, priority_gaps: event.target.value }))
-                            }
-                            placeholder="e.g., DSA, system design, communication"
-                            className="h-8 border-emerald-200 bg-white text-[12px]"
-                          />
-                        </div>
-                      </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant={veloConfirmed ? "secondary" : "default"}
-                          onClick={() => void handleConfirmVeloContext()}
-                          disabled={veloConfirming || veloConfirmed || !veloAuditId}
-                          className="h-7 text-xs"
-                        >
-                          {veloConfirmed
-                            ? "Roadmap context confirmed"
-                            : veloConfirming
-                              ? "Confirming..."
-                              : "Confirm VELO Context"}
-                        </Button>
-                        {veloConfirmError ? (
-                          <span className="text-[11px] text-rose-700">{veloConfirmError}</span>
-                        ) : null}
-                      </div>
+                    <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[12px] text-blue-800">
+                      <span className="inline-block h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-blue-400" />
+                      <span>Your profile analysis is running — your mentor will have full context shortly.</span>
                     </div>
                   </div>
                 ) : null}
@@ -1501,8 +1349,8 @@ useEffect(() => {
                       Plan status: {latestPlanUpdate?.data.message ?? "Working on your plan..."}
                     </div>
                   ) : null}
-                  <div className="min-h-0 flex-1">
-                    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                       {isMentorIntake && (
                         <div className="mb-3 space-y-3 rounded-2xl border border-black/10 bg-gradient-to-r from-amber-50 via-white to-emerald-50 px-4 py-3 text-sm shadow-sm">
                           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1525,32 +1373,11 @@ useEffect(() => {
                                 </Button>
                               ) : (
                                 <>
-                                  {!isVeloIntake ? (
-                                    <>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          sendMessage(
-                                            "I’m ready for mentor intake. Please guide me through the key questions."
-                                          )
-                                        }
-                                      >
-                                        Ask intake questions
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => sendMessage("skip")}
-                                      >
-                                        Skip this question
-                                      </Button>
-                                    </>
-                                  ) : (
+                                  {mirrorAnalysisReady ? (
                                     <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700">
-                                      Complete the VELO intake form above and confirm context.
+                                      Mentor has your resume context.
                                     </span>
-                                  )}
+                                  ) : null}
                                   <Button
                                     size="sm"
                                     onClick={handlePreviewMentorIntake}
@@ -1662,7 +1489,7 @@ useEffect(() => {
                         <AgentIndicator />
                         <MentorActionShelf
                           actions={mentorActions}
-                          onSendQuickReply={(message) => sendMessage(message)}
+                          onSendQuickReply={(message) => handleSendMessage(message)}
                           disabled={
                             messagesLoading ||
                             !activeConversation ||
@@ -1675,7 +1502,7 @@ useEffect(() => {
                             !activeConversation ||
                             socketStatus !== "open"
                           }
-                          onSend={sendMessage}
+                          onSend={handleSendMessage}
                           onTypingChange={setTypingStatus}
                         />
                       </div>
@@ -1686,19 +1513,39 @@ useEffect(() => {
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <Card className="w-96 text-center">
-                <CardHeader>
-                  <CardTitle>Welcome to the Mentor Lounge</CardTitle>
-                  <CardDescription>
-                    Select a conversation from the list on the left, or start a new one to begin.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button onClick={() => setCreateModalOpen(true)}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Start New Conversation
-                  </Button>
-                </CardContent>
-              </Card>
+              <div className="w-full max-w-xl space-y-3">
+                {analysisJobRunning ? (
+                  <Card className="border-blue-200 bg-blue-50/80">
+                    <CardHeader>
+                      <CardTitle className="text-base">Your analysis is running</CardTitle>
+                      <CardDescription>
+                        Resume and skill-gap analysis is processing in background. Start mentor chat now; context will sync automatically when ready.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-wrap gap-2">
+                      <Button variant="outline" onClick={() => setCreateModalOpen(true)}>
+                        <PlusCircle className="mr-2 h-4 w-4" /> Start Mentor Conversation
+                      </Button>
+                      <Button variant="outline" onClick={() => router.push("/onboarding")}>
+                        Open Onboarding
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : null}
+                <Card className="w-full text-center">
+                  <CardHeader>
+                    <CardTitle>Welcome to the Mentor Lounge</CardTitle>
+                    <CardDescription>
+                      Select a conversation from the list on the left, or start a new one to begin.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button onClick={() => setCreateModalOpen(true)}>
+                      <PlusCircle className="mr-2 h-4 w-4" /> Start New Conversation
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
         </section>

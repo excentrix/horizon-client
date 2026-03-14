@@ -61,10 +61,10 @@ const STUDENT_NAV_ITEMS = [
     description: "Skills, portfolio & analytics",
   },
   {
-    href: "/onboarding/velo",
-    label: "VELO Onboarding",
+    href: "/onboarding",
+    label: "Onboarding",
     icon: QrCode,
-    description: "Readiness audit and mentor handoff",
+    description: "Profile setup and VELO resume analysis",
   },
   {
     href: "/institution/overview",
@@ -201,7 +201,7 @@ export function Sidebar() {
       return false;
     }
     if (isStudentOnboardingPending) {
-      return item.href === "/onboarding/velo";
+      return ["/onboarding", "/chat", "/progress"].includes(item.href);
     }
     return true;
   });
