@@ -10,8 +10,22 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Horizon Mentorship Studio",
-  description: "An adaptive mentorship companion for students and trainees.",
+  title: "Horizon",
+  description: "The GPS for your career",
+  manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/icon.png", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    title: "Horizon",
+    statusBarStyle: "default",
+    capable: true,
+  },
 };
 
 export default function RootLayout({

@@ -30,6 +30,7 @@ const TYPE_ICONS: Record<string, string> = {
   task_reminder: "📋",
   plan_ready: "🗺️",
   intervention: "💬",
+  mentor_proactive: "💬",
   system: "🔔",
 };
 

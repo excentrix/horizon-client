@@ -17,7 +17,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { useCreatePlanFromConversation, usePlan } from "@/hooks/use-plans";
-import { useAnalyzeConversation } from "@/hooks/use-intelligence";
 import { telemetry } from "@/lib/telemetry";
 import { CreateConversationModal } from "@/components/mentor-lounge/create-conversation-modal";
 import { PlusCircle } from 'lucide-react';
@@ -29,7 +28,7 @@ import { PersonalitySelector } from "@/components/mentor-lounge/personality-sele
 import { MentorActionShelf } from "@/components/mentor-lounge/mentor-action-shelf";
 import { AgentIndicator } from "@/components/mentor-lounge/agent-indicator";
 import { CortexDebugDrawer } from "@/components/mentor-lounge/cortex-debug-drawer";
-import { intelligenceApi, authApi } from "@/lib/api";
+import { intelligenceApi, authApi, chatApi } from "@/lib/api";
 import { describeStageEvent } from "@/lib/analysis-stage";
 import { MissingInfoForm } from "@/components/mentor-lounge/missing-info-form";
 import { AnalysisHistory } from "@/components/mentor-lounge/analysis-history";
@@ -98,6 +97,8 @@ function ChatContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
+  const contextFromQuery = searchParams.get("context");
+  const queryClient = useQueryClient();
   
   const selectedConversationId = useMentorLoungeStore(
     (state) => state.selectedConversationId,
@@ -150,7 +151,6 @@ function ChatContent() {
   
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [isReportModalOpen, setReportModalOpen] = useState(false);
-  const [, setAnalysisTimedOut] = useState<string | null>(null);
   const [isInsightsOpen, setInsightsOpen] = useState(false);
   
   // Analysis history state
@@ -194,10 +194,8 @@ function ChatContent() {
   const processedAnalysisRef = useRef<Map<string, string>>(new Map());
   const stageTrackerRef = useRef<Map<string, Set<string>>>(new Map());
   const analysisPollTimeoutRef = useRef<number | null>(null);
-  const analyzedAtRef = useRef<Map<string, string>>(new Map());
   const processedStageEventSeqRef = useRef<number>(-1);
   const stageHistoryLimit = 8;
-  const analysisTimeoutRef = useRef<number | null>(null);
   const autoPromptedMentorRef = useRef(false);
   const [intakeSubmitting, setIntakeSubmitting] = useState(false);
   const [intakeError, setIntakeError] = useState<string | null>(null);
@@ -207,7 +205,6 @@ function ChatContent() {
   const [intakeState, setIntakeState] = useState<Record<string, unknown> | null>(null);
   const [intakeSubmitted, setIntakeSubmitted] = useState(false);
 
-  const analyzeConversation = useAnalyzeConversation();
   const createPlan = useCreatePlanFromConversation();
   const { analysisEvents } = useNotifications();
   const clearAnalysisPolling = useCallback(() => {
@@ -251,11 +248,48 @@ function ChatContent() {
   }, [conversations, searchParams, selectedConversationId, setSelectedConversationId]);
 
   useEffect(() => {
-    if (selectedConversationId || conversations.length > 0 || !analysisJobRunning) return;
+    const shouldSeedKickoff = analysisJobRunning || contextFromQuery === "mirror_review";
+    if (!shouldSeedKickoff) return;
+    if (selectedConversationId || conversations.length > 0 || conversationsLoading) return;
     if (autoPromptedMentorRef.current) return;
     autoPromptedMentorRef.current = true;
-    setCreateModalOpen(true);
-  }, [analysisJobRunning, conversations.length, selectedConversationId]);
+
+    (async () => {
+      try {
+        const conversation = await chatApi.createConversation({
+          title: "Mentor Kickoff",
+          topic: "Onboarding handoff",
+        });
+        setSelectedConversationId(conversation.id);
+        await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        const params = new URLSearchParams(searchParamsString);
+        params.set("conversation", conversation.id);
+        params.delete("plan");
+        if (contextFromQuery) {
+          params.set("context", contextFromQuery);
+        }
+        router.replace(`/chat?${params.toString()}`, { scroll: false });
+        await chatApi.sendMessage(conversation.id, {
+          content:
+            "I just completed onboarding. Please greet me, summarize what context you already have, and ask the single most important next question.",
+          context: "onboarding_kickoff",
+          metadata: { auto_seeded: true, source: "onboarding" },
+        });
+      } catch (error) {
+        telemetry.warn("Failed to auto-seed mentor kickoff", { error });
+      }
+    })();
+  }, [
+    analysisJobRunning,
+    contextFromQuery,
+    conversations.length,
+    conversationsLoading,
+    queryClient,
+    router,
+    searchParamsString,
+    selectedConversationId,
+    setSelectedConversationId,
+  ]);
 
   useEffect(() => {
     setIntakeState(
@@ -357,8 +391,10 @@ function ChatContent() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setLastPlanId(window.localStorage.getItem("lastPlanId"));
-  }, []);
+    if (!user?.id) return;
+    const scopedKey = `lastPlanId:${user.id}`;
+    setLastPlanId(window.localStorage.getItem(scopedKey));
+  }, [user?.id]);
 
   const fetchLatestAnalysis = useCallback(
     async (conversationId: string, options?: { silent?: boolean }) => {
@@ -410,9 +446,6 @@ function ChatContent() {
             };
           });
         }
-        if (response.analyzed_at) {
-          analyzedAtRef.current.set(conversationId, response.analyzed_at);
-        }
         return response;
       } catch (error: unknown) {
         const axiosStatus =
@@ -430,26 +463,6 @@ function ChatContent() {
       }
     },
     [stageHistoryLimit]
-  );
-
-  const startAnalysisPolling = useCallback(
-    (conversationId: string) => {
-      clearAnalysisPolling();
-      const poll = async () => {
-        const before = analyzedAtRef.current.get(conversationId) || null;
-        const result = await fetchLatestAnalysis(conversationId, { silent: true });
-        const latest =
-          result?.analyzed_at || analyzedAtRef.current.get(conversationId) || null;
-        if (latest && latest !== before) {
-          await fetchLatestAnalysis(conversationId);
-          clearAnalysisPolling();
-          return;
-        }
-        analysisPollTimeoutRef.current = window.setTimeout(poll, 6000);
-      };
-      analysisPollTimeoutRef.current = window.setTimeout(poll, 6000);
-    },
-    [clearAnalysisPolling, fetchLatestAnalysis]
   );
 
   useEffect(() => {
@@ -506,7 +519,6 @@ useEffect(() => {
     fetchLatestAnalysis(selectedConversationId, { silent: true });
   }, [selectedConversationId, fetchLatestAnalysis, clearAnalysisPolling]);
 
-  const queryClient = useQueryClient();
   const planBuildStatus = useMentorLoungeStore(state => state.planBuildStatus);
   const planBuildId = useMentorLoungeStore(state => state.planBuildId);
   const planBuildTitle = useMentorLoungeStore(state => state.planBuildTitle);
@@ -523,8 +535,10 @@ useEffect(() => {
     } else {
       params.delete("conversation");
     }
-    const desiredPlanId =
-      planBuildId ?? latestPlan?.learning_plan_id ?? planIdFromQuery ?? lastPlanId ?? null;
+    const allowPlanParam = contextFromQuery !== "mirror_review" && contextFromQuery !== "onboarding_kickoff";
+    const desiredPlanId = allowPlanParam
+      ? (planBuildId ?? latestPlan?.learning_plan_id ?? planIdFromQuery ?? lastPlanId ?? null)
+      : null;
     if (desiredPlanId) {
       params.set("plan", desiredPlanId);
     } else {
@@ -546,12 +560,13 @@ useEffect(() => {
     searchParamsString,
     selectedConversationId,
     lastPlanId,
+    contextFromQuery,
   ]);
 
   useEffect(() => {
-    if (!effectivePlanId || typeof window === "undefined") return;
-    window.localStorage.setItem("lastPlanId", effectivePlanId);
-  }, [effectivePlanId]);
+    if (!effectivePlanId || typeof window === "undefined" || !user?.id) return;
+    window.localStorage.setItem(`lastPlanId:${user.id}`, effectivePlanId);
+  }, [effectivePlanId, user?.id]);
 
   // Activate polling for plan status fallback
   usePlanSessionPoller();
@@ -562,6 +577,20 @@ useEffect(() => {
       // If there are other "workbench" queries, invalidate them here too.
     }
   }, [planBuildStatus, queryClient]);
+
+  // Refresh messages when a proactive mentor message arrives via WS
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.conversationId && selectedConversationId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["conversations", selectedConversationId, "messages"],
+        });
+      }
+    };
+    window.addEventListener("proactive_mentor_message", handler);
+    return () => window.removeEventListener("proactive_mentor_message", handler);
+  }, [selectedConversationId, queryClient]);
 
   useEffect(() => {
     return () => {
@@ -777,13 +806,6 @@ useEffect(() => {
         
         if (selectedConversationId && conversationId === selectedConversationId) {
           clearAnalysisPolling();
-          // Clear the timeout since analysis completed
-          if (analysisTimeoutRef.current) {
-            window.clearTimeout(analysisTimeoutRef.current);
-            analysisTimeoutRef.current = null;
-          }
-          setAnalysisTimedOut(null);
-          
           // AUTO-REFRESH: Fetch latest analysis results to update UI
           setTimeout(() => {
             fetchLatestAnalysis(conversationId, { silent: false });
@@ -817,103 +839,6 @@ useEffect(() => {
   const disablePlanButton =
     !selectedConversationId || createPlan.isPending || isPlanBuilding;
   const disableRoadmapButton = disablePlanButton;
-
-  const handleAnalyzeConversation = (forceOverride?: boolean) => {
-    if (!selectedConversationId) {
-      telemetry.toastError("Select a conversation first");
-      return;
-    }
-
-    const shouldForce = forceOverride ?? hasAnalysisResults;
-
-    stageTrackerRef.current.set(selectedConversationId, new Set());
-    processedAnalysisRef.current.delete(selectedConversationId);
-    
-    // Clear any existing timeout and reset timeout state
-    if (analysisTimeoutRef.current) {
-      window.clearTimeout(analysisTimeoutRef.current);
-      analysisTimeoutRef.current = null;
-    }
-    setAnalysisTimedOut(null);
-
-    setAnalysisByConversation((previous) => ({
-      ...previous,
-      [selectedConversationId]: {
-        ...previous[selectedConversationId],
-        message: shouldForce
-          ? "Force reanalysis requested..."
-          : "Brain is warming up...",
-        progress_update: { status: "analysis_started" },
-        stage_history: [],
-        analysis_results: {},
-        analysis_record: undefined,
-      },
-    }));
-    
-    // Start 2-minute timeout
-    analysisTimeoutRef.current = window.setTimeout(() => {
-      if (selectedConversationId) {
-        setAnalysisTimedOut(selectedConversationId);
-        telemetry.toastInfo(
-          "⚠️ Analysis is taking longer than expected",
-          "This may indicate a problem with the AI service. You can retry the analysis if needed."
-        );
-        
-        // Mark analysis as failed in history so it doesn't spin forever
-        setAnalysisHistory(prev => prev.map(a => {
-          if (a.conversation_id === selectedConversationId && a.status === 'running') {
-            return {
-              ...a,
-              status: 'failed',
-              results: { error: 'Analysis timed out' }
-            };
-          }
-          return a;
-        }));
-      }
-    }, 120000); // 2 minutes
-
-    // CREATE ANALYSIS HISTORY ENTRY
-    const newAnalysis = {
-      id: `analysis-${Date.now()}`,
-      conversation_id: selectedConversationId,
-      conversation_title: activeConversation?.title || "Unknown conversation",
-      status: 'running' as const,
-      started_at: new Date().toISOString(),
-      progress: 0,
-      stage_messages: [],
-    };
-    
-    setAnalysisHistory(prev => [newAnalysis, ...prev]);
-
-    // Capture analysis requested event
-    posthog.capture('analysis_requested', {
-      conversation_id: selectedConversationId,
-      conversation_title: activeConversation?.title,
-      force_reanalysis: shouldForce,
-    });
-
-    analyzeConversation.mutate(
-      {
-        conversationId: selectedConversationId,
-        forceReanalysis: shouldForce,
-      },
-      {
-        onSuccess: (data) => {
-          if (selectedConversationId && data && typeof data === "object") {
-            setAnalysisByConversation((previous) => ({
-              ...previous,
-              [selectedConversationId]: {
-                ...previous[selectedConversationId],
-                ...(data as Record<string, unknown>),
-              },
-            }));
-          }
-          startAnalysisPolling(selectedConversationId);
-        },
-      }
-    );
-  };
 
   const handleCreatePlan = async () => {
     if (!selectedConversationId) {
@@ -949,6 +874,20 @@ useEffect(() => {
       { conversationId: selectedConversationId },
       {
         onSuccess: (data) => {
+          const queuedStatus = (data as { status?: string; error?: string; message?: string })?.status;
+          const queuedError = (data as { status?: string; error?: string; message?: string })?.error;
+          if (queuedError === "analysis_not_ready" || queuedStatus === "processing") {
+            telemetry.toastInfo(
+              "Refreshing intelligence context",
+              (data as { message?: string })?.message || "Preparing the latest context. Try again in a few seconds."
+            );
+            if (selectedConversationId) {
+              setTimeout(() => {
+                void fetchLatestAnalysis(selectedConversationId, { silent: false });
+              }, 5000);
+            }
+            return;
+          }
           if (data?.learning_plan_id) {
             router.prefetch(`/plans?plan=${data.learning_plan_id}`);
           }
@@ -1258,26 +1197,6 @@ useEffect(() => {
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 px-4 pb-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={() => handleAnalyzeConversation()}
-                        disabled={!selectedConversationId || analyzeConversation.isPending}
-                      >
-                        {analyzeConversation.isPending ? "Analyzing..." : "Run analysis"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={() => handleAnalyzeConversation(true)}
-                        disabled={!selectedConversationId || analyzeConversation.isPending}
-                      >
-                        Force reanalysis
-                      </Button>
-                    </>
                     <Button
                       variant="outline"
                       size="sm"
@@ -1286,20 +1205,13 @@ useEffect(() => {
                         void handleCreatePlan();
                       }}
                       disabled={disableRoadmapButton}
-                      title={
-                        !hasAnalysisResults && !mirrorAnalysisReady
-                          ? "Run analysis or upload resume to unlock roadmap generation"
-                          : undefined
-                      }
                     >
                       {createPlan.isPending ? "Generating roadmap..." : "Generate Roadmap"}
                     </Button>
                   </div>
-                  {!hasAnalysisResults && !mirrorAnalysisReady && selectedConversationId ? (
-                    <p className="text-[11px] text-muted-foreground">
-                      Run analysis or upload your resume to unlock roadmap generation.
-                    </p>
-                  ) : null}
+                  <p className="text-[11px] text-muted-foreground">
+                    Intelligence runs automatically in the background; roadmap generation uses the latest available context.
+                  </p>
                 </div>
                 {analysisJobRunning ? (
                   <div className="px-4 pb-3">

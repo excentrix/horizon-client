@@ -46,6 +46,10 @@ interface MentorLoungeState {
   // Mirror Analysis
   mirrorAnalysisReady: string | null; // snapshot_id when analysis is complete, null otherwise
   setMirrorAnalysisReady: (snapshotId: string | null) => void;
+
+  // Tool thinking — transient indicator shown when mentor calls a tool mid-response
+  toolThinking: { tool: string; label: string; query: string } | null;
+  setToolThinking: (event: { tool: string; label: string; query: string } | null) => void;
 }
 
 export interface RoutingDecision {
@@ -133,4 +137,8 @@ export const useMentorLoungeStore = create<MentorLoungeState>((set) => ({
   // Mirror Analysis
   mirrorAnalysisReady: null,
   setMirrorAnalysisReady: (snapshotId) => set({ mirrorAnalysisReady: snapshotId }),
+
+  // Tool thinking
+  toolThinking: null,
+  setToolThinking: (event) => set({ toolThinking: event }),
 }));

@@ -127,15 +127,9 @@ export function PortfolioTab() {
             </Button>
           )}
           <Button variant="outline" asChild className="rounded-full">
-            <Link href="/portfolio/settings">
+            <Link href="/settings/portfolio">
               <Settings className="h-4 w-4 mr-2" />
               Edit Public Profile
-            </Link>
-          </Button>
-          <Button asChild className="rounded-full">
-            <Link href="/portfolio/create">
-              <Plus className="h-4 w-4 mr-2" />
-              New Artifact
             </Link>
           </Button>
         </div>
@@ -228,7 +222,7 @@ export function PortfolioTab() {
                         </Link>
                       </Button>
                       <Button size="sm" variant="secondary" asChild>
-                        <Link href="/portfolio/settings">
+                        <Link href="/settings/portfolio">
                           Manage sharing
                         </Link>
                       </Button>

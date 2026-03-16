@@ -35,16 +35,33 @@ import { useFlowSuggestion } from "@/hooks/use-flow-suggestion";
 
 const normalizeMessageContent = (raw: string) => {
   if (!raw) return raw;
-  const trimmed = raw.trim();
-
-  if (trimmed.startsWith("{") && /['"]text['"]\s*:/.test(trimmed)) {
-    const match = trimmed.match(/['"]text['"]\s*:\s*['"]([\s\S]*?)['"]\s*(,|})/);
-    if (match?.[1]) {
-      return match[1].replace(/\\n/g, "\n").replace(/\\"/g, "\"");
+  let cleaned = raw;
+  // Some model outputs use backticks in contractions (e.g., I`m), which can
+  // break markdown rendering and make messages appear truncated.
+  cleaned = cleaned.replace(/([A-Za-z])`([A-Za-z])/g, "$1'$2");
+  if (!cleaned.includes("```")) {
+    const tickCount = (cleaned.match(/`/g) || []).length;
+    if (tickCount % 2 === 1) {
+      cleaned = cleaned.replace(/`/g, "'");
     }
   }
 
-  return raw;
+  const trimmed = cleaned.trim();
+
+  // Only normalize strict JSON payloads like {"text":"..."}.
+  // Avoid fragile regex extraction that can truncate natural text.
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(trimmed) as { text?: unknown };
+      if (typeof parsed?.text === "string" && parsed.text.trim()) {
+        return parsed.text;
+      }
+    } catch {
+      // Keep original raw message when payload is not strict JSON.
+    }
+  }
+
+  return cleaned;
 };
 
 interface MessageFeedProps {
@@ -259,6 +276,8 @@ function MessageFeedContent({
   streamingMessage?: string | null;
   theme?: PersonaTheme;
 }) {
+  const toolThinking = useMentorLoungeStore((state) => state.toolThinking);
+
   // Fetch chat-context flow suggestion (only when not streaming)
   const { data: flowData } = useFlowSuggestion('chat');
   const [suggestionDismissed, setSuggestionDismissed] = useState(false);
@@ -361,11 +380,12 @@ function MessageFeedContent({
           const isNewAssistantTurn =
             !isUser && prevSender !== "ai";
           const metadata = message.metadata as
-            | { missing_info_id?: string; missing_info_field?: string; missing_info_context?: string }
+            | { missing_info_id?: string; missing_info_field?: string; missing_info_context?: string; proactive?: boolean; trigger_type?: string }
             | undefined;
           const missingInfoId = metadata?.missing_info_id;
           const missingInfoField = metadata?.missing_info_field;
           const missingInfoContext = metadata?.missing_info_context;
+          const isProactive = !isUser && metadata?.proactive === true;
           return (
             <motion.div
               key={message.id}
@@ -380,6 +400,13 @@ function MessageFeedContent({
                     Mentor
                   </span>
                   <span className="h-px flex-1 bg-gradient-to-r from-muted/60 via-muted/30 to-transparent" />
+                </div>
+              ) : null}
+              {isProactive ? (
+                <div className="flex items-center gap-1.5 mb-1 ml-1">
+                  <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+                    Your mentor checked in
+                  </span>
                 </div>
               ) : null}
               <Message from={isUser ? "user" : "assistant"}>
@@ -499,7 +526,34 @@ function MessageFeedContent({
         </div>
       </AnimatePresence>
 
-      {mentorTyping && !streamingMessage ? (
+      {/* Tool thinking indicator — shown when mentor is calling a tool before streaming */}
+      <AnimatePresence>
+        {toolThinking && (
+          <motion.div
+            key="tool-thinking"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.2 }}
+          >
+            <Message from="assistant">
+              <MessageContent className="rounded-2xl border border-blue-200/60 bg-blue-50/60 px-4 py-3 text-xs text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-300">
+                <span className="inline-flex items-center gap-2">
+                  <Loader size={14} className="text-blue-500" />
+                  <span className="font-medium">{toolThinking.label}</span>
+                  {toolThinking.query && (
+                    <span className="max-w-[240px] truncate opacity-60">
+                      &quot;{toolThinking.query}&quot;
+                    </span>
+                  )}
+                </span>
+              </MessageContent>
+            </Message>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {mentorTyping && !streamingMessage && !toolThinking ? (
         <Message from="assistant">
           <MessageContent className="rounded-2xl border border-dashed bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-2">

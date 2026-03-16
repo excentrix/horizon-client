@@ -62,12 +62,6 @@ const STUDENT_NAV_ITEMS = [
     description: "Skills, portfolio & analytics",
   },
   {
-    href: "/onboarding",
-    label: "Onboarding",
-    icon: QrCode,
-    description: "Profile setup and VELO resume analysis",
-  },
-  {
     href: "/institution/overview",
     label: "Institution Overview",
     icon: Radar,
@@ -202,7 +196,7 @@ export function Sidebar() {
       return false;
     }
     if (isStudentOnboardingPending) {
-      return ["/onboarding", "/chat", "/progress"].includes(item.href);
+      return ["/dashboard", "/chat", "/progress"].includes(item.href);
     }
     return true;
   });

@@ -19,7 +19,7 @@ type Stage = "idle" | "uploading" | "ready" | "failed";
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
@@ -92,6 +92,7 @@ export default function OnboardingPage() {
     }
     const ok = await parseResume();
     if (ok) {
+      await refreshProfile();
       router.push("/chat");
     }
   };

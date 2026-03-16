@@ -294,7 +294,7 @@ export interface ToolInvocation {
 }
 
 export interface MentorAction {
-  type: "view_plan" | "open_plan_task" | "confirm_plan_intent" | "open_link";
+  type: "view_plan" | "open_plan_task" | "confirm_plan_intent" | "open_link" | "trigger_plan_generation";
   label: string;
   description?: string;
   data?: Record<string, unknown>;

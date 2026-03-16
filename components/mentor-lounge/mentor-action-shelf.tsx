@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import type { MentorAction } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { telemetry } from "@/lib/telemetry";
+import { planningApi } from "@/lib/api";
 
 interface MentorActionShelfProps {
   actions: MentorAction[];
@@ -19,10 +21,11 @@ export function MentorActionShelf({
   disabled,
 }: MentorActionShelfProps) {
   const router = useRouter();
+  const [loadingIndex, setLoadingIndex] = useState<number | null>(null);
 
   const handleAction = useCallback(
-    (action: MentorAction) => {
-      if (disabled) {
+    async (action: MentorAction, index: number) => {
+      if (disabled || loadingIndex !== null) {
         return;
       }
 
@@ -32,6 +35,26 @@ export function MentorActionShelf({
             action.message_template ??
             "Yes, let's go ahead with the plan we discussed.";
           void onSendQuickReply(template);
+          break;
+        }
+        case "trigger_plan_generation": {
+          const data = action.data ?? {};
+          const intent = (data.intent as string) || (data.topic as string) || "";
+          const plan_type = (data.plan_type as "academic" | "exploration" | "project_based") || "exploration";
+          if (!intent) {
+            telemetry.info("trigger_plan_generation action missing intent", { action });
+            break;
+          }
+          setLoadingIndex(index);
+          try {
+            await planningApi.createStandalonePlan({ intent, plan_type });
+            toast.success("Learning plan is being built — we'll notify you when it's ready.");
+            router.push("/plans");
+          } catch {
+            toast.error("Could not start plan generation. Please try again.");
+          } finally {
+            setLoadingIndex(null);
+          }
           break;
         }
         case "view_plan": {
@@ -66,7 +89,7 @@ export function MentorActionShelf({
         }
       }
     },
-    [disabled, onSendQuickReply, router],
+    [disabled, loadingIndex, onSendQuickReply, router],
   );
 
   if (!actions?.length) {
@@ -91,15 +114,19 @@ export function MentorActionShelf({
             </div>
             <Button
               size="sm"
-              variant="secondary"
-              disabled={disabled}
-              onClick={() => handleAction(action)}
+              variant={action.type === "trigger_plan_generation" ? "default" : "secondary"}
+              disabled={disabled || loadingIndex !== null}
+              onClick={() => void handleAction(action, index)}
             >
-              {action.type === "confirm_plan_intent"
-                ? "Confirm"
-                : action.type === "open_plan_task"
-                  ? "Start"
-                  : "Open"}
+              {loadingIndex === index
+                ? "Starting…"
+                : action.type === "confirm_plan_intent"
+                  ? "Confirm"
+                  : action.type === "trigger_plan_generation"
+                    ? "Build Plan"
+                    : action.type === "open_plan_task"
+                      ? "Start"
+                      : "Open"}
             </Button>
           </div>
         ))}

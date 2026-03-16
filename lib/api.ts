@@ -90,7 +90,13 @@ export const authApi = {
     ),
 
   uploadResume: (payload: FormData) =>
-    extract<{ status: "queued" | "parsed"; resume_url: string; job_id?: string }>(
+    extract<{
+      status: "queued" | "parsed";
+      resume_url: string;
+      job_id?: string;
+      onboarding_completed?: boolean;
+      onboarding_marked_complete?: boolean;
+    }>(
       http.post("/auth/profile/resume/", payload)
     ),
   getResumeAnalysisStatus: (jobId: string) =>
@@ -109,7 +115,13 @@ export const authApi = {
     timeline?: string;
     constraints?: string;
   }) =>
-    extract<{ status: "queued"; job_id: string; resume_url: string }>(
+    extract<{
+      status: "queued";
+      job_id: string;
+      resume_url: string;
+      onboarding_completed?: boolean;
+      onboarding_marked_complete?: boolean;
+    }>(
       http.post("/auth/profile/resume/init-from-onboarding/", payload)
     ),
   confirmResume: (payload: { resume_payload: Record<string, unknown>; projects?: Array<Record<string, unknown>> }) =>
@@ -443,6 +455,14 @@ export const planningApi = {
   ) =>
     extract<{ success: boolean; requirements_gathered?: Record<string, unknown> }>(
       http.post(`/planning/plan-sessions/${sessionId}/missing-info/`, payload)
+    ),
+
+  createStandalonePlan: (payload: {
+    intent: string;
+    plan_type: "academic" | "exploration" | "project_based";
+  }) =>
+    extract<{ success: boolean; session_id: string; message: string }>(
+      http.post("/planning/standalone/", payload)
     ),
 };
 

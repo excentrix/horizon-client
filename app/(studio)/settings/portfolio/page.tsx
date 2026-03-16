@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 interface PortfolioProfile {
-  id: number;
+  id: string;
   slug: string;
   headline: string;
   bio: string;
@@ -59,8 +59,8 @@ export default function PortfolioSettingsPage() {
     : `/p/${profile?.slug ?? ""}`;
 
   useEffect(() => {
-    http.get("/api/portfolio/profiles/my_profile/")
-      .then((r) => setProfile(r.data))
+    http.get("/portfolio/profiles/my_profile/")
+      .then((r) => setProfile(r.data?.profile ?? null))
       .catch(() => toast.error("Failed to load portfolio profile"))
       .finally(() => setLoading(false));
   }, []);
@@ -72,7 +72,7 @@ export default function PortfolioSettingsPage() {
     if (!profile) return;
     setSaving(true);
     try {
-      const { data } = await http.patch("/api/portfolio/profiles/my_profile/", {
+      const { data } = await http.patch(`/portfolio/profiles/${profile.id}/`, {
         headline: profile.headline,
         bio: profile.bio,
         theme: profile.theme,

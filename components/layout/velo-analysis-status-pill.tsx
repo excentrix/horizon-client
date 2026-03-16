@@ -34,12 +34,31 @@ export function VeloAnalysisStatusPill() {
       }
     };
     void poll();
-    const id = window.setInterval(() => void poll(), 6000);
+    const id = window.setInterval(() => {
+      // Keep frequent polling only while analysis is running.
+      if (status === "running") {
+        void poll();
+      }
+    }, 15000);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void poll();
+      }
+    };
+    const onOnline = () => {
+      void poll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
     };
-  }, []);
+  }, [status]);
 
   const isDismissed = useMemo(
     () => status === "ready" && mirrorId && dismissedForMirror === mirrorId,

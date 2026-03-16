@@ -140,6 +140,7 @@ export function useChatSocket(conversationId: string | null) {
     pushInsight,
     pushMissingInfo,
     setMirrorAnalysisReady,
+    setToolThinking,
   } = useMentorLoungeStore();
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -260,6 +261,14 @@ export function useChatSocket(conversationId: string | null) {
     if (!conversationId) {
       return;
     }
+    if (
+      socketRef.current &&
+      activeConversationRef.current === conversationId &&
+      (socketRef.current.readyState === WebSocket.OPEN ||
+        socketRef.current.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
 
     const base = getWebSocketBase();
     if (!base) {
@@ -330,15 +339,21 @@ export function useChatSocket(conversationId: string | null) {
           return;
         }
 
-        setStatus("closed");
+        setStatus("connecting");
+        setError("Reconnecting...");
         telemetry.warn("Chat socket closed", { code: event.code, reason: event.reason });
         scheduleReconnect();
       };
 
       socket.onerror = (socketError) => {
         telemetry.warn("Chat socket error", { socketError });
-        setStatus("error");
-        setError("Chat connection error");
+        setStatus("connecting");
+        setError("Reconnecting...");
+        try {
+          socket.close();
+        } catch {
+          // no-op
+        }
       };
 
       socket.onmessage = (event) => {
@@ -456,6 +471,7 @@ export function useChatSocket(conversationId: string | null) {
               setStreamState({ messageId: undefined, content: null });
               updateMentorTyping(false);
               setActiveAgent(null);
+              setToolThinking(null);
               break;
             }
             case "stream_error": {
@@ -484,6 +500,17 @@ export function useChatSocket(conversationId: string | null) {
                      timestamp: new Date().toISOString(),
                  });
               }
+              break;
+            }
+            case "tool_thinking": {
+              // Mentor is calling a tool (web search, etc.) — show transient indicator
+              setToolThinking({
+                tool: (payload?.tool as string) ?? "",
+                label: (payload?.label as string) ?? "Thinking…",
+                query: (payload?.query as string) ?? "",
+              });
+              // Auto-clear after 6 s in case stream_complete doesn't fire
+              setTimeout(() => setToolThinking(null), 6000);
               break;
             }
             case "typing_status": {
@@ -579,21 +606,8 @@ export function useChatSocket(conversationId: string | null) {
                     updateMentorTyping(false);
                  }
 
-                 if (step.status) {
-                    const mapped =
-                      step.status === "initializing" || step.status === "queued"
-                        ? "queued"
-                        : step.status === "completed"
-                          ? "completed"
-                          : step.status === "error" || step.status === "failed"
-                            ? "failed"
-                            : "in_progress";
-                    setPlanBuildStatus(
-                      mapped,
-                      step.step ?? "Working on your plan...",
-                    );
-                    updateLastPlanActivity();
-                 }
+                 // Do not mutate global plan-build status from generic runtime steps.
+                 // Plan build status should come from explicit `plan_update` events only.
               }
               break;
             }
@@ -700,6 +714,21 @@ export function useChatSocket(conversationId: string | null) {
               telemetry.toastSuccess(
                 "Profile analysis ready",
                 "Your mentor now has full context about your background."
+              );
+              break;
+            }
+            case "proactive_mentor_message": {
+              // Mentor sent a proactive message — dispatch event so the chat can refresh
+              window.dispatchEvent(new CustomEvent("proactive_mentor_message", {
+                detail: {
+                  conversationId: payload?.conversation_id,
+                  triggerType: payload?.trigger_type,
+                }
+              }));
+              // Also show a subtle toast so user knows the mentor reached out
+              telemetry.toastInfo(
+                "Your mentor sent you a message",
+                "Open the chat to see what they said."
               );
               break;
             }
@@ -831,6 +860,36 @@ export function useChatSocket(conversationId: string | null) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, connect, resetSocket, updateMentorTyping]);
+
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const ensureConnected = () => {
+      if (document.visibilityState === "hidden") return;
+      if (navigator.onLine === false) return;
+      const socket = socketRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        clearReconnectTimer();
+        setStatus("connecting");
+        setError("Reconnecting...");
+        connectRef.current();
+      }
+    };
+
+    const onVisible = () => ensureConnected();
+    const onFocus = () => ensureConnected();
+    const onOnline = () => ensureConnected();
+
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [conversationId, clearReconnectTimer]);
 
   useEffect(() => {
     return () => {
