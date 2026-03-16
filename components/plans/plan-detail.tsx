@@ -587,7 +587,7 @@ export function PlanDetail({
                           : `Step ${index + 1}`
                       }
                     >
-                      {index + 1}
+                      {index}
                     </div>
                   );
                 })}
@@ -607,7 +607,7 @@ export function PlanDetail({
             </div>
           ) : null}
         </div>
-        {(learningApproach || primaryStyle || maxDailyHours || motivationPatterns.length) ? (
+        {/* {(learningApproach || primaryStyle || maxDailyHours || motivationPatterns.length) ? (
           <div className="rounded-2xl border border-transparent bg-white/80 px-3 py-3 text-[11px] text-muted-foreground shadow-[var(--shadow-1)] ring-1 ring-white/60">
             <p className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
               Why this plan fits you
@@ -638,7 +638,7 @@ export function PlanDetail({
               ))}
             </div>
           </div>
-        ) : null}
+        ) : null} */}
         <div className="flex flex-wrap items-center gap-2">
           {renderControls()}
           <Button

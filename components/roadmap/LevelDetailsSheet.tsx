@@ -2,7 +2,7 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { Loader2, Play, Lock, CheckCircle, ArrowRight } from "lucide-react";
+import { Loader2, Play, Lock, CheckCircle, ArrowRight, Clock3, Crosshair, Shield } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
 
 import { RoadmapLevel } from "@/types";
 
@@ -49,7 +50,17 @@ export function LevelDetailsSheet({ level, isOpen, onClose }: LevelDetailsSheetP
 
   const { mutate: requestPlan, isPending } = useMutation({
     mutationFn: startLevelPlan,
-    onSuccess: () => {
+    onSuccess: (data) => {
+      const planId = (data as { plan_id?: string })?.plan_id;
+      if (planId) {
+        toast.success("Existing plan found", {
+            description: "Navigating to your pre-existing plan for this level.",
+        });
+        onClose();
+        router.push(`/plans/${planId}/playground`);
+        return;
+      }
+
       toast.success("Plan generation started!", {
         description: "Your AI mentor is crafting a custom plan for this level.",
       });
@@ -88,10 +99,12 @@ export function LevelDetailsSheet({ level, isOpen, onClose }: LevelDetailsSheetP
   const isLocked = level.status === "locked";
   const isCompleted = level.status === "completed";
   const isInProgress = level.status === "in_progress";
+  const objectiveCount = level.objectives?.length || 0;
+  const completionValue = isCompleted ? 100 : isInProgress ? 50 : 0;
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-[400px] sm:w-[540px] flex flex-col h-full overflow-hidden pb-12">
+      <SheetContent className="flex h-full w-[420px] flex-col overflow-hidden pb-24 sm:w-[560px] px-4">
         <SheetHeader className="space-y-4 pb-4">
           <div className="flex items-center justify-between">
             <Badge 
@@ -109,6 +122,13 @@ export function LevelDetailsSheet({ level, isOpen, onClose }: LevelDetailsSheetP
             <SheetDescription className="mt-2 text-base">
               {level.description}
             </SheetDescription>
+          </div>
+          <div className="rounded-xl border bg-muted/30 p-3">
+            <div className="mb-1 flex items-center justify-between text-xs font-semibold text-muted-foreground">
+              <span>Region progress</span>
+              <span>{completionValue}%</span>
+            </div>
+            <Progress value={completionValue} className="h-2.5" />
           </div>
         </SheetHeader>
 
@@ -131,14 +151,27 @@ export function LevelDetailsSheet({ level, isOpen, onClose }: LevelDetailsSheetP
               </ul>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 pt-4">
-               <div className="p-4 rounded-lg bg-muted/30 border space-y-1">
-                 <div className="text-xs text-muted-foreground uppercase tracking-wider">Duration</div>
-                 <div className="font-semibold text-lg">{level.duration_weeks} Weeks</div>
+            <div className="grid grid-cols-3 gap-3 pt-1">
+               <div className="rounded-lg border bg-muted/30 p-3">
+                 <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
+                   <Clock3 className="h-3.5 w-3.5" />
+                   Duration
+                 </div>
+                 <div className="text-base font-semibold">{level.duration_weeks} weeks</div>
                </div>
-               <div className="p-4 rounded-lg bg-muted/30 border space-y-1">
-                 <div className="text-xs text-muted-foreground uppercase tracking-wider">Difficulty</div>
-                 <div className="font-semibold text-lg">Intermediate</div> 
+               <div className="rounded-lg border bg-muted/30 p-3">
+                 <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
+                   <Crosshair className="h-3.5 w-3.5" />
+                   Objectives
+                 </div>
+                 <div className="text-base font-semibold">{objectiveCount}</div>
+               </div>
+               <div className="rounded-lg border bg-muted/30 p-3">
+                 <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
+                   <Shield className="h-3.5 w-3.5" />
+                   Status
+                 </div>
+                 <div className="text-base font-semibold capitalize">{level.status.replace("_", " ")}</div>
                </div>
             </div>
           </div>
@@ -149,7 +182,7 @@ export function LevelDetailsSheet({ level, isOpen, onClose }: LevelDetailsSheetP
                 <Button disabled className="w-full gap-2" size="lg" variant="secondary">
                   <Lock className="w-4 h-4" /> Component Locked
                 </Button>
-             ) : isInProgress || isCompleted ? (
+             ) : isInProgress || isCompleted || level.learning_plan_id ? (
                 <Button onClick={handleContinue} className="w-full gap-2" size="lg">
                   {isCompleted ? "Review Completed Plan" : "Continue Learning"} <ArrowRight className="w-4 h-4" />
                 </Button>

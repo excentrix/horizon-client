@@ -4,7 +4,8 @@ import { useMemo, useRef, useState } from "react";
 import type { DailyTask } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Video, ExternalLink, Lightbulb, ThumbsUp, ThumbsDown, FlaskConical } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { BookOpen, Video, ExternalLink, Lightbulb, ThumbsUp, ThumbsDown, FlaskConical, RefreshCw } from "lucide-react";
 import { MathMarkdown } from "@/components/markdown/MathMarkdown";
 import { planningApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,7 @@ interface LearningPanelProps {
   lessonLoading: boolean;
   blockFeedback: FeedbackState;
   onFeedbackChange: (feedback: FeedbackState) => void;
+  onRegenerateLesson?: () => void;
 }
 
 type LessonBlock = NonNullable<DailyTask["lesson_blocks"]>[number];
@@ -114,7 +116,7 @@ function BlockFeedback({
   );
 }
 
-export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeedbackChange }: LearningPanelProps) {
+export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeedbackChange, onRegenerateLesson }: LearningPanelProps) {
   const panelMountTime = useRef(Date.now());
 
   const resources = (activeTask?.online_resources ?? []) as Array<
@@ -191,7 +193,20 @@ export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeed
           <Badge variant="outline" className="text-[10px] uppercase tracking-wider text-muted-foreground">
             {activeTask.task_type.replace('_', ' ')}
           </Badge>
-          <span className="text-xs text-muted-foreground">{activeTask.estimated_duration_minutes} min</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{activeTask.estimated_duration_minutes} min</span>
+            {onRegenerateLesson && !lessonLoading && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[11px] text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                onClick={onRegenerateLesson}
+                title="Regenerate lesson with AI"
+              >
+                <RefreshCw className="w-3 h-3 mr-1" /> Regenerate
+              </Button>
+            )}
+          </div>
         </div>
         <h2 className="text-2xl font-semibold tracking-tight">{activeTask.title}</h2>
         <p className="text-muted-foreground">{activeTask.description}</p>

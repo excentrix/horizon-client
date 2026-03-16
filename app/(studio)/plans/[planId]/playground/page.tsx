@@ -244,22 +244,40 @@ function PlaygroundFlow() {
       .finally(() => setStarterCodeLoading(false));
   }, [activeStepIndex, activeTask, starterCode]);
 
-  // Load Lessons if missing
-  // Using a ref to prevent infinite loops from refetchPlan dependency triggers
+  // Detect thin/fallback lesson blocks that should be regenerated.
+  // Thin = ≤3 blocks (real LLM output is 4-6) OR the only concept block content
+  // is just a copy of the task description (the old static fallback pattern).
+  const isLessonThin = (task: typeof activeTask): boolean => {
+    const blocks = task?.lesson_blocks;
+    if (!blocks || blocks.length === 0) return true;
+    if (blocks.length <= 3) return true;
+    const description = (task?.description || "").trim().toLowerCase().slice(0, 80);
+    const conceptBlock = blocks.find((b) => b.type === "concept");
+    if (
+      description &&
+      conceptBlock &&
+      (conceptBlock.content || "").trim().toLowerCase().startsWith(description.slice(0, 60))
+    ) return true;
+    return false;
+  };
+
+  // Load Lessons — generate if missing OR if existing content is thin/fallback
   const lessonRequestRef = useRef<Record<string, boolean>>({});
-  
+
   useEffect(() => {
     if (!activeTask?.id) return;
-    if (activeTask.lesson_blocks?.length) return;
+    const thin = isLessonThin(activeTask);
+    if (!thin) return;
     if (lessonRequestRef.current[activeTask.id]) return;
-    
+
     lessonRequestRef.current[activeTask.id] = true;
     setLessonLoading(true);
-    planningApi.generateTaskLesson(activeTask.id, { scope: "task" })
+    // force=true so the backend regenerates even if lesson_blocks is non-empty
+    planningApi.generateTaskLesson(activeTask.id, { scope: "task", force: thin && (activeTask.lesson_blocks?.length ?? 0) > 0 })
       .then(() => refetchPlan())
       .catch(() => { lessonRequestRef.current[activeTask.id] = false; })
       .finally(() => setLessonLoading(false));
-  }, [activeTask?.id, activeTask?.lesson_blocks, refetchPlan]);
+  }, [activeTask?.id, activeTask?.lesson_blocks, refetchPlan]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleProofSubmit = async (type: "link" | "text" | "file", content: string | File) => {
     if (!activeTask) return;
@@ -415,6 +433,15 @@ function PlaygroundFlow() {
                 lessonLoading={lessonLoading}
                 blockFeedback={blockFeedback}
                 onFeedbackChange={setBlockFeedback}
+                onRegenerateLesson={() => {
+                  if (!activeTask?.id) return;
+                  lessonRequestRef.current[activeTask.id] = false;
+                  setLessonLoading(true);
+                  planningApi.generateTaskLesson(activeTask.id, { scope: "task", force: true })
+                    .then(() => refetchPlan())
+                    .catch(() => {})
+                    .finally(() => setLessonLoading(false));
+                }}
               />
             </div>
           )}

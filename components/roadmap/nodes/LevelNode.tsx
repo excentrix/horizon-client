@@ -2,7 +2,7 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps, Node } from '@xyflow/react';
 import { cn } from '@/lib/utils';
-import { Lock, Check, Star, Play } from 'lucide-react';
+import { Lock, CheckCircle2, Sparkles, PlayCircle } from 'lucide-react';
 
 type LevelNodeData = {
   title: string;
@@ -18,41 +18,55 @@ const LevelNode = ({ data, selected }: NodeProps<Node<LevelNodeData>>) => {
 
   // Visual variants based on status
   const variants = {
-    locked: "bg-muted text-muted-foreground border-muted-foreground/30",
-    available: "bg-card text-card-foreground border-primary/50 hover:border-primary cursor-pointer shadow-sm",
-    in_progress: "bg-primary text-primary-foreground border-primary ring-4 ring-primary/20 shadow-lg scale-105",
-    completed: "bg-emerald-500 text-white border-emerald-600 shadow-md",
+    locked: "border-slate-300 bg-slate-100/80 text-slate-500 shadow-sm",
+    available: "border-sky-300 bg-white text-slate-800 shadow-[0_8px_30px_rgb(56,189,248,0.15)]",
+    in_progress: "border-indigo-400 bg-gradient-to-br from-indigo-500 to-sky-500 text-white shadow-[0_12px_36px_rgb(99,102,241,0.45)] scale-[1.02]",
+    completed: "border-emerald-400 bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-[0_10px_28px_rgb(16,185,129,0.45)]",
   };
 
-  const Icon = () => {
-    if (status === 'locked') return <Lock className="w-5 h-5" />;
-    if (status === 'completed') return <Check className="w-6 h-6 stroke-[3]" />;
-    if (status === 'in_progress') return <Play className="w-6 h-6 fill-current" />;
-    return <Star className="w-6 h-6" />;
-  };
+  const Icon = status === 'locked'
+    ? Lock
+    : status === 'completed'
+      ? CheckCircle2
+      : status === 'in_progress'
+        ? PlayCircle
+        : Sparkles;
+
+  const chipLabel = status === "locked"
+    ? "Locked"
+    : status === "in_progress"
+      ? "Current Quest"
+      : status === "completed"
+        ? "Completed"
+        : "Available";
 
   return (
     <div className={cn(
-      "relative w-[180px] h-[100px] rounded-xl border-2 flex flex-col items-center justify-center p-3 text-center transition-all duration-300",
+      "relative w-[220px] h-[128px] rounded-2xl border-2 p-4 transition-all duration-300 cursor-pointer",
       variants[status],
       selected && "ring-2 ring-ring ring-offset-2",
       isLocked && "grayscale opacity-80"
     )}>
-      <Handle type="target" position={Position.Left} className="w-3 h-3 !bg-muted-foreground/50 border-none" />
-      
-      <div className="mb-1">
-        <Icon />
+      <Handle type="target" position={Position.Left} className="w-2.5 h-2.5 !bg-slate-400 border-none" />
+
+      <div className="flex items-start justify-between gap-3">
+        <div className="rounded-xl bg-white/20 p-2 backdrop-blur-[1px]">
+          <Icon className="h-5 w-5" />
+        </div>
+        <span className="rounded-full border border-white/30 bg-white/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
+          {chipLabel}
+        </span>
       </div>
-      
-      <div className="font-bold text-sm leading-tight line-clamp-2">
+
+      <div className="mt-3 line-clamp-2 text-left text-[15px] font-semibold leading-tight">
         {title}
       </div>
-      
-      <div className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-background border-2 flex items-center justify-center text-xs font-mono font-bold text-muted-foreground shadow-sm z-10">
+
+      <div className="absolute -top-3 -right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-900 text-xs font-bold text-white shadow-md">
         {levelIndex}
       </div>
 
-      <Handle type="source" position={Position.Right} className="w-3 h-3 !bg-muted-foreground/50 border-none" />
+      <Handle type="source" position={Position.Right} className="w-2.5 h-2.5 !bg-slate-400 border-none" />
     </div>
   );
 };
