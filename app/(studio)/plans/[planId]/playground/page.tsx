@@ -122,6 +122,10 @@ function PlaygroundFlow() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lessonLoading, setLessonLoading] = useState(false);
   const [diagramAttachment, setDiagramAttachment] = useState<File | null>(null);
+  const [starterCode, setStarterCode] = useState<string | undefined>(undefined);
+  const [starterCodeLoading, setStarterCodeLoading] = useState(false);
+  const [challengeVerification, setChallengeVerification] = useState<Record<string, unknown> | null>(null);
+  const [challengeLoading, setChallengeLoading] = useState(false);
 
   // -- Quiz & Block Feedback State (lifted for mentor context) --
   const [quizResults, setQuizResults] = useState<QuizResults | null>(null);
@@ -134,13 +138,42 @@ function PlaygroundFlow() {
   const verifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // -- Chat & Mentor State --
-  const mentorConversationId = plan?.specialized_conversation_id ?? plan?.conversation_id ?? null;
-  
+  // Use a dedicated per-task playground conversation so playground messages don't
+  // pollute the learner's main plan conversation history.
+  const [playgroundConversationId, setPlaygroundConversationId] = useState<string | null>(
+    activeTask?.playground_conversation_id ?? null
+  );
+
+  // Sync from task data (in case it was already set from a previous session)
+  useEffect(() => {
+    if (activeTask?.playground_conversation_id && !playgroundConversationId) {
+      setPlaygroundConversationId(activeTask.playground_conversation_id);
+    }
+  }, [activeTask?.playground_conversation_id, playgroundConversationId]);
+
+  // Create the playground conversation on first load if not yet created
+  const playgroundConvRequestRef = useRef<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!activeTask?.id) return;
+    if (playgroundConversationId) return;
+    if (playgroundConvRequestRef.current[activeTask.id]) return;
+
+    playgroundConvRequestRef.current[activeTask.id] = true;
+    planningApi.getOrCreatePlaygroundConversation(activeTask.id)
+      .then((res) => setPlaygroundConversationId(res.conversation_id))
+      .catch(() => {
+        // Fall back to the plan's main conversation
+        setPlaygroundConversationId(plan?.specialized_conversation_id ?? plan?.conversation_id ?? null);
+      });
+  }, [activeTask?.id, playgroundConversationId, plan]);
+
+  const mentorConversationId = playgroundConversationId;
+
   const {
     messages: mentorMessages,
     refetch: refetchMentorMessages,
   } = useConversationMessages(mentorConversationId);
-  
+
   const { sendMessage, mentorTyping, streamingMessage, status: mentorSocketStatus } =
     useChatSocket(mentorConversationId);
 
@@ -176,6 +209,40 @@ function PlaygroundFlow() {
     window.addEventListener("artifact_verified", handleArtifactVerified);
     return () => window.removeEventListener("artifact_verified", handleArtifactVerified);
   }, [activeTask?.id]);
+
+  // Generate challenge lazily when the user enters the Verification step
+  const challengeRequestRef = useRef<Record<string, boolean>>({});
+  useEffect(() => {
+    if (activeStepIndex !== 3 || !activeTask?.id) return;
+    // Already have rich verification data
+    const v = activeTask.verification || {};
+    if (challengeVerification || (v.problem_statement && String(v.problem_statement).length > 40)) return;
+    if (challengeRequestRef.current[activeTask.id]) return;
+
+    challengeRequestRef.current[activeTask.id] = true;
+    setChallengeLoading(true);
+    planningApi.generateChallenge(activeTask.id)
+      .then((res) => setChallengeVerification(res.verification))
+      .catch(() => { challengeRequestRef.current[activeTask.id] = false; })
+      .finally(() => setChallengeLoading(false));
+  }, [activeStepIndex, activeTask, challengeVerification]);
+
+  // Load starter code lazily when the user enters the Omni-Environment step
+  const starterCodeRequestRef = useRef<Record<string, boolean>>({});
+  useEffect(() => {
+    if (activeStepIndex !== 2 || !activeTask?.id) return;
+    // Already have code from plan generation
+    if (getInitialCode(activeTask)) return;
+    if (starterCode !== undefined) return;
+    if (starterCodeRequestRef.current[activeTask.id]) return;
+
+    starterCodeRequestRef.current[activeTask.id] = true;
+    setStarterCodeLoading(true);
+    planningApi.generateStarterCode(activeTask.id)
+      .then((res) => setStarterCode(res.starter_code))
+      .catch(() => { starterCodeRequestRef.current[activeTask.id] = false; })
+      .finally(() => setStarterCodeLoading(false));
+  }, [activeStepIndex, activeTask, starterCode]);
 
   // Load Lessons if missing
   // Using a ref to prevent infinite loops from refetchPlan dependency triggers
@@ -389,7 +456,8 @@ function PlaygroundFlow() {
               )}
               <OmniWorkspace
                 notes={workspaceNotes}
-                initialCode={getInitialCode(activeTask)}
+                initialCode={getInitialCode(activeTask) ?? starterCode}
+                starterCodeLoading={starterCodeLoading}
                 onNotesChange={setWorkspaceNotes}
                 onSaveNotes={() => telemetry.toastSuccess("Notes saved locally.")}
                 taskTitle={activeTask?.title || "Coding Challenge"}
@@ -409,10 +477,39 @@ function PlaygroundFlow() {
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both h-full">
               <VerificationEngine
                 taskId={activeTask?.id || ""}
-                verificationMethod={activeTask?.verification?.method || "manual_rubric"}
-                verificationCriteria={activeTask?.verification?.criteria || activeTask?.check_in_question || ""}
+                verificationMethod={
+                  (challengeVerification?.method as string)
+                  || activeTask?.verification?.method
+                  || "manual_rubric"
+                }
+                verificationCriteria={
+                  (challengeVerification?.criteria as string)
+                  || activeTask?.verification?.criteria
+                  || activeTask?.check_in_question
+                  || ""
+                }
                 taskDescription={activeTask?.description || ""}
-                verificationDetailedInstructions={activeTask?.verification?.detailed_instructions}
+                verificationDetailedInstructions={
+                  (challengeVerification?.detailed_instructions as string)
+                  || activeTask?.verification?.detailed_instructions
+                }
+                problemStatement={
+                  (challengeVerification?.problem_statement as string)
+                  || undefined
+                }
+                acceptanceCriteria={
+                  (challengeVerification?.acceptance_criteria as string[])
+                  || undefined
+                }
+                exampleInputsOutputs={
+                  (challengeVerification?.example_inputs_outputs as string)
+                  || undefined
+                }
+                submissionNote={
+                  (challengeVerification?.submission_note as string)
+                  || undefined
+                }
+                challengeLoading={challengeLoading}
                 isSubmitting={isSubmitting}
                 onProofSubmit={handleProofSubmit}
                 prefilledFile={diagramAttachment}

@@ -387,6 +387,21 @@ export const planningApi = {
       cached: boolean;
     }>(http.post(`/planning/tasks/${taskId}/generate-flashcards/`, { force })),
 
+  getOrCreatePlaygroundConversation: (taskId: string) =>
+    extract<{ conversation_id: string }>(
+      http.post(`/planning/tasks/${taskId}/playground-conversation/`, {})
+    ),
+
+  generateStarterCode: (taskId: string) =>
+    extract<{ task_id: string; starter_code: string; language: string; cached: boolean }>(
+      http.post(`/planning/tasks/${taskId}/generate-starter-code/`, {})
+    ),
+
+  generateChallenge: (taskId: string) =>
+    extract<{ task_id: string; verification: Record<string, unknown>; cached: boolean }>(
+      http.post(`/planning/tasks/${taskId}/generate-challenge/`, {})
+    ),
+
   getTodaysTasks: () =>
     extract<{
       date: string;

@@ -375,7 +375,16 @@ export interface DailyTask {
   >;
   current_tools_versions: Record<string, unknown>;
   kpis?: Array<{ metric?: string; target?: string }>;
-  verification?: { method?: string; criteria?: string; detailed_instructions?: string };
+  verification?: {
+    method?: string;
+    criteria?: string;
+    detailed_instructions?: string;
+    problem_statement?: string;
+    acceptance_criteria?: string[];
+    example_inputs_outputs?: string;
+    submission_note?: string;
+    ai_generated?: boolean;
+  };
   assessment_config?: {
     id: string;
     verification_type: "auto_quiz" | "code_execution" | "github_repo" | "file_upload" | "text_analysis" | "manual_rubric";
@@ -425,6 +434,7 @@ export interface DailyTask {
     source_url?: string | null;
   }>;
   lesson_generated_at?: string | null;
+  playground_conversation_id?: string | null;
   adaptive_difficulty: boolean;
   is_skippable: boolean;
   status: TaskStatus;

@@ -20,6 +20,7 @@ const ALL_ENV_MODES: EnvMode[] = ["web", "colab", "local", "code_runner", "diagr
 
 interface OmniWorkspaceProps {
   initialCode?: string;
+  starterCodeLoading?: boolean;
   notes: string;
   onNotesChange: (notes: string) => void;
   onSaveNotes: () => void;
@@ -49,6 +50,7 @@ function SandpackReviewButton({ onReview }: { onReview: (code: string) => void }
 
 export function OmniWorkspace({
   initialCode,
+  starterCodeLoading = false,
   notes,
   onNotesChange,
   onSaveNotes,
@@ -123,7 +125,7 @@ code .
   const colabBlankUrl = "https://colab.research.google.com/#create=true";
 
   return (
-    <div className="flex h-[600px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
+    <div className="relative flex h-[600px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
       {/* Omni-Toolbar */}
       <div className="flex items-center justify-between border-b bg-white px-4 py-2 text-sm text-slate-700">
         <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
@@ -266,6 +268,16 @@ code .
               </div>
             </SandpackLayout>
           </SandpackProvider>
+        )}
+
+        {/* Starter code loading overlay */}
+        {starterCodeLoading && (envMode === "colab" || envMode === "local" || envMode === "code_runner") && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/80 rounded-xl">
+            <div className="flex flex-col items-center gap-3 text-slate-300">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-400 border-t-white" />
+              <p className="text-sm">Generating task-specific starter code…</p>
+            </div>
+          </div>
         )}
 
         {/* Google Colab Mode */}

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Link, FileText, Upload, ShieldCheck, CheckCircle2, Loader2, Trophy, AlertTriangle, ExternalLink, ArrowRight } from "lucide-react";
+import { Link, FileText, Upload, ShieldCheck, CheckCircle2, Loader2, Trophy, AlertTriangle, ExternalLink, ArrowRight, ListChecks, ClipboardList, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface ArtifactVerifiedEvent {
@@ -26,6 +26,12 @@ interface VerificationEngineProps {
   verificationCriteria: string;
   taskDescription: string;
   verificationDetailedInstructions?: string;
+  // Richer AI-generated challenge fields
+  problemStatement?: string;
+  acceptanceCriteria?: string[];
+  exampleInputsOutputs?: string;
+  submissionNote?: string;
+  challengeLoading?: boolean;
   onProofSubmit: (type: "link" | "text" | "file", content: string | File) => Promise<void>;
   isSubmitting: boolean;
   prefilledFile?: File | null;
@@ -40,6 +46,11 @@ export function VerificationEngine({
   verificationCriteria,
   taskDescription,
   verificationDetailedInstructions,
+  problemStatement,
+  acceptanceCriteria,
+  exampleInputsOutputs,
+  submissionNote,
+  challengeLoading = false,
   onProofSubmit,
   isSubmitting,
   prefilledFile,
@@ -129,54 +140,107 @@ export function VerificationEngine({
         </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-8">
-        {/* Challenge Brief */}
-        <div className="space-y-3 bg-amber-50/50 p-5 rounded-lg border border-amber-100">
-          <h4 className="text-sm font-semibold uppercase tracking-wider text-amber-800 flex items-center gap-2">
-            Mission Brief
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Loading state while challenge is being generated */}
+        {challengeLoading && (
+          <div className="flex flex-col items-center gap-3 py-8 text-slate-500">
+            <Loader2 className="w-7 h-7 animate-spin text-slate-400" />
+            <p className="text-sm">Generating challenge details…</p>
+          </div>
+        )}
+
+        {/* Problem Statement */}
+        <div className="space-y-2 bg-amber-50/60 p-5 rounded-xl border border-amber-100">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-amber-800 flex items-center gap-2">
+            <ClipboardList className="w-4 h-4" /> Mission Brief
           </h4>
-          <p className="text-sm text-slate-700 leading-relaxed font-medium">
-            {taskDescription || "Complete the task outlined in your learning plan."}
+          <p className="text-sm text-slate-800 leading-relaxed font-medium">
+            {problemStatement || taskDescription || "Complete the task outlined in your learning plan."}
           </p>
         </div>
 
-        {/* The Formal Rubric */}
-        <div className="space-y-4">
-          <h4 className="text-sm font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-2">
-            Success Rubric & Instructions
-          </h4>
-          <div className="bg-white border text-sm border-slate-200 rounded-lg overflow-hidden">
-            <div className="px-5 py-4 border-b bg-slate-50 flex flex-col gap-2">
-              <div className="flex items-center gap-2 font-medium text-slate-700">
-                Required Proof Type: <span className="text-emerald-700 font-bold capitalize bg-emerald-100/50 px-2 py-0.5 rounded-md">{readableMethod}</span>
+        {/* Acceptance Criteria */}
+        {(acceptanceCriteria && acceptanceCriteria.length > 0) ? (
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <ListChecks className="w-4 h-4" /> Acceptance Criteria
+            </h4>
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+              <div className="divide-y divide-slate-100">
+                {acceptanceCriteria.map((criterion, idx) => (
+                  <div key={idx} className="flex gap-3 px-5 py-3 text-sm text-slate-700">
+                    <span className="text-emerald-500 font-bold shrink-0 mt-0.5">{idx + 1}.</span>
+                    <p className="leading-relaxed">{criterion}</p>
+                  </div>
+                ))}
               </div>
-              <p className="text-slate-600 text-xs mt-1 leading-relaxed">
-                <span className="font-semibold text-slate-700">Instructions:</span>{" "}
-                {verificationDetailedInstructions || submissionInstructions}
-              </p>
-            </div>
-            <div className="p-5 space-y-3 bg-white">
-              {rules.map((rule, idx) => (
-                <div key={idx} className="flex gap-3 text-slate-600">
-                  <span className="text-blue-500 font-bold shrink-0">{idx + 1}.</span>
-                  <p className="leading-relaxed">{rule}</p>
-                </div>
-              ))}
-            </div>
-            <div className="px-5 py-3 bg-amber-50 border-t border-amber-100">
-              <label className="flex items-center gap-3 cursor-pointer select-none">
-                <div 
-                  className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors ${rubricAcknowledged ? 'bg-amber-500 border-amber-500 text-white' : 'border-amber-300 bg-white'}`}
-                  onClick={() => setRubricAcknowledged(!rubricAcknowledged)}
-                >
-                  {rubricAcknowledged && <CheckCircle2 className="w-3.5 h-3.5" />}
-                </div>
-                <span className="text-xs font-medium text-amber-900">
-                  I confirm that my submission meets all stated rubric criteria above.
-                </span>
-              </label>
             </div>
           </div>
+        ) : (
+          /* Fallback to old criteria-based rules */
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <ListChecks className="w-4 h-4" /> Success Criteria
+            </h4>
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+              <div className="divide-y divide-slate-100">
+                {rules.map((rule, idx) => (
+                  <div key={idx} className="flex gap-3 px-5 py-3 text-sm text-slate-700">
+                    <span className="text-blue-500 font-bold shrink-0 mt-0.5">{idx + 1}.</span>
+                    <p className="leading-relaxed">{rule}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Submission instructions */}
+        <div className="space-y-3">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <Info className="w-4 h-4" /> How to Submit
+          </h4>
+          <div className="bg-white border border-slate-200 rounded-xl px-5 py-4 text-sm">
+            <div className="flex items-center gap-2 font-medium text-slate-700 mb-2">
+              Required Proof Type:
+              <span className="text-emerald-700 font-bold capitalize bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md text-xs">
+                {readableMethod}
+              </span>
+            </div>
+            {(verificationDetailedInstructions || submissionNote) && (
+              <p className="text-slate-600 leading-relaxed whitespace-pre-line">
+                {verificationDetailedInstructions || submissionNote || submissionInstructions}
+              </p>
+            )}
+            {!(verificationDetailedInstructions || submissionNote) && (
+              <p className="text-slate-600 leading-relaxed">{submissionInstructions}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Example inputs/outputs if available */}
+        {exampleInputsOutputs && (
+          <div className="space-y-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Example</h4>
+            <pre className="bg-slate-900 text-slate-200 text-xs font-mono p-4 rounded-xl overflow-x-auto whitespace-pre-wrap">
+              {exampleInputsOutputs}
+            </pre>
+          </div>
+        )}
+
+        {/* Rubric acknowledgment */}
+        <div className="bg-amber-50 border border-amber-100 rounded-xl px-5 py-4">
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <div
+              className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors ${rubricAcknowledged ? 'bg-amber-500 border-amber-500 text-white' : 'border-amber-300 bg-white'}`}
+              onClick={() => setRubricAcknowledged(!rubricAcknowledged)}
+            >
+              {rubricAcknowledged && <CheckCircle2 className="w-3.5 h-3.5" />}
+            </div>
+            <span className="text-xs font-medium text-amber-900">
+              I confirm that my submission meets all stated criteria above.
+            </span>
+          </label>
         </div>
 
         {/* Input Form */}

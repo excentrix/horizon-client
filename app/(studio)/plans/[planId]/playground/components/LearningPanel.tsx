@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import type { DailyTask } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Video, ExternalLink, Lightbulb, ThumbsUp, ThumbsDown } from "lucide-react";
+import { BookOpen, Video, ExternalLink, Lightbulb, ThumbsUp, ThumbsDown, FlaskConical } from "lucide-react";
 import { MathMarkdown } from "@/components/markdown/MathMarkdown";
 import { planningApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -256,33 +256,55 @@ export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeed
             <div className="h-20 w-full animate-pulse rounded bg-slate-100" />
           </div>
         ) : (
-          <div className="relative rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-400 to-indigo-500"></div>
-            <div className="px-8 py-6 space-y-8">
-              {contentBlocks
-                .filter((block) => block.type !== "exercise")
-                .map((block, i) => (
-                <div key={block.id || i} className="group">
-                  <h3 className="flex items-center gap-2 text-lg font-bold capitalize text-slate-800 mb-4 border-b pb-2">
-                    <Lightbulb className="h-5 w-5 text-indigo-500" />
-                    {block.title || block.type}
-                  </h3>
-                  <div className="prose prose-sm prose-slate md:prose-base max-w-none text-slate-600 leading-relaxed font-serif">
-                    <MathMarkdown>{block.content ?? ""}</MathMarkdown>
+          <>
+            <div className="relative rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-400 to-indigo-500"></div>
+              <div className="px-8 py-6 space-y-8">
+                {contentBlocks
+                  .filter((block) => block.type !== "exercise")
+                  .map((block, i) => (
+                  <div key={block.id || i} className="group">
+                    <h3 className="flex items-center gap-2 text-lg font-bold capitalize text-slate-800 mb-4 border-b pb-2">
+                      <Lightbulb className="h-5 w-5 text-indigo-500" />
+                      {block.title || block.type}
+                    </h3>
+                    <div className="prose prose-sm prose-slate md:prose-base max-w-none text-slate-600 leading-relaxed font-serif">
+                      <MathMarkdown>{block.content ?? ""}</MathMarkdown>
+                    </div>
+                    {block.id && block.id !== "desc" && (
+                      <BlockFeedback
+                        block={block}
+                        taskId={activeTask.id}
+                        feedback={blockFeedback[block.id] ?? null}
+                        onFeedback={handleFeedback}
+                        blockStartTime={panelMountTime.current}
+                      />
+                    )}
                   </div>
-                  {block.id && block.id !== "desc" && (
-                    <BlockFeedback
-                      block={block}
-                      taskId={activeTask.id}
-                      feedback={blockFeedback[block.id] ?? null}
-                      onFeedback={handleFeedback}
-                      blockStartTime={panelMountTime.current}
-                    />
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+
+            {contentBlocks.filter((b) => b.type === "exercise").map((block, i) => (
+              <div
+                key={block.id || `exercise-${i}`}
+                className="rounded-2xl border border-violet-200 bg-violet-50/60 shadow-sm overflow-hidden"
+              >
+                <div className="flex items-center gap-2 px-6 py-4 border-b border-violet-100">
+                  <FlaskConical className="h-5 w-5 text-violet-600" />
+                  <h3 className="text-base font-bold text-violet-900">
+                    {block.title || "Try It"}
+                  </h3>
+                  <span className="ml-auto text-[10px] uppercase tracking-wider font-semibold text-violet-500 bg-violet-100 rounded-full px-2 py-0.5">
+                    Practice
+                  </span>
+                </div>
+                <div className="px-6 py-5 prose prose-sm prose-violet md:prose-base max-w-none text-violet-900/80 leading-relaxed">
+                  <MathMarkdown>{block.content ?? ""}</MathMarkdown>
+                </div>
+              </div>
+            ))}
+          </>
         )}
       </div>
     </div>
