@@ -29,6 +29,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useInstitutionScope } from "../_lib/useInstitutionScope";
 
 const ROLE_COLORS: Record<string, string> = {
   admin: "bg-amber-500/20 text-amber-400 border-amber-500/30",
@@ -45,12 +46,8 @@ function AddMemberDialog({ onClose }: { onClose: () => void }) {
     if (!email.trim()) return;
     setSaving(true);
     try {
-      await institutionsApi.updateOrgUser("", { role }); // placeholder — actual invite
-      // Since no dedicated add-by-email API exists yet, show guidance
       toast.info("Use the Invites tab CSV to bulk-add students, or contact the admin to add by email.");
       onClose();
-    } catch {
-      toast.error("Failed to add member");
     } finally {
       setSaving(false);
     }
@@ -86,6 +83,7 @@ function AddMemberDialog({ onClose }: { onClose: () => void }) {
 }
 
 export default function MembersPage() {
+  const { selectedOrgId, isSuperuser } = useInstitutionScope();
   const [users, setUsers] = useState<OrgUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -94,16 +92,21 @@ export default function MembersPage() {
   const [showAdd, setShowAdd] = useState(false);
 
   const load = useCallback(async () => {
+    if (isSuperuser && !selectedOrgId) {
+      setUsers([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const data = await institutionsApi.listOrgUsers({ role: roleFilter || undefined });
+      const data = await institutionsApi.listOrgUsers({ role: roleFilter || undefined, org: selectedOrgId || undefined });
       setUsers(data);
     } catch {
       toast.error("Failed to load members");
     } finally {
       setLoading(false);
     }
-  }, [roleFilter]);
+  }, [isSuperuser, roleFilter, selectedOrgId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -114,7 +117,7 @@ export default function MembersPage() {
   const updateUser = async (userId: string, payload: { role?: string; is_active?: boolean }) => {
     setActionLoading(userId);
     try {
-      await institutionsApi.updateOrgUser(userId, payload);
+      await institutionsApi.updateOrgUser(userId, { ...payload, org: selectedOrgId || undefined });
       toast.success("Member updated");
       load();
     } catch {
@@ -127,7 +130,7 @@ export default function MembersPage() {
   const sendPasswordReset = async (userId: string) => {
     setActionLoading(userId);
     try {
-      await institutionsApi.resetOrgUserPassword(userId);
+      await institutionsApi.resetOrgUserPassword(userId, { org: selectedOrgId || undefined });
       toast.success("Password reset email sent");
     } catch {
       toast.error("Failed to send password reset");
@@ -138,13 +141,18 @@ export default function MembersPage() {
 
   return (
     <div className="space-y-5">
+      {isSuperuser && !selectedOrgId ? (
+        <div className="rounded-lg border p-4 text-sm text-muted-foreground">
+          Select an institution from the Institution Scope selector to manage members.
+        </div>
+      ) : null}
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Members</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage roles, access, and cohort assignments.</p>
         </div>
-        <Button onClick={() => setShowAdd(true)}>
+        <Button onClick={() => setShowAdd(true)} disabled={isSuperuser && !selectedOrgId}>
           <UserPlus className="h-4 w-4 mr-2" /> Add Member
         </Button>
       </div>
@@ -235,7 +243,7 @@ export default function MembersPage() {
         </div>
       )}
 
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+      <Dialog open={showAdd && !(isSuperuser && !selectedOrgId)} onOpenChange={setShowAdd}>
         {showAdd && <AddMemberDialog onClose={() => setShowAdd(false)} />}
       </Dialog>
     </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { institutionsApi, auditApi } from "@/lib/api";
+import { institutionsApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Clock, ShieldCheck, Target } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import type { AuditInstitutionStudentDetail } from "@/types";
+import { useInstitutionScope } from "../../_lib/useInstitutionScope";
 
 type StudentInsight = {
   user_id: string;
@@ -30,6 +30,15 @@ type StudentInsight = {
   engagement_prev_7: number;
   risk_flags: string[];
   risk_level: "low" | "medium" | "high";
+  risk_score?: number;
+  momentum_score?: number;
+  consistency_score?: number;
+  completion_velocity_14d?: number;
+  completed_last_14d?: number;
+  overdue_tasks?: number;
+  upcoming_tasks_7d?: number;
+  insight_summary?: string;
+  recommended_interventions?: string[];
   top_skill_gap?: string | null;
   next_best_action?: string | null;
   engagement_series?: { date: string; value: number }[];
@@ -39,13 +48,13 @@ type StudentInsight = {
 export default function StudentInsightPage() {
   const params = useParams<{ studentId: string }>();
   const router = useRouter();
+  const { selectedOrgId } = useInstitutionScope();
   const [student, setStudent] = useState<StudentInsight | null>(null);
   const [loading, setLoading] = useState(true);
   const [notes, setNotes] = useState("");
   const [interventions, setInterventions] = useState<
     { id: string; action_type: string; status: string; notes?: string; created_at: string; created_by_name?: string }[]
   >([]);
-  const [veloDetail, setVeloDetail] = useState<AuditInstitutionStudentDetail | null>(null);
   const seriesData = useMemo(() => {
     const engagement = student?.engagement_series ?? [];
     const completion = student?.completion_series ?? [];
@@ -65,26 +74,18 @@ export default function StudentInsightPage() {
   useEffect(() => {
     if (!params.studentId) return;
     setLoading(true);
-    institutionsApi.studentInsight(params.studentId)
+    institutionsApi.studentInsight(params.studentId, { org: selectedOrgId || undefined })
       .then((data) => setStudent(data))
       .catch((err) => telemetry.error("Failed to load student insight", { err }))
       .finally(() => setLoading(false));
-  }, [params.studentId]);
+  }, [params.studentId, selectedOrgId]);
 
   useEffect(() => {
     if (!params.studentId) return;
-    institutionsApi.listStudentInterventions(params.studentId)
+    institutionsApi.listStudentInterventions(params.studentId, { org: selectedOrgId || undefined })
       .then((data) => setInterventions(data))
       .catch((err) => telemetry.error("Failed to load interventions", { err }));
-  }, [params.studentId]);
-
-  useEffect(() => {
-    if (!params.studentId) return;
-    auditApi
-      .getInstitutionStudentDetail(params.studentId)
-      .then((data) => setVeloDetail(data))
-      .catch(() => setVeloDetail(null));
-  }, [params.studentId]);
+  }, [params.studentId, selectedOrgId]);
 
   const handleIntervention = async (action: "check_in" | "schedule_1on1" | "assign_remediation") => {
     if (!params.studentId) return;
@@ -92,6 +93,7 @@ export default function StudentInsightPage() {
       const created = await institutionsApi.createStudentIntervention(params.studentId, {
         action_type: action,
         notes,
+        org: selectedOrgId || undefined,
       });
       setInterventions((prev) => [created, ...prev]);
       setNotes("");
@@ -115,7 +117,11 @@ export default function StudentInsightPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => router.push("/institution/students")}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.push(selectedOrgId ? `/institution/students?org=${selectedOrgId}` : "/institution/students")}
+        >
           <ArrowLeft className="h-4 w-4 mr-2" /> Back to Cohort
         </Button>
       </div>
@@ -172,6 +178,33 @@ export default function StudentInsightPage() {
         </Card>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Risk Score</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">{student.risk_score ?? 0}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Momentum</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">{student.momentum_score ?? 0}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Consistency</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">{student.consistency_score ?? 0}%</CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Overdue Tasks</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-bold">{student.overdue_tasks ?? 0}</CardContent>
+        </Card>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
@@ -206,41 +239,29 @@ export default function StudentInsightPage() {
         </CardContent>
       </Card>
 
-      {veloDetail ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">VELO Readiness Profile</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>
-              Readiness: <span className="font-medium text-foreground">{Math.round(veloDetail.latest.readiness_score * 100)}%</span> ({veloDetail.latest.readiness_label})
-            </p>
-            <p>
-              Audit status: <span className="font-medium text-foreground">{veloDetail.latest_audit_summary.status.replace(/_/g, " ")}</span>
-            </p>
-            <p>
-              Mentor context: <span className="font-medium text-foreground">{veloDetail.latest_audit_summary.mentor_context_status}</span>
-            </p>
-            <p>
-              Track / mode: <span className="font-medium text-foreground">{`${veloDetail.latest.onboarding_track || "resume_track"} / ${veloDetail.latest.audit_mode || "full_forensic"}`}</span>
-            </p>
-            <p>
-              Eligibility: <span className="font-medium text-foreground">{veloDetail.latest.roadmap_eligibility || "not_ready"}</span>
-            </p>
-            <p>
-              Top 3 gaps: {veloDetail.latest.top_skill_gaps.slice(0, 3).join(", ") || "None"}
-            </p>
-            <p>
-              Gap coverage: <span className="font-medium text-foreground">
-                {Math.round((veloDetail.gap_coverage?.progress || 0) * 100)}%
-              </span>
-              {veloDetail.gap_coverage
-                ? ` (${veloDetail.gap_coverage.covered_gaps}/${veloDetail.gap_coverage.total_gaps})`
-                : ""}
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">Insight Summary</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">{student.insight_summary ?? "No summary available."}</CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">Recommended Interventions</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {(student.recommended_interventions ?? []).length ? (
+            (student.recommended_interventions ?? []).map((item) => (
+              <div key={item} className="rounded-md border p-2 text-sm">
+                {item}
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">No intervention recommendation right now.</p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

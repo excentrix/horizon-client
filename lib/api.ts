@@ -345,7 +345,12 @@ export const planningApi = {
         }
       | FormData
   ) =>
-    extract<{ message: string; proof: Record<string, unknown>; artifact_id?: string }>(
+    extract<{
+      message: string;
+      proof: Record<string, unknown>;
+      artifact_id?: string;
+      execution_report?: Record<string, unknown> | null;
+    }>(
       http.post(`/planning/tasks/${taskId}/submit-proof/`, payload, {
         headers: payload instanceof FormData ? { "Content-Type": "multipart/form-data" } : undefined,
       })
@@ -361,7 +366,10 @@ export const planningApi = {
       tasks?: DailyTask[];
     }>(http.post(`/planning/tasks/${taskId}/generate-lesson/`, payload ?? {})),
 
-  generateMicroPractice: (taskId: string, force = false) =>
+  generateMicroPractice: (
+    taskId: string,
+    options?: { force?: boolean; count?: number; append?: boolean }
+  ) =>
     extract<{
       task_id: string;
       questions: Array<{
@@ -373,8 +381,17 @@ export const planningApi = {
       }>;
       generated_at: string;
       cached: boolean;
-    }>(http.post(`/planning/tasks/${taskId}/generate-micro-practice/`, { force })),
-  generateFlashcards: (taskId: string, force = false) =>
+    }>(
+      http.post(`/planning/tasks/${taskId}/generate-micro-practice/`, {
+        force: options?.force ?? false,
+        count: options?.count,
+        append: options?.append ?? false,
+      })
+    ),
+  generateFlashcards: (
+    taskId: string,
+    options?: { force?: boolean; count?: number; append?: boolean }
+  ) =>
     extract<{
       task_id: string;
       cards: Array<{
@@ -385,7 +402,13 @@ export const planningApi = {
       }>;
       generated_at: string;
       cached: boolean;
-    }>(http.post(`/planning/tasks/${taskId}/generate-flashcards/`, { force })),
+    }>(
+      http.post(`/planning/tasks/${taskId}/generate-flashcards/`, {
+        force: options?.force ?? false,
+        count: options?.count,
+        append: options?.append ?? false,
+      })
+    ),
 
   getOrCreatePlaygroundConversation: (taskId: string) =>
     extract<{ conversation_id: string }>(
@@ -727,6 +750,15 @@ type CohortStudentInsight = {
   engagement_prev_7: number;
   risk_flags: string[];
   risk_level: "low" | "medium" | "high";
+  risk_score?: number;
+  momentum_score?: number;
+  consistency_score?: number;
+  completion_velocity_14d?: number;
+  completed_last_14d?: number;
+  overdue_tasks?: number;
+  upcoming_tasks_7d?: number;
+  insight_summary?: string;
+  recommended_interventions?: string[];
   top_skill_gap?: string | null;
   next_best_action?: string | null;
   engagement_series?: { date: string; value: number }[];
@@ -769,38 +801,48 @@ export type CohortReport = {
   inactivity_buckets: { range: string; count: number }[];
   engagement_trend_mix: { up: number; flat: number; down: number };
   top_skill_gaps: { gap: string; count: number }[];
+  avg_completion_rate: number;
+  avg_risk_score: number;
+  avg_consistency_score: number;
+  avg_momentum_score: number;
+  overdue_tasks_total: number;
+  students_needing_intervention: number;
+  momentum_distribution: { improving: number; stable: number; declining: number };
+  intervention_playbook: string[];
+  high_momentum_students: { name: string; momentum_score: number }[];
 };
 
 // INSTITUTIONS --------------------------------------------------------------
 export const institutionsApi = {
-  listCohorts: () =>
+  listCohorts: (params?: { org?: string }) =>
     extract<{ id: string; name: string; mentor_name?: string | null; student_count?: number; is_active?: boolean }[]>(
-      http.get("/institutions/cohorts/")
+      http.get("/institutions/cohorts/", { params })
     ),
-  createCohort: (payload: { name: string; mentor_user?: string | null }) =>
+  createCohort: (payload: { name: string; mentor_user?: string | null; org?: string }) =>
     extract<{ id: string; name: string }>(http.post("/institutions/cohorts/", payload)),
-  cohortDashboard: (cohortId: string) =>
+  cohortDashboard: (cohortId: string, params?: { org?: string }) =>
     extract<{ cohort_id: string; cohort_name: string; total_students: number; students: CohortStudentInsight[] }>(
-      http.get(`/institutions/cohorts/${cohortId}/dashboard/`)
+      http.get(`/institutions/cohorts/${cohortId}/dashboard/`, { params })
     ),
-  studentInsight: (studentId: string) =>
+  studentInsight: (studentId: string, params?: { org?: string }) =>
     extract<CohortStudentInsight>(
-      http.get(`/institutions/students/${studentId}/insight/`)
+      http.get(`/institutions/students/${studentId}/insight/`, { params })
     ),
-  listStudentInterventions: (studentId: string) =>
+  listStudentInterventions: (studentId: string, params?: { org?: string }) =>
     extract<StudentIntervention[]>(
-      http.get(`/institutions/students/${studentId}/interventions/`)
+      http.get(`/institutions/students/${studentId}/interventions/`, { params })
     ),
   createStudentIntervention: (
     studentId: string,
-    payload: { action_type: StudentIntervention["action_type"]; notes?: string }
+    payload: { action_type: StudentIntervention["action_type"]; notes?: string; org?: string }
   ) =>
     extract<StudentIntervention>(
       http.post(`/institutions/students/${studentId}/interventions/`, payload)
     ),
-  inviteCohortCSV: (cohortId: string, file: File) => {
+  inviteCohortCSV: (cohortId: string, file: File, org?: string) => {
     const formData = new FormData();
     formData.append("file", file);
+    if (org) formData.append("org", org);
     return extract<{ message: string; task_id: string }>(
       http.post(`/institutions/cohorts/${cohortId}/invite-csv/`, formData)
     );
@@ -809,32 +851,34 @@ export const institutionsApi = {
     extract<{ id: string; name: string; slug: string }>(
       http.post("/institutions/orgs/", payload)
     ),
-  getOrgSummary: () =>
-    extract<Organization>(http.get("/institutions/org/")),
-  listEducators: () =>
-    extract<{ id: string; email: string; name: string; role: string }[]>(http.get("/institutions/educators/")),
-  listOrgUsers: (params?: { role?: string }) =>
+  getOrgSummary: (params?: { org?: string }) =>
+    extract<Organization>(http.get("/institutions/org/", { params })),
+  listEducators: (params?: { org?: string }) =>
+    extract<{ id: string; email: string; name: string; role: string }[]>(http.get("/institutions/educators/", { params })),
+  listOrgUsers: (params?: { role?: string; org?: string }) =>
     extract<OrgUser[]>(http.get("/institutions/users/", { params })),
-  updateOrgUser: (userId: string, payload: { role?: string; is_active?: boolean }) =>
+  updateOrgUser: (userId: string, payload: { role?: string; is_active?: boolean; org?: string }) =>
     extract<OrgUser>(http.patch(`/institutions/users/${userId}/`, payload)),
-  resetOrgUserPassword: (userId: string) =>
-    extract<{ message: string }>(http.post(`/institutions/users/${userId}/reset-password/`)),
-  getCohortReport: (cohortId: string) =>
-    extract<CohortReport>(http.get(`/institutions/cohorts/${cohortId}/report/`)),
-  getSupportTickets: () =>
-    extract<SupportTicket[]>(http.get("/institutions/support-tickets/")),
+  resetOrgUserPassword: (userId: string, payload?: { org?: string }) =>
+    extract<{ message: string }>(http.post(`/institutions/users/${userId}/reset-password/`, payload ?? {})),
+  getCohortReport: (cohortId: string, params?: { org?: string }) =>
+    extract<CohortReport>(http.get(`/institutions/cohorts/${cohortId}/report/`, { params })),
+  getSupportTickets: (params?: { status?: string; priority?: string; ticket_type?: string; org?: string; page?: number; page_size?: number }) =>
+    extract<{ count: number; results: SupportTicket[] }>(http.get("/institutions/support-tickets/", { params })),
   createSupportTicket: (payload: { subject: string; description: string; ticket_type: string; priority: string; metadata?: Record<string, unknown> }) =>
     extract<SupportTicket>(http.post("/institutions/support-tickets/", payload)),
   updateSupportTicketStatus: (ticketId: string, status: string) =>
     extract<SupportTicket>(http.patch(`/institutions/support-tickets/${ticketId}/`, { status })),
-  exportCohortCSV: (cohortId: string) =>
-    http.get(`/institutions/cohorts/${cohortId}/export/`, { responseType: "blob" }),
+  exportCohortCSV: (cohortId: string, params?: { org?: string }) =>
+    http.get(`/institutions/cohorts/${cohortId}/export/`, { params, responseType: "blob" }),
 };
 
 export interface SupportTicket {
   id: string;
   user_email: string;
   user_name: string;
+  organization_id?: string | null;
+  organization_name?: string | null;
   ticket_type: string;
   status: "open" | "in_progress" | "resolved" | "closed";
   priority: "low" | "medium" | "high" | "critical";
@@ -920,8 +964,59 @@ export interface GlobalUser {
   is_active: boolean;
   is_staff: boolean;
   is_superuser: boolean;
+  is_profile_public?: boolean;
+  email_notifications?: boolean;
+  push_notifications?: boolean;
+  weekly_reports?: boolean;
+  from_waitlist?: boolean;
+  waitlist_tokens?: number;
+  waitlist_tokens_imported?: boolean;
+  organization_id?: string | null;
+  organization_name?: string | null;
   last_activity: string | null;
   created_at: string;
+}
+
+export interface HQUserGovernanceDetail {
+  user: GlobalUser;
+  organization: {
+    id: string | null;
+    name: string | null;
+    role: string | null;
+  };
+  access_controls: {
+    is_active: boolean;
+    is_staff: boolean;
+    is_superuser: boolean;
+    user_type: string;
+    is_profile_public: boolean;
+    email_notifications: boolean;
+    push_notifications: boolean;
+    weekly_reports: boolean;
+  };
+  wishlist_access: {
+    enabled: boolean;
+    from_waitlist: boolean;
+    waitlist_tokens: number;
+    waitlist_tokens_imported: boolean;
+  };
+  portfolio_access: {
+    is_public: boolean;
+    allow_downloads: boolean;
+    slug: string | null;
+  };
+  token_usage: {
+    chat_tokens_total: number;
+    chat_tokens_30d: number;
+    intelligence_tokens_total: number;
+    intelligence_tokens_30d: number;
+    combined_tokens_total: number;
+    combined_tokens_30d: number;
+    chat_messages_with_usage_total: number;
+    chat_messages_with_usage_30d: number;
+    conversation_count: number;
+    active_sessions: number;
+  };
 }
 
 export interface InviteAuditLog {
@@ -948,7 +1043,7 @@ export const hqApi = {
   getEducatorEffectiveness: () =>
     extract<HQEducatorEffectiveness[]>(http.get("/institutions/hq/educator-effectiveness/")),
 
-  listOrganizations: (params?: { search?: string; tier?: string; active?: string; page?: number }) =>
+  listOrganizations: (params?: { search?: string; tier?: string; active?: string; page?: number; page_size?: number }) =>
     extract<{ count: number; results: Organization[] }>(http.get("/institutions/hq/orgs/", { params })),
 
   getOrganization: (orgId: string) =>
@@ -960,17 +1055,40 @@ export const hqApi = {
   createOrganization: (payload: { name: string; slug: string; domain?: string; contact_email?: string; plan_tier?: string; max_cohorts?: number; max_students_per_cohort?: number; max_educators?: number }) =>
     extract<Organization>(http.post("/institutions/orgs/", payload)),
 
-  listUsers: (params?: { search?: string; user_type?: string; is_active?: string; page?: number }) =>
+  listUsers: (params?: { search?: string; user_type?: string; is_active?: string; org?: string; page?: number; page_size?: number }) =>
     extract<{ count: number; results: GlobalUser[] }>(http.get("/institutions/hq/users/", { params })),
 
   updateUser: (userId: string, payload: { is_active?: boolean; is_staff?: boolean; is_superuser?: boolean; user_type?: string }) =>
     extract<GlobalUser>(http.patch(`/institutions/hq/users/${userId}/`, payload)),
 
-  getInviteAuditLog: (params?: { org?: string; result?: string; page?: number }) =>
+  getUserGovernance: (userId: string) =>
+    extract<HQUserGovernanceDetail>(http.get(`/institutions/hq/users/${userId}/governance/`)),
+
+  updateUserGovernance: (
+    userId: string,
+    payload: Partial<{
+      is_active: boolean;
+      is_staff: boolean;
+      is_superuser: boolean;
+      user_type: string;
+      is_profile_public: boolean;
+      email_notifications: boolean;
+      push_notifications: boolean;
+      weekly_reports: boolean;
+      from_waitlist: boolean;
+      waitlist_tokens: number;
+      waitlist_tokens_imported: boolean;
+      wishlist_access_enabled: boolean;
+      portfolio_is_public: boolean;
+      portfolio_allow_downloads: boolean;
+    }>
+  ) => extract<HQUserGovernanceDetail>(http.patch(`/institutions/hq/users/${userId}/governance/`, payload)),
+
+  getInviteAuditLog: (params?: { org?: string; result?: string; page?: number; page_size?: number }) =>
     extract<{ count: number; results: InviteAuditLog[] }>(http.get("/institutions/hq/invite-logs/", { params })),
 
   // Tickets with HQ filters
-  getSupportTickets: (params?: { status?: string; priority?: string; ticket_type?: string; page?: number }) =>
+  getSupportTickets: (params?: { status?: string; priority?: string; ticket_type?: string; org?: string; page?: number; page_size?: number }) =>
     extract<{ count: number; results: SupportTicket[] }>(http.get("/institutions/support-tickets/", { params })),
 
   resolveTicket: (ticketId: string, resolution_notes: string) =>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -51,6 +51,11 @@ export function MicroPracticeLab({
   const [scores, setScores] = useState<boolean[]>([]);
   const [weakTopics, setWeakTopics] = useState<string[]>([]);
   const [mode, setMode] = useState<"quiz" | "flashcards" | "review">("quiz");
+  const [questionSet, setQuestionSet] = useState<MicroPracticeQuestion[]>([]);
+  const [flashcardSet, setFlashcardSet] = useState<Flashcard[]>([]);
+  const [regenerating, setRegenerating] = useState(false);
+  const [extendingQuiz, setExtendingQuiz] = useState(false);
+  const [extending, setExtending] = useState(false);
   const queryClient = useQueryClient();
 
   // Fetch questions from the AI endpoint.
@@ -64,12 +69,15 @@ export function MicroPracticeLab({
   } = useQuery({
     queryKey: ["micro-practice", taskId],
     queryFn: () => planningApi.generateMicroPractice(taskId),
-    enabled: !!taskId,
+    enabled: !!taskId && lessonBlocks.length > 0,
     staleTime: 10 * 60 * 1000, // 10 minutes — matches server-side cache
     retry: 2,
   });
 
-  const questions: MicroPracticeQuestion[] = data?.questions ?? [];
+  const questions: MicroPracticeQuestion[] = useMemo(
+    () => (questionSet.length ? questionSet : (data?.questions ?? [])),
+    [questionSet, data?.questions]
+  );
 
   const {
     data: flashcardData,
@@ -84,7 +92,27 @@ export function MicroPracticeLab({
     retry: 2,
   });
 
-  const flashcards: Flashcard[] = flashcardData?.cards ?? [];
+  const flashcards: Flashcard[] = useMemo(
+    () => (flashcardSet.length ? flashcardSet : (flashcardData?.cards ?? [])),
+    [flashcardSet, flashcardData?.cards]
+  );
+
+  useEffect(() => {
+    if (data?.questions?.length) {
+      setQuestionSet(data.questions);
+      setCurrentIndex(0);
+      setSelectedAnswer(null);
+      setShowExplanation(false);
+      setScores([]);
+      setWeakTopics([]);
+    }
+  }, [data?.questions]);
+
+  useEffect(() => {
+    if (flashcardData?.cards?.length) {
+      setFlashcardSet(flashcardData.cards);
+    }
+  }, [flashcardData?.cards]);
 
   const {
     data: reviewData,
@@ -160,6 +188,65 @@ export function MicroPracticeLab({
     }
   }, [currentIndex, questions, scores, selectedAnswer, weakTopics, onComplete]);
 
+  const handleGenerateNewQuizSet = async () => {
+    setRegenerating(true);
+    try {
+      const payload = await planningApi.generateMicroPractice(taskId, {
+        force: true,
+        count: 5,
+        append: false,
+      });
+      setQuestionSet(payload.questions ?? []);
+      setCurrentIndex(0);
+      setSelectedAnswer(null);
+      setShowExplanation(false);
+      setScores([]);
+      setWeakTopics([]);
+      telemetry.toastSuccess("Generated a fresh quiz set.");
+      queryClient.invalidateQueries({ queryKey: ["micro-practice", taskId] });
+    } catch {
+      telemetry.toastError("Couldn't generate a new quiz set.");
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  const handleGenerateMoreQuestions = async () => {
+    setExtendingQuiz(true);
+    try {
+      const payload = await planningApi.generateMicroPractice(taskId, {
+        force: true,
+        count: 5,
+        append: true,
+      });
+      setQuestionSet(payload.questions ?? []);
+      telemetry.toastSuccess("Added more quiz questions.");
+      queryClient.invalidateQueries({ queryKey: ["micro-practice", taskId] });
+    } catch {
+      telemetry.toastError("Couldn't add more quiz questions.");
+    } finally {
+      setExtendingQuiz(false);
+    }
+  };
+
+  const handleGenerateMoreCards = async () => {
+    setExtending(true);
+    try {
+      const payload = await planningApi.generateFlashcards(taskId, {
+        force: true,
+        count: 5,
+        append: true,
+      });
+      setFlashcardSet(payload.cards ?? []);
+      telemetry.toastSuccess("Added more flashcards.");
+      queryClient.invalidateQueries({ queryKey: ["flashcards", taskId] });
+    } catch {
+      telemetry.toastError("Couldn't add more flashcards.");
+    } finally {
+      setExtending(false);
+    }
+  };
+
   // ── Loading state ──────────────────────────────────────────────────────────
   if (isLoading && mode === "quiz") {
     return (
@@ -186,7 +273,7 @@ export function MicroPracticeLab({
       <div className="flex flex-col items-center justify-center h-48 border border-orange-100 rounded-xl bg-orange-50 gap-3">
         <AlertTriangle className="w-8 h-8 text-orange-400" />
         <p className="text-sm text-orange-700 font-medium text-center max-w-xs">
-          Couldn't generate practice questions right now.
+          Could not generate practice questions right now.
         </p>
         <div className="flex gap-2">
           <Button
@@ -234,7 +321,7 @@ export function MicroPracticeLab({
       <div className="flex flex-col items-center justify-center h-48 border border-orange-100 rounded-xl bg-orange-50 gap-3">
         <AlertTriangle className="w-8 h-8 text-orange-400" />
         <p className="text-sm text-orange-700 font-medium text-center max-w-xs">
-          Couldn't generate flashcards right now.
+          Could not generate flashcards right now.
         </p>
         <div className="flex gap-2">
           <Button
@@ -278,7 +365,7 @@ export function MicroPracticeLab({
       <div className="flex flex-col items-center justify-center h-48 border border-orange-100 rounded-xl bg-orange-50 gap-3">
         <AlertTriangle className="w-8 h-8 text-orange-400" />
         <p className="text-sm text-orange-700 font-medium text-center max-w-xs">
-          Couldn't load review cards right now.
+          Could not load review cards right now.
         </p>
         <div className="flex gap-2">
           <Button
@@ -348,6 +435,42 @@ export function MicroPracticeLab({
           >
             Review
           </Button>
+          {mode === "quiz" ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleGenerateMoreQuestions}
+                disabled={extendingQuiz}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${extendingQuiz ? "animate-spin" : ""}`} />
+                More questions
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleGenerateNewQuizSet}
+                disabled={regenerating}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${regenerating ? "animate-spin" : ""}`} />
+                New set
+              </Button>
+            </>
+          ) : null}
+          {mode === "flashcards" ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={handleGenerateMoreCards}
+              disabled={extending}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 mr-1 ${extending ? "animate-spin" : ""}`} />
+              More cards
+            </Button>
+          ) : null}
         </div>
         <span className="ml-1 text-xs text-indigo-400">
           {mode === "quiz"

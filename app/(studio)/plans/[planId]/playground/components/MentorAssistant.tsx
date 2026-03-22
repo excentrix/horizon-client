@@ -39,16 +39,24 @@ export function MentorAssistant({
   socketStatus,
 }: MentorAssistantProps) {
   const [input, setInput] = useState("");
+  const [pendingMessages, setPendingMessages] = useState<Array<{ id: string; content: string }>>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingMessage]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    onSendMessage(input.trim());
+  const handleSend = async () => {
+    const message = input.trim();
+    if (!message) return;
+    const pendingId = `pending-${Date.now()}`;
+    setPendingMessages((prev) => [...prev, { id: pendingId, content: message }]);
     setInput("");
+    try {
+      await onSendMessage(message);
+    } finally {
+      setPendingMessages((prev) => prev.filter((m) => m.id !== pendingId));
+    }
   };
 
   const handleAction = (action: typeof mentorSuggestions[number]["id"]) => {
@@ -61,6 +69,21 @@ export function MentorAssistant({
   };
 
   const allMessages = [...messages];
+  if (pendingMessages.length) {
+    allMessages.push(
+      ...pendingMessages.map((m) => ({
+        id: m.id,
+        content: m.content,
+        message_type: "text" as const,
+        sender_type: "user" as const,
+        sequence_number: 0,
+        is_edited: false,
+        is_flagged: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })),
+    );
+  }
   if (streamingMessage) {
     const streamId = typeof streamingMessage === "string" ? "stream" : streamingMessage.id;
     const streamContent = typeof streamingMessage === "string" ? streamingMessage : streamingMessage.content;
@@ -73,13 +96,13 @@ export function MentorAssistant({
   }
 
   return (
-    <div className="flex h-[600px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex items-center gap-2 border-b bg-slate-50 px-4 py-3">
         <Bot className="h-5 w-5 text-violet-500" />
         <div>
           <h3 className="text-sm font-semibold text-slate-800">Learning Mentor</h3>
           <p className="text-[10px] text-slate-500 uppercase tracking-wider">
-            {socketStatus === "open" ? "Connected" : "Reconnecting..."}
+            {socketStatus === "open" ? "Connected" : "Syncing..."}
           </p>
         </div>
       </div>
@@ -170,7 +193,7 @@ export function MentorAssistant({
             size="icon"
             className="h-9 w-9 shrink-0 rounded-lg mb-0.5 mr-0.5"
             onClick={handleSend}
-            disabled={!input.trim() || socketStatus !== "open"}
+            disabled={!input.trim()}
           >
             <Send className="h-4 w-4" />
           </Button>

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Save, Building2, CreditCard, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useInstitutionScope } from "../_lib/useInstitutionScope";
 
 const TIER_COLORS: Record<string, string> = {
   free: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
@@ -33,6 +34,7 @@ function UsageBar({ used, max, label }: { used: number; max: number; label: stri
 }
 
 export default function InstitutionSettingsPage() {
+  const { selectedOrgId, isSuperuser } = useInstitutionScope();
   const [org, setOrg] = useState<Organization | null>(null);
   const [form, setForm] = useState<{ name: string; domain: string; contact_email: string; logo_url: string }>({
     name: "",
@@ -44,7 +46,12 @@ export default function InstitutionSettingsPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    institutionsApi.getOrgSummary()
+    if (isSuperuser && !selectedOrgId) {
+      setLoading(false);
+      setOrg(null);
+      return;
+    }
+    institutionsApi.getOrgSummary({ org: selectedOrgId || undefined })
       .then((data) => {
         setOrg(data);
         setForm({
@@ -56,7 +63,7 @@ export default function InstitutionSettingsPage() {
       })
       .catch(() => toast.error("Failed to load organisation settings"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isSuperuser, selectedOrgId]);
 
   const save = async () => {
     setSaving(true);
@@ -78,7 +85,13 @@ export default function InstitutionSettingsPage() {
     );
   }
 
-  if (!org) return null;
+  if (!org) {
+    return (
+      <div className="rounded-lg border p-4 text-sm text-muted-foreground">
+        Select an institution from the Institution Scope selector to manage settings.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 max-w-2xl">

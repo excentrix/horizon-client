@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { institutionsApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
+import { useAuth } from "@/context/AuthContext";
+import { useSearchParams } from "next/navigation";
 
 export interface Cohort {
   id: string;
@@ -30,6 +32,15 @@ export interface StudentInsight {
   engagement_prev_7: number;
   risk_flags: string[];
   risk_level: "low" | "medium" | "high";
+  risk_score?: number;
+  momentum_score?: number;
+  consistency_score?: number;
+  completion_velocity_14d?: number;
+  completed_last_14d?: number;
+  overdue_tasks?: number;
+  upcoming_tasks_7d?: number;
+  insight_summary?: string;
+  recommended_interventions?: string[];
   top_skill_gap?: string | null;
   next_best_action?: string | null;
 }
@@ -47,36 +58,54 @@ interface UseInstitutionCohortOptions {
 
 export function useInstitutionCohort(options: UseInstitutionCohortOptions = {}) {
   const { withDashboard = true } = options;
+  const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const scopedOrgId = searchParams.get("org") ?? undefined;
+  const isSuperuser = Boolean(user?.is_superuser);
   const [cohorts, setCohorts] = useState<Cohort[]>([]);
   const [selectedCohort, setSelectedCohort] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<CohortDashboard | null>(null);
   const [loading, setLoading] = useState(false);
 
   const refreshCohorts = useCallback(() => {
+    if (isSuperuser && !scopedOrgId) {
+      setCohorts([]);
+      setSelectedCohort(null);
+      return;
+    }
     institutionsApi
-      .listCohorts()
+      .listCohorts({ org: scopedOrgId })
       .then((data) => {
         setCohorts(data);
-        if (data.length > 0 && !selectedCohort) {
+        if (!data.length) {
+          setSelectedCohort(null);
+          return;
+        }
+        if (!selectedCohort || !data.some((cohort) => cohort.id === selectedCohort)) {
           setSelectedCohort(data[0].id);
         }
       })
       .catch((err) => telemetry.error("Failed to load cohorts", { err }));
-  }, [selectedCohort]);
+  }, [isSuperuser, scopedOrgId, selectedCohort]);
 
   useEffect(() => {
     refreshCohorts();
   }, [refreshCohorts]);
 
   useEffect(() => {
+    if (isSuperuser && !scopedOrgId) {
+      setDashboard(null);
+      setLoading(false);
+      return;
+    }
     if (!withDashboard || !selectedCohort) return;
     setLoading(true);
     institutionsApi
-      .cohortDashboard(selectedCohort)
+      .cohortDashboard(selectedCohort, { org: scopedOrgId })
       .then((data) => setDashboard(data))
       .catch((err) => telemetry.error("Failed to load cohort dashboard", { err }))
       .finally(() => setLoading(false));
-  }, [selectedCohort, withDashboard]);
+  }, [isSuperuser, scopedOrgId, selectedCohort, withDashboard]);
 
   return {
     cohorts,

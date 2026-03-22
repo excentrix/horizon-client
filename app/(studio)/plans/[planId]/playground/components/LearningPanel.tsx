@@ -1,11 +1,25 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { DailyTask } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Video, ExternalLink, Lightbulb, ThumbsUp, ThumbsDown, FlaskConical, RefreshCw } from "lucide-react";
+import {
+  BookOpen,
+  Video,
+  ExternalLink,
+  Lightbulb,
+  ThumbsUp,
+  ThumbsDown,
+  FlaskConical,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  ListChecks,
+  Target,
+} from "lucide-react";
 import { MathMarkdown } from "@/components/markdown/MathMarkdown";
 import { planningApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -48,6 +62,35 @@ function getVideoEmbedUrl(url: string) {
   return null;
 }
 
+function splitIntoSegments(content?: string | null): string[] {
+  if (!content) return [];
+  const parts = content
+    .split(/\n\s*\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts.length ? parts : [content.trim()];
+}
+
+function toPlainText(markdown: string): string {
+  return markdown
+    .replace(/`{1,3}[^`]*`{1,3}/g, " ")
+    .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
+    .replace(/[#>*_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractKeyTakeaways(segment?: string, max = 3): string[] {
+  if (!segment) return [];
+  const plain = toPlainText(segment);
+  if (!plain) return [];
+  const pieces = plain
+    .split(/(?<=[.!?])\s+/)
+    .map((piece) => piece.trim())
+    .filter((piece) => piece.length > 35);
+  return pieces.slice(0, max);
+}
+
 function BlockFeedback({
   block,
   taskId,
@@ -74,7 +117,7 @@ function BlockFeedback({
         { block_id: block.id, helpful, time_spent_seconds: timeSpent },
       ]);
       onFeedback(block.id, helpful);
-    } catch (err) {
+    } catch {
       // silent — preference inference is best-effort
     } finally {
       setSubmitting(false);
@@ -118,6 +161,9 @@ function BlockFeedback({
 
 export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeedbackChange, onRegenerateLesson }: LearningPanelProps) {
   const panelMountTime = useRef(Date.now());
+  const [activeBlockIndex, setActiveBlockIndex] = useState(0);
+  const [readingMode, setReadingMode] = useState<"focus" | "full">("focus");
+  const [activeSegmentIndex, setActiveSegmentIndex] = useState(0);
 
   const resources = (activeTask?.online_resources ?? []) as Array<
     string | Record<string, unknown>
@@ -169,6 +215,30 @@ export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeed
     ];
   }, [activeTask]);
 
+  const studyBlocks = useMemo(
+    () => contentBlocks.filter((block) => block.type !== "exercise"),
+    [contentBlocks]
+  );
+
+  const activeBlock = studyBlocks[activeBlockIndex] ?? studyBlocks[0];
+  const activeSegments = useMemo(
+    () => splitIntoSegments(activeBlock?.content),
+    [activeBlock?.content]
+  );
+  const activeSegment = activeSegments[activeSegmentIndex] ?? activeSegments[0] ?? "";
+  const segmentTakeaways = useMemo(
+    () => extractKeyTakeaways(activeSegment, 3),
+    [activeSegment]
+  );
+
+  useEffect(() => {
+    setActiveBlockIndex(0);
+  }, [activeTask?.id]);
+
+  useEffect(() => {
+    setActiveSegmentIndex(0);
+  }, [activeBlockIndex, activeTask?.id]);
+
   const handleFeedback = (blockId: string, helpful: boolean) => {
     onFeedbackChange({
       ...blockFeedback,
@@ -190,26 +260,13 @@ export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeed
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <Badge variant="outline" className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            {activeTask.task_type.replace('_', ' ')}
-          </Badge>
-          <div className="flex items-center gap-2">
+          {/* <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">{activeTask.estimated_duration_minutes} min</span>
-            {onRegenerateLesson && !lessonLoading && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[11px] text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
-                onClick={onRegenerateLesson}
-                title="Regenerate lesson with AI"
-              >
-                <RefreshCw className="w-3 h-3 mr-1" /> Regenerate
-              </Button>
-            )}
-          </div>
+            
+          </div> */}
         </div>
-        <h2 className="text-2xl font-semibold tracking-tight">{activeTask.title}</h2>
-        <p className="text-muted-foreground">{activeTask.description}</p>
+        {/* <h2 className="text-2xl font-semibold tracking-tight">{activeTask.title}</h2>
+        <p className="text-muted-foreground">{activeTask.description}</p> */}
       </div>
 
       {videoEmbed ? (
@@ -224,20 +281,30 @@ export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeed
             />
           </div>
           <div className="bg-slate-50 p-3 text-xs text-slate-500 flex justify-between items-center border-t">
-            <span className="flex items-center gap-1.5"><Video className="w-3.5 h-3.5" /> Embedded Video Tutorial</span>
-            <a href={String(primaryResourceHref)} target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:text-primary">
+            <span className="flex items-center gap-1.5">
+              <Video className="w-3.5 h-3.5" /> Embedded Video Tutorial
+            </span>
+            <a
+              href={String(primaryResourceHref)}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 hover:text-primary"
+            >
               Open source <ExternalLink className="w-3 h-3" />
             </a>
           </div>
         </Card>
-      ) : primaryResourceHref && (!activeTask.lesson_blocks || activeTask.lesson_blocks.length === 0) ? (
+      ) : primaryResourceHref &&
+        (!activeTask.lesson_blocks || activeTask.lesson_blocks.length === 0) ? (
         <Card className="bg-blue-50/30 border-blue-100">
           <CardContent className="p-4 flex items-start gap-4">
             <div className="p-2.5 bg-blue-100 rounded-lg text-blue-600 shrink-0">
               <BookOpen className="w-5 h-5" />
             </div>
             <div className="flex-1">
-              <h4 className="font-semibold text-blue-950">{primaryResourceTitle}</h4>
+              <h4 className="font-semibold text-blue-950">
+                {primaryResourceTitle}
+              </h4>
               <p className="text-sm text-blue-800/80 mt-1 line-clamp-2">
                 {(() => {
                   const meta = resourceMetadata[String(primaryResourceHref)];
@@ -272,53 +339,251 @@ export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeed
           </div>
         ) : (
           <>
-            <div className="relative rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-400 to-indigo-500"></div>
-              <div className="px-8 py-6 space-y-8">
-                {contentBlocks
-                  .filter((block) => block.type !== "exercise")
-                  .map((block, i) => (
-                  <div key={block.id || i} className="group">
-                    <h3 className="flex items-center gap-2 text-lg font-bold capitalize text-slate-800 mb-4 border-b pb-2">
-                      <Lightbulb className="h-5 w-5 text-indigo-500" />
-                      {block.title || block.type}
-                    </h3>
-                    <div className="prose prose-sm prose-slate md:prose-base max-w-none text-slate-600 leading-relaxed font-serif">
-                      <MathMarkdown>{block.content ?? ""}</MathMarkdown>
-                    </div>
-                    {block.id && block.id !== "desc" && (
-                      <BlockFeedback
-                        block={block}
-                        taskId={activeTask.id}
-                        feedback={blockFeedback[block.id] ?? null}
-                        onFeedback={handleFeedback}
-                        blockStartTime={panelMountTime.current}
-                      />
-                    )}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
+              <Card className="border-slate-200 bg-slate-50/60">
+                <CardContent className="p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Study path
+                  </p>
+                  <div className="space-y-2">
+                    {studyBlocks.map((block, i) => (
+                      <button
+                        key={`nav-${block.id || i}`}
+                        onClick={() => setActiveBlockIndex(i)}
+                        className={cn(
+                          "w-full rounded-lg border px-3 py-2 text-left text-sm transition",
+                          i === activeBlockIndex
+                            ? "border-violet-300 bg-violet-50 text-violet-800"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50",
+                        )}
+                      >
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                          Section {i + 1}
+                        </div>
+                        <div className="line-clamp-2 font-medium">
+                          {block.title || block.type}
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                ))}
+                </CardContent>
+              </Card>
+
+              <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                {/* <div className="absolute top-0 left-0 h-full w-2 bg-gradient-to-b from-blue-400 to-indigo-500" /> */}
+                {activeBlock ? (
+                  <div className="px-8 py-6">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <h3 className="flex items-center gap-2 text-lg font-bold capitalize text-slate-800">
+                        <Lightbulb className="h-5 w-5 text-indigo-500" />
+                        {activeBlock.title || activeBlock.type}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-500">
+                          <Clock3 className="h-3.5 w-3.5" />~
+                          {Math.max(
+                            2,
+                            Math.round(
+                              (activeBlock.content?.split(" ").length || 120) /
+                                130,
+                            ),
+                          )}{" "}
+                          min read
+                        </div>
+                        <div className="inline-flex gap-2 items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                          <Button
+                            variant={
+                              readingMode === "focus" ? "default" : "ghost"
+                            }
+                            size="sm"
+                            className="h-7 px-2.5 text-xs"
+                            onClick={() => setReadingMode("focus")}
+                          >
+                            Focus mode
+                          </Button>
+                          <Button
+                            variant={
+                              readingMode === "full" ? "default" : "ghost"
+                            }
+                            size="sm"
+                            className="h-7 px-2.5 text-xs"
+                            onClick={() => setReadingMode("full")}
+                          >
+                            Full notes
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {readingMode === "focus" ? (
+                      <div className="space-y-4">
+                        <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
+                          <div className="mb-2 flex items-center justify-between text-xs text-indigo-700">
+                            <span className="font-semibold">Concept bite</span>
+                            <span>
+                              Segment {activeSegmentIndex + 1} of{" "}
+                              {Math.max(1, activeSegments.length)}
+                            </span>
+                          </div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-indigo-100">
+                            <div
+                              className="h-full rounded-full bg-indigo-500 transition-all"
+                              style={{
+                                width: `${((activeSegmentIndex + 1) / Math.max(1, activeSegments.length)) * 100}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-white p-5">
+                          <div className="prose prose-sm md:prose-base max-w-none prose-slate leading-relaxed">
+                            <MathMarkdown>{activeSegment}</MathMarkdown>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+                            <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-900">
+                              <ListChecks className="h-4 w-4" />
+                              Key takeaways
+                            </p>
+                            <ul className="space-y-2 text-sm text-emerald-900/90">
+                              {(segmentTakeaways.length
+                                ? segmentTakeaways
+                                : [
+                                    "Summarize this concept in one sentence before moving on.",
+                                  ]
+                              ).map((takeaway, idx) => (
+                                <li
+                                  key={`takeaway-${idx}`}
+                                  className="rounded-md bg-white/70 px-2.5 py-1.5"
+                                >
+                                  {takeaway}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+                            <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-blue-900">
+                              <Target className="h-4 w-4" />
+                              Active recall
+                            </p>
+                            <div className="space-y-2 text-sm text-blue-900/90">
+                              <p className="rounded-md bg-white/70 px-2.5 py-1.5">
+                                Explain this segment aloud without looking at
+                                the notes.
+                              </p>
+                              <p className="rounded-md bg-white/70 px-2.5 py-1.5">
+                                Write one practical use-case from your current
+                                project.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-5">
+                        <div className="prose prose-sm md:prose-base max-w-none prose-slate leading-relaxed">
+                          <MathMarkdown>
+                            {activeBlock.content ?? ""}
+                          </MathMarkdown>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (
+                            readingMode === "focus" &&
+                            activeSegmentIndex > 0
+                          ) {
+                            setActiveSegmentIndex((idx) =>
+                              Math.max(0, idx - 1),
+                            );
+                            return;
+                          }
+                          setActiveBlockIndex((idx) => Math.max(0, idx - 1));
+                        }}
+                        disabled={
+                          readingMode === "focus"
+                            ? activeBlockIndex === 0 && activeSegmentIndex === 0
+                            : activeBlockIndex === 0
+                        }
+                      >
+                        <ChevronLeft className="mr-1 h-4 w-4" />
+                        {readingMode === "focus" && activeSegmentIndex > 0
+                          ? "Previous bite"
+                          : "Previous section"}
+                      </Button>
+                      {activeBlock.id && activeBlock.id !== "desc" ? (
+                        <BlockFeedback
+                          block={activeBlock}
+                          taskId={activeTask.id}
+                          feedback={blockFeedback[activeBlock.id] ?? null}
+                          onFeedback={handleFeedback}
+                          blockStartTime={panelMountTime.current}
+                        />
+                      ) : null}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (
+                            readingMode === "focus" &&
+                            activeSegmentIndex < activeSegments.length - 1
+                          ) {
+                            setActiveSegmentIndex((idx) =>
+                              Math.min(activeSegments.length - 1, idx + 1),
+                            );
+                            return;
+                          }
+                          setActiveBlockIndex((idx) =>
+                            Math.min(studyBlocks.length - 1, idx + 1),
+                          );
+                        }}
+                        disabled={
+                          readingMode === "focus"
+                            ? activeBlockIndex >= studyBlocks.length - 1 &&
+                              activeSegmentIndex >= activeSegments.length - 1
+                            : activeBlockIndex >= studyBlocks.length - 1
+                        }
+                      >
+                        {readingMode === "focus" &&
+                        activeSegmentIndex < activeSegments.length - 1
+                          ? "Next bite"
+                          : "Next section"}
+                        <ChevronRight className="ml-1 h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
-            {contentBlocks.filter((b) => b.type === "exercise").map((block, i) => (
-              <div
-                key={block.id || `exercise-${i}`}
-                className="rounded-2xl border border-violet-200 bg-violet-50/60 shadow-sm overflow-hidden"
-              >
-                <div className="flex items-center gap-2 px-6 py-4 border-b border-violet-100">
-                  <FlaskConical className="h-5 w-5 text-violet-600" />
-                  <h3 className="text-base font-bold text-violet-900">
-                    {block.title || "Try It"}
-                  </h3>
-                  <span className="ml-auto text-[10px] uppercase tracking-wider font-semibold text-violet-500 bg-violet-100 rounded-full px-2 py-0.5">
-                    Practice
-                  </span>
+            {contentBlocks
+              .filter((b) => b.type === "exercise")
+              .map((block, i) => (
+                <div
+                  key={block.id || `exercise-${i}`}
+                  className="rounded-2xl border border-violet-200 bg-violet-50/60 shadow-sm overflow-hidden"
+                >
+                  <div className="flex items-center gap-2 px-6 py-4 border-b border-violet-100">
+                    <FlaskConical className="h-5 w-5 text-violet-600" />
+                    <h3 className="text-base font-bold text-violet-900">
+                      {block.title || "Try It"}
+                    </h3>
+                    <span className="ml-auto text-[10px] uppercase tracking-wider font-semibold text-violet-500 bg-violet-100 rounded-full px-2 py-0.5">
+                      Practice
+                    </span>
+                  </div>
+                  <div className="px-6 py-5 prose prose-sm prose-violet md:prose-base max-w-none text-violet-900/80 leading-relaxed">
+                    <MathMarkdown>{block.content ?? ""}</MathMarkdown>
+                  </div>
                 </div>
-                <div className="px-6 py-5 prose prose-sm prose-violet md:prose-base max-w-none text-violet-900/80 leading-relaxed">
-                  <MathMarkdown>{block.content ?? ""}</MathMarkdown>
-                </div>
-              </div>
-            ))}
+              ))}
           </>
         )}
       </div>

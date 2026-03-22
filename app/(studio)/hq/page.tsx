@@ -9,8 +9,8 @@ import {
   type HQOrgPerformance,
   type HQRiskRetention,
   type HQEducatorEffectiveness,
-  type Organization,
   type GlobalUser,
+  type HQUserGovernanceDetail,
   type SupportTicket,
 } from "@/lib/api";
 import { toast } from "sonner";
@@ -26,12 +26,9 @@ import {
   LayoutDashboard,
   Loader2,
   MoreVertical,
-  Plus,
   Search,
   ShieldCheck,
   Ticket,
-  ToggleLeft,
-  ToggleRight,
   TrendingUp,
   Users,
   XCircle,
@@ -71,12 +68,6 @@ import { cn } from "@/lib/utils";
 // HELPERS
 // ══════════════════════════════════════════════════════════════════
 
-const TIER_COLORS: Record<string, string> = {
-  free: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
-  starter: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  growth: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  enterprise: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-};
 const TIER_PIE_COLORS = ["#71717a", "#3b82f6", "#a855f7", "#f59e0b"];
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -92,22 +83,6 @@ const STATUS_COLORS: Record<string, string> = {
   resolved: "bg-green-500/20 text-green-400",
   closed: "bg-zinc-500/20 text-zinc-400",
 };
-
-function UsageBar({ used, max, label }: { used: number; max: number; label: string }) {
-  const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
-  const color = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-orange-400" : "bg-emerald-500";
-  return (
-    <div className="space-y-1">
-      <div className="flex justify-between text-xs text-muted-foreground">
-        <span>{label}</span>
-        <span className={pct >= 90 ? "text-red-400 font-medium" : ""}>{used}/{max}</span>
-      </div>
-      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-        <div className={cn("h-full rounded-full transition-all duration-500", color)} style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
-}
 
 function StatCard({
   icon: Icon, label, value, sub, accent,
@@ -425,364 +400,10 @@ function OverviewTab({
 }
 
 // ══════════════════════════════════════════════════════════════════
-// INSTITUTIONS TAB
-// ══════════════════════════════════════════════════════════════════
-
-function OrgDetailDrawer({
-  org, onClose, onUpdate,
-}: {
-  org: Organization;
-  onClose: () => void;
-  onUpdate: (updated: Organization) => void;
-}) {
-  const [form, setForm] = useState({
-    plan_tier: org.plan_tier,
-    max_cohorts: org.max_cohorts,
-    max_students_per_cohort: org.max_students_per_cohort,
-    max_educators: org.max_educators,
-    contact_email: org.contact_email,
-    notes: org.notes,
-    is_active: org.is_active,
-  });
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const updated = await hqApi.updateOrganization(org.id, form);
-      onUpdate(updated);
-      toast.success("Institution updated");
-      onClose();
-    } catch {
-      toast.error("Failed to update institution");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2">
-          <Building2 className="h-5 w-5" /> {org.name}
-        </DialogTitle>
-      </DialogHeader>
-      <div className="space-y-4 py-2">
-        {/* Status */}
-        <div className="flex items-center justify-between rounded-lg border p-3">
-          <span className="text-sm font-medium">Account Status</span>
-          <Button
-            variant={form.is_active ? "default" : "destructive"}
-            size="sm"
-            onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
-          >
-            {form.is_active ? <><ToggleRight className="h-4 w-4 mr-1" /> Active</> : <><ToggleLeft className="h-4 w-4 mr-1" /> Suspended</>}
-          </Button>
-        </div>
-
-        {/* Plan tier */}
-        <div>
-          <label className="text-xs text-muted-foreground uppercase tracking-wider">Plan Tier</label>
-          <div className="flex flex-wrap gap-2 mt-2">
-            {(["free", "starter", "growth", "enterprise"] as const).map((t) => (
-              <Button
-                key={t}
-                size="sm"
-                variant={form.plan_tier === t ? "default" : "outline"}
-                onClick={() => setForm((f) => ({ ...f, plan_tier: t }))}
-                className="capitalize"
-              >
-                {t}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        {/* Quotas */}
-        <div>
-          <label className="text-xs text-muted-foreground uppercase tracking-wider">Quotas</label>
-          <div className="grid grid-cols-3 gap-3 mt-2">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Max Cohorts</p>
-              <Input
-                type="number"
-                min={1}
-                value={form.max_cohorts}
-                onChange={(e) => setForm((f) => ({ ...f, max_cohorts: Number(e.target.value) }))}
-              />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Students/Cohort</p>
-              <Input
-                type="number"
-                min={1}
-                value={form.max_students_per_cohort}
-                onChange={(e) => setForm((f) => ({ ...f, max_students_per_cohort: Number(e.target.value) }))}
-              />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Max Educators</p>
-              <Input
-                type="number"
-                min={1}
-                value={form.max_educators}
-                onChange={(e) => setForm((f) => ({ ...f, max_educators: Number(e.target.value) }))}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Usage */}
-        <div className="rounded-lg border p-3 space-y-3">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider">Current Usage</p>
-          <UsageBar used={org.cohort_count} max={form.max_cohorts} label="Cohorts" />
-          <UsageBar used={org.student_count} max={form.max_cohorts * form.max_students_per_cohort} label="Total Students" />
-          <UsageBar used={org.educator_count} max={form.max_educators} label="Educators" />
-        </div>
-
-        {/* Contact + notes */}
-        <div>
-          <label className="text-xs text-muted-foreground uppercase tracking-wider">Contact Email</label>
-          <Input
-            className="mt-1"
-            value={form.contact_email}
-            onChange={(e) => setForm((f) => ({ ...f, contact_email: e.target.value }))}
-          />
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground uppercase tracking-wider">Internal Notes</label>
-          <textarea
-            className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground resize-none h-20 focus:outline-none focus:ring-2 focus:ring-ring"
-            value={form.notes}
-            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-          />
-        </div>
-      </div>
-      <DialogFooter>
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button onClick={save} disabled={saving}>
-          {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null} Save Changes
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  );
-}
-
-type ProvisionOrgForm = {
-  name: string;
-  slug: string;
-  domain: string;
-  contact_email: string;
-  plan_tier: "free" | "starter" | "growth" | "enterprise";
-  max_cohorts: number;
-  max_students_per_cohort: number;
-  max_educators: number;
-};
-
-function ProvisionOrgDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [form, setForm] = useState<ProvisionOrgForm>({
-    name: "",
-    slug: "",
-    domain: "",
-    contact_email: "",
-    plan_tier: "starter",
-    max_cohorts: 5,
-    max_students_per_cohort: 50,
-    max_educators: 3,
-  });
-  const [saving, setSaving] = useState(false);
-
-  const submit = async () => {
-    if (!form.name || !form.slug) return toast.error("Name and slug are required");
-    setSaving(true);
-    try {
-      await hqApi.createOrganization(form);
-      toast.success(`${form.name} provisioned`);
-      onCreated();
-      onClose();
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Failed to provision institution";
-      toast.error(message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <DialogContent className="max-w-md">
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5" /> Provision Institution</DialogTitle>
-      </DialogHeader>
-      <div className="space-y-3 py-2">
-        {(
-          [
-            { key: "name", label: "Institution Name", placeholder: "Acme University" },
-            { key: "slug", label: "Slug (URL key)", placeholder: "acme-univ" },
-            { key: "domain", label: "Email Domain", placeholder: "acme.edu" },
-            { key: "contact_email", label: "Contact Email", placeholder: "admin@acme.edu" },
-          ] as const
-        ).map(({ key, label, placeholder }) => (
-          <div key={key}>
-            <label className="text-xs text-muted-foreground">{label}</label>
-            <Input
-              className="mt-1"
-              placeholder={placeholder}
-              value={form[key]}
-              onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-            />
-          </div>
-        ))}
-        <div>
-          <label className="text-xs text-muted-foreground">Plan Tier</label>
-          <div className="flex gap-2 mt-1 flex-wrap">
-            {(["free", "starter", "growth", "enterprise"] as const).map((t) => (
-              <Button key={t} size="sm" variant={form.plan_tier === t ? "default" : "outline"} onClick={() => setForm((f) => ({ ...f, plan_tier: t }))} className="capitalize">{t}</Button>
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {(
-            [
-              ["max_cohorts", "Max Cohorts"],
-              ["max_students_per_cohort", "Students/Cohort"],
-              ["max_educators", "Max Educators"],
-            ] as const
-          ).map(([key, label]) => (
-            <div key={key}>
-              <label className="text-xs text-muted-foreground">{label}</label>
-              <Input
-                type="number"
-                min={1}
-                className="mt-1"
-                value={form[key]}
-                onChange={(e) => setForm((f) => ({ ...f, [key]: Number(e.target.value) }))}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-      <DialogFooter>
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button onClick={submit} disabled={saving}>
-          {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null} Provision
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  );
-}
-
-function InstitutionsTab() {
-  const [orgs, setOrgs] = useState<Organization[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [tierFilter, setTierFilter] = useState("");
-  const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
-  const [showProvision, setShowProvision] = useState(false);
-  const [page, setPage] = useState(1);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await hqApi.listOrganizations({ search, tier: tierFilter || undefined, page });
-      setOrgs(data.results);
-      setTotal(data.count);
-    } catch { /* noop */ }
-    finally { setLoading(false); }
-  }, [search, tierFilter, page]);
-
-  useEffect(() => { load(); }, [load]);
-
-  return (
-    <div className="space-y-4">
-      {/* Controls */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search institutions..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-        </div>
-        <div className="flex gap-1">
-          {["", "free", "starter", "growth", "enterprise"].map((t) => (
-            <Button key={t} size="sm" variant={tierFilter === t ? "default" : "ghost"} onClick={() => { setTierFilter(t); setPage(1); }} className="capitalize">{t || "All"}</Button>
-          ))}
-        </div>
-        <Button size="sm" onClick={() => setShowProvision(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Provision
-        </Button>
-      </div>
-
-      <p className="text-xs text-muted-foreground">{total} institution{total !== 1 ? "s" : ""}</p>
-
-      {loading ? (
-        <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-      ) : orgs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-          <Building2 className="h-10 w-10 opacity-30" />
-          <p>No institutions found</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {orgs.map((org) => (
-            <div key={org.id} className="rounded-xl border bg-card p-4 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setSelectedOrg(org)}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold truncate">{org.name}</span>
-                    <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize", TIER_COLORS[org.plan_tier] ?? "bg-muted")}>{org.plan_tier}</span>
-                    {!org.is_active && <span className="rounded-full bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 text-[10px] font-medium">Suspended</span>}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{org.domain || org.contact_email || org.slug}</p>
-                </div>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
-                  <span className="hidden sm:block">{org.cohort_count}/{org.max_cohorts} cohorts</span>
-                  <span className="hidden md:block">{org.student_count} students</span>
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <UsageBar used={org.cohort_count} max={org.max_cohorts} label="Cohorts" />
-                <UsageBar used={org.student_count} max={org.max_cohorts * org.max_students_per_cohort} label="Students" />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Pagination */}
-      {total > 25 && (
-        <div className="flex justify-center gap-2 pt-2">
-          <Button variant="ghost" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</Button>
-          <span className="flex items-center text-sm text-muted-foreground px-2">Page {page} of {Math.ceil(total / 25)}</span>
-          <Button variant="ghost" size="sm" disabled={page >= Math.ceil(total / 25)} onClick={() => setPage(page + 1)}>Next</Button>
-        </div>
-      )}
-
-      {/* Org detail dialog */}
-      <Dialog open={!!selectedOrg} onOpenChange={(o) => !o && setSelectedOrg(null)}>
-        {selectedOrg && (
-          <OrgDetailDrawer
-            org={selectedOrg}
-            onClose={() => setSelectedOrg(null)}
-            onUpdate={(updated) => {
-              setOrgs((prev) => prev.map((o) => o.id === updated.id ? updated : o));
-              setSelectedOrg(null);
-            }}
-          />
-        )}
-      </Dialog>
-
-      {/* Provision dialog */}
-      <Dialog open={showProvision} onOpenChange={setShowProvision}>
-        {showProvision && <ProvisionOrgDialog onClose={() => setShowProvision(false)} onCreated={load} />}
-      </Dialog>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════
 // USERS TAB
 // ══════════════════════════════════════════════════════════════════
 
-function UsersTab() {
+function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<GlobalUser[]>([]);
   const [total, setTotal] = useState(0);
@@ -792,18 +413,59 @@ function UsersTab() {
   const [activeFilter, setActiveFilter] = useState("");
   const [page, setPage] = useState(1);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [selectedGovernanceUser, setSelectedGovernanceUser] = useState<GlobalUser | null>(null);
+  const [governance, setGovernance] = useState<HQUserGovernanceDetail | null>(null);
+  const [governanceLoading, setGovernanceLoading] = useState(false);
+  const [governanceSaving, setGovernanceSaving] = useState(false);
+  const [govForm, setGovForm] = useState({
+    is_active: true,
+    is_staff: false,
+    is_superuser: false,
+    is_profile_public: false,
+    email_notifications: true,
+    push_notifications: true,
+    weekly_reports: true,
+    wishlist_access_enabled: false,
+    waitlist_tokens: 0,
+    portfolio_is_public: false,
+    portfolio_allow_downloads: false,
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await hqApi.listUsers({ search, user_type: typeFilter || undefined, is_active: activeFilter || undefined, page });
+      const data = await hqApi.listUsers({
+        search,
+        user_type: typeFilter || undefined,
+        is_active: activeFilter || undefined,
+        org: selectedOrgId || undefined,
+        page,
+      });
       setUsers(data.results);
       setTotal(data.count);
     } catch { /* noop */ }
     finally { setLoading(false); }
-  }, [search, typeFilter, activeFilter, page]);
+  }, [search, typeFilter, activeFilter, selectedOrgId, page]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setPage(1); }, [selectedOrgId]);
+
+  useEffect(() => {
+    if (!governance) return;
+    setGovForm({
+      is_active: governance.access_controls.is_active,
+      is_staff: governance.access_controls.is_staff,
+      is_superuser: governance.access_controls.is_superuser,
+      is_profile_public: governance.access_controls.is_profile_public,
+      email_notifications: governance.access_controls.email_notifications,
+      push_notifications: governance.access_controls.push_notifications,
+      weekly_reports: governance.access_controls.weekly_reports,
+      wishlist_access_enabled: governance.wishlist_access.enabled,
+      waitlist_tokens: governance.wishlist_access.waitlist_tokens ?? 0,
+      portfolio_is_public: governance.portfolio_access.is_public,
+      portfolio_allow_downloads: governance.portfolio_access.allow_downloads,
+    });
+  }, [governance]);
 
   const toggleActive = async (u: GlobalUser) => {
     setActionLoading(u.id);
@@ -831,6 +493,47 @@ function UsersTab() {
     }
   };
 
+  const openGovernance = async (u: GlobalUser) => {
+    setSelectedGovernanceUser(u);
+    setGovernance(null);
+    setGovernanceLoading(true);
+    try {
+      const detail = await hqApi.getUserGovernance(u.id);
+      setGovernance(detail);
+    } catch {
+      toast.error("Failed to load user governance");
+    } finally {
+      setGovernanceLoading(false);
+    }
+  };
+
+  const saveGovernance = async () => {
+    if (!selectedGovernanceUser) return;
+    setGovernanceSaving(true);
+    try {
+      const updated = await hqApi.updateUserGovernance(selectedGovernanceUser.id, {
+        is_active: govForm.is_active,
+        is_staff: govForm.is_staff,
+        is_superuser: govForm.is_superuser,
+        is_profile_public: govForm.is_profile_public,
+        email_notifications: govForm.email_notifications,
+        push_notifications: govForm.push_notifications,
+        weekly_reports: govForm.weekly_reports,
+        wishlist_access_enabled: govForm.wishlist_access_enabled,
+        waitlist_tokens: Number.isFinite(govForm.waitlist_tokens) ? govForm.waitlist_tokens : 0,
+        portfolio_is_public: govForm.portfolio_is_public,
+        portfolio_allow_downloads: govForm.portfolio_allow_downloads,
+      });
+      setGovernance(updated);
+      setUsers((prev) => prev.map((item) => (item.id === updated.user.id ? updated.user : item)));
+      toast.success("Governance updated");
+    } catch {
+      toast.error("Failed to update governance");
+    } finally {
+      setGovernanceSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-center">
@@ -850,7 +553,14 @@ function UsersTab() {
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">{total} user{total !== 1 ? "s" : ""}</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">{total} user{total !== 1 ? "s" : ""}</p>
+        {selectedOrgId ? (
+          <p className="text-xs text-muted-foreground">Scoped to selected institution</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">Showing all institutions</p>
+        )}
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
@@ -862,7 +572,8 @@ function UsersTab() {
                 <th className="text-left px-4 py-3">User</th>
                 <th className="text-left px-4 py-3 hidden sm:table-cell">Type</th>
                 <th className="text-left px-4 py-3 hidden md:table-cell">Joined</th>
-                <th className="text-left px-4 py-3">Flags</th>
+                <th className="text-left px-4 py-3">Access</th>
+                <th className="text-left px-4 py-3 hidden lg:table-cell">Wishlist</th>
                 <th className="text-right px-4 py-3">Actions</th>
               </tr>
             </thead>
@@ -874,6 +585,9 @@ function UsersTab() {
                     <td className="px-4 py-3">
                       <p className="font-medium truncate max-w-[180px]">{u.full_name || u.username || "—"}</p>
                       <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                      {u.organization_name && (
+                        <p className="text-[11px] text-muted-foreground truncate">Org: {u.organization_name}</p>
+                      )}
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell capitalize text-muted-foreground">{u.user_type}</td>
                     <td className="px-4 py-3 hidden md:table-cell text-muted-foreground text-xs">{new Date(u.created_at).toLocaleDateString()}</td>
@@ -884,27 +598,42 @@ function UsersTab() {
                         {!u.is_active && <Badge variant="outline" className="text-[10px] py-0 border-red-500/50 text-red-400">Inactive</Badge>}
                       </div>
                     </td>
+                    <td className="px-4 py-3 hidden lg:table-cell">
+                      <div className="flex flex-wrap gap-1">
+                        <Badge variant={u.from_waitlist ? "secondary" : "outline"} className="text-[10px] py-0">
+                          {u.from_waitlist ? "Wishlist On" : "Wishlist Off"}
+                        </Badge>
+                        <Badge variant="outline" className="text-[10px] py-0">
+                          {u.waitlist_tokens ?? 0} waitlist tokens
+                        </Badge>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-right">
                       {isSelf ? (
                         <span className="text-xs text-muted-foreground">You</span>
                       ) : (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={actionLoading === u.id}>
-                              {actionLoading === u.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => toggleActive(u)}>
-                              {u.is_active ? <XCircle className="h-4 w-4 mr-2 text-red-400" /> : <CheckCircle className="h-4 w-4 mr-2 text-green-400" />}
-                              {u.is_active ? "Deactivate" : "Reactivate"}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleStaff(u)}>
-                              <ShieldCheck className="h-4 w-4 mr-2" />
-                              {u.is_staff ? "Revoke Staff" : "Grant Staff"}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <div className="inline-flex items-center gap-1">
+                          <Button size="sm" variant="outline" onClick={() => openGovernance(u)}>
+                            Governance & Tokens
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={actionLoading === u.id}>
+                                {actionLoading === u.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => toggleActive(u)}>
+                                {u.is_active ? <XCircle className="h-4 w-4 mr-2 text-red-400" /> : <CheckCircle className="h-4 w-4 mr-2 text-green-400" />}
+                                {u.is_active ? "Deactivate" : "Reactivate"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => toggleStaff(u)}>
+                                <ShieldCheck className="h-4 w-4 mr-2" />
+                                {u.is_staff ? "Revoke Staff" : "Grant Staff"}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -925,6 +654,97 @@ function UsersTab() {
           <Button variant="ghost" size="sm" disabled={page >= Math.ceil(total / 25)} onClick={() => setPage(page + 1)}>Next</Button>
         </div>
       )}
+
+      <Dialog open={!!selectedGovernanceUser} onOpenChange={(open) => !open && setSelectedGovernanceUser(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              User Governance {selectedGovernanceUser ? `· ${selectedGovernanceUser.email}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          {governanceLoading || !governance ? (
+            <div className="py-8 flex items-center justify-center text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Chat Tokens (30d)</p>
+                  <p className="font-semibold">{governance.token_usage.chat_tokens_30d.toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Intelligence (30d)</p>
+                  <p className="font-semibold">{governance.token_usage.intelligence_tokens_30d.toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Combined (30d)</p>
+                  <p className="font-semibold">{governance.token_usage.combined_tokens_30d.toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Conversations</p>
+                  <p className="font-semibold">{governance.token_usage.conversation_count}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Active Sessions</p>
+                  <p className="font-semibold">{governance.token_usage.active_sessions}</p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-3 space-y-2">
+                <p className="text-sm font-medium">Access Controls</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant={govForm.is_active ? "default" : "outline"} onClick={() => setGovForm((s) => ({ ...s, is_active: !s.is_active }))}>Active</Button>
+                  <Button size="sm" variant={govForm.is_staff ? "default" : "outline"} onClick={() => setGovForm((s) => ({ ...s, is_staff: !s.is_staff }))}>Staff</Button>
+                  <Button size="sm" variant={govForm.is_superuser ? "default" : "outline"} onClick={() => setGovForm((s) => ({ ...s, is_superuser: !s.is_superuser }))}>Superuser</Button>
+                  <Button size="sm" variant={govForm.is_profile_public ? "default" : "outline"} onClick={() => setGovForm((s) => ({ ...s, is_profile_public: !s.is_profile_public }))}>Public Profile</Button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-3 space-y-2">
+                <p className="text-sm font-medium">Communication Controls</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant={govForm.email_notifications ? "default" : "outline"} onClick={() => setGovForm((s) => ({ ...s, email_notifications: !s.email_notifications }))}>Email</Button>
+                  <Button size="sm" variant={govForm.push_notifications ? "default" : "outline"} onClick={() => setGovForm((s) => ({ ...s, push_notifications: !s.push_notifications }))}>Push</Button>
+                  <Button size="sm" variant={govForm.weekly_reports ? "default" : "outline"} onClick={() => setGovForm((s) => ({ ...s, weekly_reports: !s.weekly_reports }))}>Weekly Reports</Button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-3 space-y-2">
+                <p className="text-sm font-medium">Wishlist/Waitlist Access</p>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant={govForm.wishlist_access_enabled ? "default" : "outline"} onClick={() => setGovForm((s) => ({ ...s, wishlist_access_enabled: !s.wishlist_access_enabled }))}>
+                    {govForm.wishlist_access_enabled ? "Enabled" : "Disabled"}
+                  </Button>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="w-40"
+                    value={govForm.waitlist_tokens}
+                    onChange={(e) => setGovForm((s) => ({ ...s, waitlist_tokens: Number(e.target.value || 0) }))}
+                  />
+                  <span className="text-xs text-muted-foreground">token balance</span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-3 space-y-2">
+                <p className="text-sm font-medium">Portfolio Access</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant={govForm.portfolio_is_public ? "default" : "outline"} onClick={() => setGovForm((s) => ({ ...s, portfolio_is_public: !s.portfolio_is_public }))}>Public Portfolio</Button>
+                  <Button size="sm" variant={govForm.portfolio_allow_downloads ? "default" : "outline"} onClick={() => setGovForm((s) => ({ ...s, portfolio_allow_downloads: !s.portfolio_allow_downloads }))}>Allow Downloads</Button>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSelectedGovernanceUser(null)}>Close</Button>
+            <Button onClick={saveGovernance} disabled={governanceLoading || governanceSaving || !governance}>
+              {governanceSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Governance
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -933,7 +753,7 @@ function UsersTab() {
 // SUPPORT QUEUE TAB
 // ══════════════════════════════════════════════════════════════════
 
-function SupportQueueTab() {
+function SupportQueueTab({ selectedOrgId }: { selectedOrgId: string }) {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -946,14 +766,20 @@ function SupportQueueTab() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await hqApi.getSupportTickets({ status: statusFilter || undefined, priority: priorityFilter || undefined, page });
+      const data = await hqApi.getSupportTickets({
+        status: statusFilter || undefined,
+        priority: priorityFilter || undefined,
+        org: selectedOrgId || undefined,
+        page,
+      });
       setTickets(data.results);
       setTotal(data.count);
     } catch { /* noop */ }
     finally { setLoading(false); }
-  }, [statusFilter, priorityFilter, page]);
+  }, [statusFilter, priorityFilter, selectedOrgId, page]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setPage(1); }, [selectedOrgId]);
 
   const updateStatus = async (ticketId: string, newStatus: string) => {
     try {
@@ -998,7 +824,14 @@ function SupportQueueTab() {
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">{total} ticket{total !== 1 ? "s" : ""}</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">{total} ticket{total !== 1 ? "s" : ""}</p>
+        {selectedOrgId ? (
+          <p className="text-xs text-muted-foreground">Scoped to selected institution</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">Showing all institutions</p>
+        )}
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
@@ -1028,7 +861,11 @@ function SupportQueueTab() {
                       <Badge variant="outline" className="text-[10px]">{ticket.ticket_type}</Badge>
                     </div>
                     <p className="font-medium truncate">{ticket.subject}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{ticket.user_email} · {new Date(ticket.created_at).toLocaleDateString()}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {ticket.user_email}
+                      {ticket.organization_name ? ` · ${ticket.organization_name}` : ""}
+                      {` · ${new Date(ticket.created_at).toLocaleDateString()}`}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {ticket.status === "open" && (
@@ -1089,11 +926,10 @@ function SupportQueueTab() {
 // ROOT PAGE
 // ══════════════════════════════════════════════════════════════════
 
-type Tab = "overview" | "institutions" | "users" | "support";
+type Tab = "overview" | "users" | "support";
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "institutions", label: "Institutions", icon: Building2 },
   { id: "users", label: "Users", icon: Users },
   { id: "support", label: "Support Queue", icon: Ticket },
 ];
@@ -1106,6 +942,8 @@ export default function MasterHQPage() {
   const [orgPerformance, setOrgPerformance] = useState<HQOrgPerformance[] | null>(null);
   const [riskRetention, setRiskRetention] = useState<HQRiskRetention | null>(null);
   const [educatorEffectiveness, setEducatorEffectiveness] = useState<HQEducatorEffectiveness[] | null>(null);
+  const [orgOptions, setOrgOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState("");
 
   useEffect(() => {
     if (user && !user.is_superuser) {
@@ -1118,6 +956,10 @@ export default function MasterHQPage() {
     hqApi.getOrgPerformance().then(setOrgPerformance).catch(() => {});
     hqApi.getRiskRetention().then(setRiskRetention).catch(() => {});
     hqApi.getEducatorEffectiveness().then(setEducatorEffectiveness).catch(() => {});
+    hqApi
+      .listOrganizations({ page: 1, page_size: 100 })
+      .then((data) => setOrgOptions(data.results.map((org) => ({ id: org.id, name: org.name }))))
+      .catch(() => {});
   }, []);
 
   if (!user?.is_superuser) {
@@ -1159,6 +1001,27 @@ export default function MasterHQPage() {
         )}
       </div>
 
+      <div className="rounded-xl border bg-card p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">Institution Scope</p>
+          <p className="text-xs text-muted-foreground">Drives users and support queue views by selected college/institution.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="hq-org-scope" className="text-xs text-muted-foreground">College</label>
+          <select
+            id="hq-org-scope"
+            className="h-9 rounded-md border bg-background px-3 text-sm"
+            value={selectedOrgId}
+            onChange={(e) => setSelectedOrgId(e.target.value)}
+          >
+            <option value="">All institutions</option>
+            {orgOptions.map((org) => (
+              <option key={org.id} value={org.id}>{org.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* Tabs */}
       <div className="flex gap-1 border-b pb-0">
         {TABS.map(({ id, label, icon: Icon }) => (
@@ -1194,9 +1057,8 @@ export default function MasterHQPage() {
             educatorEffectiveness={educatorEffectiveness}
           />
         )}
-        {activeTab === "institutions" && <InstitutionsTab />}
-        {activeTab === "users" && <UsersTab />}
-        {activeTab === "support" && <SupportQueueTab />}
+        {activeTab === "users" && <UsersTab selectedOrgId={selectedOrgId} />}
+        {activeTab === "support" && <SupportQueueTab selectedOrgId={selectedOrgId} />}
       </div>
     </div>
   );

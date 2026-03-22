@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { institutionsApi, OrgUser } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
@@ -10,28 +10,30 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search } from "lucide-react";
+import { useInstitutionScope } from "../_lib/useInstitutionScope";
 
 const ROLE_OPTIONS = ["admin", "educator", "student"] as const;
 
 export default function InstitutionSupportPage() {
   const { user } = useAuth();
+  const { selectedOrgId, isSuperuser } = useInstitutionScope();
   const [users, setUsers] = useState<OrgUser[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     setLoading(true);
     institutionsApi
-      .listOrgUsers()
+      .listOrgUsers({ org: selectedOrgId || undefined })
       .then((data) => setUsers(data))
       .catch((err) => telemetry.error("Failed to load org users", { err }))
       .finally(() => setLoading(false));
-  };
+  }, [selectedOrgId]);
 
   useEffect(() => {
-    if (user?.user_type !== "admin") return;
+    if ((user?.user_type !== "admin" && !user?.is_superuser) || (isSuperuser && !selectedOrgId)) return;
     refresh();
-  }, [user?.user_type]);
+  }, [isSuperuser, refresh, selectedOrgId, user?.is_superuser, user?.user_type]);
 
   const filtered = useMemo(() => {
     if (!search) return users;
@@ -41,7 +43,7 @@ export default function InstitutionSupportPage() {
 
   const handleRoleChange = async (userId: string, role: string) => {
     try {
-      const updated = await institutionsApi.updateOrgUser(userId, { role });
+      const updated = await institutionsApi.updateOrgUser(userId, { role, org: selectedOrgId || undefined });
       setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: updated.role } : u)));
       telemetry.toastSuccess("Role updated");
     } catch (err) {
@@ -52,7 +54,7 @@ export default function InstitutionSupportPage() {
 
   const handleActiveToggle = async (target: OrgUser) => {
     try {
-      const updated = await institutionsApi.updateOrgUser(target.id, { is_active: !target.is_active });
+      const updated = await institutionsApi.updateOrgUser(target.id, { is_active: !target.is_active, org: selectedOrgId || undefined });
       setUsers((prev) => prev.map((u) => (u.id === target.id ? { ...u, is_active: updated.is_active } : u)));
       telemetry.toastSuccess("Account status updated");
     } catch (err) {
@@ -63,7 +65,7 @@ export default function InstitutionSupportPage() {
 
   const handleReset = async (userId: string) => {
     try {
-      await institutionsApi.resetOrgUserPassword(userId);
+      await institutionsApi.resetOrgUserPassword(userId, { org: selectedOrgId || undefined });
       telemetry.toastSuccess("Password reset email sent");
     } catch (err) {
       telemetry.toastError("Password reset failed");
@@ -71,7 +73,7 @@ export default function InstitutionSupportPage() {
     }
   };
 
-  if (user?.user_type !== "admin") {
+  if (user?.user_type !== "admin" && !user?.is_superuser) {
     return (
       <div className="p-6 max-w-5xl mx-auto">
         <Card>
@@ -86,6 +88,13 @@ export default function InstitutionSupportPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {isSuperuser && !selectedOrgId ? (
+        <Card>
+          <CardContent className="pt-6 text-sm text-muted-foreground">
+            Select an institution from the Institution Scope selector to access support tools.
+          </CardContent>
+        </Card>
+      ) : null}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">User Support</h1>
         <p className="text-muted-foreground mt-1">Manage roles, account status, and password resets.</p>

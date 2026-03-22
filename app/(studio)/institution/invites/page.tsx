@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useInstitutionCohort } from "../_lib/useInstitutionCohort";
 import { institutionsApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
+import { useInstitutionScope } from "../_lib/useInstitutionScope";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,13 +14,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 export default function InstitutionInvitesPage() {
   const { user } = useAuth();
+  const { selectedOrgId, isSuperuser } = useInstitutionScope();
   const { cohorts, selectedCohort, setSelectedCohort } = useInstitutionCohort({ withDashboard: false });
   const [csvFile, setCsvFile] = useState<File | null>(null);
 
   const handleCsvUpload = async () => {
     if (!csvFile || !selectedCohort) return;
     try {
-      await institutionsApi.inviteCohortCSV(selectedCohort, csvFile);
+      await institutionsApi.inviteCohortCSV(selectedCohort, csvFile, selectedOrgId || undefined);
       telemetry.toastSuccess("CSV uploaded to queue. Processing will complete shortly.");
       setCsvFile(null);
     } catch (err) {
@@ -38,7 +40,7 @@ export default function InstitutionInvitesPage() {
     URL.revokeObjectURL(url);
   };
 
-  if (user?.user_type !== "admin") {
+  if (user?.user_type !== "admin" && !user?.is_superuser) {
     return (
       <div className="p-6 max-w-5xl mx-auto">
         <Card>
@@ -56,6 +58,13 @@ export default function InstitutionInvitesPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
+      {isSuperuser && !selectedOrgId ? (
+        <Card>
+          <CardContent className="pt-6 text-sm text-muted-foreground">
+            Select an institution from the Institution Scope selector to manage invites.
+          </CardContent>
+        </Card>
+      ) : null}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Roster & Invites</h1>
         <p className="text-muted-foreground mt-1">Upload CSVs to provision students into a cohort.</p>

@@ -10,7 +10,7 @@ import { chatApi, planningApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { BookOpen, Code2, ShieldCheck, ArrowRight, ArrowLeft, RefreshCw } from "lucide-react";
+import { BookOpen, Code2, ShieldCheck, ArrowRight, ArrowLeft, RefreshCw, CheckCircle2 } from "lucide-react";
 import { generateEfficacyReportPDF } from "@/lib/generate-efficacy-report";
 
 import { LearningPanel } from "./components/LearningPanel";
@@ -18,6 +18,7 @@ import { MicroPracticeLab, type QuizResults } from "./components/MicroPracticeLa
 import { OmniWorkspace, type EnvMode as OmniEnvMode } from "./components/OmniWorkspace";
 import { VerificationEngine, type ArtifactVerifiedEvent } from "./components/VerificationEngine";
 import { MentorAssistant } from "./components/MentorAssistant";
+import { Badge } from "@/components/ui/badge";
 
 const STEPS = [
   { id: "ingest", label: "Knowledge Ingestion", icon: BookOpen },
@@ -302,7 +303,24 @@ function PlaygroundFlow() {
           })()
         : { submission_type: type, content: content as string, metadata };
 
-      await planningApi.submitTaskProof(activeTask.id, payload);
+      const proofResponse = await planningApi.submitTaskProof(activeTask.id, payload);
+      const executionReport = proofResponse.execution_report as
+        | { ran?: boolean; passed?: boolean; summary?: string }
+        | undefined;
+
+      if (executionReport?.ran) {
+        if (executionReport.passed) {
+          telemetry.toastSuccess(
+            executionReport.summary || "Auto-tests passed for your submission."
+          );
+        } else {
+          telemetry.toastError(
+            executionReport.summary || "Auto-tests failed. Review your code and resubmit."
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      }
       
       const totalDurationMs = Date.now() - (sessionStartTime ?? Date.now());
       const durationMinutes = Math.max(1, Math.round(totalDurationMs / 60000));
@@ -389,7 +407,6 @@ function PlaygroundFlow() {
 
   if (!plan) return null;
 
-  const currentStep = STEPS[activeStepIndex];
   const progressPercent = ((activeStepIndex + 1) / STEPS.length) * 100;
   const envReqs = activeTask?.environment_requirements as Record<string, unknown> | undefined;
   const recommendedEnvRaw = envReqs?.recommended_environment as EnvMode | undefined;
@@ -399,19 +416,42 @@ function PlaygroundFlow() {
   const visibleEnvModes = computeVisibleEnvs(subjectCategory, recommendedEnv);
   const quizFailed = quizResults && (quizResults.correct / quizResults.total) < 0.6;
 
+  const onRegenerateLesson = () => {
+    if (!activeTask?.id) return;
+    lessonRequestRef.current[activeTask.id] = false;
+    setLessonLoading(true);
+    planningApi
+      .generateTaskLesson(activeTask.id, {
+                      scope: "task",
+                      force: true,
+                    })
+                    .then(() => refetchPlan())
+                    .catch(() => {})
+                    .finally(() => setLessonLoading(false));
+                }
+
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col gap-4 p-4 lg:p-6 bg-slate-50">
+    <div className="flex h-[100vh] flex-col gap-4 p-4 lg:p-6 bg-slate-50">
+    {/* <div className="flex h-[calc(100vh-4rem)] flex-col gap-4 p-4 lg:p-6 bg-slate-50"> */}
       {/* Header Pipeline */}
       <div className="flex shrink-0 items-center justify-between rounded-2xl bg-white px-6 py-4 shadow-sm ring-1 ring-slate-200">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">{activeTask?.title || "Loading Task..."}</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">
+            {activeTask?.title || "Loading Task..."}
+          </h1>
           <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-            <span className="flex items-center gap-1 font-medium text-slate-700">
+            {/* <span className="flex items-center gap-1 font-medium text-slate-700">
               <currentStep.icon className="h-4 w-4 text-violet-600" />
               {currentStep.label} Phase
-            </span>
-            <span>·</span>
-            <span>{activeTask?.estimated_duration_minutes} min estimated</span>
+            </span> */}
+            {/* <span>·</span> */}
+            <Badge
+              variant="outline"
+              className="text-[10px] uppercase tracking-wider text-muted-foreground"
+            >
+              {activeTask.task_type.replace("_", " ")}
+            </Badge>
+            <span>{activeTask?.estimated_duration_minutes} min</span>
           </p>
         </div>
         <div className="w-64">
@@ -423,9 +463,49 @@ function PlaygroundFlow() {
         </div>
       </div>
 
-      <div className="grid flex-1 grid-cols-1 gap-6 overflow-hidden md:grid-cols-3">
+      <div className="flex items-center justify-between shrink-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          {STEPS.map((step, index) => {
+            const isActive = index === activeStepIndex;
+            const isDone = index < activeStepIndex;
+            return (
+              <button
+                key={step.id}
+                onClick={() => changeStep(index)}
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  isActive
+                    ? "border-violet-300 bg-violet-50 text-violet-700"
+                    : isDone
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {isDone ? (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                ) : (
+                  <step.icon className="h-3.5 w-3.5" />
+                )}
+                {step.label}
+              </button>
+            );
+          })}
+        </div>
+        {onRegenerateLesson && !lessonLoading && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[11px] text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+            onClick={onRegenerateLesson}
+            title="Regenerate lesson with AI"
+          >
+            <RefreshCw className="w-3 h-3 mr-1" /> Regenerate
+          </Button>
+        )}
+      </div>
+
+      <div className="grid flex-1 grid-cols-1 gap-6 overflow-hidden md:grid-cols-12">
         {/* Main Workspace Area (Left 2/3) */}
-        <div className="flex flex-col gap-4 md:col-span-2 overflow-y-auto pr-2 custom-scrollbar">
+        <div className="flex flex-col gap-4 md:col-span-8 overflow-y-auto pr-2 custom-scrollbar">
           {activeStepIndex === 0 && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
               <LearningPanel
@@ -433,15 +513,6 @@ function PlaygroundFlow() {
                 lessonLoading={lessonLoading}
                 blockFeedback={blockFeedback}
                 onFeedbackChange={setBlockFeedback}
-                onRegenerateLesson={() => {
-                  if (!activeTask?.id) return;
-                  lessonRequestRef.current[activeTask.id] = false;
-                  setLessonLoading(true);
-                  planningApi.generateTaskLesson(activeTask.id, { scope: "task", force: true })
-                    .then(() => refetchPlan())
-                    .catch(() => {})
-                    .finally(() => setLessonLoading(false));
-                }}
               />
             </div>
           )}
@@ -466,16 +537,36 @@ function PlaygroundFlow() {
               {quizFailed && !quizBannerDismissed && (
                 <div className="shrink-0 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
                   <span className="text-amber-600 text-sm font-medium flex-1">
-                    ⚠ You scored {quizResults!.correct}/{quizResults!.total} on the practice quiz.
+                    ⚠ You scored {quizResults!.correct}/{quizResults!.total} on
+                    the practice quiz.
                     {quizResults!.weakTopics.length > 0 && (
-                      <> Consider reviewing: {quizResults!.weakTopics.slice(0, 3).map((t) => `"${t}"`).join(" · ")}</>
+                      <>
+                        {" "}
+                        Consider reviewing:{" "}
+                        {quizResults!.weakTopics
+                          .slice(0, 3)
+                          .map((t) => `"${t}"`)
+                          .join(" · ")}
+                      </>
                     )}
                   </span>
                   <div className="flex gap-2 shrink-0">
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setActiveStepIndex(0); }}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        setActiveStepIndex(0);
+                      }}
+                    >
                       ← Review Lesson
                     </Button>
-                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setQuizBannerDismissed(true)}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      onClick={() => setQuizBannerDismissed(true)}
+                    >
                       Dismiss
                     </Button>
                   </div>
@@ -486,7 +577,9 @@ function PlaygroundFlow() {
                 initialCode={getInitialCode(activeTask) ?? starterCode}
                 starterCodeLoading={starterCodeLoading}
                 onNotesChange={setWorkspaceNotes}
-                onSaveNotes={() => telemetry.toastSuccess("Notes saved locally.")}
+                onSaveNotes={() =>
+                  telemetry.toastSuccess("Notes saved locally.")
+                }
                 taskTitle={activeTask?.title || "Coding Challenge"}
                 initialEnvMode={recommendedEnv}
                 defaultCodeLanguage={defaultLanguage}
@@ -505,36 +598,48 @@ function PlaygroundFlow() {
               <VerificationEngine
                 taskId={activeTask?.id || ""}
                 verificationMethod={
-                  (challengeVerification?.method as string)
-                  || activeTask?.verification?.method
-                  || "manual_rubric"
+                  (challengeVerification?.method as string) ||
+                  activeTask?.verification?.method ||
+                  "manual_rubric"
                 }
                 verificationCriteria={
-                  (challengeVerification?.criteria as string)
-                  || activeTask?.verification?.criteria
-                  || activeTask?.check_in_question
-                  || ""
+                  (challengeVerification?.criteria as string) ||
+                  activeTask?.verification?.criteria ||
+                  activeTask?.check_in_question ||
+                  ""
                 }
                 taskDescription={activeTask?.description || ""}
                 verificationDetailedInstructions={
-                  (challengeVerification?.detailed_instructions as string)
-                  || activeTask?.verification?.detailed_instructions
+                  (challengeVerification?.detailed_instructions as string) ||
+                  activeTask?.verification?.detailed_instructions
                 }
                 problemStatement={
-                  (challengeVerification?.problem_statement as string)
-                  || undefined
+                  (challengeVerification?.problem_statement as string) ||
+                  undefined
                 }
                 acceptanceCriteria={
-                  (challengeVerification?.acceptance_criteria as string[])
-                  || undefined
+                  (challengeVerification?.acceptance_criteria as string[]) ||
+                  undefined
                 }
                 exampleInputsOutputs={
-                  (challengeVerification?.example_inputs_outputs as string)
-                  || undefined
+                  (challengeVerification?.example_inputs_outputs as string) ||
+                  undefined
                 }
                 submissionNote={
-                  (challengeVerification?.submission_note as string)
-                  || undefined
+                  (challengeVerification?.submission_note as string) ||
+                  undefined
+                }
+                problemSet={
+                  (challengeVerification?.problem_set as Array<Record<string, unknown>>) ||
+                  undefined
+                }
+                hiddenTestIntent={
+                  (challengeVerification?.hidden_test_intent as string[]) ||
+                  undefined
+                }
+                integrityNotice={
+                  (challengeVerification?.integrity_notice as string) ||
+                  undefined
                 }
                 challengeLoading={challengeLoading}
                 isSubmitting={isSubmitting}
@@ -556,25 +661,29 @@ function PlaygroundFlow() {
             >
               <ArrowLeft className="mr-2 h-4 w-4" /> Previous Step
             </Button>
-            
+
             {activeStepIndex < STEPS.length - 1 ? (
               <Button
-                onClick={() => changeStep(Math.min(activeStepIndex + 1, STEPS.length - 1))}
+                onClick={() =>
+                  changeStep(Math.min(activeStepIndex + 1, STEPS.length - 1))
+                }
                 className="bg-slate-900 text-white hover:bg-slate-800"
               >
-                Proceed to {STEPS[activeStepIndex + 1].label} <ArrowRight className="ml-2 h-4 w-4" />
+                Proceed to {STEPS[activeStepIndex + 1].label}{" "}
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             ) : (
               <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" /> Complete the proof above to finish.
+                <ShieldCheck className="w-3 h-3" /> Complete the proof above to
+                finish.
               </p>
             )}
           </div>
         </div>
 
         {/* Sidebar Space (Right 1/3) */}
-        <div className="flex h-full flex-col">
-          <MentorAssistant 
+        <div className="flex h-full min-h-0 flex-col md:col-span-4">
+          <MentorAssistant
             messages={mentorMessages ?? []}
             isTyping={mentorTyping}
             streamingMessage={streamingMessage}

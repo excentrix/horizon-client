@@ -167,15 +167,9 @@ export function Sidebar() {
         },
         {
           href: "/institution/overview",
-          label: "Institutions & Cohorts",
+          label: "Institution 360",
           icon: Briefcase,
           description: "Tenant management",
-        },
-        {
-          href: "/dashboard",
-          label: "Student View (Debug)",
-          icon: Compass,
-          description: "View as student",
         },
       ]
     : isAdmin

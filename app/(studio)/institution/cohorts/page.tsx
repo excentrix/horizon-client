@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { institutionsApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
 import { useInstitutionCohort } from "../_lib/useInstitutionCohort";
+import { useInstitutionScope } from "../_lib/useInstitutionScope";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 export default function InstitutionCohortsPage() {
   const { user } = useAuth();
+  const { selectedOrgId } = useInstitutionScope();
   const { cohorts, refreshCohorts } = useInstitutionCohort({ withDashboard: false });
   const [orgSummary, setOrgSummary] = useState<{
     max_cohorts: number;
@@ -27,18 +29,18 @@ export default function InstitutionCohortsPage() {
 
   useEffect(() => {
     institutionsApi
-      .getOrgSummary()
+      .getOrgSummary({ org: selectedOrgId || undefined })
       .then((data) => setOrgSummary(data))
       .catch((err) => telemetry.error("Failed to load org summary", { err }));
-  }, []);
+  }, [selectedOrgId]);
 
   useEffect(() => {
-    if (user?.user_type !== "admin") return;
+    if (user?.user_type !== "admin" && !user?.is_superuser) return;
     institutionsApi
-      .listEducators()
+      .listEducators({ org: selectedOrgId || undefined })
       .then((data) => setEducators(data.map((e) => ({ id: e.id, name: e.name, role: e.role }))))
       .catch((err) => telemetry.error("Failed to load educators", { err }));
-  }, [user?.user_type]);
+  }, [selectedOrgId, user?.is_superuser, user?.user_type]);
 
   const canCreate = useMemo(() => {
     if (!orgSummary) return false;
@@ -49,7 +51,7 @@ export default function InstitutionCohortsPage() {
     if (!name.trim()) return;
     setIsSubmitting(true);
     try {
-      await institutionsApi.createCohort({ name: name.trim(), mentor_user: mentor || undefined });
+      await institutionsApi.createCohort({ name: name.trim(), mentor_user: mentor || undefined, org: selectedOrgId || undefined });
       telemetry.toastSuccess("Cohort created");
       setName("");
       setMentor(null);
@@ -83,7 +85,7 @@ export default function InstitutionCohortsPage() {
         </Card>
       )}
 
-      {user?.user_type === "admin" && (
+      {(user?.user_type === "admin" || user?.is_superuser) && (
         <Card className="border-dashed bg-muted/20">
           <CardHeader>
             <CardTitle>Create New Cohort</CardTitle>

@@ -31,6 +31,19 @@ interface VerificationEngineProps {
   acceptanceCriteria?: string[];
   exampleInputsOutputs?: string;
   submissionNote?: string;
+  problemSet?: Array<{
+    id?: string;
+    title?: string;
+    difficulty?: string;
+    prompt?: string;
+    input_contract?: string;
+    output_contract?: string;
+    self_check_cases?: Array<string | { description?: string; input?: string; expected_output?: string }>;
+    edge_cases?: string[];
+    anti_cheat_signals?: string[];
+  }>;
+  hiddenTestIntent?: string[];
+  integrityNotice?: string;
   challengeLoading?: boolean;
   onProofSubmit: (type: "link" | "text" | "file", content: string | File) => Promise<void>;
   isSubmitting: boolean;
@@ -50,6 +63,9 @@ export function VerificationEngine({
   acceptanceCriteria,
   exampleInputsOutputs,
   submissionNote,
+  problemSet,
+  hiddenTestIntent,
+  integrityNotice,
   challengeLoading = false,
   onProofSubmit,
   isSubmitting,
@@ -70,6 +86,7 @@ export function VerificationEngine({
 
   const [activeTab, setActiveTab] = useState<"link" | "text" | "file">(allowedTypes[0] as "link" | "text" | "file");
   const [rubricAcknowledged, setRubricAcknowledged] = useState(false);
+  const [activeProblemIndex, setActiveProblemIndex] = useState(0);
 
   const [linkUrl, setLinkUrl] = useState("");
   const [textContent, setTextContent] = useState("");
@@ -98,6 +115,10 @@ export function VerificationEngine({
     if (v.includes("manual")) return "Manual Mentor Review";
     return verificationMethod.replace(/_/g, " ");
   }, [verificationMethod]);
+
+  const challenges = Array.isArray(problemSet) ? problemSet : [];
+  const hasProblemSet = challenges.length > 0;
+  const activeProblem = hasProblemSet ? challenges[Math.min(activeProblemIndex, challenges.length - 1)] : null;
 
   const submissionInstructions = useMemo(() => {
     const v = verificationMethod.toLowerCase();
@@ -155,9 +176,39 @@ export function VerificationEngine({
             <ClipboardList className="w-4 h-4" /> Mission Brief
           </h4>
           <p className="text-sm text-slate-800 leading-relaxed font-medium">
-            {problemStatement || taskDescription || "Complete the task outlined in your learning plan."}
+            {activeProblem?.prompt || problemStatement || taskDescription || "Complete the task outlined in your learning plan."}
           </p>
+          {hasProblemSet && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {challenges.map((problem, index) => (
+                <Button
+                  key={problem.id || `problem-${index}`}
+                  type="button"
+                  size="sm"
+                  variant={activeProblemIndex === index ? "default" : "outline"}
+                  className="h-7 text-[11px]"
+                  onClick={() => setActiveProblemIndex(index)}
+                >
+                  {problem.title || `Problem ${index + 1}`}
+                  {problem.difficulty ? ` · ${problem.difficulty}` : ""}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
+
+        {activeProblem && (
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Input Contract</p>
+              <p className="text-sm text-slate-700 leading-relaxed">{activeProblem.input_contract || "Define clear function inputs before solving."}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Output Contract</p>
+              <p className="text-sm text-slate-700 leading-relaxed">{activeProblem.output_contract || "Output must be deterministic and testable."}</p>
+            </div>
+          </div>
+        )}
 
         {/* Acceptance Criteria */}
         {(acceptanceCriteria && acceptanceCriteria.length > 0) ? (
@@ -192,6 +243,65 @@ export function VerificationEngine({
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {activeProblem?.self_check_cases && activeProblem.self_check_cases.length > 0 && (
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Self-check Cases</h4>
+            <div className="bg-white border border-slate-200 rounded-xl px-5 py-4 space-y-2">
+              {activeProblem.self_check_cases.map((caseItem, idx) => {
+                if (typeof caseItem === "string") {
+                  return (
+                    <p key={`self-check-${idx}`} className="text-sm text-slate-700">
+                      {idx + 1}. {caseItem}
+                    </p>
+                  );
+                }
+                return (
+                  <div key={`self-check-${idx}`} className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                    <p className="text-sm font-medium text-slate-800">
+                      {idx + 1}. {caseItem.description || "Test case"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      <span className="font-semibold">Input:</span> {caseItem.input || "(not specified)"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      <span className="font-semibold">Expected:</span> {caseItem.expected_output || "(not specified)"}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {activeProblem?.anti_cheat_signals && activeProblem.anti_cheat_signals.length > 0 && (
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Authenticity Checks</h4>
+            <div className="bg-white border border-slate-200 rounded-xl px-5 py-4 space-y-2">
+              {activeProblem.anti_cheat_signals.map((signal, idx) => (
+                <p key={`integrity-${idx}`} className="text-sm text-slate-700">
+                  {idx + 1}. {signal}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(integrityNotice || (hiddenTestIntent && hiddenTestIntent.length > 0)) && (
+          <div className="rounded-xl border border-rose-100 bg-rose-50/60 px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-rose-700 mb-2">Integrity Notice</p>
+            <p className="text-sm text-rose-900/90 leading-relaxed">
+              {integrityNotice || "Submissions are evaluated against hidden checks and behavioral quality signals."}
+            </p>
+            {hiddenTestIntent && hiddenTestIntent.length > 0 && (
+              <ul className="mt-2 list-disc pl-5 text-xs text-rose-900/80 space-y-1">
+                {hiddenTestIntent.slice(0, 4).map((intent, idx) => (
+                  <li key={`hidden-intent-${idx}`}>{intent}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 
