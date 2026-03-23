@@ -70,6 +70,13 @@ export default function DashboardPage() {
   const badgeCount = gamificationData?.badge_count ?? 0;
   const tasksThisWeek = 0; // Removing weekly stats for simplicity
   const hasPlan = todaysTasksData && todaysTasksData.count > 0;
+  const activeTasks =
+    todaysTasksData?.tasks?.filter((task: any) =>
+      ["scheduled", "in_progress"].includes(task.status)
+    ) ?? [];
+  const maxDashboardTasks = 6;
+  const visibleTasks = activeTasks.slice(0, maxDashboardTasks);
+  const hiddenTaskCount = Math.max(0, activeTasks.length - visibleTasks.length);
   const updatedAt = new Date().toLocaleTimeString();
 
   return (
@@ -151,7 +158,7 @@ export default function DashboardPage() {
               </div>
               {todaysTasksData && (
                 <div className="rounded-full bg-violet-100 px-3 py-1 text-sm font-medium text-violet-800">
-                  {todaysTasksData.count} tasks
+                  {activeTasks.length} tasks
                 </div>
               )}
             </div>
@@ -163,7 +170,7 @@ export default function DashboardPage() {
                   <div key={i} className="h-20 animate-pulse rounded-lg bg-muted" />
                 ))}
               </div>
-            ) : todaysTasksData?.count === 0 ? (
+            ) : activeTasks.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <div className="mb-4 rounded-full bg-slate-100 p-4">
                   <Sparkles className="h-8 w-8 text-slate-400" />
@@ -178,7 +185,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {todaysTasksData?.tasks.map((task: any) => (
+                {visibleTasks.map((task: any) => (
                   <div 
                     key={task.id} 
                     className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border p-4 transition-all hover:border-violet-300 hover:shadow-md bg-white"
@@ -213,6 +220,18 @@ export default function DashboardPage() {
                     </Button>
                   </div>
                 ))}
+                {hiddenTaskCount > 0 && (
+                  <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                    Showing {visibleTasks.length} of {activeTasks.length} active tasks for today.
+                    {" "}
+                    <button
+                      className="font-medium text-violet-700 hover:underline"
+                      onClick={() => router.push("/plans")}
+                    >
+                      View all in Plans
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

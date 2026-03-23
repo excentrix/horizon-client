@@ -143,6 +143,7 @@ function ChatContent() {
     sendMessage,
     mentorTyping,
     streamingMessage,
+    streamingMessageId,
     setTypingStatus,
   } = useChatSocket(selectedConversationId ?? null);
 
@@ -347,8 +348,6 @@ function ChatContent() {
     }
   }, [
     activeConversation?.id,
-    intakePreview?.slots,
-    intakeState?.slots,
   ]);
 
   const handlePreviewMentorIntake = useCallback(async () => {
@@ -1008,15 +1007,7 @@ useEffect(() => {
         isOpen={isCreateModalOpen}
         onOpenChange={setCreateModalOpen}
       />
-      <SafetyAlert socket={null} /> {/* Socket is handled inside hook, need to expose it or move SafetyAlert inside MessageFeed/Composer context? Actually useChatSocket returns socket status but not the socket instance directly. We might need to lift the socket or pass the event via a store/context. For now, let's assume we can pass the socket if we expose it from useChatSocket, OR we can make SafetyAlert use the same socket logic. Let's check useChatSocket. */}
-      {/* Correction: useChatSocket manages the socket. We should probably add the safety listener inside useChatSocket or expose the socket. 
-          For this iteration, I'll modify useChatSocket to expose the socket or handle the alert state there. 
-          Wait, I can't modify useChatSocket easily without seeing it. 
-          Alternative: The SafetyService sends messages via the websocket. 
-          The `useChatSocket` likely handles incoming messages. I should add a callback or use a store for safety alerts.
-          
-          Let's place the SessionGoal first.
-      */}
+      <SafetyAlert />
       <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-hidden px-4 pb-4 pt-4 lg:flex-row lg:gap-6">
         <aside className="flex h-full w-full flex-col lg:w-80">
           <div className="flex h-full flex-col rounded-[28px] border border-white/80 bg-white/80 shadow-[var(--shadow-2)] backdrop-blur">
@@ -1339,6 +1330,7 @@ useEffect(() => {
                         isLoadingMore={isFetchingNextPage}
                         mentorTyping={mentorTyping}
                         streamingMessage={streamingMessage}
+                        streamingMessageId={streamingMessageId}
                         theme={personaTheme}
                         variant="plain"
                       />

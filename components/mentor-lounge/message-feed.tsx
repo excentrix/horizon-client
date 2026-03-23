@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, Conversation, MentorAction } from "@/types";
@@ -115,12 +115,16 @@ export function MessageFeed({
     }
   }, [streamingMessageId]);
 
-  // Merge streaming message into the list to prevent blinking
-  const displayMessages = useMemo<ChatMessage[]>(() => {
-    if (!streamingMessage || !streamingMessageId) return messages;
+  const activeStreamingMessage = useMemo<ChatMessage | null>(() => {
+    if (!streamingMessage || !streamingMessageId) {
+      return null;
+    }
 
-    // Create a temporary message object for the streaming content
-    const streamingObj: ChatMessage = {
+    if (messages.some((message) => message.id === streamingMessageId)) {
+      return null;
+    }
+
+    return {
       id: streamingMessageId,
       conversation: conversation?.id ?? "",
       content: streamingMessage,
@@ -128,19 +132,12 @@ export function MessageFeed({
       message_type: "text",
       created_at: streamingTimestampRef.current,
       updated_at: streamingTimestampRef.current,
-      sequence_number: Number.MAX_SAFE_INTEGER, // Ensure it's at the end
+      sequence_number: Number.MAX_SAFE_INTEGER,
       is_edited: false,
       is_flagged: false,
       attachments: [],
     };
-
-    // If the message is already in the list (e.g. race condition), don't add it
-    if (messages.some(m => m.id === streamingMessageId)) {
-      return messages;
-    }
-
-    return [...messages, streamingObj];
-  }, [messages, streamingMessage, streamingMessageId, conversation?.id]);
+  }, [conversation?.id, messages, streamingMessage, streamingMessageId]);
 
   useEffect(() => {
     const latestWithActions = [...messages]
@@ -236,14 +233,13 @@ export function MessageFeed({
       >
         <ConversationContent className="gap-4 px-5 pt-4 pb-2">
           <MessageFeedContent
-            displayMessages={displayMessages}
             hasMore={hasMore}
             isLoading={isLoading}
             isLoadingMore={isLoadingMore}
             mentorTyping={mentorTyping}
             messages={messages}
             onLoadMore={onLoadMore}
-            streamingMessage={streamingMessage}
+            streamingMessage={activeStreamingMessage}
             theme={theme}
           />
         </ConversationContent>
@@ -256,7 +252,6 @@ export function MessageFeed({
 }
 
 function MessageFeedContent({
-  displayMessages,
   hasMore,
   isLoading,
   isLoadingMore,
@@ -266,14 +261,13 @@ function MessageFeedContent({
   streamingMessage,
   theme,
 }: {
-  displayMessages: ChatMessage[];
   hasMore?: boolean;
   isLoading?: boolean;
   isLoadingMore?: boolean;
   mentorTyping?: boolean;
   messages: ChatMessage[];
   onLoadMore?: () => Promise<void> | void;
-  streamingMessage?: string | null;
+  streamingMessage?: ChatMessage | null;
   theme?: PersonaTheme;
 }) {
   const toolThinking = useMentorLoungeStore((state) => state.toolThinking);
@@ -285,14 +279,14 @@ function MessageFeedContent({
   
   // Determine if we should show the flow chip
   // Show after the last AI message, not during streaming, and only once per session
-  const lastMessage = displayMessages[displayMessages.length - 1];
+  const lastMessage = streamingMessage ?? messages[messages.length - 1];
   const showFlowChip = 
     flowData?.suggestion &&
     !suggestionDismissed &&
     !streamingMessage &&
     !mentorTyping &&
     lastMessage?.sender_type === 'ai' &&
-    displayMessages.length > 1; // Don't show on first message
+    (streamingMessage ? messages.length + 1 : messages.length) > 1; // Don't show on first message
   const { scrollRef } = useStickToBottomContext();
   const planSessionId = useMentorLoungeStore((state) => state.planSessionId);
   const resolveMissingInfo = useMentorLoungeStore((state) => state.resolveMissingInfo);
@@ -374,155 +368,54 @@ function MessageFeedContent({
 
       <AnimatePresence initial={false}>
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-          {displayMessages.map((message, index) => {
-          const isUser = message.sender_type === "user";
-          const prevSender = displayMessages[index - 1]?.sender_type;
-          const isNewAssistantTurn =
-            !isUser && prevSender !== "ai";
-          const metadata = message.metadata as
-            | { missing_info_id?: string; missing_info_field?: string; missing_info_context?: string; proactive?: boolean; trigger_type?: string }
-            | undefined;
-          const missingInfoId = metadata?.missing_info_id;
-          const missingInfoField = metadata?.missing_info_field;
-          const missingInfoContext = metadata?.missing_info_context;
-          const isProactive = !isUser && metadata?.proactive === true;
-          return (
-            <motion.div
+          {messages.map((message, index) => (
+            <MessageRow
               key={message.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 12 }}
-              transition={{ duration: 0.18 }}
-            >
-              {isNewAssistantTurn ? (
-                <div className="flex items-center gap-3 py-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                    Mentor
-                  </span>
-                  <span className="h-px flex-1 bg-gradient-to-r from-muted/60 via-muted/30 to-transparent" />
-                </div>
-              ) : null}
-              {isProactive ? (
-                <div className="flex items-center gap-1.5 mb-1 ml-1">
-                  <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wide">
-                    Your mentor checked in
-                  </span>
-                </div>
-              ) : null}
-              <Message from={isUser ? "user" : "assistant"}>
-                <MessageContent
-                  className={cn(
-                    "max-w-[72%] rounded-2xl px-4 py-3 text-sm shadow-[var(--shadow-1)]",
-                    "group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground",
-                    !isUser &&
-                      `${theme?.bubbleBg ?? "bg-white/80"} ${theme?.bubbleText ?? "text-foreground"} border border-white/70`,
-                  )}
-                >
-                  <MessageResponse>{normalizeMessageContent(message.content)}</MessageResponse>
+              message={message}
+              previousSender={messages[index - 1]?.sender_type}
+              theme={theme}
+              planSessionId={planSessionId}
+              quickReplyValue={quickReplies[String((message.metadata as { missing_info_id?: string } | undefined)?.missing_info_id ?? "")] ?? ""}
+              isSubmitting={Boolean(submitting[String((message.metadata as { missing_info_id?: string } | undefined)?.missing_info_id ?? "")])}
+              onQuickReplyChange={(messageId, value) =>
+                setQuickReplies((previous) => ({
+                  ...previous,
+                  [messageId]: value,
+                }))
+              }
+              onQuickReplySubmit={async (messageId, field, value) => {
+                if (!planSessionId) {
+                  telemetry.toastError(
+                    "Unable to submit info",
+                    "Missing plan session.",
+                  );
+                  return;
+                }
 
-                  {message.metadata?.graph_learning_snapshot && (
-                    <LearningGraphPill snapshot={message.metadata.graph_learning_snapshot} />
-                  )}
-                  {message.metadata?.graph_career_snapshot && (
-                    <CareerGoalsPill snapshot={message.metadata.graph_career_snapshot} />
-                  )}
-
-                  <AgentInsightsCard
-                    agentTools={message.metadata?.agent_tools}
-                    toolInvocations={message.metadata?.tool_invocations}
-                    toolRuntimeInvocations={message.metadata?.tool_runtime_invocations}
-                    guardrails={message.metadata?.guardrails}
-                    safety={message.metadata?.safety}
-                    agentName={message.cortex?.agent}
-                  />
-
-                  {message.cortex ? (
-                    <div className="mt-2 flex justify-end">
-                      <div
-                        className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2 py-0.5 text-[10px] font-medium text-foreground/70"
-                        title={`${message.cortex.reason} • Confidence: ${(
-                          message.cortex.confidence * 100
-                        ).toFixed(0)}%`}
-                      >
-                        <Bot className="h-3 w-3" />
-                        {message.cortex.agent}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {!isUser && missingInfoId && missingInfoField ? (
-                    <div className="mt-3 rounded-xl border bg-background/70 p-3 text-xs">
-                      {missingInfoContext ? (
-                        <p className="mb-2 text-[11px] text-muted-foreground">
-                          {missingInfoContext}
-                        </p>
-                      ) : null}
-                      {message.metadata?.missing_info_unblocks ? (
-                        <p className="mb-2 text-[11px] text-muted-foreground">
-                          {String(message.metadata.missing_info_unblocks)}
-                        </p>
-                      ) : null}
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={quickReplies[missingInfoId] ?? ""}
-                          onChange={(event) =>
-                            setQuickReplies((prev) => ({
-                              ...prev,
-                              [missingInfoId]: event.target.value,
-                            }))
-                          }
-                          placeholder="Type your answer…"
-                          className="h-8 text-xs"
-                        />
-                        <Button
-                          size="sm"
-                          className="h-8 px-3"
-                          disabled={
-                            !planSessionId ||
-                            !quickReplies[missingInfoId]?.trim() ||
-                            submitting[missingInfoId]
-                          }
-                          onClick={async () => {
-                            if (!planSessionId) {
-                              telemetry.toastError(
-                                "Unable to submit info",
-                                "Missing plan session."
-                              );
-                              return;
-                            }
-                            const reply = quickReplies[missingInfoId]?.trim();
-                            if (!reply) return;
-                            setSubmitting((prev) => ({ ...prev, [missingInfoId]: true }));
-                            try {
-                              await planningApi.submitMissingInfo(planSessionId, {
-                                field: missingInfoField,
-                                value: reply,
-                              });
-                              resolveMissingInfo(missingInfoId);
-                              setQuickReplies((prev) => ({ ...prev, [missingInfoId]: "" }));
-                              telemetry.toastInfo("Information updated", "Thanks! Updated.");
-                            } catch {
-                              telemetry.toastError("Failed to update information.");
-                            } finally {
-                              setSubmitting((prev) => ({ ...prev, [missingInfoId]: false }));
-                            }
-                          }}
-                        >
-                          <Send className="h-3 w-3" />
-                        </Button>
-                      </div>
-                      {!planSessionId ? (
-                        <p className="mt-2 text-[11px] text-muted-foreground">
-                          Open the plan builder to submit this info.
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </MessageContent>
-              </Message>
-            </motion.div>
-          );
-        })}
+                setSubmitting((previous) => ({ ...previous, [messageId]: true }));
+                try {
+                  await planningApi.submitMissingInfo(planSessionId, {
+                    field,
+                    value,
+                  });
+                  resolveMissingInfo(messageId);
+                  setQuickReplies((previous) => ({ ...previous, [messageId]: "" }));
+                  telemetry.toastInfo("Information updated", "Thanks! Updated.");
+                } catch {
+                  telemetry.toastError("Failed to update information.");
+                } finally {
+                  setSubmitting((previous) => ({ ...previous, [messageId]: false }));
+                }
+              }}
+            />
+          ))}
+          {streamingMessage ? (
+            <StreamingMessageRow
+              previousSender={messages[messages.length - 1]?.sender_type}
+              streamingMessage={streamingMessage}
+              theme={theme}
+            />
+          ) : null}
         </div>
       </AnimatePresence>
 
@@ -579,7 +472,7 @@ function MessageFeedContent({
         </motion.div>
       )}
 
-      {!displayMessages.length && !isLoading ? (
+      {!messages.length && !streamingMessage && !isLoading ? (
         <ConversationEmptyState
           title="No messages yet"
           description="Break the ice and ask your mentor anything."
@@ -588,3 +481,200 @@ function MessageFeedContent({
     </>
   );
 }
+
+interface MessageRowProps {
+  message: ChatMessage;
+  previousSender?: ChatMessage["sender_type"];
+  theme?: PersonaTheme;
+  planSessionId: string | null;
+  quickReplyValue: string;
+  isSubmitting: boolean;
+  onQuickReplyChange: (messageId: string, value: string) => void;
+  onQuickReplySubmit: (messageId: string, field: string, value: string) => Promise<void>;
+}
+
+const MessageRow = memo(function MessageRow({
+  message,
+  previousSender,
+  theme,
+  planSessionId,
+  quickReplyValue,
+  isSubmitting,
+  onQuickReplyChange,
+  onQuickReplySubmit,
+}: MessageRowProps) {
+  const isUser = message.sender_type === "user";
+  const isNewAssistantTurn = !isUser && previousSender !== "ai";
+  const metadata = message.metadata as
+    | {
+        missing_info_id?: string;
+        missing_info_field?: string;
+        missing_info_context?: string;
+        proactive?: boolean;
+        trigger_type?: string;
+        missing_info_unblocks?: string;
+      }
+    | undefined;
+  const missingInfoId = metadata?.missing_info_id;
+  const missingInfoField = metadata?.missing_info_field;
+  const missingInfoContext = metadata?.missing_info_context;
+  const isProactive = !isUser && metadata?.proactive === true;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 12 }}
+      transition={{ duration: 0.18 }}
+    >
+      {isNewAssistantTurn ? (
+        <div className="flex items-center gap-3 py-1">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+            Mentor
+          </span>
+          <span className="h-px flex-1 bg-gradient-to-r from-muted/60 via-muted/30 to-transparent" />
+        </div>
+      ) : null}
+      {isProactive ? (
+        <div className="mb-1 ml-1 flex items-center gap-1.5">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400">
+            Your mentor checked in
+          </span>
+        </div>
+      ) : null}
+      <Message from={isUser ? "user" : "assistant"}>
+        <MessageContent
+          className={cn(
+            "max-w-[72%] rounded-2xl px-4 py-3 text-sm shadow-[var(--shadow-1)]",
+            "group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground",
+            !isUser &&
+              `${theme?.bubbleBg ?? "bg-white/80"} ${theme?.bubbleText ?? "text-foreground"} border border-white/70`,
+          )}
+        >
+          <MessageResponse>{normalizeMessageContent(message.content)}</MessageResponse>
+
+          {message.metadata?.graph_learning_snapshot ? (
+            <LearningGraphPill snapshot={message.metadata.graph_learning_snapshot} />
+          ) : null}
+          {message.metadata?.graph_career_snapshot ? (
+            <CareerGoalsPill snapshot={message.metadata.graph_career_snapshot} />
+          ) : null}
+
+          <AgentInsightsCard
+            agentTools={message.metadata?.agent_tools}
+            toolInvocations={message.metadata?.tool_invocations}
+            toolRuntimeInvocations={message.metadata?.tool_runtime_invocations}
+            guardrails={message.metadata?.guardrails}
+            safety={message.metadata?.safety}
+            agentName={message.cortex?.agent}
+          />
+
+          {message.cortex ? (
+            <div className="mt-2 flex justify-end">
+              <div
+                className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2 py-0.5 text-[10px] font-medium text-foreground/70"
+                title={`${message.cortex.reason} • Confidence: ${(
+                  message.cortex.confidence * 100
+                ).toFixed(0)}%`}
+              >
+                <Bot className="h-3 w-3" />
+                {message.cortex.agent}
+              </div>
+            </div>
+          ) : null}
+
+          {!isUser && missingInfoId && missingInfoField ? (
+            <div className="mt-3 rounded-xl border bg-background/70 p-3 text-xs">
+              {missingInfoContext ? (
+                <p className="mb-2 text-[11px] text-muted-foreground">
+                  {missingInfoContext}
+                </p>
+              ) : null}
+              {metadata?.missing_info_unblocks ? (
+                <p className="mb-2 text-[11px] text-muted-foreground">
+                  {String(metadata.missing_info_unblocks)}
+                </p>
+              ) : null}
+              <div className="flex items-center gap-2">
+                <Input
+                  value={quickReplyValue}
+                  onChange={(event) =>
+                    onQuickReplyChange(missingInfoId, event.target.value)
+                  }
+                  placeholder="Type your answer..."
+                  className="h-8 text-xs"
+                />
+                <Button
+                  size="sm"
+                  className="h-8 px-3"
+                  disabled={!planSessionId || !quickReplyValue.trim() || isSubmitting}
+                  onClick={() => onQuickReplySubmit(missingInfoId, missingInfoField, quickReplyValue.trim())}
+                >
+                  <Send className="h-3 w-3" />
+                </Button>
+              </div>
+              {!planSessionId ? (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Open the plan builder to submit this info.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </MessageContent>
+      </Message>
+    </motion.div>
+  );
+}, (previous, next) =>
+  previous.message === next.message &&
+  previous.previousSender === next.previousSender &&
+  previous.theme === next.theme &&
+  previous.planSessionId === next.planSessionId &&
+  previous.quickReplyValue === next.quickReplyValue &&
+  previous.isSubmitting === next.isSubmitting,
+);
+
+interface StreamingMessageRowProps {
+  previousSender?: ChatMessage["sender_type"];
+  streamingMessage: ChatMessage;
+  theme?: PersonaTheme;
+}
+
+const StreamingMessageRow = memo(function StreamingMessageRow({
+  previousSender,
+  streamingMessage,
+  theme,
+}: StreamingMessageRowProps) {
+  const isNewAssistantTurn = previousSender !== "ai";
+
+  return (
+    <motion.div
+      key={streamingMessage.id}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 12 }}
+      transition={{ duration: 0.18 }}
+    >
+      {isNewAssistantTurn ? (
+        <div className="flex items-center gap-3 py-1">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+            Mentor
+          </span>
+          <span className="h-px flex-1 bg-gradient-to-r from-muted/60 via-muted/30 to-transparent" />
+        </div>
+      ) : null}
+      <Message from="assistant">
+        <MessageContent
+          className={cn(
+            "max-w-[72%] rounded-2xl border border-white/70 px-4 py-3 text-sm shadow-[var(--shadow-1)]",
+            theme?.bubbleBg ?? "bg-white/80",
+            theme?.bubbleText ?? "text-foreground",
+          )}
+        >
+          <MessageResponse>
+            {normalizeMessageContent(streamingMessage.content)}
+          </MessageResponse>
+        </MessageContent>
+      </Message>
+    </motion.div>
+  );
+});

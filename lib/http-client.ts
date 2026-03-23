@@ -1,5 +1,6 @@
 import axios, {
   AxiosError,
+  AxiosHeaders,
   AxiosInstance,
   AxiosRequestConfig,
   AxiosResponse,
@@ -64,11 +65,8 @@ const http: AxiosInstance = axios.create({
 });
 
 http.interceptors.request.use((config) => {
-  const url = config.url ?? "";
-  const isAuthRoute = url.includes("/auth/login/") || url.includes("/auth/register/");
-  if (isAuthRoute) {
-    return config;
-  }
+  const headers = AxiosHeaders.from(config.headers ?? {});
+  config.headers = headers;
   const token = Cookies.get("accessToken");
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;

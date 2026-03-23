@@ -384,6 +384,10 @@ export interface DailyTask {
     example_inputs_outputs?: string;
     submission_note?: string;
     ai_generated?: boolean;
+    problem_set?: Array<Record<string, unknown>>;
+    hidden_test_intent?: string[];
+    hidden_test_cases?: Array<Record<string, unknown>>;
+    integrity_notice?: string;
   };
   assessment_config?: {
     id: string;

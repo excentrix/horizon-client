@@ -425,12 +425,22 @@ export const planningApi = {
       http.post(`/planning/tasks/${taskId}/generate-challenge/`, {})
     ),
 
-  getTodaysTasks: () =>
-    extract<{
+  getTodaysTasks: async () => {
+    const data = await extract<{
       date: string;
-      count: number;
+      count?: number;
       tasks: DailyTask[];
-    }>(http.get("/planning/tasks/today/")),
+      summary?: {
+        total?: number;
+      };
+    }>(http.get("/planning/tasks/today/"));
+
+    return {
+      date: data.date,
+      tasks: data.tasks ?? [],
+      count: data.count ?? data.summary?.total ?? (data.tasks?.length ?? 0),
+    };
+  },
 
   getPreAssessment: (planId: string) =>
     extract<{

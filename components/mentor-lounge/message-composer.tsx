@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import posthog from "posthog-js";
 import { Send, ScanSearch } from "lucide-react";
 import {
@@ -48,10 +48,67 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  const typingStartTimerRef = useRef<number | null>(null);
+  const typingStopTimerRef = useRef<number | null>(null);
+  const lastTypingStateRef = useRef(false);
 
   useEffect(() => {
     setShowDebug(process.env.NEXT_PUBLIC_SHOW_CORTEX_DEBUG === "true");
   }, []);
+
+  const emitTypingState = useCallback(
+    (isTyping: boolean) => {
+      if (lastTypingStateRef.current === isTyping) {
+        return;
+      }
+      lastTypingStateRef.current = isTyping;
+      onTypingChange?.(isTyping);
+    },
+    [onTypingChange],
+  );
+
+  const clearTypingTimers = useCallback(() => {
+    if (typingStartTimerRef.current) {
+      window.clearTimeout(typingStartTimerRef.current);
+      typingStartTimerRef.current = null;
+    }
+    if (typingStopTimerRef.current) {
+      window.clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleTypingState = useCallback(
+    (value: string) => {
+      const hasText = Boolean(value.trim());
+      clearTypingTimers();
+
+      if (!hasText) {
+        emitTypingState(false);
+        return;
+      }
+
+      if (!lastTypingStateRef.current) {
+        typingStartTimerRef.current = window.setTimeout(() => {
+          emitTypingState(true);
+          typingStartTimerRef.current = null;
+        }, 250);
+      }
+
+      typingStopTimerRef.current = window.setTimeout(() => {
+        emitTypingState(false);
+        typingStopTimerRef.current = null;
+      }, 1500);
+    },
+    [clearTypingTimers, emitTypingState],
+  );
+
+  useEffect(() => {
+    return () => {
+      clearTypingTimers();
+      emitTypingState(false);
+    };
+  }, [clearTypingTimers, emitTypingState]);
 
   const sendMessage = async (content: string) => {
     if (!selectedConversationId || disabled) {
@@ -74,7 +131,8 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
       });
 
       setComposerDraft("");
-      onTypingChange?.(false);
+      clearTypingTimers();
+      emitTypingState(false);
     } catch (error) {
       telemetry.warn("Failed to send chat message", { error });
       telemetry.toastError("Couldn't send that message. Try again.");
@@ -136,12 +194,13 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
             }
             disabled={disabled || !selectedConversationId || isSubmitting}
             onChange={(event) => {
-              setComposerDraft(event.target.value);
-              const nextTyping = Boolean(event.target.value.trim());
-              onTypingChange?.(nextTyping);
+              const nextValue = event.target.value;
+              setComposerDraft(nextValue);
+              scheduleTypingState(nextValue);
             }}
             onBlur={() => {
-              onTypingChange?.(false);
+              clearTypingTimers();
+              emitTypingState(false);
             }}
             className="border-none bg-transparent px-4 py-4 text-base leading-6"
           />

@@ -19,6 +19,8 @@ import {
   Clock3,
   ListChecks,
   Target,
+  HelpCircle,
+  Lock,
 } from "lucide-react";
 import { MathMarkdown } from "@/components/markdown/MathMarkdown";
 import { planningApi } from "@/lib/api";
@@ -155,6 +157,89 @@ function BlockFeedback({
         <ThumbsDown className="w-3 h-3" />
         {feedback === "unhelpful" && <span>No</span>}
       </button>
+    </div>
+  );
+}
+
+function ProgressiveHints({ hints }: { hints: string[] }) {
+  const [revealed, setRevealed] = useState(0);
+  const [revealedAt, setRevealedAt] = useState<number[]>([]);
+  const [now, setNow] = useState(Date.now());
+
+  // Tick every second so countdown stays live
+  useEffect(() => {
+    if (revealed >= hints.length) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [revealed, hints.length]);
+
+  if (!hints.length) return null;
+
+  const GATE_SECONDS = [0, 30, 60]; // wait before hint 1→2→3
+
+  const canRevealNext = (): boolean => {
+    if (revealed === 0) return true;
+    const lastAt = revealedAt[revealed - 1];
+    const gate = GATE_SECONDS[revealed] ?? 60;
+    return now - lastAt >= gate * 1000;
+  };
+
+  const secondsLeft = (): number => {
+    if (revealed === 0) return 0;
+    const lastAt = revealedAt[revealed - 1];
+    const gate = GATE_SECONDS[revealed] ?? 60;
+    return Math.max(0, gate - Math.floor((now - lastAt) / 1000));
+  };
+
+  const reveal = () => {
+    if (!canRevealNext() || revealed >= hints.length) return;
+    setRevealedAt((prev) => [...prev, Date.now()]);
+    setRevealed((n) => n + 1);
+  };
+
+  const BUTTON_LABELS = ["Need a hint?", "Still stuck?", "Show me more"];
+
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/40 overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-amber-100">
+        <Lightbulb className="h-4 w-4 text-amber-500" />
+        <h4 className="text-sm font-semibold text-amber-900">Hints</h4>
+        <span className="ml-auto text-[10px] text-amber-600 font-medium">
+          {revealed}/{hints.length} revealed
+        </span>
+      </div>
+      <div className="px-5 py-4 space-y-3">
+        {Array.from({ length: revealed }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-white px-3 py-2.5 text-sm text-slate-700 shadow-sm"
+          >
+            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700">
+              {i + 1}
+            </span>
+            {hints[i]}
+          </div>
+        ))}
+
+        {revealed < hints.length && (
+          <div className="flex items-center gap-2">
+            {canRevealNext() ? (
+              <button
+                onClick={reveal}
+                className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 shadow-sm hover:bg-amber-50 transition-colors"
+              >
+                <HelpCircle className="h-3.5 w-3.5" />
+                {BUTTON_LABELS[revealed] ?? "Show next hint"}
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-400">
+                <Lock className="h-3 w-3" />
+                Next hint in {secondsLeft()}s
+              </span>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -562,6 +647,10 @@ export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeed
                 ) : null}
               </div>
             </div>
+
+            {activeTask.ai_generated_hints?.length > 0 && (
+              <ProgressiveHints hints={activeTask.ai_generated_hints} />
+            )}
 
             {contentBlocks
               .filter((b) => b.type === "exercise")

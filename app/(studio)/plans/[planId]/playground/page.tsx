@@ -10,11 +10,12 @@ import { chatApi, planningApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { BookOpen, Code2, ShieldCheck, ArrowRight, ArrowLeft, RefreshCw, CheckCircle2 } from "lucide-react";
+import { BookOpen, Code2, ShieldCheck, ArrowRight, ArrowLeft, RefreshCw, CheckCircle2, Brain } from "lucide-react";
 import { generateEfficacyReportPDF } from "@/lib/generate-efficacy-report";
 
 import { LearningPanel } from "./components/LearningPanel";
 import { MicroPracticeLab, type QuizResults } from "./components/MicroPracticeLab";
+import { FeynmanCheck } from "./components/FeynmanCheck";
 import { OmniWorkspace, type EnvMode as OmniEnvMode } from "./components/OmniWorkspace";
 import { VerificationEngine, type ArtifactVerifiedEvent } from "./components/VerificationEngine";
 import { MentorAssistant } from "./components/MentorAssistant";
@@ -23,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 const STEPS = [
   { id: "ingest", label: "Knowledge Ingestion", icon: BookOpen },
   { id: "micro", label: "Micro-Practice", icon: RefreshCw },
+  { id: "prove", label: "Teach It Back", icon: Brain },
   { id: "omni", label: "Omni-Environment", icon: Code2 },
   { id: "verify", label: "Neural Verification", icon: ShieldCheck },
 ];
@@ -109,7 +111,8 @@ function PlaygroundFlow() {
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
   const [stepEntryTime, setStepEntryTime] = useState<number>(Date.now());
-  const [stepDurations, setStepDurations] = useState<Record<number, number>>({ 0: 0, 1: 0, 2: 0, 3: 0 });
+  const [stepDurations, setStepDurations] = useState<Record<number, number>>({ 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 });
+  const [feynmanGaps, setFeynmanGaps] = useState<string[]>([]);
 
   const changeStep = (newIndex: number) => {
     const elapsed = Date.now() - stepEntryTime;
@@ -211,28 +214,61 @@ function PlaygroundFlow() {
     return () => window.removeEventListener("artifact_verified", handleArtifactVerified);
   }, [activeTask?.id]);
 
-  // Generate challenge lazily when the user enters the Verification step
+  // Generate challenge lazily when the user enters the Verification step.
+  // The endpoint returns immediately (Celery does the work); we poll refetchPlan
+  // every 3s until task.verification has a real problem_set.
   const challengeRequestRef = useRef<Record<string, boolean>>({});
+  const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
-    if (activeStepIndex !== 3 || !activeTask?.id) return;
-    // Already have rich verification data
+    if (activeStepIndex !== 4 || !activeTask?.id) return;
     const v = activeTask.verification || {};
-    if (challengeVerification || (v.problem_statement && String(v.problem_statement).length > 40)) return;
+    const isComplete = Array.isArray(v.problem_set) && v.problem_set.length >= 2;
+    if (challengeVerification || isComplete) return;
     if (challengeRequestRef.current[activeTask.id]) return;
 
     challengeRequestRef.current[activeTask.id] = true;
     setChallengeLoading(true);
     planningApi.generateChallenge(activeTask.id)
-      .then((res) => setChallengeVerification(res.verification))
-      .catch(() => { challengeRequestRef.current[activeTask.id] = false; })
-      .finally(() => setChallengeLoading(false));
-  }, [activeStepIndex, activeTask, challengeVerification]);
+      .then((res) => {
+        if (res.verification) {
+          setChallengeVerification(res.verification);
+          setChallengeLoading(false);
+        } else {
+          // Generating async — poll until task data updates
+          challengePollRef.current = setInterval(() => refetchPlan(), 3000);
+        }
+      })
+      .catch(() => {
+        challengeRequestRef.current[activeTask.id] = false;
+        setChallengeLoading(false);
+      });
+  }, [activeStepIndex, activeTask, challengeVerification, refetchPlan]);
 
-  // Load starter code lazily when the user enters the Omni-Environment step
-  const starterCodeRequestRef = useRef<Record<string, boolean>>({});
+  // Stop challenge polling when task.verification arrives
   useEffect(() => {
-    if (activeStepIndex !== 2 || !activeTask?.id) return;
-    // Already have code from plan generation
+    const v = activeTask?.verification || {};
+    const isComplete = Array.isArray(v.problem_set) && v.problem_set.length >= 2;
+    if (isComplete && challengePollRef.current) {
+      clearInterval(challengePollRef.current);
+      challengePollRef.current = null;
+      setChallengeVerification(v as unknown as Record<string, unknown>);
+      setChallengeLoading(false);
+    }
+  }, [activeTask?.verification]);
+
+  // Clean up challenge poll on unmount
+  useEffect(() => () => {
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+  }, []);
+
+  // Load starter code lazily when the user enters the Omni-Environment step.
+  // Same async pattern: endpoint enqueues, we poll until ai_generated_examples appears.
+  const starterCodeRequestRef = useRef<Record<string, boolean>>({});
+  const starterCodePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (activeStepIndex !== 3 || !activeTask?.id) return;
     if (getInitialCode(activeTask)) return;
     if (starterCode !== undefined) return;
     if (starterCodeRequestRef.current[activeTask.id]) return;
@@ -240,10 +276,35 @@ function PlaygroundFlow() {
     starterCodeRequestRef.current[activeTask.id] = true;
     setStarterCodeLoading(true);
     planningApi.generateStarterCode(activeTask.id)
-      .then((res) => setStarterCode(res.starter_code))
-      .catch(() => { starterCodeRequestRef.current[activeTask.id] = false; })
-      .finally(() => setStarterCodeLoading(false));
-  }, [activeStepIndex, activeTask, starterCode]);
+      .then((res) => {
+        if (res.starter_code) {
+          setStarterCode(res.starter_code);
+          setStarterCodeLoading(false);
+        } else {
+          starterCodePollRef.current = setInterval(() => refetchPlan(), 3000);
+        }
+      })
+      .catch(() => {
+        starterCodeRequestRef.current[activeTask.id] = false;
+        setStarterCodeLoading(false);
+      });
+  }, [activeStepIndex, activeTask, starterCode, refetchPlan]);
+
+  // Stop starter code polling when ai_generated_examples arrives
+  useEffect(() => {
+    const code = getInitialCode(activeTask);
+    if (code && starterCodePollRef.current) {
+      clearInterval(starterCodePollRef.current);
+      starterCodePollRef.current = null;
+      setStarterCode(code);
+      setStarterCodeLoading(false);
+    }
+  }, [activeTask?.ai_generated_examples]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clean up starter code poll on unmount
+  useEffect(() => () => {
+    if (starterCodePollRef.current) clearInterval(starterCodePollRef.current);
+  }, []);
 
   // Detect thin/fallback lesson blocks that should be regenerated.
   // Thin = ≤3 blocks (real LLM output is 4-6) OR the only concept block content
@@ -372,7 +433,8 @@ function PlaygroundFlow() {
       .filter(([, v]) => v === "unhelpful")
       .map(([k]) => k);
     if (unhelpful.length) parts.push(`Found confusing: lesson blocks ${unhelpful.join(", ")}`);
-    if (activeStepIndex === 2) {
+    if (feynmanGaps.length) parts.push(`Feynman gaps: ${feynmanGaps.slice(0, 3).join(", ")}`);
+    if (activeStepIndex === 3) {
       const envReqs = activeTask?.environment_requirements as Record<string, unknown> | undefined;
       const env = envReqs?.recommended_environment as string | undefined;
       if (env) parts.push(`Working in: ${env} environment`);
@@ -533,6 +595,22 @@ function PlaygroundFlow() {
           )}
 
           {activeStepIndex === 2 && (
+            <div className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
+              <FeynmanCheck
+                task={activeTask}
+                messages={mentorMessages ?? []}
+                streamingMessage={streamingMessage ?? ""}
+                isTyping={mentorTyping}
+                onSendMessage={handleMentorSend}
+                onComplete={(gaps) => {
+                  setFeynmanGaps(gaps);
+                  changeStep(3);
+                }}
+              />
+            </div>
+          )}
+
+          {activeStepIndex === 3 && (
             <div className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both flex flex-col gap-3">
               {quizFailed && !quizBannerDismissed && (
                 <div className="shrink-0 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -593,7 +671,7 @@ function PlaygroundFlow() {
             </div>
           )}
 
-          {activeStepIndex === 3 && (
+          {activeStepIndex === 4 && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both h-full">
               <VerificationEngine
                 taskId={activeTask?.id || ""}
