@@ -296,7 +296,7 @@ function HorizonVerifiedStrip({
                   <DialogTitle>Share your portfolio</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 pt-1">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+
                   <div className="mx-auto flex h-48 w-48 items-center justify-center rounded-xl border bg-muted/30">
                     {publicUrl ? (
                       <img

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function LegacyAuditSessionRedirectPage() {
+function LegacyAuditSessionRedirectContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -16,4 +16,12 @@ export default function LegacyAuditSessionRedirectPage() {
   }, [router, searchParams]);
 
   return <div className="p-6 text-sm text-muted-foreground">Redirecting to VELO audit session...</div>;
+}
+
+export default function LegacyAuditSessionRedirectPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading...</div>}>
+      <LegacyAuditSessionRedirectContent />
+    </Suspense>
+  );
 }

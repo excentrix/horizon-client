@@ -347,8 +347,6 @@ function ChatContent() {
     }
   }, [
     activeConversation?.id,
-    intakePreview?.slots,
-    intakeState?.slots,
   ]);
 
   const handlePreviewMentorIntake = useCallback(async () => {

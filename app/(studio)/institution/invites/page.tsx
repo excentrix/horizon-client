@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { UploadCloud } from "lucide-react";
+import { Suspense, useState } from "react";
+import { UploadCloud, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useInstitutionCohort } from "../_lib/useInstitutionCohort";
 import { institutionsApi } from "@/lib/api";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-export default function InstitutionInvitesPage() {
+function InstitutionInvitesContent() {
   const { user } = useAuth();
   const { selectedOrgId, isSuperuser } = useInstitutionScope();
   const { cohorts, selectedCohort, setSelectedCohort } = useInstitutionCohort({ withDashboard: false });
@@ -98,5 +98,17 @@ export default function InstitutionInvitesPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function InstitutionInvitesPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex p-12 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    }>
+      <InstitutionInvitesContent />
+    </Suspense>
   );
 }

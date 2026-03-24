@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ import {
   FilePieChart,
   Settings,
   Users,
+  Loader2,
 } from "lucide-react";
 
 const ALL_TABS = [
@@ -22,7 +24,7 @@ const ALL_TABS = [
   { href: "/institution/settings",  label: "Settings",   icon: Settings,    adminOnly: true  },
 ] as const;
 
-export default function InstitutionLayout({ children }: { children: React.ReactNode }) {
+function InstitutionLayoutContent({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const pathname = usePathname();
   const isAdmin = user?.user_type === "admin" || user?.is_superuser;
@@ -81,5 +83,19 @@ export default function InstitutionLayout({ children }: { children: React.ReactN
         {children}
       </div>
     </div>
+  );
+}
+
+export default function InstitutionLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={
+      <div className="flex-1 flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    }>
+      <InstitutionLayoutContent>
+        {children}
+      </InstitutionLayoutContent>
+    </Suspense>
   );
 }

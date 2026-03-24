@@ -446,6 +446,9 @@ export interface DailyTask {
   completion_notes?: string;
   milestone_id?: string | null;
   milestone_title?: string | null;
+  plan_id?: string | null;
+  plan_title?: string | null;
+  estimated_duration?: number | string | null;
   created_at: string;
   updated_at: string;
 }

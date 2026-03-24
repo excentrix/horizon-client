@@ -6,10 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useHomeDashboard } from "@/hooks/use-home-dashboard";
 import { useGamificationSummary } from "@/hooks/use-gamification";
 import { useFlowSuggestion } from "@/hooks/use-flow-suggestion";
-import { TodayFocusCard } from "@/components/dashboard/today-focus-card";
-import { WeeklyMomentumCard } from "@/components/dashboard/weekly-momentum-card";
-import { ActivityFeed } from "@/components/dashboard/activity-feed";
-import { FlowStarter } from "@/components/dashboard/flow-starter";
+import { DailyTask } from "@/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { telemetry } from "@/lib/telemetry";
 import {
@@ -17,25 +14,21 @@ import {
   Calendar,
   Target,
   Sparkles,
-  TrendingUp,
-  Award,
   Zap,
   Flame,
   Clock,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 
 export default function DashboardPage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const canQuery = !authLoading && !!user;
-  const { data: homeData, isLoading: homeLoading } = useHomeDashboard({ enabled: canQuery });
+  useHomeDashboard({ enabled: canQuery });
   const { data: gamificationData } = useGamificationSummary({ enabled: canQuery });
-  const { data: flowData } = useFlowSuggestion('dashboard', { enabled: canQuery });
-  const [flowShownAt] = useState(new Date());
+  useFlowSuggestion('dashboard', { enabled: canQuery });
 
-  const [todaysTasksData, setTodaysTasksData] = useState<{tasks: any[], count: number} | null>(null);
+  const [todaysTasksData, setTodaysTasksData] = useState<{tasks: DailyTask[], count: number} | null>(null);
   const [tasksLoading, setTasksLoading] = useState(true);
 
   useEffect(() => {
@@ -66,11 +59,11 @@ export default function DashboardPage() {
   const xpNeeded = profile?.xp_for_next_level ?? 100;
   const progressPercent = profile?.level_progress_percentage ?? 0;
   const currentStreak = profile?.current_streak ?? 0;
-  const longestStreak = profile?.longest_streak ?? 0;
-  const badgeCount = gamificationData?.badge_count ?? 0;
-  const tasksThisWeek = 0; // Removing weekly stats for simplicity
-  const hasPlan = todaysTasksData && todaysTasksData.count > 0;
-  const updatedAt = new Date().toLocaleTimeString();
+  // const longestStreak = profile?.longest_streak ?? 0;
+  // const badgeCount = gamificationData?.badge_count ?? 0;
+  // const tasksThisWeek = 0; // Removing weekly stats for simplicity
+  // const hasPlan = todaysTasksData && todaysTasksData.count > 0;
+  // const updatedAt = new Date().toLocaleTimeString();
 
   return (
     <div className="space-y-6 p-4 lg:p-6">
@@ -178,7 +171,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {todaysTasksData?.tasks.map((task: any) => (
+                {todaysTasksData?.tasks.map((task: DailyTask) => (
                   <div 
                     key={task.id} 
                     className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border p-4 transition-all hover:border-violet-300 hover:shadow-md bg-white"

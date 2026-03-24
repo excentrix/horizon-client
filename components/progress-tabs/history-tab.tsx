@@ -40,7 +40,7 @@ export function HistoryTab() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">XP Ledger</h1>
-          <p className="text-sm text-muted-foreground">Every point you've earned, in order.</p>
+          <p className="text-sm text-muted-foreground">Every point you&apos;ve earned, in order.</p>
         </div>
         <div className="flex gap-2">
           <Button

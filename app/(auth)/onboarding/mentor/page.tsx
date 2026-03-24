@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Loader2, MessageSquare } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
-export default function MentorIntakePage() {
+function MentorIntakeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [sessionKey, setSessionKey] = useState<string | null>(null);
@@ -131,5 +131,17 @@ export default function MentorIntakePage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function MentorIntakePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    }>
+      <MentorIntakeContent />
+    </Suspense>
   );
 }

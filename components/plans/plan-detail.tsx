@@ -78,20 +78,7 @@ export function PlanDetail({
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [showAllMilestones, setShowAllMilestones] = useState(false);
   const description = plan.description?.trim() ?? "";
-  const preferences = plan.user_preferences_snapshot as
-    | Record<string, unknown>
-    | undefined;
-  const scheduleSnapshot = plan.user_schedule_snapshot as
-    | Record<string, unknown>
-    | undefined;
-  const motivationPatterns = Array.isArray(preferences?.motivation_patterns)
-    ? (preferences?.motivation_patterns as string[])
-    : [];
-  const learningApproach = preferences?.learning_approach as string | undefined;
-  const primaryStyle =
-    (preferences?.primary_style as string | undefined) ??
-    (preferences?.primary_learning_style as string | undefined);
-  const maxDailyHours = scheduleSnapshot?.max_daily_hours as number | undefined;
+
   const shortDescription = useMemo(() => {
     if (!description) {
       return "";

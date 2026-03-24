@@ -17,7 +17,7 @@ export default function PublicAuditReportPage() {
       try {
         const data = await auditApi.getPublicReport(auditId);
         setReport(data);
-      } catch (err) {
+      } catch {
         setError("Report unavailable.");
       }
     };

@@ -18,7 +18,7 @@ export default function AuditAdminDashboardPage() {
       try {
         const data = await auditApi.getAdminMetrics();
         setMetrics(data);
-      } catch (err) {
+      } catch {
         setError("Unable to load audit metrics.");
       }
     };

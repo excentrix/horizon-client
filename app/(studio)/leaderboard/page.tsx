@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
-import { Flame, Loader2, Star, Trophy, Zap } from "lucide-react";
+import { Flame, Loader2, Trophy, Zap } from "lucide-react";
 
 type LeaderboardEntry = {
   rank: number;

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
 import { http } from "@/lib/http-client";
+import { UserSummary, UserProfileDetail } from "@/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -21,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   User, Lock, Bell, FileText, ChevronRight, Save, Loader2,
-  Building2, GraduationCap, Globe, Github, Linkedin,
+  GraduationCap, Globe, Github, Linkedin,
 } from "lucide-react";
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
@@ -35,7 +36,7 @@ type TabId = (typeof TABS)[number]["id"];
 
 // ─── Profile tab ─────────────────────────────────────────────────────────────
 function ProfileTab() {
-  const [profile, setProfile] = useState<Record<string, any> | null>(null);
+  const [profile, setProfile] = useState<UserSummary | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -141,7 +142,7 @@ function ProfileTab() {
             </Select>
           </Field>
           <Field label="Graduation Year">
-            <Input type="number" value={profile.graduation_year ?? ""} onChange={(e) => setProfile({ ...profile, graduation_year: parseInt(e.target.value) || null })} placeholder="2026" />
+            <Input type="number" value={profile.graduation_year ?? ""} onChange={(e) => setProfile({ ...profile, graduation_year: parseInt(e.target.value) || undefined })} placeholder="2026" />
           </Field>
         </CardContent>
       </Card>
@@ -183,8 +184,9 @@ function AccountTab() {
       await http.post("/api/auth/password/change/", form);
       toast.success("Password changed successfully");
       setForm({ current_password: "", new_password: "", confirm_password: "" });
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Failed to change password");
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      toast.error(err?.response?.data?.detail || "Failed to change password");
     } finally {
       setSaving(false);
     }
@@ -231,7 +233,7 @@ function AccountTab() {
 
 // ─── Resume tab ───────────────────────────────────────────────────────────────
 function ResumeTab() {
-  const [profile, setProfile] = useState<Record<string, any> | null>(null);
+  const [profile, setProfile] = useState<UserProfileDetail | null>(null);
 
   useEffect(() => {
     http.get("/api/auth/profile/detail/").then((r) => setProfile(r.data)).catch(() => {});
@@ -315,7 +317,7 @@ function ResumeTab() {
 
 // ─── Notification tab (inline — wraps existing logic) ────────────────────────
 function NotificationTab() {
-  const [prefs, setPrefs] = useState<Record<string, any> | null>(null);
+  const [prefs, setPrefs] = useState<Record<string, boolean> | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {

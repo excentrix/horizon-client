@@ -216,7 +216,7 @@ export function PlanScheduleView({ plan, tasks }: PlanScheduleViewProps) {
         const dateKey = format(parseISO(task.scheduled_date as unknown as string), "yyyy-MM-dd");
         if (!acc[dateKey]) acc[dateKey] = [];
         acc[dateKey].push(task);
-      } catch (e) {
+      } catch {
         console.error("Failed to parse date", task.scheduled_date);
       }
       return acc;
