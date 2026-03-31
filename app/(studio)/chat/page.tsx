@@ -1002,7 +1002,7 @@ useEffect(() => {
   }, [planDisplayStatus, planUpdates.length]);
 
   return (
-    <div className="flex h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-[radial-gradient(1200px_600px_at_0%_0%,rgba(56,189,248,0.06),transparent),radial-gradient(900px_500px_at_100%_10%,rgba(249,115,22,0.06),transparent)]">
+    <div className="flex h-full flex-col overflow-hidden bg-[radial-gradient(1200px_600px_at_0%_0%,rgba(56,189,248,0.06),transparent),radial-gradient(900px_500px_at_100%_10%,rgba(249,115,22,0.06),transparent)]">
     <CreateConversationModal
         isOpen={isCreateModalOpen}
         onOpenChange={setCreateModalOpen}

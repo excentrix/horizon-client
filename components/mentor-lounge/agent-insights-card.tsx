@@ -1,20 +1,64 @@
 "use client";
 
 import { useState } from "react";
-import { 
-  Cpu,
-  Terminal,
-  BrainCircuit,
-  Zap,
-  Bot,
-  ChevronDown,
-  ChevronUp
-} from "lucide-react";
+import { Bot, ChevronDown, ChevronUp, Cpu, Terminal } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ToolInvocation, GuardrailsMetadata, SafetyMetadata } from "@/types";
+import type { GuardrailsMetadata, SafetyMetadata, ToolInvocation } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SafetyPill } from "./safety-pill";
+
+const extractSnippet = (value: unknown): string => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return "";
+    }
+
+    try {
+      return extractSnippet(JSON.parse(trimmed) as unknown);
+    } catch {
+      return trimmed.replace(/\s+/g, " ").slice(0, 120);
+    }
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const snippet = extractSnippet(item);
+      if (snippet) {
+        return snippet;
+      }
+    }
+    return "";
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of [
+      "reason",
+      "summary",
+      "message",
+      "explanation",
+      "rationale",
+      "fallback_reason",
+      "output",
+      "input",
+      "query",
+      "label",
+      "title",
+    ]) {
+      const snippet = extractSnippet(record[key]);
+      if (snippet) {
+        return snippet;
+      }
+    }
+  }
+
+  return "";
+};
+
+const humanizeToolName = (tool: string) =>
+  tool?.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 
 interface AgentInsightsCardProps {
   agentTools?: string[];
@@ -23,56 +67,73 @@ interface AgentInsightsCardProps {
   guardrails?: GuardrailsMetadata;
   safety?: SafetyMetadata;
   agentName?: string;
+  reason?: string;
   className?: string;
 }
 
-export function AgentInsightsCard({ 
-  agentTools = [], 
-  toolInvocations = [], 
+export function AgentInsightsCard({
+  agentTools = [],
+  toolInvocations = [],
   toolRuntimeInvocations = [],
   guardrails,
-
   agentName = "Agent",
+  reason,
+  className,
 }: AgentInsightsCardProps) {
   const [isOpen, setIsOpen] = useState(false);
-  
+
   const runtime = toolRuntimeInvocations || [];
   const activeInvocations = runtime.length > 0 ? runtime : (toolInvocations || []);
+  const summaryReason = extractSnippet(reason);
+  const hasMemoryProbe = activeInvocations.some((tool) => tool.tool === "semantic_memory_probe");
+  const uniqueToolsUsed = Array.from(
+    new Set(activeInvocations.filter((tool) => tool && tool.tool).map((tool) => tool.tool)),
+  );
+  const invocationSummaries = activeInvocations
+    .map((tool) => {
+      const toolLabel = humanizeToolName(tool.tool);
+      const explanation =
+        extractSnippet(tool.output) ||
+        extractSnippet(tool.input) ||
+        (tool.status === "error" ? "it returned an error" : "it was the best available step");
+      return `${agentName} used ${toolLabel} because ${explanation}`;
+    })
+    .slice(0, 3);
 
-  // Don't render if there's nothing interesting to show
-  if (!agentTools.length && !activeInvocations.length && !guardrails) return null;
-
-  const hasMemoryProbe = activeInvocations.some(t => t.tool === "semantic_memory_probe");
-  const uniqueToolsUsed = Array.from(new Set(activeInvocations.filter(t => t && t.tool).map(t => t.tool)));
+  if (!agentTools.length && !activeInvocations.length && !guardrails && !summaryReason) {
+    return null;
+  }
 
   return (
-    <div className="mt-4 border-t border-border pt-2 w-full">
+    <div className={cn("mt-4 w-full border-t border-border pt-2", className)}>
       <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-             <div className="flex items-center gap-1 font-medium text-primary">
-               <Bot className="h-3 w-3" />
-               <span className="uppercase tracking-wider">{agentName}</span>
-             </div>
-             
-             {/* Summary Badges */}
-             {uniqueToolsUsed.length > 0 && (
-               <span className="flex items-center gap-1">
-                 • Used: {uniqueToolsUsed.map(tool => (
-                   <span key={tool} className={cn(
-                     "px-1 py-0.5 rounded border bg-muted/50",
-                     tool === "semantic_memory_probe" && "border-purple-200 bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:border-purple-800 dark:text-purple-300"
-                   )}>
-                     {tool.replace(/_/g, " ")}
-                   </span>
-                 ))}
-               </span>
-             )}
-
+            <div className="flex items-center gap-1 font-medium text-primary">
+              <Bot className="h-3 w-3" />
+              <span className="uppercase tracking-wider">{agentName}</span>
+            </div>
+            {uniqueToolsUsed.length > 0 ? (
+              <span className="flex items-center gap-1">
+                Used:
+                {uniqueToolsUsed.map((tool) => (
+                  <span
+                    key={tool}
+                    className={cn(
+                      "rounded border px-1 py-0.5",
+                      tool === "semantic_memory_probe" &&
+                        "border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-900/20 dark:text-purple-300",
+                    )}
+                  >
+                    {tool.replace(/_/g, " ")}
+                  </span>
+                ))}
+              </span>
+            ) : null}
           </div>
 
           <CollapsibleTrigger asChild>
-            <button className="rounded hover:bg-muted p-1 text-muted-foreground transition-colors">
+            <button className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted">
               {isOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               <span className="sr-only">Toggle agent insights</span>
             </button>
@@ -80,82 +141,63 @@ export function AgentInsightsCard({
         </div>
 
         <CollapsibleContent className="mt-2 space-y-3 rounded-md bg-muted/10 p-2 text-xs">
-          {/* Agent Identity & Guardrails Section */}
           <div className="flex items-start justify-between border-b pb-2">
-             <div>
-               <p className="font-semibold text-muted-foreground">Pedagogical Strategy</p>
-               <p className="text-muted-foreground/80 mt-0.5">
-                 Running {agentTools.length} capabilities. {hasMemoryProbe && "Context-aware memory active."}
-               </p>
-             </div>
-             {guardrails && <SafetyPill metadata={guardrails} />}
+            <div>
+              <p className="font-semibold text-muted-foreground">Pedagogical Strategy</p>
+              <p className="mt-0.5 text-muted-foreground/80">
+                Running {agentTools.length} capabilities. {hasMemoryProbe ? "Context-aware memory active." : null}
+              </p>
+              {summaryReason ? (
+                <p className="mt-1 text-foreground/80">
+                  {agentName} chose this path because {summaryReason}
+                </p>
+              ) : null}
+            </div>
+            {guardrails ? <SafetyPill metadata={guardrails} /> : null}
           </div>
 
-          {/* Tools Trace */}
-          {activeInvocations.length > 0 && (
+          {(invocationSummaries.length > 0 || activeInvocations.length > 0) ? (
             <div className="space-y-2">
-              <p className="font-semibold text-muted-foreground flex items-center gap-1">
-                <Terminal className="h-3 w-3" /> Mentor Cited Sources
+              <p className="flex items-center gap-1 font-semibold text-muted-foreground">
+                <Terminal className="h-3 w-3" /> Mentor reasoning
               </p>
               <div className="space-y-2">
-                {activeInvocations.map((tool, idx) => (
-                  <div key={idx} className={cn(
-                    "rounded border p-2 bg-background font-mono",
-                    tool.tool === "semantic_memory_probe" && "border-purple-200 shadow-sm"
-                  )}>
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1.5 font-bold">
-                        {tool.tool === "semantic_memory_probe" ? (
-                          <BrainCircuit className="h-3 w-3 text-purple-500" />
-                        ) : (
-                          <Zap className="h-3 w-3 text-amber-500" />
-                        )}
-                        <span className={cn(
-                          tool.tool === "semantic_memory_probe" && "text-purple-700 dark:text-purple-400"
-                        )}>
-                          {tool.tool}
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground opacity-70">
-                        {new Date(tool.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}
-                      </span>
-                    </div>
-                    
-                    <div className="grid gap-1 pl-4 border-l-2 border-muted">
-                      <div>
-                        <span className="text-[10px] uppercase text-muted-foreground select-none">In: </span>
-                        <span className="text-foreground/80 break-words">
-                          {typeof tool.input === 'object' ? JSON.stringify(tool.input) : tool.input}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] uppercase text-muted-foreground select-none">Out: </span>
-                        <span className="text-muted-foreground break-words">
-                          {typeof tool.output === 'object' ? JSON.stringify(tool.output) : tool.output}
-                        </span>
-                      </div>
-                    </div>
+                {(invocationSummaries.length > 0
+                  ? invocationSummaries
+                  : [`${agentName} reviewed the available context before answering.`]
+                ).map((summary, idx) => (
+                  <div
+                    key={`${summary}-${idx}`}
+                    className={cn(
+                      "rounded border bg-background px-3 py-2 text-[11px] leading-5",
+                      idx === 0 && "border-primary/20 bg-primary/5",
+                    )}
+                  >
+                    {summary}
                   </div>
                 ))}
               </div>
             </div>
-          )}
-          
-          {/* Available Tools (Optional, maybe debug only? User generic request implies simply visualizing tools access) */}
-          {agentTools.length > 0 && (
-             <div className="pt-2 border-t mt-2">
-               <p className="font-semibold text-muted-foreground mb-1 flex items-center gap-1">
-                 <Cpu className="h-3 w-3" /> Available Capabilities
-               </p>
-               <div className="flex flex-wrap gap-1">
-                 {agentTools.map(t => (
-                   <Badge key={t} variant="outline" className="text-[10px] font-mono font-normal text-muted-foreground">
-                     {t}
-                   </Badge>
-                 ))}
-               </div>
-             </div>
-          )}
+          ) : null}
+
+          {agentTools.length > 0 ? (
+            <div className="mt-2 border-t pt-2">
+              <p className="mb-1 flex items-center gap-1 font-semibold text-muted-foreground">
+                <Cpu className="h-3 w-3" /> Available Capabilities
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {agentTools.map((tool) => (
+                  <Badge
+                    key={tool}
+                    variant="outline"
+                    className="text-[10px] font-mono font-normal text-muted-foreground"
+                  >
+                    {tool}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </CollapsibleContent>
       </Collapsible>
     </div>

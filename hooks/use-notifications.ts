@@ -9,6 +9,10 @@ import {
   type StageEventPayload,
 } from "@/lib/analysis-stage";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
+import {
+  hasHandledChatEvent,
+  markHandledChatEvent,
+} from "@/lib/chat-event-dedupe";
 
 export type NotificationSocketStatus =
   | "idle"
@@ -42,6 +46,7 @@ type NotificationEvent =
 
 const HEARTBEAT_INTERVAL = 30000;
 const HEARTBEAT_TIMEOUT = 10000;
+const BACKEND_STAGE_COMPLETE_EVENT = "mentor_stage_complete";
 
 const getWebSocketBase = () => {
   if (typeof window === "undefined") {
@@ -56,6 +61,54 @@ const getWebSocketBase = () => {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = process.env.NEXT_PUBLIC_WS_HOST ?? window.location.host;
   return `${protocol}//${host}`;
+};
+
+const isStageCompletionEvent = (
+  payload: StageEventPayload,
+  descriptor?: ReturnType<typeof describeStageEvent>,
+) => {
+  const eventType =
+    typeof payload.event === "string" ? payload.event.toLowerCase() : "";
+  const stage =
+    typeof payload.stage === "string" ? payload.stage.toLowerCase() : "";
+  const progressUpdate = payload.progress_update as
+    | { status?: unknown }
+    | undefined;
+  const progressStatus =
+    typeof progressUpdate?.status === "string"
+      ? progressUpdate.status.toLowerCase()
+      : "";
+
+  return (
+    eventType === "analysis_complete" ||
+    eventType === "analysis_completed" ||
+    eventType === "analysis_error" ||
+    stage === "analysis_successful" ||
+    stage === "analysis_failed" ||
+    stage === "analysis_complete" ||
+    stage === "analysis_completed" ||
+    stage === "tracking_complete" ||
+    stage === "extract_complete" ||
+    progressStatus === "completed" ||
+    progressStatus === "analysis_complete" ||
+    progressStatus === "analysis_completed" ||
+    descriptor?.severity === "success" ||
+    descriptor?.severity === "error"
+  );
+};
+
+const dispatchBackendStageComplete = (
+  detail: Record<string, unknown>,
+) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(BACKEND_STAGE_COMPLETE_EVENT, {
+      detail,
+    }),
+  );
 };
 
 export function useNotificationsSocket() {
@@ -294,6 +347,17 @@ export function useNotificationsSocket() {
                   telemetry.info("Unhandled notification event", { payload: data });
                 }
 
+                if (stageEvent && isStageCompletionEvent(data, descriptor)) {
+                  dispatchBackendStageComplete({
+                    conversationId: data.conversation_id,
+                    sessionId: data.session_id,
+                    eventType,
+                    stage: data.stage,
+                    message: descriptor?.message,
+                    severity: descriptor?.severity,
+                  });
+                }
+
                 if (!stageEvent) {
                   const notificationCandidate = data as Partial<ToastNotification>;
                   if (
@@ -312,6 +376,10 @@ export function useNotificationsSocket() {
               break;
             }
             case "agent_runtime": {
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
               const step = payload?.data as Record<string, unknown> | undefined;
               if (step) {
                 pushRuntimeStep({
@@ -342,11 +410,26 @@ export function useNotificationsSocket() {
                     (step.step as string) ?? "Working on your plan...",
                   );
                   updateLastPlanActivity();
+
+                  if (mapped === "completed" || mapped === "failed") {
+                    dispatchBackendStageComplete({
+                      conversationId: step.conversation_id,
+                      sessionId: step.session_id,
+                      eventType: "agent_runtime",
+                      stage: step.step,
+                      status: statusValue,
+                      message: step.step as string | undefined,
+                    });
+                  }
                 }
               }
               break;
             }
             case "missing_information": {
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
               const info = payload?.data as Record<string, unknown> | undefined;
               if (info) {
                 pushMissingInfo({
@@ -373,6 +456,10 @@ export function useNotificationsSocket() {
               break;
             }
             case "insight_generated": {
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
               const insight = payload?.data as Record<string, unknown> | undefined;
               if (insight) {
                 pushInsight({
@@ -388,6 +475,10 @@ export function useNotificationsSocket() {
               break;
             }
             case "plan_update": {
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
               const data = payload?.data as Record<string, unknown> | undefined;
               if (data) {
                 const eventId =
@@ -429,6 +520,17 @@ export function useNotificationsSocket() {
                     data.plan_title as string | undefined,
                   );
                   updateLastPlanActivity();
+
+                  if (mapped === "completed" || mapped === "failed") {
+                    dispatchBackendStageComplete({
+                      conversationId: data.conversation_id,
+                      sessionId: data.session_id,
+                      eventType: "plan_update",
+                      stage: (data.step_type as string | undefined) ?? "plan_update",
+                      status: String(data.status),
+                      message: (data.message as string) ?? undefined,
+                    });
+                  }
                 }
               }
               break;

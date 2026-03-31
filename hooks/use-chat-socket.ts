@@ -15,15 +15,18 @@ import type {
 } from "@/types";
 import { telemetry } from "@/lib/telemetry";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
+import {
+  hasHandledChatEvent,
+  markHandledChatEvent,
+} from "@/lib/chat-event-dedupe";
 
 export type SocketStatus = "idle" | "connecting" | "open" | "closed" | "error";
 
 const HEARTBEAT_INTERVAL = 20000;
 const HEARTBEAT_TIMEOUT = 10000;
-const MENTOR_TYPING_TIMEOUT = 4000;
 const MAX_RECONNECT_DELAY = 30000;
-const TOOL_THINKING_CLEAR_DELAY = 6000;
 const SAFETY_ALERT_EVENT = "mentor_safety_alert";
+const BACKEND_STAGE_COMPLETE_EVENT = "mentor_stage_complete";
 
 interface StreamState {
   messageId?: string;
@@ -36,6 +39,27 @@ interface SafetyAlertEventDetail {
   message: string;
   resources?: string[];
 }
+
+interface BackendStageCompleteEventDetail {
+  conversationId?: string;
+  sessionId?: string;
+  eventType?: string;
+  stage?: string;
+  message?: string;
+  status?: string;
+}
+
+const dispatchBackendStageComplete = (detail: BackendStageCompleteEventDetail) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(BACKEND_STAGE_COMPLETE_EVENT, {
+      detail,
+    }),
+  );
+};
 
 const getWebSocketBase = () => {
   if (typeof window === "undefined") {
@@ -262,13 +286,13 @@ export function useChatSocket(conversationId: string | null) {
   const heartbeatIntervalRef = useRef<number | null>(null);
   const heartbeatTimeoutRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
-  const mentorTypingTimeoutRef = useRef<number | null>(null);
-  const toolThinkingTimeoutRef = useRef<number | null>(null);
   const activeConversationRef = useRef<string | null>(null);
   const manualCloseRef = useRef(false);
   const lastPongRef = useRef<number>(Date.now());
   const lastTypingSentRef = useRef(false);
   const connectRef = useRef<() => void>(() => {});
+  const streamBufferRef = useRef("");
+  const streamFlushTimerRef = useRef<number | null>(null);
 
   const [status, setStatus] = useState<SocketStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -284,12 +308,46 @@ export function useChatSocket(conversationId: string | null) {
     }
   }, []);
 
-  const clearToolThinkingTimer = useCallback(() => {
-    if (toolThinkingTimeoutRef.current) {
-      window.clearTimeout(toolThinkingTimeoutRef.current);
-      toolThinkingTimeoutRef.current = null;
+  const clearStreamFlushTimer = useCallback(() => {
+    if (streamFlushTimerRef.current) {
+      window.clearTimeout(streamFlushTimerRef.current);
+      streamFlushTimerRef.current = null;
     }
   }, []);
+
+  const flushStreamBuffer = useCallback(() => {
+    if (!streamBufferRef.current) {
+      return;
+    }
+
+    const buffered = streamBufferRef.current;
+    streamBufferRef.current = "";
+
+    setStreamState((previous) => {
+      if (!previous.content) {
+        return {
+          messageId: previous.messageId,
+          content: buffered,
+        };
+      }
+
+      return {
+        messageId: previous.messageId,
+        content: `${previous.content}${buffered}`,
+      };
+    });
+  }, []);
+
+  const scheduleStreamFlush = useCallback(() => {
+    if (streamFlushTimerRef.current) {
+      return;
+    }
+
+    streamFlushTimerRef.current = window.setTimeout(() => {
+      streamFlushTimerRef.current = null;
+      flushStreamBuffer();
+    }, 50);
+  }, [flushStreamBuffer]);
 
   const stopHeartbeat = useCallback(() => {
     if (heartbeatIntervalRef.current) {
@@ -305,7 +363,8 @@ export function useChatSocket(conversationId: string | null) {
   const resetSocket = useCallback(() => {
     stopHeartbeat();
     clearReconnectTimer();
-    clearToolThinkingTimer();
+    clearStreamFlushTimer();
+    streamBufferRef.current = "";
     if (socketRef.current) {
       manualCloseRef.current = true;
       try {
@@ -316,22 +375,10 @@ export function useChatSocket(conversationId: string | null) {
       socketRef.current = null;
     }
     activeConversationRef.current = null;
-  }, [clearReconnectTimer, clearToolThinkingTimer, stopHeartbeat]);
+  }, [clearReconnectTimer, clearStreamFlushTimer, stopHeartbeat]);
 
   const updateMentorTyping = useCallback((value: boolean) => {
-    if (mentorTypingTimeoutRef.current) {
-      window.clearTimeout(mentorTypingTimeoutRef.current);
-      mentorTypingTimeoutRef.current = null;
-    }
-
     setMentorTypingState(value);
-
-    if (value) {
-      mentorTypingTimeoutRef.current = window.setTimeout(() => {
-        setMentorTypingState(false);
-        mentorTypingTimeoutRef.current = null;
-      }, MENTOR_TYPING_TIMEOUT);
-    }
   }, []);
 
   const scheduleReconnect = useCallback(() => {
@@ -523,11 +570,11 @@ export function useChatSocket(conversationId: string | null) {
                 appendMessageToCache(queryClient, conversationId, message);
                 updateConversationSnapshot(queryClient, conversationId, message);
               }
-
-              updateMentorTyping(false);
               break;
             }
             case "stream_start": {
+              streamBufferRef.current = "";
+              clearStreamFlushTimer();
               setStreamState({
                 messageId: payload?.message_id,
                 content: "",
@@ -536,24 +583,17 @@ export function useChatSocket(conversationId: string | null) {
               break;
             }
             case "stream_chunk": {
-              setStreamState((previous) => {
-                if (
-                  previous.messageId &&
-                  payload?.message_id &&
-                  previous.messageId !== payload.message_id
-                ) {
-                  return previous;
-                }
-
-                return {
-                  messageId: payload?.message_id ?? previous.messageId,
-                  content: `${previous.content ?? ""}${payload?.content ?? ""}`,
-                };
-              });
+              const chunk =
+                typeof payload?.content === "string" ? payload.content : "";
+              if (chunk) {
+                streamBufferRef.current += chunk;
+                scheduleStreamFlush();
+              }
               updateMentorTyping(true);
               break;
             }
             case "stream_complete": {
+              flushStreamBuffer();
               const message = payload?.message as ChatMessage | undefined;
               const toolRuntime =
                 payload?.tool_runtime_invocations || payload?.tool_invocations;
@@ -570,19 +610,22 @@ export function useChatSocket(conversationId: string | null) {
                 updateConversationSnapshot(queryClient, conversationId, message);
               }
 
-              setStreamState({ messageId: undefined, content: null });
-              updateMentorTyping(false);
-              setActiveAgent(null);
-              setToolThinking(null);
-              clearToolThinkingTimer();
+              setStreamState((previous) => ({
+                messageId: message?.id ?? previous.messageId,
+                content:
+                  typeof message?.content === "string"
+                    ? message.content
+                    : previous.content,
+              }));
               break;
             }
             case "stream_error": {
+              clearStreamFlushTimer();
+              streamBufferRef.current = "";
               setStreamState({ messageId: undefined, content: null });
               updateMentorTyping(false);
               setActiveAgent(null);
               setToolThinking(null);
-              clearToolThinkingTimer();
               if (payload?.error) {
                 telemetry.toastError(payload.error);
               }
@@ -603,16 +646,12 @@ export function useChatSocket(conversationId: string | null) {
               break;
             }
             case "tool_thinking": {
+              clearStreamFlushTimer();
               setToolThinking({
                 tool: (payload?.tool as string) ?? "",
                 label: (payload?.label as string) ?? "Thinking...",
                 query: (payload?.query as string) ?? "",
               });
-              clearToolThinkingTimer();
-              toolThinkingTimeoutRef.current = window.setTimeout(() => {
-                setToolThinking(null);
-                toolThinkingTimeoutRef.current = null;
-              }, TOOL_THINKING_CLEAR_DELAY);
               break;
             }
             case "typing_status": {
@@ -665,6 +704,11 @@ export function useChatSocket(conversationId: string | null) {
                 break;
               }
 
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
+
               const eventId =
                 data?.event_id ??
                 (typeof crypto !== "undefined" && crypto.randomUUID
@@ -699,6 +743,18 @@ export function useChatSocket(conversationId: string | null) {
                   (data.plan_title as string) ?? undefined,
                 );
                 updateLastPlanActivity();
+
+                const normalizedStatus = String(data.status).toLowerCase();
+                if (normalizedStatus === "completed" || normalizedStatus === "failed") {
+                  dispatchBackendStageComplete({
+                    conversationId: targetConversation ?? undefined,
+                    sessionId: data.session_id as string | undefined,
+                    eventType: "plan_update",
+                    stage: (data.step_type as string | undefined) ?? "plan_update",
+                    status: normalizedStatus,
+                    message: (data.message as string) ?? undefined,
+                  });
+                }
               }
 
               if (data?.status === "failed" && data?.message) {
@@ -711,6 +767,22 @@ export function useChatSocket(conversationId: string | null) {
               if (!step) {
                 break;
               }
+
+              const stepConversationId =
+                (step.conversation_id as string | undefined) ??
+                (step.session_id as string | undefined);
+              if (
+                stepConversationId &&
+                conversationId &&
+                stepConversationId !== conversationId
+              ) {
+                break;
+              }
+
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
 
               pushRuntimeStep({
                 id: step.id ?? crypto.randomUUID(),
@@ -732,10 +804,22 @@ export function useChatSocket(conversationId: string | null) {
                 step.status === "failed"
               ) {
                 updateMentorTyping(false);
+                dispatchBackendStageComplete({
+                  conversationId: (step.conversation_id as string | undefined) ?? conversationId ?? undefined,
+                  sessionId: step.session_id as string | undefined,
+                  eventType: "agent_runtime",
+                  stage: (step.step as string | undefined) ?? "agent_runtime",
+                  status: String(step.status),
+                  message: (step.step as string | undefined) ?? undefined,
+                });
               }
               break;
             }
             case "insight_generated": {
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
               const insight = payload?.data;
               if (!insight) {
                 break;
@@ -753,6 +837,10 @@ export function useChatSocket(conversationId: string | null) {
               break;
             }
             case "missing_information": {
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
               const info = payload?.data;
               if (!info) {
                 break;
@@ -824,6 +912,10 @@ export function useChatSocket(conversationId: string | null) {
               break;
             }
             case "level_completed": {
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
               const levelTitle = (payload?.level_title as string) ?? "Level";
               const xpAwarded = (payload?.xp_awarded as number) ?? 100;
               import("canvas-confetti")
@@ -846,12 +938,20 @@ export function useChatSocket(conversationId: string | null) {
               break;
             }
             case "artifact_verified": {
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
               window.dispatchEvent(
                 new CustomEvent("artifact_verified", { detail: payload }),
               );
               break;
             }
             case "mirror_analysis_ready": {
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
               const snapshotId = payload?.mirror_snapshot_id as string | undefined;
               setMirrorAnalysisReady(snapshotId ?? null);
               queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
@@ -862,6 +962,10 @@ export function useChatSocket(conversationId: string | null) {
               break;
             }
             case "proactive_mentor_message": {
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
               window.dispatchEvent(
                 new CustomEvent("proactive_mentor_message", {
                   detail: {
@@ -891,7 +995,8 @@ export function useChatSocket(conversationId: string | null) {
       scheduleReconnect();
     }
   }, [
-    clearToolThinkingTimer,
+    clearStreamFlushTimer,
+    flushStreamBuffer,
     conversationId,
     pushInsight,
     pushMissingInfo,
@@ -901,6 +1006,7 @@ export function useChatSocket(conversationId: string | null) {
     queryClient,
     resetSocket,
     scheduleReconnect,
+    scheduleStreamFlush,
     setActiveAgent,
     setMirrorAnalysisReady,
     setPlanBuildStatus,
@@ -1084,14 +1190,50 @@ export function useChatSocket(conversationId: string | null) {
   }, [conversationId, clearReconnectTimer]);
 
   useEffect(() => {
-    return () => {
-      if (mentorTypingTimeoutRef.current) {
-        window.clearTimeout(mentorTypingTimeoutRef.current);
-        mentorTypingTimeoutRef.current = null;
+    if (!conversationId) {
+      return;
+    }
+
+    const handleStageComplete = (event: Event) => {
+      const detail = (event as CustomEvent<BackendStageCompleteEventDetail>).detail;
+      if (!detail) {
+        return;
       }
-      clearToolThinkingTimer();
+
+      const matchesConversation =
+        detail.conversationId === conversationId ||
+        detail.sessionId === conversationId ||
+        (!detail.conversationId && !detail.sessionId);
+
+      if (!matchesConversation) {
+        return;
+      }
+
+      setStreamState({ messageId: undefined, content: null });
+      updateMentorTyping(false);
+      setActiveAgent(null);
+      setToolThinking(null);
     };
-  }, [clearToolThinkingTimer]);
+
+    window.addEventListener(
+      BACKEND_STAGE_COMPLETE_EVENT,
+      handleStageComplete as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        BACKEND_STAGE_COMPLETE_EVENT,
+        handleStageComplete as EventListener,
+      );
+    };
+  }, [conversationId, setActiveAgent, setToolThinking, updateMentorTyping]);
+
+  useEffect(() => {
+    return () => {
+      clearStreamFlushTimer();
+      streamBufferRef.current = "";
+    };
+  }, [clearStreamFlushTimer]);
 
   return {
     status,

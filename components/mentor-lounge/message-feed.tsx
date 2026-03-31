@@ -367,7 +367,7 @@ function MessageFeedContent({
       ) : null}
 
       <AnimatePresence initial={false}>
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+        <div className="mx-auto flex w-full flex-col gap-4 px-4 lg:px-8">
           {messages.map((message, index) => (
             <MessageRow
               key={message.id}
@@ -567,6 +567,7 @@ const MessageRow = memo(function MessageRow({
             guardrails={message.metadata?.guardrails}
             safety={message.metadata?.safety}
             agentName={message.cortex?.agent}
+            reason={message.cortex?.reason}
           />
 
           {message.cortex ? (
@@ -670,9 +671,12 @@ const StreamingMessageRow = memo(function StreamingMessageRow({
             theme?.bubbleText ?? "text-foreground",
           )}
         >
-          <MessageResponse>
+          <div
+            aria-live="polite"
+            className="whitespace-pre-wrap break-words leading-6"
+          >
             {normalizeMessageContent(streamingMessage.content)}
-          </MessageResponse>
+          </div>
         </MessageContent>
       </Message>
     </motion.div>

@@ -23,8 +23,14 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
       >
         {hideSidebar ? null : <Sidebar />}
         <div className="flex min-h-0 flex-col">
-          <main className="flex min-h-0 flex-1 flex-col overflow-hidden gap-4 lg:gap-6">
-            <div className="flex-1 overflow-y-auto">
+          <main className={cn(
+            "flex min-h-0 flex-1 flex-col overflow-hidden",
+            pathname === "/chat" ? "gap-0" : "gap-4 lg:gap-6"
+          )}>
+            <div className={cn(
+              "flex-1 min-h-0",
+              pathname === "/chat" ? "overflow-hidden" : "overflow-y-auto"
+            )}>
               {children}
             </div>
           </main>
