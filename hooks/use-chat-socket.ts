@@ -493,6 +493,10 @@ export function useChatSocket(conversationId: string | null) {
 
       socket.onclose = (event) => {
         stopHeartbeat();
+        updateMentorTyping(false);
+        setActiveAgent(null);
+        setToolThinking(null);
+        setStreamState({ messageId: undefined, content: null });
 
         if (manualCloseRef.current) {
           manualCloseRef.current = false;
@@ -521,6 +525,10 @@ export function useChatSocket(conversationId: string | null) {
 
       socket.onerror = (socketError) => {
         telemetry.warn("Chat socket error", { socketError });
+        updateMentorTyping(false);
+        setActiveAgent(null);
+        setToolThinking(null);
+        setStreamState({ messageId: undefined, content: null });
         setStatus("connecting");
         setError("Reconnecting...");
         try {
@@ -570,6 +578,9 @@ export function useChatSocket(conversationId: string | null) {
                 appendMessageToCache(queryClient, conversationId, message);
                 updateConversationSnapshot(queryClient, conversationId, message);
               }
+              updateMentorTyping(false);
+              setActiveAgent(null);
+              setToolThinking(null);
               break;
             }
             case "stream_start": {
@@ -617,6 +628,9 @@ export function useChatSocket(conversationId: string | null) {
                     ? message.content
                     : previous.content,
               }));
+              updateMentorTyping(false);
+              setActiveAgent(null);
+              setToolThinking(null);
               break;
             }
             case "stream_error": {

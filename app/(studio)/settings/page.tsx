@@ -39,7 +39,7 @@ function ProfileTab() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    http.get("/api/auth/profile/").then((r) => setProfile(r.data)).catch(() =>
+    http.get("/auth/profile/").then((r) => setProfile(r.data)).catch(() =>
       toast.error("Failed to load profile")
     );
   }, []);
@@ -48,7 +48,7 @@ function ProfileTab() {
     if (!profile) return;
     setSaving(true);
     try {
-      await http.patch("/api/auth/profile/", {
+      await http.patch("/auth/profile/", {
         first_name: profile.first_name,
         last_name: profile.last_name,
         full_name: profile.full_name,
@@ -180,7 +180,7 @@ function AccountTab() {
     }
     setSaving(true);
     try {
-      await http.post("/api/auth/password/change/", form);
+      await http.post("/auth/password/change/", form);
       toast.success("Password changed successfully");
       setForm({ current_password: "", new_password: "", confirm_password: "" });
     } catch (e: any) {
@@ -230,14 +230,24 @@ function AccountTab() {
 }
 
 // ─── Resume tab ───────────────────────────────────────────────────────────────
+const API_ORIGIN = (process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api").replace(/\/api\/?$/, "");
+
+function resolveMediaUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${API_ORIGIN}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
 function ResumeTab() {
   const [profile, setProfile] = useState<Record<string, any> | null>(null);
 
   useEffect(() => {
-    http.get("/api/auth/profile/detail/").then((r) => setProfile(r.data)).catch(() => {});
+    http.get("/auth/profile/detail/").then((r) => setProfile(r.data)).catch(() => {});
   }, []);
 
   if (!profile) return <SkeletonCard lines={3} />;
+
+  const resumeUrl = resolveMediaUrl(profile.resume_url);
 
   return (
     <div className="space-y-6">
@@ -247,7 +257,7 @@ function ResumeTab() {
           <CardDescription>Used by your AI mentors to personalise your learning plan</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {profile.resume_url ? (
+          {resumeUrl ? (
             <div className="flex items-center justify-between rounded-lg border p-4">
               <div>
                 <p className="font-medium text-sm">Resume on file</p>
@@ -259,7 +269,10 @@ function ResumeTab() {
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" asChild>
-                  <a href={profile.resume_url} target="_blank" rel="noopener noreferrer">View</a>
+                  <a href={resumeUrl} target="_blank" rel="noopener noreferrer">View</a>
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <a href={resumeUrl} download>Download</a>
                 </Button>
               </div>
             </div>
@@ -319,7 +332,7 @@ function NotificationTab() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    http.get("/api/notifications/preferences/").then((r) => setPrefs(r.data)).catch(() =>
+    http.get("/notifications/preferences/").then((r) => setPrefs(r.data)).catch(() =>
       toast.error("Could not load notification preferences")
     );
   }, []);
@@ -330,7 +343,7 @@ function NotificationTab() {
     setPrefs(next);
     setSaving(true);
     try {
-      await http.patch("/api/notifications/preferences/", { [key]: val });
+      await http.patch("/notifications/preferences/", { [key]: val });
     } catch {
       setPrefs(prefs);
       toast.error("Failed to update");

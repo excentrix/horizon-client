@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowRight, Calendar, BookOpen, Trophy } from "lucide-react";
+import { Loader2, ArrowRight, Calendar, BookOpen, Trophy, RefreshCw, LayoutDashboard, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
@@ -35,6 +36,7 @@ export default function PlanPreviewPage({ params }: { params: Promise<{ planId: 
   const [planId, setPlanId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [plan, setPlan] = useState<PlanPreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     params.then((p) => {
@@ -73,9 +75,19 @@ export default function PlanPreviewPage({ params }: { params: Promise<{ planId: 
         }
     } catch (err) {
         console.error(err);
+        const message = err instanceof Error ? err.message : "Could not load your plan.";
+        setError(message);
+        toast.error("Couldn't load your plan — you can retry or head to your dashboard.");
     } finally {
         setLoading(false);
     }
+  };
+
+  const handleRetry = () => {
+    if (!planId) return;
+    setError(null);
+    setLoading(true);
+    fetchPlan(planId);
   };
 
   const handleStartJourney = () => {
@@ -92,7 +104,33 @@ export default function PlanPreviewPage({ params }: { params: Promise<{ planId: 
     );
   }
 
-  if (!plan) return <div>Failed to load plan.</div>;
+  if (error || !plan) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gray-50 px-6 dark:bg-gray-950">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
+          <AlertTriangle className="h-7 w-7 text-destructive" />
+        </div>
+        <div className="space-y-1 text-center">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Couldn&apos;t load your plan
+          </h2>
+          <p className="max-w-sm text-sm text-gray-500 dark:text-gray-400">
+            {error || "The plan preview could not be fetched. This is usually a temporary issue."}
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={handleRetry} disabled={!planId}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Try again
+          </Button>
+          <Button onClick={() => router.push("/dashboard")}>
+            <LayoutDashboard className="mr-2 h-4 w-4" />
+            Go to dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">

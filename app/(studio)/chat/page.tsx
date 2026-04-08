@@ -20,13 +20,12 @@ import { useCreatePlanFromConversation, usePlan } from "@/hooks/use-plans";
 import { telemetry } from "@/lib/telemetry";
 import { CreateConversationModal } from "@/components/mentor-lounge/create-conversation-modal";
 import { PlusCircle } from 'lucide-react';
-import type { PlanCreationResponse } from "@/types";
+import type { MentorAction, PlanCreationResponse } from "@/types";
 import { useNotifications } from "@/context/NotificationContext";
 import { SafetyAlert } from "@/components/mentor-lounge/safety-alert";
 import { IntelligenceReportModal } from "@/components/mentor-lounge/intelligence-report-modal";
 import { PersonalitySelector } from "@/components/mentor-lounge/personality-selector";
 import { MentorActionShelf } from "@/components/mentor-lounge/mentor-action-shelf";
-import { AgentIndicator } from "@/components/mentor-lounge/agent-indicator";
 import { CortexDebugDrawer } from "@/components/mentor-lounge/cortex-debug-drawer";
 import { intelligenceApi, authApi, chatApi } from "@/lib/api";
 import { describeStageEvent } from "@/lib/analysis-stage";
@@ -45,7 +44,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Brain, User, PanelRightOpen } from "lucide-react";
+import { Brain, User, PanelRightOpen, WifiOff } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlanSessionPoller } from "@/hooks/use-plan-poller";
 
@@ -78,6 +77,9 @@ interface StageHistoryEntry {
   message: string;
   timestamp: string;
 }
+
+const mentorActionKey = (action: MentorAction) =>
+  `${action.type}:${action.plan_id ?? action.task_id ?? action.href ?? action.label ?? ""}`;
 
 export default function ChatPage() {
   return (
@@ -205,6 +207,7 @@ function ChatContent() {
   const [intakePreview, setIntakePreview] = useState<Record<string, unknown> | null>(null);
   const [intakeState, setIntakeState] = useState<Record<string, unknown> | null>(null);
   const [intakeSubmitted, setIntakeSubmitted] = useState(false);
+  const [dismissedMentorActionKeys, setDismissedMentorActionKeys] = useState<string[]>([]);
 
   const createPlan = useCreatePlanFromConversation();
   const { analysisEvents } = useNotifications();
@@ -503,6 +506,7 @@ useEffect(() => {
   setTypingStatus(false);
   setLatestPlan(null);
   setMentorActions([]);
+  setDismissedMentorActionKeys([]);
 }, [
   selectedConversationId,
   setComposerDraft,
@@ -1001,6 +1005,55 @@ useEffect(() => {
     return 0;
   }, [planDisplayStatus, planUpdates.length]);
 
+  const visibleMentorActions = useMemo(
+    () =>
+      mentorActions.filter(
+        (action) => !dismissedMentorActionKeys.includes(mentorActionKey(action)),
+      ),
+    [mentorActions, dismissedMentorActionKeys],
+  );
+
+  const dismissedPlanShortcutAction = useMemo(() => {
+    const candidates = mentorActions.filter((action) => {
+      const isPlanAction =
+        action.type === "view_plan" || action.type === "open_plan_task";
+      return isPlanAction && dismissedMentorActionKeys.includes(mentorActionKey(action));
+    });
+    return candidates.length ? candidates[candidates.length - 1] : null;
+  }, [mentorActions, dismissedMentorActionKeys]);
+
+  const handleOpenMentorAction = useCallback(
+    (action: MentorAction) => {
+      if (action.type === "view_plan") {
+        if (action.plan_id) {
+          router.push(`/plans?plan=${action.plan_id}`);
+        } else if (action.href) {
+          router.push(action.href);
+        }
+        return;
+      }
+
+      if (action.type === "open_plan_task") {
+        if (action.plan_id) {
+          const search = action.task_id
+            ? `?plan=${action.plan_id}&task=${action.task_id}`
+            : `?plan=${action.plan_id}`;
+          router.push(`/plans${search}`);
+        } else if (action.href) {
+          router.push(action.href);
+        }
+      }
+    },
+    [router],
+  );
+
+  const conversationTitle = useMemo(() => {
+    const raw = activeConversation?.title?.trim();
+    if (!raw) return "Mentor Session";
+    if (raw.toLowerCase() === "new conversation") return "Mentor Session";
+    return raw;
+  }, [activeConversation?.title]);
+
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[radial-gradient(1200px_600px_at_0%_0%,rgba(56,189,248,0.06),transparent),radial-gradient(900px_500px_at_100%_10%,rgba(249,115,22,0.06),transparent)]">
     <CreateConversationModal
@@ -1045,7 +1098,7 @@ useEffect(() => {
                       <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
                         Active mentor
                       </p>
-                      <h3 className="truncate text-lg font-semibold">{activeConversation.title}</h3>
+                      <h3 className="truncate text-lg font-semibold">{conversationTitle}</h3>
                       {/* Show selector if plan is active (mocked logic for now as 'specialized' check) 
                           In a real scenario, we'd check if user has an active plan that unlocks this.
                           For now, we allow switching if the current personality is NOT general, 
@@ -1100,9 +1153,6 @@ useEffect(() => {
                           : socketStatus === "error"
                             ? "Offline"
                             : "Idle"}
-                    </span>
-                    <span className="rounded-full bg-primary/10 px-2 py-1 font-medium text-primary">
-                      {activeConversation.ai_personality?.name ?? "Adaptive Mentor"}
                     </span>
                     <PlanBuildHeaderBadge />
                     <Sheet open={isInsightsOpen} onOpenChange={setInsightsOpen}>
@@ -1199,10 +1249,16 @@ useEffect(() => {
                     >
                       {createPlan.isPending ? "Generating roadmap..." : "Generate Roadmap"}
                     </Button>
+                    {dismissedPlanShortcutAction ? (
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => handleOpenMentorAction(dismissedPlanShortcutAction)}
+                      >
+                        Open current plan
+                      </Button>
+                    ) : null}
                   </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Intelligence runs automatically in the background; roadmap generation uses the latest available context.
-                  </p>
                 </div>
                 {analysisJobRunning ? (
                   <div className="px-4 pb-3">
@@ -1244,6 +1300,7 @@ useEffect(() => {
                         tool: latestPlanUpdate?.data.tool,
                         stepType: latestPlanUpdate?.data.step_type,
                       }}
+                      onDismiss={() => setPlanWorkbenchDismissed(true)}
                     />
                   ) : null}
                   {/* IntelligenceStatus moved to header */}
@@ -1390,10 +1447,25 @@ useEffect(() => {
                         </DialogContent>
                       </Dialog>
                       <div className="space-y-3 border-t border-white/80 bg-white/65 px-4 pb-4 pt-3">
-                        <AgentIndicator />
+                        {(socketStatus === "closed" || socketStatus === "error") && (
+                          <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                            <WifiOff className="h-4 w-4 shrink-0" />
+                            <span>
+                              {socketStatus === "error"
+                                ? "Connection error — reconnecting…"
+                                : "Connection lost — reconnecting…"}
+                            </span>
+                          </div>
+                        )}
                         <MentorActionShelf
-                          actions={mentorActions}
+                          actions={visibleMentorActions}
                           onSendQuickReply={(message) => handleSendMessage(message)}
+                          onDismissAction={(action) => {
+                            const key = mentorActionKey(action);
+                            setDismissedMentorActionKeys((previous) =>
+                              previous.includes(key) ? previous : [...previous, key],
+                            );
+                          }}
                           disabled={
                             messagesLoading ||
                             !activeConversation ||

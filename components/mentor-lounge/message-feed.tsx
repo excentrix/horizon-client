@@ -64,6 +64,8 @@ const normalizeMessageContent = (raw: string) => {
   return cleaned;
 };
 
+const showAgentInsights = process.env.NEXT_PUBLIC_SHOW_AGENT_INSIGHTS === "true";
+
 interface MessageFeedProps {
   conversation?: Conversation;
   messages: ChatMessage[];
@@ -227,10 +229,7 @@ export function MessageFeed({
         </header>
       ) : null}
 
-      <ConversationContainer
-        className="flex-1 overflow-y-auto"
-        key={conversation.id}
-      >
+      <ConversationContainer className="flex-1" key={conversation.id}>
         <ConversationContent className="gap-4 px-5 pt-4 pb-2">
           <MessageFeedContent
             hasMore={hasMore}
@@ -560,15 +559,17 @@ const MessageRow = memo(function MessageRow({
             <CareerGoalsPill snapshot={message.metadata.graph_career_snapshot} />
           ) : null}
 
-          <AgentInsightsCard
-            agentTools={message.metadata?.agent_tools}
-            toolInvocations={message.metadata?.tool_invocations}
-            toolRuntimeInvocations={message.metadata?.tool_runtime_invocations}
-            guardrails={message.metadata?.guardrails}
-            safety={message.metadata?.safety}
-            agentName={message.cortex?.agent}
-            reason={message.cortex?.reason}
-          />
+          {showAgentInsights ? (
+            <AgentInsightsCard
+              agentTools={message.metadata?.agent_tools}
+              toolInvocations={message.metadata?.tool_invocations}
+              toolRuntimeInvocations={message.metadata?.tool_runtime_invocations}
+              guardrails={message.metadata?.guardrails}
+              safety={message.metadata?.safety}
+              agentName={message.cortex?.agent}
+              reason={message.cortex?.reason}
+            />
+          ) : null}
 
           {message.cortex ? (
             <div className="mt-2 flex justify-end">

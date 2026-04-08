@@ -129,6 +129,11 @@ export const authApi = {
       http.post("/auth/profile/resume/confirm/", payload)
     ),
 
+  reanalyseResume: () =>
+    extract<{ status: string; job_id: string }>(
+      http.post("/auth/profile/resume/reanalyse/")
+    ),
+
   getPreferences: () =>
     extract<UserPreferences>(http.get("/auth/preferences/")),
 
@@ -1275,6 +1280,53 @@ export const auditApi = {
         confidence: Record<string, number>;
         missing_prompts: string[];
         role_readiness_narrative: string;
+        deep_analysis?: {
+          ats_score?: number;
+          ats_breakdown?: {
+            keyword_match?: { score: number; max: number; present: string[]; missing: string[] };
+            impact_statements?: { score: number; max: number; quantified_count: number; total_bullets: number };
+            summary_quality?: { score: number; max: number; has_summary: boolean };
+            skills_coverage?: { score: number; max: number };
+            format_signals?: { score: number; max: number; issues: string[] };
+          };
+          experience_analysis?: Array<{
+            company: string;
+            role: string;
+            ats_commentary: string;
+            impact_score: number;
+            quantified_bullets: number;
+            total_bullets: number;
+            improvement_suggestions: string[];
+            relevance_to_target: "high" | "medium" | "low";
+          }>;
+          project_analysis?: Array<{
+            title: string;
+            relevance_score: number;
+            technical_depth_score: number;
+            commentary: string;
+            highlighted_skills: string[];
+            improvement_suggestions: string[];
+          }>;
+          skill_gap_details?: Array<{
+            skill: string;
+            priority: "P1" | "P2" | "P3";
+            why_matters: string;
+            how_to_fill: string;
+            time_estimate: string;
+          }>;
+          improvement_actions?: Array<{
+            priority: number;
+            action: string;
+            impact: "high" | "medium" | "low";
+            effort: "high" | "medium" | "low";
+          }>;
+          keyword_optimization?: {
+            target_role: string;
+            present_keywords: string[];
+            missing_high_value: string[];
+            density_score: number;
+          };
+        };
         created_at: string;
         updated_at: string;
       };

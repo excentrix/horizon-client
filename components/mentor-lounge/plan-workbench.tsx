@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,7 @@ interface PlanWorkbenchProps {
   status: "idle" | "queued" | "in_progress" | "warning" | "completed" | "failed";
   statusMessage?: string;
   statusMeta?: { agent?: string; tool?: string; stepType?: string };
+  onDismiss?: () => void;
 }
 
 export function PlanWorkbench({ 
@@ -28,7 +29,8 @@ export function PlanWorkbench({
   progress = 0,
   status,
   statusMessage,
-  statusMeta
+  statusMeta,
+  onDismiss,
 }: PlanWorkbenchProps) {
   
   const hint = (() => {
@@ -91,6 +93,17 @@ export function PlanWorkbench({
             >
               {status === "completed" ? "Ready" : status.replace("_", " ")}
             </Badge>
+            {onDismiss ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-full text-muted-foreground"
+                onClick={onDismiss}
+                aria-label="Dismiss plan panel"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
           </div>
         </div>
         <div className="space-y-3 rounded-2xl border border-white/70 bg-white/70 px-4 py-3 shadow-[var(--shadow-1)]">

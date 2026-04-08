@@ -29,7 +29,13 @@ import {
   Check,
   ExternalLink,
   ShieldCheck,
+  Info,
 } from "lucide-react";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import Link from "next/link";
 
 // ─── status config ────────────────────────────────────────────────────────────
@@ -100,15 +106,31 @@ export default function ProgressHubPage() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 dark:border-blue-900/50 dark:bg-blue-950/30">
-                    <Scan className="h-3 w-3 text-blue-600 dark:text-blue-400" />
-                    <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-blue-700 dark:text-blue-400">
-                      VELO
-                    </span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    Verification Engine for Learning Outcomes
-                  </span>
+                  <HoverCard>
+                    <HoverCardTrigger asChild>
+                      <div className="flex cursor-pointer select-none items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 transition-colors hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-950/30 dark:hover:bg-blue-950/50">
+                        <Scan className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                        <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-blue-700 dark:text-blue-400">
+                          VELO
+                        </span>
+                        <Info className="h-3 w-3 text-blue-500 dark:text-blue-500" />
+                      </div>
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-80" align="start">
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold">Verification Engine for Learning Outcomes</p>
+                        <p className="text-xs text-muted-foreground">
+                          VELO uses AI to deeply analyse your resume — scoring ATS compatibility,
+                          mapping skill gaps to your target role, rating each job and project entry
+                          for impact, and generating a prioritised action plan to strengthen your profile.
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Upload a resume to get your full analysis. Results update automatically
+                          as you complete tasks and add portfolio evidence.
+                        </p>
+                      </div>
+                    </HoverCardContent>
+                  </HoverCard>
                 </div>
                 <h1 className="text-3xl font-bold tracking-tight">Your Mirror</h1>
                 <p className="text-sm text-muted-foreground">
