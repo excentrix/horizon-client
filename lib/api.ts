@@ -1269,6 +1269,15 @@ export const auditApi = {
         job_id: string;
         status: "queued" | "running" | "completed" | "failed";
         error?: string | null;
+        progress?: {
+          parsing?: "running" | "complete";
+          mirror?: "running" | "complete";
+          ats?: "running" | "complete";
+          experience?: "running" | "complete";
+          projects_gaps?: "running" | "complete";
+          role_matching?: "running" | "complete";
+          employer_view?: "running" | "complete";
+        };
       };
       mirror: null | {
         id: string;
@@ -1325,6 +1334,34 @@ export const auditApi = {
             present_keywords: string[];
             missing_high_value: string[];
             density_score: number;
+          };
+          role_matches?: Array<{
+            title: string;
+            match_score: number;
+            match_reason: string;
+            present_skills: string[];
+            missing_skills: string[];
+            seniority: "junior" | "mid" | "senior";
+          }>;
+          skill_mastery?: Array<{
+            skill: string;
+            level: "demonstrated" | "mentioned" | "gap";
+            evidence: string;
+            used_in_projects: number;
+            used_in_experience: number;
+          }>;
+          employer_perspective?: {
+            first_impression: string;
+            candidate_narrative: string;
+            what_stands_out: string[];
+            what_raises_flags: string[];
+            shortlist_verdict: "yes" | "maybe" | "no";
+            shortlist_reason: string;
+            resume_improvements: Array<{
+              section: string;
+              current_issue: string;
+              suggested_fix: string;
+            }>;
           };
         };
         created_at: string;
