@@ -3,38 +3,25 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
+import {
+  SAFETY_ALERT_EVENT,
+  type SafetyAlertEventDetail,
+} from "@/hooks/use-chat-socket";
 
-interface SafetyAlertProps {
-  socket: WebSocket | null;
-}
-
-interface SafetyEvent {
-  type: "safety_alert";
-  severity: "medium" | "high" | "critical";
-  message: string;
-  resources?: string[];
-}
-
-export function SafetyAlert({ socket }: SafetyAlertProps) {
-  const [alert, setAlert] = useState<SafetyEvent | null>(null);
+export function SafetyAlert() {
+  const [alert, setAlert] = useState<SafetyAlertEventDetail | null>(null);
 
   useEffect(() => {
-    if (!socket) return;
-
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "safety_alert") {
-          setAlert(data as SafetyEvent);
-        }
-      } catch {
-        // Ignore parse errors
+    const handleSafetyAlert = (event: Event) => {
+      const detail = (event as CustomEvent<SafetyAlertEventDetail>).detail;
+      if (detail?.type === "safety_alert") {
+        setAlert(detail);
       }
     };
 
-    socket.addEventListener("message", handleMessage);
-    return () => socket.removeEventListener("message", handleMessage);
-  }, [socket]);
+    window.addEventListener(SAFETY_ALERT_EVENT, handleSafetyAlert);
+    return () => window.removeEventListener(SAFETY_ALERT_EVENT, handleSafetyAlert);
+  }, []);
 
   if (!alert) return null;
 

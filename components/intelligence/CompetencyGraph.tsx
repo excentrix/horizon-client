@@ -10,7 +10,6 @@ import {
   Tooltip,
 } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Brain } from "lucide-react";
 
 interface CompetencyPoint {

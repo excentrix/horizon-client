@@ -202,6 +202,49 @@ export function usePlanMutations(planId?: string) {
     },
   });
 
+  const activateExamMode = useMutation({
+    mutationFn: (payload: { exam_date: string; exam_topic: string }) => {
+      if (!planId) throw new Error("Missing plan id");
+      return planningApi.activateExamMode(planId, payload);
+    },
+    onSuccess: (data) => {
+      telemetry.toastInfo("Exam Mode Active", data.message);
+      invalidate();
+    },
+    onError: (error) => {
+      telemetry.toastError("Failed to activate exam mode", error instanceof Error ? error.message : undefined);
+    },
+  });
+
+  const deactivateExamMode = useMutation({
+    mutationFn: () => {
+      if (!planId) throw new Error("Missing plan id");
+      return planningApi.deactivateExamMode(planId);
+    },
+    onSuccess: (data) => {
+      telemetry.toastInfo("Exam Mode Deactivated", data.message);
+      invalidate();
+    },
+    onError: (error) => {
+      telemetry.toastError("Failed to deactivate exam mode", error instanceof Error ? error.message : undefined);
+    },
+  });
+
+  const generateReschedule = useMutation({
+    mutationFn: (payload: { taskId: string; scheduled_date: string }) => {
+      if (!planId) throw new Error("Missing plan id");
+      return planningApi.rescheduleTask(planId, payload.taskId, {
+        scheduled_date: payload.scheduled_date,
+      });
+    },
+    onSuccess: () => {
+      invalidate();
+    },
+    onError: (error) => {
+      telemetry.toastError("Move failed", error instanceof Error ? error.message : undefined);
+    },
+  });
+
   return {
     startPlan,
     pausePlan,
@@ -209,5 +252,8 @@ export function usePlanMutations(planId?: string) {
     completePlan,
     updateTaskStatus,
     switchMentor,
+    activateExamMode,
+    deactivateExamMode,
+    rescheduleTask: generateReschedule,
   };
 }

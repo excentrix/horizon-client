@@ -45,6 +45,8 @@ export interface UserSummary {
   last_activity: string | null;
   created_at: string;
   profile_completion: number;
+  is_staff?: boolean;
+  is_superuser?: boolean;
 }
 
 export interface LoginResponse extends ApiMetadata {
@@ -107,6 +109,9 @@ export interface UserProfileDetail {
   preferred_communication_hours: Record<string, unknown>;
   mentor_preferences: Record<string, unknown>;
   resume_url?: string;
+  resume_payload?: Record<string, unknown>;
+  resume_parsed_at?: string;
+  resume_source?: string;
   transcript_url?: string;
   portfolio_url?: string;
   created_at?: string;
@@ -289,7 +294,7 @@ export interface ToolInvocation {
 }
 
 export interface MentorAction {
-  type: "view_plan" | "open_plan_task" | "confirm_plan_intent" | "open_link";
+  type: "view_plan" | "open_plan_task" | "confirm_plan_intent" | "open_link" | "trigger_plan_generation";
   label: string;
   description?: string;
   data?: Record<string, unknown>;
@@ -370,7 +375,20 @@ export interface DailyTask {
   >;
   current_tools_versions: Record<string, unknown>;
   kpis?: Array<{ metric?: string; target?: string }>;
-  verification?: { method?: string; criteria?: string };
+  verification?: {
+    method?: string;
+    criteria?: string;
+    detailed_instructions?: string;
+    problem_statement?: string;
+    acceptance_criteria?: string[];
+    example_inputs_outputs?: string;
+    submission_note?: string;
+    ai_generated?: boolean;
+    problem_set?: Array<Record<string, unknown>>;
+    hidden_test_intent?: string[];
+    hidden_test_cases?: Array<Record<string, unknown>>;
+    integrity_notice?: string;
+  };
   assessment_config?: {
     id: string;
     verification_type: "auto_quiz" | "code_execution" | "github_repo" | "file_upload" | "text_analysis" | "manual_rubric";
@@ -388,6 +406,14 @@ export interface DailyTask {
       options: string[];
       answer_index?: number;
       rationale?: string;
+    }>;
+  };
+  flashcard_payload?: {
+    cards?: Array<{
+      id: string;
+      front: string;
+      back: string;
+      hint?: string | null;
     }>;
   };
   quiz_response?: {
@@ -412,7 +438,9 @@ export interface DailyTask {
     source_url?: string | null;
   }>;
   lesson_generated_at?: string | null;
+  playground_conversation_id?: string | null;
   adaptive_difficulty: boolean;
+  is_skippable: boolean;
   status: TaskStatus;
   started_at?: string | null;
   completed_at?: string | null;
@@ -439,6 +467,19 @@ export interface PortfolioArtifact {
   metadata?: Record<string, unknown>;
   status: "draft" | "needs_review" | "verified";
   verification_status?: "pending" | "verified" | "human_verified" | "rejected" | "needs_revision";
+  verification_score?: number;
+  verification_feedback?: {
+    verdict_summary?: string;
+    criteria_results?: Array<{
+      criterion: string;
+      met: boolean;
+      score: number;
+      evidence: string;
+    }>;
+    strengths?: string[];
+    suggestions?: string[];
+    method?: "llm" | "heuristic";
+  };
   featured?: boolean;
   tags?: string[];
   visibility?: "private" | "mentors" | "employers" | "public";
@@ -520,6 +561,18 @@ export interface PublicPortfolioResponse {
     featured_count: number;
     profile_views: number;
   };
+}
+
+export interface SpacedRepetitionCard {
+  id: UUID;
+  front: string;
+  back: string;
+  hint?: string | null;
+  next_review_date: string;
+  repetitions: number;
+  interval_days: number;
+  ease_factor: number;
+  source_task_id?: UUID | null;
 }
 
 export interface RoadmapLevel {
@@ -609,6 +662,8 @@ export interface GamificationPointsProfile {
   current_streak: number;
   longest_streak: number;
   last_activity_date: string | null;
+  streak_freezes_available: number;
+  streak_freeze_expires_at: string | null;
   updated_at: string;
 }
 
@@ -685,6 +740,9 @@ export interface LearningPlan {
   total_estimated_hours: number;
   status: PlanStatus;
   progress_percentage: number;
+  is_exam_mode?: boolean;
+  exam_date?: string | null;
+  exam_topic?: string | null;
   plan_generation_method: string;
   ai_confidence_score: number;
   industry_standards_validated: boolean;
@@ -713,6 +771,7 @@ export interface LearningPlan {
   user_schedule_snapshot?: Record<string, unknown> | null;
   user_preferences_snapshot?: Record<string, unknown> | null;
   available_resources_snapshot?: string[];
+  source_analysis?: Record<string, unknown> | null;
   target_competencies_data?: unknown;
   daily_tasks_summary?: {
     total: number;
@@ -733,6 +792,7 @@ export interface LearningPlan {
     status: string;
   } | null;
   user_schedule?: unknown;
+  pre_assessed?: boolean;
 }
 
 export interface ToastNotification {
@@ -1004,4 +1064,245 @@ export interface HomeDashboard {
   weekly_stats: WeeklyStats;
   recent_activity: ActivityItem[];
   generated_at: string;
+}
+
+export type AuditStatus =
+  | "verified_truth"
+  | "narrative_validated"
+  | "unverified_claim";
+
+export type AuditType = "repo" | "narrative";
+export type VeloOnboardingTrack = "resume_track" | "builder_track" | "domain_track";
+export type VeloAuditMode = "full_forensic" | "starter_diagnostic" | "domain_narrative";
+export type VeloRoadmapEligibility = "not_ready" | "starter_ready" | "full_ready";
+export type VeloVerificationTier = "starter" | "full";
+
+export interface ExperienceAudit {
+  id: UUID;
+  status: AuditStatus;
+  audit_type: AuditType;
+  flagship_artifact?: UUID | null;
+  project_title?: string;
+  resume_payload?: Record<string, unknown>;
+  resume_source?: string;
+  hm_score?: number | null;
+  code_signature_score?: number | null;
+  interrogation_depth?: number | null;
+  evidence_validity?: number | null;
+  mentor_context_status?: "pending" | "confirmed";
+  mentor_context_confirmed_at?: string | null;
+  mentor_conversation?: UUID | null;
+  mentor_context_payload?: Record<string, unknown>;
+  direction_overview?: {
+    focus_areas?: string[];
+    risk_areas?: string[];
+    mentor_questions?: string[];
+    readiness_narrative?: string;
+  };
+  active_for_planning?: boolean;
+  onboarding_track?: VeloOnboardingTrack;
+  audit_mode?: VeloAuditMode;
+  domain_family?: "tech" | "business" | "marketing" | "design" | "finance" | "other";
+  roadmap_eligibility?: VeloRoadmapEligibility;
+  verification_tier?: VeloVerificationTier;
+  evidence_completeness_score?: number;
+  created_at: string;
+  updated_at: string;
+  retention_expires_at?: string | null;
+  slot_expires_at?: string | null;
+  evidence?: AuditEvidence[];
+}
+
+export interface AuditEvidence {
+  id: UUID;
+  source_type: AuditType;
+  repo_metadata: Record<string, unknown>;
+  narrative_text?: string;
+  narrative_diagram?: string | null;
+  evidence_summary: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AuditReport {
+  audit_id: UUID;
+  status: AuditStatus;
+  audit_type: AuditType;
+  project_title: string;
+  scores: {
+    hm_score?: number | null;
+    code_signature?: number | null;
+    interrogation_depth?: number | null;
+    evidence_validity?: number | null;
+  };
+  evidence_summary?: Record<string, unknown>;
+  resume_summary?: Record<string, unknown>;
+  mentor_handoff_required?: boolean;
+  mentor_context_status?: "pending" | "confirmed";
+  mentor_context_confirmed_at?: string | null;
+  chat_handoff_url?: string | null;
+  direction_overview?: {
+    focus_areas?: string[];
+    risk_areas?: string[];
+    mentor_questions?: string[];
+    readiness_narrative?: string;
+  };
+  onboarding_track?: VeloOnboardingTrack;
+  audit_mode?: VeloAuditMode;
+  domain_family?: "tech" | "business" | "marketing" | "design" | "finance" | "other";
+  roadmap_eligibility?: VeloRoadmapEligibility;
+  verification_tier?: VeloVerificationTier;
+  evidence_completeness_score?: number;
+  generated_at: string;
+  public?: boolean;
+}
+
+export interface VeloOnboardingSession {
+  id: UUID;
+  current_step:
+    | "discovery"
+    | "evidence_intake"
+    | "audit_readiness"
+    | "audit_session"
+    | "insight_brief"
+    | "mentor_personalization"
+    | "roadmap_launch"
+    | "mentor_and_roadmap";
+  chosen_track: VeloOnboardingTrack;
+  completion_flags: Record<string, boolean>;
+  latest_audit?: UUID | null;
+  latest_conversation?: UUID | null;
+  active_conversation_id?: UUID | null;
+  metadata?: Record<string, unknown>;
+  step_state?: Record<string, Record<string, unknown>>;
+  last_error?: Record<string, unknown>;
+  analysis_job_status?: {
+    job_id: UUID;
+    status: "queued" | "running" | "completed" | "failed";
+    started_at?: string | null;
+    completed_at?: string | null;
+    error?: string | null;
+  } | null;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface ResumeAnalysisJob {
+  job_id: UUID;
+  status: "queued" | "running" | "completed" | "failed";
+  error?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  mirror_snapshot_id?: UUID | null;
+}
+
+export interface MirrorSnapshot {
+  id: UUID;
+  analysis_job_id?: UUID | null;
+  source_resume_payload: Record<string, unknown>;
+  normalized_profile: Record<string, unknown>;
+  skill_gaps: string[];
+  strengths: string[];
+  confidence: Record<string, number>;
+  missing_prompts: string[];
+  role_readiness_narrative: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VeloMentorReviewResponse {
+  audit_id: UUID;
+  conversation_id: UUID;
+  mentor_context_status: "pending" | "confirmed";
+  roadmap_unlocked: boolean;
+  intake_state: {
+    slots?: Record<string, unknown>;
+    missing_or_uncertain?: string[];
+    readiness?: number;
+  };
+  context_enrichment?: Record<string, unknown>;
+  latest_messages?: Array<{
+    id: UUID;
+    sender_type: "user" | "ai" | "system";
+    content: string;
+    created_at: string;
+  }>;
+}
+
+export interface AuditQueueSlot {
+  week_start: string;
+  max_slots: number;
+  used_slots: number;
+  remaining: number;
+}
+
+export interface AuditInstitutionOverview {
+  total_students: number;
+  verified_profile_rate: number;
+  career_ready_count: number;
+  starter_ready_count: number;
+  full_verified_count: number;
+  mentor_context_completion_rate: number;
+  readiness_distribution: Record<string, number>;
+  track_mix: Record<string, number>;
+  readiness_by_domain_family: Record<string, number>;
+  top_skill_gaps: Array<{ gap: string; count: number }>;
+  top_skill_gaps_by_domain?: Record<string, Array<{ gap: string; count: number }>>;
+  avg_readiness_score: number;
+}
+
+export interface AuditInstitutionStudentRow {
+  student_id: UUID;
+  name: string;
+  email: string;
+  readiness_score: number;
+  readiness_label: string;
+  verified_evidence_ratio: number;
+  top_skill_gaps: string[];
+  top_strengths: string[];
+  flags: string[];
+  audit_id: UUID;
+  onboarding_track?: VeloOnboardingTrack;
+  audit_mode?: VeloAuditMode;
+  roadmap_eligibility?: VeloRoadmapEligibility;
+  verification_tier?: VeloVerificationTier;
+  domain_family?: string;
+  gap_coverage_progress?: number;
+  generated_at: string;
+}
+
+export interface AuditInstitutionStudentDetail {
+  student_id: UUID;
+  name: string;
+  email: string;
+  latest: {
+    readiness_score: number;
+    readiness_label: string;
+    verified_evidence_ratio: number;
+    top_skill_gaps: string[];
+    top_strengths: string[];
+    flags: string[];
+    audit_id: UUID;
+    onboarding_track?: VeloOnboardingTrack;
+    audit_mode?: VeloAuditMode;
+    roadmap_eligibility?: VeloRoadmapEligibility;
+    verification_tier?: VeloVerificationTier;
+    domain_family?: string;
+  };
+  trend: Array<{
+    generated_at: string;
+    readiness_score: number;
+    readiness_label: string;
+  }>;
+  latest_audit_summary: {
+    audit_id: UUID;
+    status: AuditStatus;
+    mentor_context_status: "pending" | "confirmed";
+    hm_score?: number | null;
+  };
+  gap_coverage?: {
+    plan_id?: UUID | null;
+    total_gaps: number;
+    covered_gaps: number;
+    progress: number;
+  };
 }

@@ -1,30 +1,28 @@
+"use client";
 
-'use client';
-
-import React, { useMemo, useCallback, useEffect } from 'react';
+import React, { useMemo, useCallback, useEffect } from "react";
 import {
   ReactFlow,
   Controls,
   Background,
+  MiniMap,
+  MarkerType,
   useNodesState,
   useEdgesState,
-  addEdge,
-  MiniMap,
   Node,
   Edge,
-  Connection,
-  Panel,
-} from '@xyflow/react';
-import '@xyflow/react/dist/style.css'; // Import minimal styles
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css"; // Import minimal styles
 
-import LevelNode from './nodes/LevelNode';
-import { cn } from '@/lib/utils';
-import { Card } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
-import { Briefcase, Map as MapIcon, Trophy } from 'lucide-react';
-import { LevelDetailsSheet } from './LevelDetailsSheet';
-import { RoadmapLevel, Roadmap, RoadmapStage } from '@/types';
+import LevelNode from "./nodes/LevelNode";
+import RegionNode from "./nodes/RegionNode";
+import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Briefcase, CheckCircle2, Lock, Sparkles, Swords } from "lucide-react";
+import { LevelDetailsSheet } from "./LevelDetailsSheet";
+import { Roadmap } from "@/types";
+import { useGamificationSummary } from "@/hooks/use-gamification";
 
 // RoadmapLevel is imported from LevelDetailsSheet
 
@@ -34,23 +32,31 @@ interface RoadmapJourneyMapProps {
 
 const nodeTypes = {
   level: LevelNode,
+  region: RegionNode,
 };
 
 const RoadmapJourneyMap = ({ roadmap }: RoadmapJourneyMapProps) => {
-  const [selectedLevelId, setSelectedLevelId] = React.useState<string | null>(null);
-  
+  const [selectedLevelId, setSelectedLevelId] = React.useState<string | null>(
+    null,
+  );
+  const { data: gamificationSummary } = useGamificationSummary();
+  const badgeCount =
+    gamificationSummary?.badge_count ??
+    gamificationSummary?.recent_badges?.length ??
+    0;
+
   const selectedLevel = useMemo(() => {
     if (!selectedLevelId) return null;
     for (const stage of roadmap.stages) {
-        const found = stage.levels.find(l => l.id === selectedLevelId);
-        if (found) return found;
+      const found = stage.levels.find((l) => l.id === selectedLevelId);
+      if (found) return found;
     }
     return null;
   }, [selectedLevelId, roadmap]);
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-      const levelId = node.id.replace('level-', '');
-      setSelectedLevelId(levelId);
+    const levelId = node.id.replace("level-", "");
+    setSelectedLevelId(levelId);
   }, []);
 
   // Transform Roadmap data into Nodes and Edges
@@ -58,86 +64,90 @@ const RoadmapJourneyMap = ({ roadmap }: RoadmapJourneyMapProps) => {
   const { initialNodes, initialEdges } = useMemo(() => {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
-    
-    let globalY = 0;
-    const LEVEL_HEIGHT = 150;
-    const LEVEL_WIDTH = 250;
-    
+
+    const LEVEL_GAP_X = 290;
+    const STAGE_GAP_X = 160;
+    const LEVEL_BASE_Y = 250;
+    const LEVEL_CARD_WIDTH = 220;
+    const REGION_PADDING_X = 60;
+    const REGION_HEIGHT = 300;
+    const REGION_TOP_Y = 145;
+    let cursorX = 110;
+    let previousLevelId: string | null = null;
+
     // Process Stages
     roadmap.stages.forEach((stage, stageIndex) => {
-      // Create Group Node for Stage
-      const stageNodeId = `stage-${stage.id}`;
-      // Calculate height based on levels (simple vertical stack for now)
+      const stageLevelCount = stage.levels.length || 1;
+      const stageWidth = Math.max(
+        LEVEL_CARD_WIDTH + 30,
+        (stageLevelCount - 1) * LEVEL_GAP_X + LEVEL_CARD_WIDTH + 30,
+      );
+      const regionNodeId = `region-${stage.id}`;
+      const stageCompleted = stage.levels.filter(
+        (l) => l.status === "completed",
+      ).length;
+      const stageProgress =
+        Math.round((stageCompleted / stageLevelCount) * 100) || 0;
 
-      // We will layout levels in a zig-zag or snake pattern
-      let stageHeight = 0;
-      
+      nodes.push({
+        id: regionNodeId,
+        type: "region",
+        position: { x: cursorX - REGION_PADDING_X, y: REGION_TOP_Y },
+        data: {
+          title: stage.title,
+          subtitle: stage.description,
+          progress: stageProgress,
+          index: stageIndex + 1,
+        },
+        style: {
+          width: stageWidth + REGION_PADDING_X * 2 - 10,
+          height: REGION_HEIGHT,
+        },
+        draggable: false,
+        selectable: false,
+      });
+
       stage.levels.forEach((level, levelIndex) => {
-        // If position is 0 (default), calculate it
-        // Snake pattern: Left -> Right -> Down -> Right -> Left
-        const isEveRow = Math.floor(levelIndex / 3) % 2 === 0;
-        const colIndex = levelIndex % 3;
-        
-        const x = isEveRow 
-            ? colIndex * LEVEL_WIDTH 
-            : (2 - colIndex) * LEVEL_WIDTH;
-            
-        const y = Math.floor(levelIndex / 3) * LEVEL_HEIGHT;
-
-        const absoluteY = globalY + y + 60; // Offset for stage header
-        const absoluteX = x + 50; // Padding
+        const absoluteX = cursorX + levelIndex * LEVEL_GAP_X;
+        const absoluteY = LEVEL_BASE_Y + (levelIndex % 2 === 0 ? 0 : 18);
 
         nodes.push({
           id: `level-${level.id}`,
-          type: 'level',
-          data: { 
+          type: "level",
+          data: {
             title: level.title,
             status: level.status,
-            isLocked: level.status === 'locked',
+            isLocked: level.status === "locked",
             levelIndex: level.level_index,
             stageId: stage.id,
-            description: level.title 
+            description: level.title,
           },
           position: { x: absoluteX, y: absoluteY },
-          parentId: undefined,// stageNodeId, // Optional: Use grouping if we want containment
-          extent: 'parent',
+          zIndex: 10,
         });
 
-        // Add Edge to previous level
-        const prevLevel = stage.levels[levelIndex - 1];
-        if (prevLevel) {
-           edges.push({
-             id: `e-${prevLevel.id}-${level.id}`,
-             source: `level-${prevLevel.id}`,
-             target: `level-${level.id}`,
-             animated: prevLevel.status === 'completed',
-             style: { stroke: prevLevel.status === 'completed' ? '#10b981' : '#94a3b8', strokeWidth: 2 },
-           });
-        } 
-        // Cross-stage edge
-        else if (stageIndex > 0) {
-           const prevStage = roadmap.stages[stageIndex - 1];
-           const lastLevelOfPrevStage = prevStage.levels[prevStage.levels.length - 1];
-           if (lastLevelOfPrevStage) {
-             edges.push({
-               id: `e-${lastLevelOfPrevStage.id}-${level.id}`,
-               source: `level-${lastLevelOfPrevStage.id}`,
-               target: `level-${level.id}`,
-               animated: lastLevelOfPrevStage.status === 'completed',
-               style: { stroke: '#94a3b8', strokeDasharray: '5,5' },
-               label: 'Stage Up',
-             });
-           }
+        if (previousLevelId) {
+          edges.push({
+            id: `e-${previousLevelId}-${level.id}`,
+            source: `level-${previousLevelId}`,
+            target: `level-${level.id}`,
+            animated: level.status === "in_progress",
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              width: 18,
+              height: 18,
+              color: level.status === "locked" ? "#94a3b8" : "#3b82f6",
+            },
+            style: {
+              stroke: level.status === "locked" ? "#94a3b8" : "#3b82f6",
+              strokeWidth: 3,
+            },
+          });
         }
-        
-        stageHeight = Math.max(stageHeight, y + LEVEL_HEIGHT);
+        previousLevelId = level.id;
       });
 
-      // Add Stage "Island" Background (as a Group Node if we wanted, or just separate visual)
-      // For now, let's keep it simple and just render nodes. 
-      // We can add "Group" nodes later for the "Island" visual.
-      
-      globalY += stageHeight + 100; // Gap between stages
+      cursorX += stageWidth + STAGE_GAP_X;
     });
 
     return { initialNodes: nodes, initialEdges: edges };
@@ -154,47 +164,90 @@ const RoadmapJourneyMap = ({ roadmap }: RoadmapJourneyMapProps) => {
 
   // Calculate Readiness
   const readiness = useMemo(() => {
-    const totalLevels = roadmap.stages.reduce((acc, stage) => acc + stage.levels.length, 0);
-    const completedLevels = roadmap.stages.reduce((acc, stage) => 
-        acc + stage.levels.filter(l => l.status === 'completed').length, 0
+    const totalLevels = roadmap.stages.reduce(
+      (acc, stage) => acc + stage.levels.length,
+      0,
+    );
+    const completedLevels = roadmap.stages.reduce(
+      (acc, stage) =>
+        acc + stage.levels.filter((l) => l.status === "completed").length,
+      0,
     );
     return Math.round((completedLevels / totalLevels) * 100) || 0;
   }, [roadmap]);
 
-  return (
-    <div className="h-[85vh] w-full flex flex-col relative bg-dot-pattern/5 rounded-xl overflow-hidden border">
-        {/* Job Readiness HUD */}
-        <div className="absolute top-4 left-4 right-4 z-10 flex justify-between items-start pointer-events-none">
-            <Card className="p-4 w-[300px] pointer-events-auto bg-background/95 backdrop-blur shadow-lg border-primary/20">
-                <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                        <Briefcase className="w-5 h-5" />
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-sm">Career Readiness</h3>
-                        <p className="text-xs text-muted-foreground">{roadmap.target_role || "Career Path"}</p>
-                    </div>
-                </div>
-                <div className="space-y-1">
-                    <div className="flex justify-between text-xs font-semibold">
-                        <span>Market Ready</span>
-                        <span>{readiness}%</span>
-                    </div>
-                    <Progress value={readiness} className="h-2" />
-                </div>
-            </Card>
+  const levelStats = useMemo(() => {
+    const flatLevels = roadmap.stages.flatMap((stage) => stage.levels);
+    const completed = flatLevels.filter(
+      (level) => level.status === "completed",
+    ).length;
+    const inProgress = flatLevels.filter(
+      (level) => level.status === "in_progress",
+    ).length;
+    const locked = flatLevels.filter(
+      (level) => level.status === "locked",
+    ).length;
+    return { total: flatLevels.length, completed, inProgress, locked };
+  }, [roadmap]);
 
-            <div className="flex gap-2 pointer-events-auto">
-                <Badge variant="outline" className="bg-background/95 backdrop-blur px-3 py-1.5 gap-2 border-primary/20">
-                    <Trophy className="w-4 h-4 text-amber-500" />
-                    <span>0 Badges</span>
-                </Badge>
-                <Badge variant="outline" className="bg-background/95 backdrop-blur px-3 py-1.5 gap-2 border-primary/20">
-                    <MapIcon className="w-4 h-4 text-blue-500" />
-                    <span>Map View</span>
-                </Badge>
+  return (
+    <div className="relative flex h-[62vh] w-full flex-col overflow-hidden rounded-2xl border bg-gradient-to-b from-sky-50 via-white to-indigo-50">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-30"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at 1px 1px, rgba(148,163,184,0.5) 1px, transparent 0)",
+          backgroundSize: "24px 24px",
+        }}
+      />
+      <div className="absolute -top-20 left-[-5%] h-60 w-60 rounded-full bg-sky-200/40 blur-3xl" />
+      <div className="absolute bottom-10 right-[-4%] h-72 w-72 rounded-full bg-indigo-200/40 blur-3xl" />
+
+      <div className="relative z-10 flex items-center justify-between gap-3 border-b bg-white/80 p-3 backdrop-blur">
+        <Card className="w-[340px] border-sky-200 bg-white/90 p-2.5 shadow-sm gap-3">
+          {/* <div className="mb-2 flex items-center gap-2 text-sky-700">
+            <Briefcase className="h-4 w-4" />
+            <p className="text-xs font-bold uppercase tracking-[0.14em]">Mission</p>
+          </div> */}
+          {/* <p className="line-clamp-2 font-semibold text-slate-800">{roadmap.target_role || "Career Path"}</p> */}
+          <div className="mt-1.5 w-full">
+            <div className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-600">
+              <span>Career Readiness</span>
+              <span>{readiness}%</span>
             </div>
+            <Progress value={readiness} className="h-2.5" />
+          </div>
+        </Card>
+        <div className="flex items-center gap-2">
+          <Badge
+            className="border-emerald-200 bg-emerald-50 text-emerald-700"
+            variant="outline"
+          >
+            <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+            {levelStats.completed}/{levelStats.total} Complete
+          </Badge>
+          <Badge
+            className="border-amber-200 bg-amber-50 text-amber-700"
+            variant="outline"
+          >
+            <Swords className="mr-1 h-3.5 w-3.5" />
+            {levelStats.inProgress} Active
+          </Badge>
+          <Badge
+            className="border-slate-200 bg-slate-50 text-slate-700"
+            variant="outline"
+          >
+            <Lock className="mr-1 h-3.5 w-3.5" />
+            {levelStats.locked} Locked
+          </Badge>
+          <Badge
+            className="border-indigo-200 bg-indigo-50 text-indigo-700"
+            variant="outline"
+          >
+            {badgeCount} {badgeCount === 1 ? "Badge" : "Badges"}
+          </Badge>
         </div>
+      </div>
 
       <ReactFlow
         nodes={nodes}
@@ -203,22 +256,53 @@ const RoadmapJourneyMap = ({ roadmap }: RoadmapJourneyMapProps) => {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
+        
         fitView
-        attributionPosition="bottom-right"
-        className="bg-dot-pattern"
+        // attributionPosition="bottom-right"
+        className="relative z-10"
+        minZoom={0.6}
+        maxZoom={1.5}
+        proOptions={{ hideAttribution: true }}
       >
-        <Background gap={20} size={1} />
-        <Controls />
+        <Background gap={22} size={1} color="#bfdbfe" />
+        <MiniMap
+          className="!bottom-24 !right-0 !h-24 !w-40 !rounded-lg !border !border-slate-200 !bg-white/95"
+          pannable
+          nodeColor={(node) => {
+            const status = String(node.data?.status || "");
+            if (status === "completed") return "#10b981";
+            if (status === "in_progress") return "#6366f1";
+            if (status === "available") return "#38bdf8";
+            return "#cbd5e1";
+          }}
+        />
+        <Controls className="!bottom-25 !left-2 !shadow-xl !rounded !border !border-slate-400 !bg-white/95" />
       </ReactFlow>
 
-      <LevelDetailsSheet 
-        level={selectedLevel} 
-        isOpen={!!selectedLevel} 
-        onClose={() => setSelectedLevelId(null)} 
+      <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
+        <div className="flex rounded-lg items-center gap-3 border-slate-200 bg-white/95 px-4 py-2 text-xs text-slate-600 shadow-md">
+          <div className="inline-flex items-center gap-1">
+            <Sparkles className="h-3.5 w-3.5 text-sky-500" /> Available
+          </div>
+          <div className="inline-flex items-center gap-1">
+            <Swords className="h-3.5 w-3.5 text-indigo-500" /> In Progress
+          </div>
+          <div className="inline-flex items-center gap-1">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> Completed
+          </div>
+          <div className="inline-flex items-center gap-1">
+            <Lock className="h-3.5 w-3.5 text-slate-400" /> Locked
+          </div>
+        </div>
+      </div>
+
+      <LevelDetailsSheet
+        level={selectedLevel}
+        isOpen={!!selectedLevel}
+        onClose={() => setSelectedLevelId(null)}
       />
     </div>
   );
-
 };
 
 export default RoadmapJourneyMap;

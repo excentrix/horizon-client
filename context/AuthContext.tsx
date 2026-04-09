@@ -96,16 +96,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // handled in fetchProfile
     });
   }, [fetchProfile]);
-  
+
   // Listen for Supabase auth changes (handling Google Login redirect)
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       logger: console.log("Supabase Auth Event:", event);
       if (event === 'SIGNED_IN' && session) {
         // We are signed in with Supabase, now sync with Backend
-        // Check if we already have a backend session (to avoid double login loops if possible, though strict sync is better)
         const currentAccess = Cookies.get("accessToken");
-        if (currentAccess) return; // Already logged in to backend?
+        const isGcalCallback = typeof window !== 'undefined' && window.location.search.includes('gcal=connected');
+
+        if (currentAccess && !isGcalCallback) return; // Already logged in and not a re-auth for Calendar
         
         // Defensive check: Ensure we have an access token
         const token = session.access_token;
@@ -124,10 +125,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         try {
           // Sync with backend
-          // We need to pass the Supabase tokens to the backend
+          // We need to pass the Supabase tokens to the backend, 
+          // AND the raw Google provider tokens for Calendar Sync.
           const payload = {
              access_token: session.access_token,
              refresh_token: session.refresh_token,
+             provider_token: session.provider_token ?? undefined,
+             provider_refresh_token: session.provider_refresh_token ?? undefined,
              device_info: {
                  device_type: "web",
                  browser: navigator.userAgent,
@@ -137,7 +141,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log("Syncing with backend, payload:", { 
               ...payload, 
               access_token: payload.access_token?.substring(0, 10) + '...',
-              refresh_token: payload.refresh_token?.substring(0, 10) + '...'
+              refresh_token: payload.refresh_token?.substring(0, 10) + '...',
+              provider_token: payload.provider_token?.substring(0, 10) + '...'
           });
 
           const response = await authApi.loginWithGoogle(payload);
@@ -149,7 +154,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           setSessionTokens(access, refresh, true); // persistent by default for social login
           setUser(response.user);
-          
           telemetry.identify(response.user.id ?? response.user.email, {
              email: response.user.email,
              name: response.user.full_name,
@@ -164,7 +168,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             description: response.user.full_name ?? response.user.email,
           });
           
-          router.push("/dashboard");
+          // Redirect: if this was a Google Calendar re-auth, go back to plans
+          if (typeof window !== 'undefined' && window.location.search.includes('gcal=connected')) {
+            toast.success("Google Calendar connected!", {
+              description: "Your learning plan tasks will now sync automatically.",
+            });
+            router.push("/plans");
+            return;
+          }
+
+          if (
+            response.user.user_type === "student" &&
+            !response.user.onboarding_completed
+          ) {
+            router.push("/onboarding");
+          } else if (response.user.is_superuser) {
+            router.push("/hq");
+          } else if (
+            response.user.user_type === "admin" ||
+            response.user.user_type === "educator"
+          ) {
+            router.push("/institution/overview");
+          } else {
+            router.push("/dashboard");
+          }
           
         } catch (error) {
            console.error("Backend sync failed", error);
@@ -193,7 +220,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           response.session.refresh_token ?? response.session.refresh ?? undefined;
         setSessionTokens(access, refresh, Boolean(payload.remember_me));
         setUser(response.user);
-
         // Identify user in PostHog
         telemetry.identify(response.user.id ?? response.user.email, {
           email: response.user.email,
@@ -210,7 +236,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         toast.success("Welcome back!", {
           description: response.user.full_name ?? response.user.email,
         });
-        router.push("/dashboard");
+        const userType = response.user.user_type;
+        if (
+          response.user.user_type === "student" &&
+          !response.user.onboarding_completed
+        ) {
+          router.push("/onboarding");
+        } else if (response.user.is_superuser) {
+          router.push("/hq");
+        } else if (userType === "admin" || userType === "educator") {
+          router.push("/institution/overview");
+        } else {
+          router.push("/dashboard");
+        }
       } catch (error) {
         toast.error("Unable to sign in", {
           description:
@@ -231,6 +269,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             provider: 'google',
             options: {
                 redirectTo: `${window.location.origin}/auth/callback`,
+                scopes: 'https://www.googleapis.com/auth/calendar',
                 queryParams: {
                     access_type: 'offline', // ensures we get a refresh token
                     prompt: 'consent',
@@ -251,15 +290,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       try {
         await authApi.register(payload);
-
+        const loginResponse = await authApi.login({
+          email: payload.email,
+          password: payload.password,
+          remember_me: true,
+        });
+        const access =
+          loginResponse.session.access_token ??
+          loginResponse.session.access ??
+          undefined;
+        const refresh =
+          loginResponse.session.refresh_token ??
+          loginResponse.session.refresh ??
+          undefined;
+        setSessionTokens(access, refresh, true);
+        setUser(loginResponse.user);
         // Capture signup event
         telemetry.track('user_signed_up', {
           email: payload.email,
           username: payload.username,
         });
 
-        toast.success("Account created! Sign in to continue.");
-        router.push("/login");
+        toast.success("Account created.");
+        if (
+          loginResponse.user.user_type === "student" &&
+          !loginResponse.user.onboarding_completed
+        ) {
+          router.push("/onboarding");
+        } else if (
+          loginResponse.user.user_type === "admin" ||
+          loginResponse.user.user_type === "educator"
+        ) {
+          router.push("/institution/overview");
+        } else {
+          router.push("/dashboard");
+        }
       } catch (error) {
         toast.error("Registration failed", {
           description:
@@ -272,6 +337,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [router],
   );
+
+  useEffect(() => {
+    if (!user || !pathname) return;
+    if (user.user_type !== "student" || user.onboarding_completed) return;
+    const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/register");
+    const isOnboardingPage = pathname.startsWith("/onboarding");
+    const isMentorChat = pathname.startsWith("/chat");
+    if (!isAuthPage && !isOnboardingPage && !isMentorChat) {
+      router.replace("/onboarding");
+    }
+  }, [pathname, router, user]);
 
   const handleLogout = useCallback(async () => {
     try {

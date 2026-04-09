@@ -50,7 +50,7 @@ async function createConversation(
 ): Promise<Conversation> {
   const response = await http.post<Conversation>("/chat/conversations/", {
     ai_personality_id: personalityId,
-    title: "New Conversation",
+    title: "Mentor Session",
     topic: "A fresh start",
   });
   return response.data;

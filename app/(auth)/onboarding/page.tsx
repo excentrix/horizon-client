@@ -1,378 +1,228 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import posthog from "posthog-js";
+import { AlertCircle, CheckCircle2, Loader2, Upload, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, FileText, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-
-import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import { authApi } from "@/lib/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
+const ACCEPTED_EXT = ".pdf,.png,.jpg,.jpeg";
+
+type Stage = "idle" | "uploading" | "ready" | "failed";
 
 export default function OnboardingPage() {
-  const { loginWithGoogle, isLoading } = useAuth();
   const router = useRouter();
-  const [isDragging, setIsDragging] = useState(false);
+  const { user, refreshProfile } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string>("");
-  const [parseStatus, setParseStatus] = useState<"idle" | "uploading" | "parsing" | "complete" | "failed">("idle");
+  const [isDragging, setIsDragging] = useState(false);
+  const [stage, setStage] = useState<Stage>("idle");
+  const [error, setError] = useState("");
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
+  const [targetRole, setTargetRole] = useState("");
+  const [targetCompany, setTargetCompany] = useState("");
+  const [timeline, setTimeline] = useState("");
+  const [constraints, setConstraints] = useState("");
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  const statusCopy = useMemo(() => {
+    if (stage === "uploading") return "Uploading resume...";
+    if (stage === "ready") return "Resume uploaded. VELO analysis started in background.";
+    if (stage === "failed") return error || "Resume analysis failed.";
+    return "Upload resume to start VELO analysis.";
+  }, [error, stage]);
+
+  const validateFile = (selectedFile: File): string | null => {
+    if (!ACCEPTED_TYPES.includes(selectedFile.type)) return "Please upload a PDF/JPG/PNG resume.";
+    if (selectedFile.size > 10 * 1024 * 1024) return "File must be under 10MB.";
+    return null;
   };
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile) {
-      validateAndSetFile(droppedFile);
-    }
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      validateAndSetFile(selectedFile);
-    }
-  };
-
-  const validateAndSetFile = (selectedFile: File) => {
-    // Validate file type
-    const allowedTypes = [
-      'application/pdf',
-      'image/png',
-      'image/jpeg',
-      'text/plain',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ];
-
-    if (!allowedTypes.includes(selectedFile.type)) {
-      setError("Unsupported file type. Please upload a PDF, PNG, JPG, TXT, or DOCX file.");
+  const handleFile = (selectedFile: File) => {
+    const fileError = validateFile(selectedFile);
+    if (fileError) {
+      setError(fileError);
       return;
     }
-
-    // Validate file size (10MB max)
-    const maxSize = 10 * 1024 * 1024;
-    if (selectedFile.size > maxSize) {
-      setError("File too large. Maximum size is 10MB.");
-      return;
-    }
-
     setError("");
     setFile(selectedFile);
   };
 
-  const handleUpload = async () => {
-    if (!file) return;
-
-    setUploading(true);
-    setParseStatus("uploading");
+  const parseResume = async (): Promise<boolean> => {
+    if (!file || !targetRole.trim()) return false;
     setError("");
-
-    const formData = new FormData();
-    formData.append("resume", file);
+    setStage("uploading");
 
     try {
-      const response = await fetch(`${API_URL}/onboarding/upload-resume/`, {
-        method: "POST",
-        body: formData,
-      });
+      const form = new FormData();
+      form.append("resume", file);
+      form.append("target_role", targetRole.trim());
+      form.append("target_company", targetCompany.trim());
+      form.append("timeline", timeline.trim());
+      form.append("constraints", constraints.trim());
+      const payload = await authApi.uploadResume(form);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Upload failed");
+      setStage("ready");
+      if (payload.job_id) {
+        setJobId(payload.job_id);
+        window.localStorage.setItem("resumeAnalysisJobId", payload.job_id);
       }
-
-      const data = await response.json();
-      setParseStatus("parsing");
-
-      // Poll for parsing completion
-      await pollParsingStatus(data.session_key);
-
-    } catch {
-      setError("Upload failed. Please try again.");
-      setParseStatus("failed");
-    } finally {
-      setUploading(false);
+      return true;
+    } catch (e) {
+      setStage("failed");
+      setError(e instanceof Error ? e.message : "Upload failed");
+      return false;
     }
   };
 
-  const pollParsingStatus = async (sessionKey: string) => {
-    const maxAttempts = 20;
-    let attempts = 0;
+  const canContinue = Boolean(file) && Boolean(targetRole.trim());
 
-    const checkStatus = async (): Promise<void> => {
-      try {
-        const response = await fetch(`${API_URL}/onboarding/session/${sessionKey}/`);
-        const data = await response.json();
-
-        if (data.parsing_status === "complete") {
-          setParseStatus("complete");
-          // Store session key and redirect to form
-          localStorage.setItem("onboarding_session_key", sessionKey);
-
-          // Capture resume uploaded event
-          posthog.capture('onboarding_resume_uploaded', {
-            file_type: file?.type,
-            file_size_kb: file ? Math.round(file.size / 1024) : undefined,
-          });
-
-          setTimeout(() => {
-            router.push("/onboarding/form");
-          }, 1500);
-        } else if (data.parsing_status === "failed") {
-          setParseStatus("failed");
-          setError("Failed to parse resume. Please try again or skip this step.");
-        } else if (attempts < maxAttempts) {
-          attempts++;
-          setTimeout(checkStatus, 2000);
-        } else {
-          setParseStatus("failed");
-          setError("Parsing timeout. Please try again.");
-        }
-      } catch {
-        setParseStatus("failed");
-        setError("Failed to check parsing status.");
-      }
-    };
-
-    await checkStatus();
-  };
-
-  const handleSkip = async () => {
-    try {
-      const response = await fetch(`${API_URL}/onboarding/skip-resume/`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to skip resume upload");
-      }
-
-      const data = await response.json();
-      localStorage.setItem("onboarding_session_key", data.session_key);
-
-      // Capture resume skipped event
-      posthog.capture('onboarding_resume_skipped');
-
-      router.push("/onboarding/form");
-    } catch {
-      setError("Failed to proceed. Please try again.");
+  const handleGetStarted = async () => {
+    if (stage === "ready" && jobId) {
+      router.push("/chat");
+      return;
+    }
+    const ok = await parseResume();
+    if (ok) {
+      await refreshProfile();
+      router.push("/chat");
     }
   };
+
+  useEffect(() => {
+    if (!user) {
+      router.replace("/register");
+    }
+  }, [router, user]);
+
+  if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-[#f6f4ff] dark:bg-[#0b0b0f]">
-      <div className="container mx-auto flex min-h-screen flex-col items-center justify-center px-4 py-16">
-        
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-5xl">
+    <div className="min-h-screen bg-[#f6f4ff]">
+      <div className="container mx-auto flex min-h-screen flex-col items-center justify-center px-4 py-12">
+        <div className="mb-6 text-center">
+          <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
             Welcome to{" "}
-            <span className="inline-block -rotate-1 rounded-md border-2 border-black bg-[#fcd34d] px-2 py-1 text-black shadow-[6px_6px_0_0_#000] dark:border-white dark:shadow-[6px_6px_0_0_#fff]">
+            <span className="inline-block -rotate-1 rounded-md border-2 border-black bg-[#fcd34d] px-2 py-1 text-black shadow-[6px_6px_0_0_#000]">
               Horizon
             </span>
           </h1>
-          <p className="mt-4 text-lg font-medium text-gray-700 dark:text-gray-300">
-            Let&apos;s personalize your learning journey. A resume helps, but it&apos;s optional.
+          <p className="mt-3 text-base text-gray-700">
+            Upload your resume once. VELO runs analysis in the background while you start with your mentor.
           </p>
         </div>
 
-
-        {/* Progress Bar */}
-        <div className="mb-12 w-full max-w-2xl">
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col items-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-white text-black shadow-[3px_3px_0_0_#000] dark:border-white dark:bg-zinc-800 dark:text-white dark:shadow-[3px_3px_0_0_#fff]">1</div>
-              <span className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">Upload (Optional)</span>
-            </div>
-            <div className="mx-4 h-1 flex-1 bg-black/10 dark:bg-white/20" />
-            <div className="flex flex-col items-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-[#e0f2fe] text-black shadow-[3px_3px_0_0_#000] dark:border-white dark:bg-zinc-900 dark:text-gray-400 dark:shadow-[3px_3px_0_0_#fff]">2</div>
-              <span className="mt-2 text-sm font-semibold text-gray-900 dark:text-gray-400">Tell Us More</span>
-            </div>
-            <div className="mx-4 h-1 flex-1 bg-black/10 dark:bg-white/20" />
-            <div className="flex flex-col items-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-[#dcfce7] text-black shadow-[3px_3px_0_0_#000] dark:border-white dark:bg-zinc-900 dark:text-gray-400 dark:shadow-[3px_3px_0_0_#fff]">3</div>
-              <span className="mt-2 text-sm font-semibold text-gray-900 dark:text-gray-400">Choose Path</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Main Card */}
-        <Card className="w-full max-w-2xl border-2 border-black bg-white shadow-[10px_10px_0_0_#000] dark:border-white dark:bg-zinc-900 dark:shadow-[10px_10px_0_0_#fff]">
+        <Card className="w-full max-w-3xl border-2 border-black bg-white shadow-[10px_10px_0_0_#000]">
           <CardHeader>
-            <CardTitle className="text-2xl dark:text-white">Upload Your Resume (Optional)</CardTitle>
-            <CardDescription className="dark:text-gray-400">
-              We can tailor your path faster with a resume, or you can enter details manually.
-            </CardDescription>
+            <CardTitle className="text-2xl">Onboarding</CardTitle>
+            <CardDescription>Upload resume and target details to initialize your personalized roadmap context.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            
-            {/* Drop Zone */}
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              className={cn(
-                "relative flex flex-col items-center justify-center rounded-lg border-2 border-black p-12 transition-all dark:border-gray-500",
-                isDragging
-                  ? "bg-[#fef9c3] dark:bg-yellow-900/20"
-                  : "bg-white hover:bg-[#f1f5f9] dark:bg-zinc-800 dark:hover:bg-zinc-700",
-                file && "bg-[#dcfce7] dark:bg-emerald-900/20"
-              )}
-            >
-              {parseStatus === "idle" && !file && (
-                <>
-                  <Upload className="mb-4 h-12 w-12 text-gray-400 dark:text-gray-500" />
-                  <p className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Drag and drop your resume here (optional)
-                  </p>
-                  <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
-                    or click to browse (PDF, PNG, JPG, TXT, DOCX • Max 10MB)
-                  </p>
-                  <input
-                    type="file"
-                    accept=".pdf,.png,.jpg,.jpeg,.txt,.docx"
-                    onChange={handleFileSelect}
-                    className="absolute inset-0 cursor-pointer opacity-0"
-                  />
-                </>
-              )}
-
-              {file && parseStatus === "idle" && (
-                <div className="flex items-center gap-3">
-                  <FileText className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{file.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{(file.size / 1024).toFixed(0)} KB</p>
-                  </div>
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                </div>
-              )}
-
-              {parseStatus === "uploading" && (
-                <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="h-8 w-8 animate-spin text-black dark:text-white" />
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Uploading...</p>
-                </div>
-              )}
-
-              {parseStatus === "parsing" && (
-                <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="h-8 w-8 animate-spin text-black dark:text-white" />
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Analyzing your resume with AI...</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">This usually takes 10-15 seconds</p>
-                </div>
-              )}
-
-              {parseStatus === "complete" && (
-                <div className="flex flex-col items-center gap-3">
-                  <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-                  <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Resume analyzed successfully!</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">Redirecting...</p>
-                </div>
-              )}
-
-              {parseStatus === "failed" && (
-                <div className="flex flex-col items-center gap-3">
-                  <AlertCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
-                  <p className="text-sm font-semibold text-red-700 dark:text-red-400">Analysis failed</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">You can try again or skip this step</p>
-                </div>
-              )}
-            </div>
-
-            {/* Error Message */}
-            {error && (
-              <div className="rounded-lg border-2 border-black bg-red-100 p-4 text-sm font-semibold text-red-700 shadow-[4px_4px_0_0_#000] dark:border-red-500/50 dark:bg-red-900/20 dark:text-red-300 dark:shadow-none">
-                {error}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label htmlFor="target-role">Target role *</Label>
+                <Input id="target-role" value={targetRole} onChange={(e) => setTargetRole(e.target.value)} placeholder="e.g., Backend Engineer" />
               </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex gap-3">
-              {file && parseStatus === "idle" && (
-                <Button
-                  onClick={handleUpload}
-                  disabled={uploading}
-                  className="flex-1 bg-black text-white shadow-[4px_4px_0_0_#000] hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition dark:bg-emerald-600 dark:text-white dark:shadow-[4px_4px_0_0_#000]"
-                >
-                  {uploading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    "Continue with Resume"
-                  )}
-                </Button>
-              )}
-
-              {parseStatus === "failed" && (
-                <Button
-                  onClick={() => {
-                    setFile(null);
-                    setParseStatus("idle");
-                    setError("");
-                  }}
-                  variant="outline"
-                  className="flex-1 border-2 border-black shadow-[4px_4px_0_0_#000] hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition dark:border-gray-500 dark:bg-zinc-800 dark:text-white dark:shadow-[4px_4px_0_0_#fff]"
-                >
-                  Try Again
-                </Button>
-              )}
-
-              {(parseStatus === "idle" || parseStatus === "failed") && (
-                <Button
-                  onClick={handleSkip}
-                  variant="outline"
-                  className="flex-1 border-2 border-black shadow-[4px_4px_0_0_#000] hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition dark:border-white dark:bg-zinc-800 dark:text-white dark:shadow-[4px_4px_0_0_#fff]"
-                >
-                  Continue Without Resume
-                </Button>
-              )}
+              <div>
+                <Label htmlFor="target-company">Target company (optional)</Label>
+                <Input id="target-company" value={targetCompany} onChange={(e) => setTargetCompany(e.target.value)} placeholder="e.g., Google" />
+              </div>
+              <div>
+                <Label htmlFor="timeline">Timeline</Label>
+                <Input id="timeline" value={timeline} onChange={(e) => setTimeline(e.target.value)} placeholder="e.g., 3 months" />
+              </div>
+              <div className="md:col-span-2">
+                <Label htmlFor="constraints">Constraints</Label>
+                <Textarea id="constraints" value={constraints} onChange={(e) => setConstraints(e.target.value)} placeholder="e.g., 2 hrs/day weekdays" className="min-h-[90px]" />
+              </div>
             </div>
 
-            <p className="text-center text-xs font-medium text-gray-700 dark:text-gray-400">
-              No resume? No problem — we&apos;ll ask a few quick questions next.
-            </p>
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                const dropped = e.dataTransfer.files?.[0];
+                if (dropped) handleFile(dropped);
+              }}
+              className={cn(
+                "relative flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition-all",
+                isDragging ? "border-black bg-[#fef9c3]" : "border-black/30 bg-[#f8fafc] hover:bg-[#f1f5f9]",
+                file && "border-emerald-500 bg-emerald-50"
+              )}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {!file ? (
+                <>
+                  <Upload className="mb-3 h-7 w-7 text-gray-500" />
+                  <p className="text-sm font-medium text-gray-700">Drop resume here or click to browse</p>
+                  <p className="mt-1 text-xs text-gray-500">PDF / PNG / JPG · max 10MB</p>
+                </>
+              ) : (
+                <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+                  <CheckCircle2 className="h-5 w-5" />
+                  <span>{file.name}</span>
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_EXT}
+                className="hidden"
+                onChange={(e) => {
+                  const selected = e.target.files?.[0];
+                  if (selected) handleFile(selected);
+                }}
+              />
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <div className="flex items-center gap-2 text-sm">
+                {stage === "uploading" ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                ) : stage === "failed" ? (
+                  <AlertCircle className="h-4 w-4 text-rose-600" />
+                ) : stage === "ready" ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                ) : (
+                  <Upload className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span>{statusCopy}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleGetStarted} disabled={!canContinue || stage === "uploading"}>
+                {stage === "uploading" ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Uploading resume...
+                  </>
+                ) : (
+                  <>
+                    Upload & Open Mentor
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
-      </div>
-      
-      <div className="absolute top-4 right-4 md:top-8 md:right-8">
-         <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600 dark:text-gray-400 hidden sm:inline">Already have an account?</span>
-            <Button variant="outline" asChild className="border-black dark:border-white">
-                <Link href="/login">Sign In</Link>
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => loginWithGoogle()}
-              disabled={isLoading}
-              className="rounded-full border border-gray-200 dark:border-gray-700 w-10 h-10 p-0"
-              title="Sign in with Google"
-            >
-              <svg className="h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
-                <path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path>
-              </svg>
-            </Button>
-         </div>
       </div>
     </div>
   );

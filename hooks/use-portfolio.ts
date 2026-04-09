@@ -12,6 +12,40 @@ const artifactsKey = ["portfolio-artifacts"];
 const profileKey = ["portfolio-profile"];
 const timelineKey = ["growth-timeline"];
 const skillsKey = ["portfolio-skills-transcript"];
+const readinessKey = ["portfolio-readiness"];
+
+export interface ReadinessBreakdownDimension {
+  value: number;
+  weight: number;
+  [key: string]: unknown;
+}
+
+export interface ReadinessSnapshot {
+  score: number;
+  label: "Exploring" | "Developing" | "Emerging" | "Proficient" | "Job-Ready";
+  breakdown: Record<string, ReadinessBreakdownDimension>;
+  top_competencies: string[];
+  next_tips: string[];
+  generated_at: string;
+  error?: string;
+}
+
+export function useReadiness() {
+  return useQuery<ReadinessSnapshot>({
+    queryKey: readinessKey,
+    queryFn: async () => {
+      const response = await fetch("/api/portfolio/readiness/", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch readiness score");
+      return response.json();
+    },
+    staleTime: 120_000, // 2 minutes
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+}
+
 
 export function usePortfolioArtifacts() {
   return useQuery<PortfolioArtifact[]>({
@@ -103,6 +137,7 @@ export function useVerifyArtifact() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: artifactsKey });
       queryClient.invalidateQueries({ queryKey: timelineKey });
+      queryClient.invalidateQueries({ queryKey: readinessKey });
       telemetry.toastSuccess("Artifact verification started!");
     },
     onError: (error) => {
@@ -148,16 +183,17 @@ export function useSetVisibility() {
         credentials: "include",
         body: JSON.stringify({ visibility }),
       });
-      if (!response.ok) throw new Error("Failed to update visibility");
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error || "Failed to update visibility");
+      }
       return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: artifactsKey });
-      telemetry.toastSuccess("Visibility updated!");
     },
     onError: (error) => {
       telemetry.error("Failed to update visibility", { error });
-      telemetry.toastError("Couldn't update visibility.");
     },
   });
 }

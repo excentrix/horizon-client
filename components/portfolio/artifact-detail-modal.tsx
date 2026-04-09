@@ -32,6 +32,14 @@ interface ArtifactDetail {
     verified_at: string;
     strengths: string[];
     suggestions: string[];
+    verdict_summary?: string;
+    criteria_results?: Array<{
+      criterion: string;
+      met: boolean;
+      score: number;
+      evidence: string;
+    }>;
+    method?: string;
   };
   demonstrated_competencies?: Array<{
     competency: {
@@ -47,6 +55,7 @@ interface ArtifactDetail {
   visibility: string;
   featured: boolean;
   tags?: string[];
+  metadata?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -74,6 +83,10 @@ export function ArtifactDetailModal({
   const isPdf = artifact.url?.toLowerCase().endsWith(".pdf");
   const showContent = Boolean(artifact.content);
   const showEmbed = Boolean(artifact.url);
+  const isVeloPending =
+    artifact.metadata?.source === "velo_resume" &&
+    artifact.verification_status !== "verified" &&
+    artifact.verification_status !== "human_verified";
 
   const handleReflectionSubmit = async () => {
     if (!reflection.trim()) {
@@ -99,8 +112,8 @@ export function ArtifactDetailModal({
     try {
       await setVisibility({ artifactId: artifact.id, visibility });
       toast.success("Visibility updated");
-    } catch {
-      toast.error("Failed to update visibility");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update visibility");
     } finally {
       setVisibilityUpdating(false);
     }
@@ -137,18 +150,26 @@ export function ArtifactDetailModal({
             ))}
           </div>
           <div className="flex flex-wrap gap-2 text-xs">
-            {["private", "mentors", "employers", "public"].map((visibility) => (
+            {["private", "mentors", "employers", "public"].map((visibility) => {
+              const promotionBlocked = isVeloPending && ["employers", "public"].includes(visibility);
+              return (
               <Button
                 key={visibility}
                 size="sm"
                 variant={artifact.visibility === visibility ? "default" : "outline"}
-                disabled={visibilityUpdating}
+                disabled={visibilityUpdating || promotionBlocked}
                 onClick={() => handleVisibilityChange(visibility)}
               >
                 {visibility}
               </Button>
-            ))}
+              );
+            })}
           </div>
+          {isVeloPending ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Needs VELO verification before promoting to employers/public.
+            </p>
+          ) : null}
 
           {/* Verification Summary */}
           {artifact.verification_summary && (
@@ -162,6 +183,12 @@ export function ArtifactDetailModal({
                   Score: {Math.round(artifact.verification_summary.score * 100)}%
                 </Badge>
               </div>
+
+              {artifact.verification_summary.verdict_summary && (
+                <p className="text-sm text-muted-foreground italic border-l-2 border-slate-200 pl-3">
+                  {artifact.verification_summary.verdict_summary}
+                </p>
+              )}
 
               {artifact.verification_summary.strengths.length > 0 && (
                 <div>
@@ -183,6 +210,30 @@ export function ArtifactDetailModal({
                     ))}
                   </ul>
                 </div>
+              )}
+
+              {artifact.verification_summary.criteria_results && artifact.verification_summary.criteria_results.length > 0 && (
+                <details>
+                  <summary className="text-xs font-semibold text-muted-foreground cursor-pointer select-none hover:text-foreground transition-colors">
+                    View criteria breakdown ({artifact.verification_summary.criteria_results.length} criteria)
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    {artifact.verification_summary.criteria_results.map((cr, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs p-2 rounded-md bg-muted/30">
+                        <span className={cr.met ? "text-emerald-500 shrink-0 mt-0.5" : "text-amber-500 shrink-0 mt-0.5"}>
+                          {cr.met ? "✓" : "✗"}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-foreground">{cr.criterion}</p>
+                          <p className="text-muted-foreground mt-0.5">{cr.evidence}</p>
+                        </div>
+                        <span className="font-mono text-muted-foreground shrink-0">
+                          {Math.round(cr.score * 100)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               )}
             </div>
           )}

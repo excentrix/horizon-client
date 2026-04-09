@@ -6,7 +6,6 @@ import {
   BrainCircuit,
   Briefcase,
   Compass,
-  FolderOpen,
   MessageCircle,
   Radar,
   Trophy,
@@ -26,9 +25,12 @@ import { AnalysisProgressPanel } from "@/components/progress/AnalysisProgressPan
 import { ProfileMenu } from "@/components/layout/profile-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { usePortfolioProfile } from "@/hooks/use-portfolio";
-import { useMemo, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { type ComponentType, useMemo, useState } from "react";
+import { NotificationBell } from "@/components/layout/NotificationBell";
+import { VeloAnalysisStatusPill } from "@/components/layout/velo-analysis-status-pill";
 
-const NAV_ITEMS = [
+const STUDENT_NAV_ITEMS = [
   {
     href: "/dashboard",
     label: "Dashboard",
@@ -54,43 +56,144 @@ const NAV_ITEMS = [
     description: "Levels toward job readiness",
   },
   {
-    href: "/insights",
-    label: "Your Mirror",
-    icon: Radar,
-    description: "Skills, proofs & career readiness",
-  },
-  {
-    href: "/artifacts",
-    label: "Artifacts",
-    icon: Briefcase,
-    description: "Submitted, verified, and promoted work",
-  },
-  {
-    href: "/portfolio",
-    label: "Portfolio",
-    icon: FolderOpen,
-    description: "Your professional portfolio showcase",
-  },
-  {
     href: "/progress",
-    label: "Progress Mural",
+    label: "Your Mirror",
     icon: Trophy,
-    description: "Milestones, streaks, and wins",
+    description: "Skills, portfolio & analytics",
   },
   {
-    href: "/signals",
-    label: "Signals & Alerts",
+    href: "/institution/overview",
+    label: "Institution Overview",
     icon: Radar,
-    description: "Wellness & intelligence feed",
+    description: "Cohorts, invites, educator insights",
+    requiresInstitutionRole: true,
+  },
+];
+
+const EDUCATOR_NAV_ITEMS = [
+  {
+    href: "/institution/overview",
+    label: "Institution Overview",
+    icon: Radar,
+    description: "Cohorts, invites, educator insights",
+  },
+  {
+    href: "/audit/admin/dashboard",
+    label: "Audit Dashboard",
+    icon: QrCode,
+    description: "Audit completion and verification",
+  },
+  {
+    href: "/institution/students",
+    label: "Student Intelligence",
+    icon: Radar,
+    description: "Student progress, risk, and actions",
+  },
+  {
+    href: "/institution/reports",
+    label: "Reports & Exports",
+    icon: Radar,
+    description: "Cohort reporting and exports",
+  },
+];
+
+const ADMIN_NAV_ITEMS = [
+  {
+    href: "/institution/overview",
+    label: "Institution Overview",
+    icon: Briefcase,
+    description: "Cohorts, invites, educator insights",
+  },
+  {
+    href: "/audit/admin/dashboard",
+    label: "Audit Dashboard",
+    icon: QrCode,
+    description: "Audit completion and verification",
+  },
+  {
+    href: "/institution/cohorts",
+    label: "Cohorts",
+    icon: Briefcase,
+    description: "Create and manage cohorts",
+  },
+  {
+    href: "/institution/students",
+    label: "Student Intelligence",
+    icon: Radar,
+    description: "Student progress, risk, and actions",
+  },
+  {
+    href: "/institution/reports",
+    label: "Reports & Exports",
+    icon: Radar,
+    description: "Cohort reporting and exports",
+  },
+  {
+    href: "/institution/invites",
+    label: "Roster & Invites",
+    icon: Briefcase,
+    description: "CSV invites and provisioning",
+  },
+  {
+    href: "/institution/support",
+    label: "User Support",
+    icon: Radar,
+    description: "Account support and access controls",
   },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const { data: profileData } = usePortfolioProfile();
+  const { user } = useAuth();
   const [qrOpen, setQrOpen] = useState(false);
   const [badgeCopied, setBadgeCopied] = useState(false);
   const profile = profileData?.profile;
+  const isSuperUser = user?.is_superuser;
+  const isAdmin = profile?.user_type === "admin";
+  const isEducator = profile?.user_type === "educator";
+  const isStudent = profile?.user_type === "student";
+  const isStudentOnboardingPending = Boolean(
+    isStudent && user && !user.onboarding_completed
+  );
+
+  const baseNavItems = isSuperUser
+    ? [
+        {
+          href: "/hq",
+          label: "Master HQ",
+          icon: Radar,
+          description: "Global platform administration",
+        },
+        {
+          href: "/institution/overview",
+          label: "Institution 360",
+          icon: Briefcase,
+          description: "Tenant management",
+        },
+      ]
+    : isAdmin
+      ? ADMIN_NAV_ITEMS
+      : isEducator
+        ? EDUCATOR_NAV_ITEMS
+        : STUDENT_NAV_ITEMS;
+  const activeNavItems = (
+    baseNavItems as Array<{
+      href: string;
+      label: string;
+      description: string;
+      icon: ComponentType<{ className?: string }>;
+      requiresInstitutionRole?: boolean;
+    }>
+  ).filter((item) => {
+    if (item.requiresInstitutionRole && !(isAdmin || isEducator || isSuperUser)) {
+      return false;
+    }
+    if (isStudentOnboardingPending) {
+      return ["/dashboard", "/chat", "/progress"].includes(item.href);
+    }
+    return true;
+  });
   const publicUrl = useMemo(() => {
     if (!profile?.slug || typeof window === "undefined") return "";
     return `${window.location.origin}/p/${profile.slug}`;
@@ -106,9 +209,11 @@ export function Sidebar() {
             </span>
             <span>Horizon Studio</span>
           </Link>
+          <div className="ml-auto flex items-center gap-1">
+            <NotificationBell />
           <Dialog open={qrOpen} onOpenChange={setQrOpen}>
             <DialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="ml-auto h-8 w-8">
+              <Button variant="ghost" size="icon" className="h-8 w-8">
                 <span className="sr-only">Share profile</span>
                 <QrCode className="h-4 w-4" />
               </Button>
@@ -120,13 +225,16 @@ export function Sidebar() {
               <div className="space-y-4">
                 <div className="mx-auto flex w-full max-w-[240px] items-center justify-center rounded-2xl border border-border bg-muted/40 p-4">
                   {publicUrl ? (
-                    <img
-                      alt="Portfolio QR"
-                      className="h-48 w-48"
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
-                        publicUrl
-                      )}`}
-                    />
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        alt="Portfolio QR"
+                        className="h-48 w-48"
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
+                          publicUrl
+                        )}`}
+                      />
+                    </>
                   ) : (
                     <div className="text-center text-xs text-muted-foreground">
                       Enable your public portfolio to generate a QR code.
@@ -159,11 +267,12 @@ export function Sidebar() {
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
-
         <nav className="flex-1 space-y-1 px-2 py-3 text-sm font-medium lg:px-4">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          {activeNavItems.map(({ href, label, icon: Icon }) => {
             const isActive =
+
               pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Link
@@ -183,22 +292,25 @@ export function Sidebar() {
           })}
         </nav>
 
-        <AnalysisProgressPanel />
+        {isStudent && <VeloAnalysisStatusPill />}
+        {isStudent && <AnalysisProgressPanel />}
 
         <div className="mt-auto space-y-4 p-4">
-          <Card>
-            <CardHeader className="p-2 pt-0 md:p-4">
-              <CardTitle>Invite a friend</CardTitle>
-              <CardDescription>
-                Unlock bonus mentor styles when a friend joins your studio.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-2 pt-0 md:p-4 md:pt-0">
-              <Button size="sm" className="w-full">
-                Share Link
-              </Button>
-            </CardContent>
-          </Card>
+          {isStudent && (
+            <Card>
+              <CardHeader className="p-2 pt-0 md:p-4">
+                <CardTitle>Invite a friend</CardTitle>
+                <CardDescription>
+                  Unlock bonus mentor styles when a friend joins your studio.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-2 pt-0 md:p-4 md:pt-0">
+                <Button size="sm" className="w-full">
+                  Share Link
+                </Button>
+              </CardContent>
+            </Card>
+          )}
           <ProfileMenu />
         </div>
         {/* Global progress panel */}

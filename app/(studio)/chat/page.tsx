@@ -17,19 +17,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { useCreatePlanFromConversation, usePlan } from "@/hooks/use-plans";
-import { useAnalyzeConversation } from "@/hooks/use-intelligence";
 import { telemetry } from "@/lib/telemetry";
 import { CreateConversationModal } from "@/components/mentor-lounge/create-conversation-modal";
 import { PlusCircle } from 'lucide-react';
-import type { PlanCreationResponse } from "@/types";
+import type { MentorAction, PlanCreationResponse } from "@/types";
 import { useNotifications } from "@/context/NotificationContext";
 import { SafetyAlert } from "@/components/mentor-lounge/safety-alert";
 import { IntelligenceReportModal } from "@/components/mentor-lounge/intelligence-report-modal";
 import { PersonalitySelector } from "@/components/mentor-lounge/personality-selector";
 import { MentorActionShelf } from "@/components/mentor-lounge/mentor-action-shelf";
-import { AgentIndicator } from "@/components/mentor-lounge/agent-indicator";
 import { CortexDebugDrawer } from "@/components/mentor-lounge/cortex-debug-drawer";
-import { intelligenceApi } from "@/lib/api";
+import { intelligenceApi, authApi, chatApi } from "@/lib/api";
 import { describeStageEvent } from "@/lib/analysis-stage";
 import { MissingInfoForm } from "@/components/mentor-lounge/missing-info-form";
 import { AnalysisHistory } from "@/components/mentor-lounge/analysis-history";
@@ -46,7 +44,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Brain, User, PanelRightOpen } from "lucide-react";
+import { Brain, User, PanelRightOpen, WifiOff } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlanSessionPoller } from "@/hooks/use-plan-poller";
 
@@ -80,6 +78,9 @@ interface StageHistoryEntry {
   timestamp: string;
 }
 
+const mentorActionKey = (action: MentorAction) =>
+  `${action.type}:${action.plan_id ?? action.task_id ?? action.href ?? action.label ?? ""}`;
+
 export default function ChatPage() {
   return (
     <Suspense fallback={
@@ -98,6 +99,8 @@ function ChatContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
+  const contextFromQuery = searchParams.get("context");
+  const queryClient = useQueryClient();
   
   const selectedConversationId = useMentorLoungeStore(
     (state) => state.selectedConversationId,
@@ -108,7 +111,6 @@ function ChatContent() {
   const setComposerDraft = useMentorLoungeStore(
     (state) => state.setComposerDraft,
   );
-  const composerDraft = useMentorLoungeStore((state) => state.composerDraft);
   const mentorActions = useMentorLoungeStore((state) => state.mentorActions);
   const setMentorActions = useMentorLoungeStore(
     (state) => state.setMentorActions,
@@ -143,6 +145,7 @@ function ChatContent() {
     sendMessage,
     mentorTyping,
     streamingMessage,
+    streamingMessageId,
     setTypingStatus,
   } = useChatSocket(selectedConversationId ?? null);
 
@@ -151,7 +154,6 @@ function ChatContent() {
   
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [isReportModalOpen, setReportModalOpen] = useState(false);
-  const [, setAnalysisTimedOut] = useState<string | null>(null);
   const [isInsightsOpen, setInsightsOpen] = useState(false);
   
   // Analysis history state
@@ -169,14 +171,35 @@ function ChatContent() {
   }>>([]);
   const [analysisByConversation, setAnalysisByConversation] = useState<Record<string, Record<string, unknown>>>({});
   const [latestPlan, setLatestPlan] = useState<PlanCreationResponse | null>(null);
+  const [analysisJobRunning, setAnalysisJobRunning] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return Boolean(localStorage.getItem("resumeAnalysisJobId"));
+  });
+
+  // Poll resume analysis job until it completes, then dismiss the banner
+  useEffect(() => {
+    if (!analysisJobRunning) return;
+    const jobId = localStorage.getItem("resumeAnalysisJobId");
+    if (!jobId) { setAnalysisJobRunning(false); return; }
+    // WS event will also dismiss it; this is the polling fallback
+    const interval = window.setInterval(async () => {
+      try {
+        const status = await authApi.getResumeAnalysisStatus(jobId);
+        if (status.status === "completed" || status.status === "failed") {
+          localStorage.removeItem("resumeAnalysisJobId");
+          setAnalysisJobRunning(false);
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+    return () => window.clearInterval(interval);
+  }, [analysisJobRunning]);
   const [lastPlanId, setLastPlanId] = useState<string | null>(null);
   const processedAnalysisRef = useRef<Map<string, string>>(new Map());
   const stageTrackerRef = useRef<Map<string, Set<string>>>(new Map());
   const analysisPollTimeoutRef = useRef<number | null>(null);
-  const analyzedAtRef = useRef<Map<string, string>>(new Map());
   const processedStageEventSeqRef = useRef<number>(-1);
   const stageHistoryLimit = 8;
-  const analysisTimeoutRef = useRef<number | null>(null);
+  const autoPromptedMentorRef = useRef(false);
   const [intakeSubmitting, setIntakeSubmitting] = useState(false);
   const [intakeError, setIntakeError] = useState<string | null>(null);
   const [intakeModalOpen, setIntakeModalOpen] = useState(false);
@@ -184,8 +207,8 @@ function ChatContent() {
   const [intakePreview, setIntakePreview] = useState<Record<string, unknown> | null>(null);
   const [intakeState, setIntakeState] = useState<Record<string, unknown> | null>(null);
   const [intakeSubmitted, setIntakeSubmitted] = useState(false);
+  const [dismissedMentorActionKeys, setDismissedMentorActionKeys] = useState<string[]>([]);
 
-  const analyzeConversation = useAnalyzeConversation();
   const createPlan = useCreatePlanFromConversation();
   const { analysisEvents } = useNotifications();
   const clearAnalysisPolling = useCallback(() => {
@@ -229,10 +252,54 @@ function ChatContent() {
   }, [conversations, searchParams, selectedConversationId, setSelectedConversationId]);
 
   useEffect(() => {
+    const shouldSeedKickoff = analysisJobRunning || contextFromQuery === "mirror_review";
+    if (!shouldSeedKickoff) return;
+    if (selectedConversationId || conversations.length > 0 || conversationsLoading) return;
+    if (autoPromptedMentorRef.current) return;
+    autoPromptedMentorRef.current = true;
+
+    (async () => {
+      try {
+        const conversation = await chatApi.createConversation({
+          title: "Mentor Kickoff",
+          topic: "Onboarding handoff",
+        });
+        setSelectedConversationId(conversation.id);
+        await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        const params = new URLSearchParams(searchParamsString);
+        params.set("conversation", conversation.id);
+        params.delete("plan");
+        if (contextFromQuery) {
+          params.set("context", contextFromQuery);
+        }
+        router.replace(`/chat?${params.toString()}`, { scroll: false });
+        await chatApi.sendMessage(conversation.id, {
+          content:
+            "I just completed onboarding. Please greet me, summarize what context you already have, and ask the single most important next question.",
+          context: "onboarding_kickoff",
+          metadata: { auto_seeded: true, source: "onboarding" },
+        });
+      } catch (error) {
+        telemetry.warn("Failed to auto-seed mentor kickoff", { error });
+      }
+    })();
+  }, [
+    analysisJobRunning,
+    contextFromQuery,
+    conversations.length,
+    conversationsLoading,
+    queryClient,
+    router,
+    searchParamsString,
+    selectedConversationId,
+    setSelectedConversationId,
+  ]);
+
+  useEffect(() => {
     setIntakeState(
       (activeConversation?.intake_state as Record<string, unknown> | undefined) ?? null,
     );
-  }, [activeConversation?.id]);
+  }, [activeConversation?.id, activeConversation?.intake_state]);
 
   useEffect(() => {
     if (!messages.length) {
@@ -244,34 +311,7 @@ function ChatContent() {
     }
   }, [messages]);
 
-  useEffect(() => {
-    if (!isMentorIntake) return;
-    if (composerDraft.trim()) return;
-    const key = `mentor_intake_prompt_set_${activeConversation?.id ?? "new"}`;
-    if (typeof window !== "undefined") {
-      if (window.sessionStorage.getItem(key)) return;
-      window.sessionStorage.setItem(key, "true");
-    }
-    setComposerDraft(
-      "I want to complete my mentor intake and build my roadmap. Please ask me the key questions."
-    );
-  }, [composerDraft, isMentorIntake, setComposerDraft, activeConversation?.id]);
 
-  useEffect(() => {
-    if (!isMentorIntake || !activeConversation?.id) {
-      return;
-    }
-    const hasMentorReply = messages.some((message) => message.sender_type === "ai");
-    if (hasMentorReply) {
-      return;
-    }
-    const key = `mentor_intake_autostart_${activeConversation.id}`;
-    if (typeof window !== "undefined") {
-      if (window.sessionStorage.getItem(key)) return;
-      window.sessionStorage.setItem(key, "true");
-    }
-    sendMessage("Please start mentor intake and ask the key questions.");
-  }, [activeConversation?.id, isMentorIntake, messages, sendMessage]);
 
   const handleCompleteMentorIntake = useCallback(async () => {
     if (!activeConversation?.id) return;
@@ -309,7 +349,9 @@ function ChatContent() {
     } finally {
       setIntakeSubmitting(false);
     }
-  }, [activeConversation?.id]);
+  }, [
+    activeConversation?.id,
+  ]);
 
   const handlePreviewMentorIntake = useCallback(async () => {
     if (!activeConversation?.id) return;
@@ -351,8 +393,10 @@ function ChatContent() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setLastPlanId(window.localStorage.getItem("lastPlanId"));
-  }, []);
+    if (!user?.id) return;
+    const scopedKey = `lastPlanId:${user.id}`;
+    setLastPlanId(window.localStorage.getItem(scopedKey));
+  }, [user?.id]);
 
   const fetchLatestAnalysis = useCallback(
     async (conversationId: string, options?: { silent?: boolean }) => {
@@ -404,9 +448,6 @@ function ChatContent() {
             };
           });
         }
-        if (response.analyzed_at) {
-          analyzedAtRef.current.set(conversationId, response.analyzed_at);
-        }
         return response;
       } catch (error: unknown) {
         const axiosStatus =
@@ -424,26 +465,6 @@ function ChatContent() {
       }
     },
     [stageHistoryLimit]
-  );
-
-  const startAnalysisPolling = useCallback(
-    (conversationId: string) => {
-      clearAnalysisPolling();
-      const poll = async () => {
-        const before = analyzedAtRef.current.get(conversationId) || null;
-        const result = await fetchLatestAnalysis(conversationId, { silent: true });
-        const latest =
-          result?.analyzed_at || analyzedAtRef.current.get(conversationId) || null;
-        if (latest && latest !== before) {
-          await fetchLatestAnalysis(conversationId);
-          clearAnalysisPolling();
-          return;
-        }
-        analysisPollTimeoutRef.current = window.setTimeout(poll, 6000);
-      };
-      analysisPollTimeoutRef.current = window.setTimeout(poll, 6000);
-    },
-    [clearAnalysisPolling, fetchLatestAnalysis]
   );
 
   useEffect(() => {
@@ -485,6 +506,7 @@ useEffect(() => {
   setTypingStatus(false);
   setLatestPlan(null);
   setMentorActions([]);
+  setDismissedMentorActionKeys([]);
 }, [
   selectedConversationId,
   setComposerDraft,
@@ -500,10 +522,10 @@ useEffect(() => {
     fetchLatestAnalysis(selectedConversationId, { silent: true });
   }, [selectedConversationId, fetchLatestAnalysis, clearAnalysisPolling]);
 
-  const queryClient = useQueryClient();
   const planBuildStatus = useMentorLoungeStore(state => state.planBuildStatus);
   const planBuildId = useMentorLoungeStore(state => state.planBuildId);
   const planBuildTitle = useMentorLoungeStore(state => state.planBuildTitle);
+  const mirrorAnalysisReady = useMentorLoungeStore(state => state.mirrorAnalysisReady);
   const planIdFromQuery = searchParams.get("plan");
   const effectivePlanId =
     planBuildId ?? planIdFromQuery ?? latestPlan?.learning_plan_id ?? undefined;
@@ -516,8 +538,10 @@ useEffect(() => {
     } else {
       params.delete("conversation");
     }
-    const desiredPlanId =
-      planBuildId ?? latestPlan?.learning_plan_id ?? planIdFromQuery ?? lastPlanId ?? null;
+    const allowPlanParam = contextFromQuery !== "mirror_review" && contextFromQuery !== "onboarding_kickoff";
+    const desiredPlanId = allowPlanParam
+      ? (planBuildId ?? latestPlan?.learning_plan_id ?? planIdFromQuery ?? lastPlanId ?? null)
+      : null;
     if (desiredPlanId) {
       params.set("plan", desiredPlanId);
     } else {
@@ -539,12 +563,13 @@ useEffect(() => {
     searchParamsString,
     selectedConversationId,
     lastPlanId,
+    contextFromQuery,
   ]);
 
   useEffect(() => {
-    if (!effectivePlanId || typeof window === "undefined") return;
-    window.localStorage.setItem("lastPlanId", effectivePlanId);
-  }, [effectivePlanId]);
+    if (!effectivePlanId || typeof window === "undefined" || !user?.id) return;
+    window.localStorage.setItem(`lastPlanId:${user.id}`, effectivePlanId);
+  }, [effectivePlanId, user?.id]);
 
   // Activate polling for plan status fallback
   usePlanSessionPoller();
@@ -555,6 +580,20 @@ useEffect(() => {
       // If there are other "workbench" queries, invalidate them here too.
     }
   }, [planBuildStatus, queryClient]);
+
+  // Refresh messages when a proactive mentor message arrives via WS
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.conversationId && selectedConversationId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["conversations", selectedConversationId, "messages"],
+        });
+      }
+    };
+    window.addEventListener("proactive_mentor_message", handler);
+    return () => window.removeEventListener("proactive_mentor_message", handler);
+  }, [selectedConversationId, queryClient]);
 
   useEffect(() => {
     return () => {
@@ -770,13 +809,6 @@ useEffect(() => {
         
         if (selectedConversationId && conversationId === selectedConversationId) {
           clearAnalysisPolling();
-          // Clear the timeout since analysis completed
-          if (analysisTimeoutRef.current) {
-            window.clearTimeout(analysisTimeoutRef.current);
-            analysisTimeoutRef.current = null;
-          }
-          setAnalysisTimedOut(null);
-          
           // AUTO-REFRESH: Fetch latest analysis results to update UI
           setTimeout(() => {
             fetchLatestAnalysis(conversationId, { silent: false });
@@ -809,110 +841,14 @@ useEffect(() => {
   const isPlanBuilding = ["queued", "in_progress", "warning"].includes(planBuildStatus);
   const disablePlanButton =
     !selectedConversationId || createPlan.isPending || isPlanBuilding;
-
-  const handleAnalyzeConversation = (forceOverride?: boolean) => {
-    if (!selectedConversationId) {
-      telemetry.toastError("Select a conversation first");
-      return;
-    }
-
-    const shouldForce = forceOverride ?? hasAnalysisResults;
-
-    stageTrackerRef.current.set(selectedConversationId, new Set());
-    processedAnalysisRef.current.delete(selectedConversationId);
-    
-    // Clear any existing timeout and reset timeout state
-    if (analysisTimeoutRef.current) {
-      window.clearTimeout(analysisTimeoutRef.current);
-      analysisTimeoutRef.current = null;
-    }
-    setAnalysisTimedOut(null);
-
-    setAnalysisByConversation((previous) => ({
-      ...previous,
-      [selectedConversationId]: {
-        ...previous[selectedConversationId],
-        message: shouldForce
-          ? "Force reanalysis requested..."
-          : "Brain is warming up...",
-        progress_update: { status: "analysis_started" },
-        stage_history: [],
-        analysis_results: {},
-        analysis_record: undefined,
-      },
-    }));
-    
-    // Start 2-minute timeout
-    analysisTimeoutRef.current = window.setTimeout(() => {
-      if (selectedConversationId) {
-        setAnalysisTimedOut(selectedConversationId);
-        telemetry.toastInfo(
-          "⚠️ Analysis is taking longer than expected",
-          "This may indicate a problem with the AI service. You can retry the analysis if needed."
-        );
-        
-        // Mark analysis as failed in history so it doesn't spin forever
-        setAnalysisHistory(prev => prev.map(a => {
-          if (a.conversation_id === selectedConversationId && a.status === 'running') {
-            return {
-              ...a,
-              status: 'failed',
-              results: { error: 'Analysis timed out' }
-            };
-          }
-          return a;
-        }));
-      }
-    }, 120000); // 2 minutes
-
-    // CREATE ANALYSIS HISTORY ENTRY
-    const newAnalysis = {
-      id: `analysis-${Date.now()}`,
-      conversation_id: selectedConversationId,
-      conversation_title: activeConversation?.title || "Unknown conversation",
-      status: 'running' as const,
-      started_at: new Date().toISOString(),
-      progress: 0,
-      stage_messages: [],
-    };
-    
-    setAnalysisHistory(prev => [newAnalysis, ...prev]);
-
-    // Capture analysis requested event
-    posthog.capture('analysis_requested', {
-      conversation_id: selectedConversationId,
-      conversation_title: activeConversation?.title,
-      force_reanalysis: shouldForce,
-    });
-
-    analyzeConversation.mutate(
-      {
-        conversationId: selectedConversationId,
-        forceReanalysis: shouldForce,
-      },
-      {
-        onSuccess: (data) => {
-          if (selectedConversationId && data && typeof data === "object") {
-            setAnalysisByConversation((previous) => ({
-              ...previous,
-              [selectedConversationId]: {
-                ...previous[selectedConversationId],
-                ...(data as Record<string, unknown>),
-              },
-            }));
-          }
-          startAnalysisPolling(selectedConversationId);
-        },
-      }
-    );
-  };
+  const disableRoadmapButton = disablePlanButton;
 
   const handleCreatePlan = async () => {
     if (!selectedConversationId) {
       telemetry.toastError("Select a conversation first");
       return;
     }
-    let analysisReady = hasAnalysisResults;
+    const analysisReady = hasAnalysisResults || Boolean(mirrorAnalysisReady);
     if (!analysisReady) {
       telemetry.toastInfo("Checking latest analysis snapshot...");
       const latest = await fetchLatestAnalysis(selectedConversationId, {
@@ -920,11 +856,13 @@ useEffect(() => {
       });
       const latestMetadata =
         latest?.analysis_metadata ?? latest?.analysis_results ?? {};
-      analysisReady =
+      const latestReady =
         Boolean(latestMetadata) && Object.keys(latestMetadata).length > 0;
-      if (!analysisReady) {
-        telemetry.toastError("Run intelligence analysis before creating a plan");
-        return;
+      if (!latestReady) {
+        telemetry.toastInfo(
+          "Generating roadmap",
+          "Your mentor has enough context to get started."
+        );
       }
     }
     setLatestPlan(null);
@@ -939,17 +877,51 @@ useEffect(() => {
       { conversationId: selectedConversationId },
       {
         onSuccess: (data) => {
+          const queuedStatus = (data as { status?: string; error?: string; message?: string })?.status;
+          const queuedError = (data as { status?: string; error?: string; message?: string })?.error;
+          if (queuedError === "analysis_not_ready" || queuedStatus === "processing") {
+            telemetry.toastInfo(
+              "Refreshing intelligence context",
+              (data as { message?: string })?.message || "Preparing the latest context. Try again in a few seconds."
+            );
+            if (selectedConversationId) {
+              setTimeout(() => {
+                void fetchLatestAnalysis(selectedConversationId, { silent: false });
+              }, 5000);
+            }
+            return;
+          }
           if (data?.learning_plan_id) {
             router.prefetch(`/plans?plan=${data.learning_plan_id}`);
           }
           setLatestPlan(data);
         },
         onError: (error) => {
+          const guardPayload = (error as { response?: { data?: { error?: string; handoff_url?: string; message?: string } } })?.response?.data;
+          if (guardPayload?.error === "mentor_context_required") {
+            telemetry.track("plan_generation_blocked_by_guard", {
+              conversation_id: selectedConversationId,
+              context: "general",
+            });
+            telemetry.toastError("Mentor context required", guardPayload.message || "Continue with mentor to personalize roadmap.");
+            if (guardPayload.handoff_url && typeof window !== "undefined") {
+              window.location.href = guardPayload.handoff_url;
+              return;
+            }
+          }
           telemetry.error("Plan creation request failed", { error });
         },
       },
     );
   };
+
+
+  const handleSendMessage = useCallback(
+    async (content: string) => {
+      await sendMessage(content);
+    },
+    [sendMessage]
+  );
 
   const planWorkbenchData = useMemo(() => {
     if (planRecord) {
@@ -987,8 +959,28 @@ useEffect(() => {
 
   const planDisplayStatus =
     planRecord && planBuildStatus === "idle" ? "completed" : planBuildStatus;
+  const [planWorkbenchDismissed, setPlanWorkbenchDismissed] = useState(false);
   const showPlanWorkbench =
-    ["queued", "in_progress", "warning"].includes(planBuildStatus) || createPlan.isPending;
+    (["queued", "in_progress", "warning", "completed"].includes(planBuildStatus) || createPlan.isPending) &&
+    !planWorkbenchDismissed;
+
+  useEffect(() => {
+    if (planBuildStatus !== "completed") return;
+    const timer = window.setTimeout(() => setPlanWorkbenchDismissed(true), 8000);
+    return () => window.clearTimeout(timer);
+  }, [planBuildStatus]);
+
+  // Dismiss the analysis banner when the WS event fires
+  useEffect(() => {
+    if (mirrorAnalysisReady) {
+      localStorage.removeItem("resumeAnalysisJobId");
+      setAnalysisJobRunning(false);
+    }
+  }, [mirrorAnalysisReady]);
+
+  useEffect(() => {
+    setPlanWorkbenchDismissed(false);
+  }, [selectedConversationId]);
 
   const planProgress = useMemo(() => {
     if (planDisplayStatus === "completed") {
@@ -1013,21 +1005,62 @@ useEffect(() => {
     return 0;
   }, [planDisplayStatus, planUpdates.length]);
 
+  const visibleMentorActions = useMemo(
+    () =>
+      mentorActions.filter(
+        (action) => !dismissedMentorActionKeys.includes(mentorActionKey(action)),
+      ),
+    [mentorActions, dismissedMentorActionKeys],
+  );
+
+  const dismissedPlanShortcutAction = useMemo(() => {
+    const candidates = mentorActions.filter((action) => {
+      const isPlanAction =
+        action.type === "view_plan" || action.type === "open_plan_task";
+      return isPlanAction && dismissedMentorActionKeys.includes(mentorActionKey(action));
+    });
+    return candidates.length ? candidates[candidates.length - 1] : null;
+  }, [mentorActions, dismissedMentorActionKeys]);
+
+  const handleOpenMentorAction = useCallback(
+    (action: MentorAction) => {
+      if (action.type === "view_plan") {
+        if (action.plan_id) {
+          router.push(`/plans?plan=${action.plan_id}`);
+        } else if (action.href) {
+          router.push(action.href);
+        }
+        return;
+      }
+
+      if (action.type === "open_plan_task") {
+        if (action.plan_id) {
+          const search = action.task_id
+            ? `?plan=${action.plan_id}&task=${action.task_id}`
+            : `?plan=${action.plan_id}`;
+          router.push(`/plans${search}`);
+        } else if (action.href) {
+          router.push(action.href);
+        }
+      }
+    },
+    [router],
+  );
+
+  const conversationTitle = useMemo(() => {
+    const raw = activeConversation?.title?.trim();
+    if (!raw) return "Mentor Session";
+    if (raw.toLowerCase() === "new conversation") return "Mentor Session";
+    return raw;
+  }, [activeConversation?.title]);
+
   return (
-    <div className="flex min-h-[calc(100vh-theme(spacing.16))] flex-col overflow-hidden bg-[radial-gradient(1200px_600px_at_0%_0%,rgba(56,189,248,0.06),transparent),radial-gradient(900px_500px_at_100%_10%,rgba(249,115,22,0.06),transparent)]">
-      <CreateConversationModal
+    <div className="flex h-full flex-col overflow-hidden bg-[radial-gradient(1200px_600px_at_0%_0%,rgba(56,189,248,0.06),transparent),radial-gradient(900px_500px_at_100%_10%,rgba(249,115,22,0.06),transparent)]">
+    <CreateConversationModal
         isOpen={isCreateModalOpen}
         onOpenChange={setCreateModalOpen}
       />
-      <SafetyAlert socket={null} /> {/* Socket is handled inside hook, need to expose it or move SafetyAlert inside MessageFeed/Composer context? Actually useChatSocket returns socket status but not the socket instance directly. We might need to lift the socket or pass the event via a store/context. For now, let's assume we can pass the socket if we expose it from useChatSocket, OR we can make SafetyAlert use the same socket logic. Let's check useChatSocket. */}
-      {/* Correction: useChatSocket manages the socket. We should probably add the safety listener inside useChatSocket or expose the socket. 
-          For this iteration, I'll modify useChatSocket to expose the socket or handle the alert state there. 
-          Wait, I can't modify useChatSocket easily without seeing it. 
-          Alternative: The SafetyService sends messages via the websocket. 
-          The `useChatSocket` likely handles incoming messages. I should add a callback or use a store for safety alerts.
-          
-          Let's place the SessionGoal first.
-      */}
+      <SafetyAlert />
       <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-hidden px-4 pb-4 pt-4 lg:flex-row lg:gap-6">
         <aside className="flex h-full w-full flex-col lg:w-80">
           <div className="flex h-full flex-col rounded-[28px] border border-white/80 bg-white/80 shadow-[var(--shadow-2)] backdrop-blur">
@@ -1065,7 +1098,7 @@ useEffect(() => {
                       <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
                         Active mentor
                       </p>
-                      <h3 className="truncate text-lg font-semibold">{activeConversation.title}</h3>
+                      <h3 className="truncate text-lg font-semibold">{conversationTitle}</h3>
                       {/* Show selector if plan is active (mocked logic for now as 'specialized' check) 
                           In a real scenario, we'd check if user has an active plan that unlocks this.
                           For now, we allow switching if the current personality is NOT general, 
@@ -1120,9 +1153,6 @@ useEffect(() => {
                           : socketStatus === "error"
                             ? "Offline"
                             : "Idle"}
-                    </span>
-                    <span className="rounded-full bg-primary/10 px-2 py-1 font-medium text-primary">
-                      {activeConversation.ai_personality?.name ?? "Adaptive Mentor"}
                     </span>
                     <PlanBuildHeaderBadge />
                     <Sheet open={isInsightsOpen} onOpenChange={setInsightsOpen}>
@@ -1212,43 +1242,32 @@ useEffect(() => {
                       variant="outline"
                       size="sm"
                       className="h-8 text-xs"
-                      onClick={() => handleAnalyzeConversation()}
-                      disabled={!selectedConversationId || analyzeConversation.isPending}
-                    >
-                      {analyzeConversation.isPending ? "Analyzing..." : "Run analysis"}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => handleAnalyzeConversation(true)}
-                      disabled={!selectedConversationId || analyzeConversation.isPending}
-                    >
-                      Force reanalysis
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
                       onClick={() => {
                         void handleCreatePlan();
                       }}
-                      disabled={disablePlanButton}
-                      title={
-                        !hasAnalysisResults
-                          ? "Run analysis to unlock plan creation"
-                          : undefined
-                      }
+                      disabled={disableRoadmapButton}
                     >
-                      {createPlan.isPending ? "Creating plan..." : "Create plan"}
+                      {createPlan.isPending ? "Generating roadmap..." : "Generate Roadmap"}
                     </Button>
+                    {dismissedPlanShortcutAction ? (
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => handleOpenMentorAction(dismissedPlanShortcutAction)}
+                      >
+                        Open current plan
+                      </Button>
+                    ) : null}
                   </div>
-                  {!hasAnalysisResults && selectedConversationId ? (
-                    <p className="text-[11px] text-muted-foreground">
-                      Run analysis to unlock plans and reports.
-                    </p>
-                  ) : null}
                 </div>
+                {analysisJobRunning ? (
+                  <div className="px-4 pb-3">
+                    <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[12px] text-blue-800">
+                      <span className="inline-block h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-blue-400" />
+                      <span>Your profile analysis is running — your mentor will have full context shortly.</span>
+                    </div>
+                  </div>
+                ) : null}
                 {socketError ? (
                   <div className="px-4 pb-3">
                     <p className="rounded-md bg-rose-50 px-3 py-2 text-[11px] text-rose-700">
@@ -1281,6 +1300,7 @@ useEffect(() => {
                         tool: latestPlanUpdate?.data.tool,
                         stepType: latestPlanUpdate?.data.step_type,
                       }}
+                      onDismiss={() => setPlanWorkbenchDismissed(true)}
                     />
                   ) : null}
                   {/* IntelligenceStatus moved to header */}
@@ -1289,8 +1309,8 @@ useEffect(() => {
                       Plan status: {latestPlanUpdate?.data.message ?? "Working on your plan..."}
                     </div>
                   ) : null}
-                  <div className="min-h-0 flex-1">
-                    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                       {isMentorIntake && (
                         <div className="mb-3 space-y-3 rounded-2xl border border-black/10 bg-gradient-to-r from-amber-50 via-white to-emerald-50 px-4 py-3 text-sm shadow-sm">
                           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1313,24 +1333,11 @@ useEffect(() => {
                                 </Button>
                               ) : (
                                 <>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      sendMessage(
-                                        "I’m ready for mentor intake. Please guide me through the key questions."
-                                      )
-                                    }
-                                  >
-                                    Ask intake questions
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => sendMessage("skip")}
-                                  >
-                                    Skip this question
-                                  </Button>
+                                  {mirrorAnalysisReady ? (
+                                    <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700">
+                                      Mentor has your resume context.
+                                    </span>
+                                  ) : null}
                                   <Button
                                     size="sm"
                                     onClick={handlePreviewMentorIntake}
@@ -1380,6 +1387,7 @@ useEffect(() => {
                         isLoadingMore={isFetchingNextPage}
                         mentorTyping={mentorTyping}
                         streamingMessage={streamingMessage}
+                        streamingMessageId={streamingMessageId}
                         theme={personaTheme}
                         variant="plain"
                       />
@@ -1439,10 +1447,25 @@ useEffect(() => {
                         </DialogContent>
                       </Dialog>
                       <div className="space-y-3 border-t border-white/80 bg-white/65 px-4 pb-4 pt-3">
-                        <AgentIndicator />
+                        {(socketStatus === "closed" || socketStatus === "error") && (
+                          <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                            <WifiOff className="h-4 w-4 shrink-0" />
+                            <span>
+                              {socketStatus === "error"
+                                ? "Connection error — reconnecting…"
+                                : "Connection lost — reconnecting…"}
+                            </span>
+                          </div>
+                        )}
                         <MentorActionShelf
-                          actions={mentorActions}
-                          onSendQuickReply={(message) => sendMessage(message)}
+                          actions={visibleMentorActions}
+                          onSendQuickReply={(message) => handleSendMessage(message)}
+                          onDismissAction={(action) => {
+                            const key = mentorActionKey(action);
+                            setDismissedMentorActionKeys((previous) =>
+                              previous.includes(key) ? previous : [...previous, key],
+                            );
+                          }}
                           disabled={
                             messagesLoading ||
                             !activeConversation ||
@@ -1455,7 +1478,7 @@ useEffect(() => {
                             !activeConversation ||
                             socketStatus !== "open"
                           }
-                          onSend={sendMessage}
+                          onSend={handleSendMessage}
                           onTypingChange={setTypingStatus}
                         />
                       </div>
@@ -1466,19 +1489,39 @@ useEffect(() => {
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <Card className="w-96 text-center">
-                <CardHeader>
-                  <CardTitle>Welcome to the Mentor Lounge</CardTitle>
-                  <CardDescription>
-                    Select a conversation from the list on the left, or start a new one to begin.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button onClick={() => setCreateModalOpen(true)}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Start New Conversation
-                  </Button>
-                </CardContent>
-              </Card>
+              <div className="w-full max-w-xl space-y-3">
+                {analysisJobRunning ? (
+                  <Card className="border-blue-200 bg-blue-50/80">
+                    <CardHeader>
+                      <CardTitle className="text-base">Your analysis is running</CardTitle>
+                      <CardDescription>
+                        Resume and skill-gap analysis is processing in background. Start mentor chat now; context will sync automatically when ready.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-wrap gap-2">
+                      <Button variant="outline" onClick={() => setCreateModalOpen(true)}>
+                        <PlusCircle className="mr-2 h-4 w-4" /> Start Mentor Conversation
+                      </Button>
+                      <Button variant="outline" onClick={() => router.push("/onboarding")}>
+                        Open Onboarding
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : null}
+                <Card className="w-full text-center">
+                  <CardHeader>
+                    <CardTitle>Welcome to the Mentor Lounge</CardTitle>
+                    <CardDescription>
+                      Select a conversation from the list on the left, or start a new one to begin.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button onClick={() => setCreateModalOpen(true)}>
+                      <PlusCircle className="mr-2 h-4 w-4" /> Start New Conversation
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
         </section>

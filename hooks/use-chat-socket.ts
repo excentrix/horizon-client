@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Cookies from "js-cookie";
 import {
   InfiniteData,
@@ -15,18 +15,51 @@ import type {
 } from "@/types";
 import { telemetry } from "@/lib/telemetry";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
+import {
+  hasHandledChatEvent,
+  markHandledChatEvent,
+} from "@/lib/chat-event-dedupe";
 
 export type SocketStatus = "idle" | "connecting" | "open" | "closed" | "error";
 
 const HEARTBEAT_INTERVAL = 20000;
 const HEARTBEAT_TIMEOUT = 10000;
-const MENTOR_TYPING_TIMEOUT = 4000;
 const MAX_RECONNECT_DELAY = 30000;
+const SAFETY_ALERT_EVENT = "mentor_safety_alert";
+const BACKEND_STAGE_COMPLETE_EVENT = "mentor_stage_complete";
 
 interface StreamState {
   messageId?: string;
   content: string | null;
 }
+
+interface SafetyAlertEventDetail {
+  type: "safety_alert";
+  severity: "medium" | "high" | "critical";
+  message: string;
+  resources?: string[];
+}
+
+interface BackendStageCompleteEventDetail {
+  conversationId?: string;
+  sessionId?: string;
+  eventType?: string;
+  stage?: string;
+  message?: string;
+  status?: string;
+}
+
+const dispatchBackendStageComplete = (detail: BackendStageCompleteEventDetail) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(BACKEND_STAGE_COMPLETE_EVENT, {
+      detail,
+    }),
+  );
+};
 
 const getWebSocketBase = () => {
   if (typeof window === "undefined") {
@@ -56,49 +89,132 @@ const appendMessageToCache = (
 ) => {
   queryClient.setQueryData<
     InfiniteData<PaginatedResponse<ChatMessage>> | undefined
-  >(
-    ["conversations", conversationId, "messages"],
-    (previous) => {
-      // If the cache is empty, initialize it with the new message.
-      if (!previous) {
-        return {
-          pages: [
-            {
-              results: [message],
-              count: 1,
-              next: null,
-              previous: null,
-            },
-          ],
-          pageParams: [null],
-        };
-      }
-
-      // Otherwise, add the new message to the first page.
-      const newPages = [...previous.pages];
-      const firstPage = { ...newPages[0] };
-
-      // Avoid adding duplicates if the message is already in the cache
-      if (firstPage.results.some((existing) => existing.id === message.id)) {
-        return previous;
-      }
-
-      firstPage.results = sortMessages([...firstPage.results, message]);
-      firstPage.count = firstPage.results.length;
-      newPages[0] = firstPage;
-
+  >(["conversations", conversationId, "messages"], (previous) => {
+    if (!previous) {
       return {
-        ...previous,
-        pages: newPages,
+        pages: [
+          {
+            results: [message],
+            count: 1,
+            next: null,
+            previous: null,
+          },
+        ],
+        pageParams: [null],
       };
-    },
-  );
+    }
+
+    const newPages = [...previous.pages];
+    const firstPage = { ...newPages[0] };
+
+    if (firstPage.results.some((existing) => existing.id === message.id)) {
+      return previous;
+    }
+
+    firstPage.results = sortMessages([...firstPage.results, message]);
+    firstPage.count = firstPage.results.length;
+    newPages[0] = firstPage;
+
+    return {
+      ...previous,
+      pages: newPages,
+    };
+  });
+};
+
+const replaceMessageInCache = (
+  queryClient: QueryClient,
+  conversationId: string,
+  tempId: string,
+  message: ChatMessage,
+) => {
+  queryClient.setQueryData<
+    InfiniteData<PaginatedResponse<ChatMessage>> | undefined
+  >(["conversations", conversationId, "messages"], (previous) => {
+    if (!previous) {
+      return previous;
+    }
+
+    const newPages = previous.pages.map((page) => ({
+      ...page,
+      results: page.results.map((existing) =>
+        existing.id === tempId ? message : existing,
+      ),
+    }));
+
+    return { ...previous, pages: newPages };
+  });
+};
+
+const removeMessageFromCache = (
+  queryClient: QueryClient,
+  conversationId: string,
+  messageId: string,
+) => {
+  queryClient.setQueryData<
+    InfiniteData<PaginatedResponse<ChatMessage>> | undefined
+  >(["conversations", conversationId, "messages"], (previous) => {
+    if (!previous) {
+      return previous;
+    }
+
+    const newPages = previous.pages.map((page) => {
+      const filtered = page.results.filter((message) => message.id !== messageId);
+      return {
+        ...page,
+        results: filtered,
+        count: filtered.length,
+      };
+    });
+
+    return { ...previous, pages: newPages };
+  });
 };
 
 const updateConversationSnapshot = (
   queryClient: QueryClient,
   conversationId: string,
   message: ChatMessage,
+  options?: {
+    incrementCount?: boolean;
+  },
+) => {
+  queryClient.setQueryData<Conversation[] | undefined>(
+    ["conversations"],
+    (previous) => {
+      if (!previous) {
+        return previous;
+      }
+
+      return previous.map((conversation) => {
+        if (conversation.id !== conversationId) {
+          return conversation;
+        }
+
+        const nextCount = options?.incrementCount === false
+          ? conversation.message_count ?? 0
+          : (conversation.message_count ?? 0) + 1;
+
+        return {
+          ...conversation,
+          message_count: nextCount,
+          last_activity: message.created_at ?? conversation.last_activity,
+          last_message: {
+            id: message.id,
+            content: message.content,
+            sender_type: message.sender_type,
+            created_at: message.created_at,
+          },
+        };
+      });
+    },
+  );
+};
+
+const rollbackConversationSnapshot = (
+  queryClient: QueryClient,
+  conversationId: string,
+  messageId: string,
 ) => {
   queryClient.setQueryData<Conversation[] | undefined>(
     ["conversations"],
@@ -114,42 +230,69 @@ const updateConversationSnapshot = (
 
         return {
           ...conversation,
-          message_count: (conversation.message_count ?? 0) + 1,
-          last_activity: message.created_at ?? conversation.last_activity,
-          last_message: {
-            id: message.id,
-            content: message.content,
-            sender_type: message.sender_type,
-            created_at: message.created_at,
-          },
+          message_count: Math.max(0, (conversation.message_count ?? 0) - 1),
+          last_message:
+            conversation.last_message?.id === messageId
+              ? null
+              : conversation.last_message,
         };
       });
     },
   );
 };
 
+const dispatchSafetyAlert = (detail: SafetyAlertEventDetail) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent<SafetyAlertEventDetail>(SAFETY_ALERT_EVENT, {
+      detail,
+    }),
+  );
+};
+
+const createClientId = () => {
+  if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `req-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
 export function useChatSocket(conversationId: string | null) {
   const queryClient = useQueryClient();
-  const {
-    pushPlanUpdate,
-    setActiveAgent,
-    pushRoutingDecision,
-    setPlanBuildStatus,
-    updateLastPlanActivity,
-    pushRuntimeStep,
-    pushInsight,
-    pushMissingInfo,
-  } = useMentorLoungeStore();
+  const pushPlanUpdate = useMentorLoungeStore((state) => state.pushPlanUpdate);
+  const setActiveAgent = useMentorLoungeStore((state) => state.setActiveAgent);
+  const pushRoutingDecision = useMentorLoungeStore(
+    (state) => state.pushRoutingDecision,
+  );
+  const setPlanBuildStatus = useMentorLoungeStore(
+    (state) => state.setPlanBuildStatus,
+  );
+  const updateLastPlanActivity = useMentorLoungeStore(
+    (state) => state.updateLastPlanActivity,
+  );
+  const pushRuntimeStep = useMentorLoungeStore((state) => state.pushRuntimeStep);
+  const pushInsight = useMentorLoungeStore((state) => state.pushInsight);
+  const pushMissingInfo = useMentorLoungeStore((state) => state.pushMissingInfo);
+  const setMirrorAnalysisReady = useMentorLoungeStore(
+    (state) => state.setMirrorAnalysisReady,
+  );
+  const setToolThinking = useMentorLoungeStore((state) => state.setToolThinking);
+
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const heartbeatIntervalRef = useRef<number | null>(null);
   const heartbeatTimeoutRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
-  const mentorTypingTimeoutRef = useRef<number | null>(null);
   const activeConversationRef = useRef<string | null>(null);
   const manualCloseRef = useRef(false);
   const lastPongRef = useRef<number>(Date.now());
+  const lastTypingSentRef = useRef(false);
   const connectRef = useRef<() => void>(() => {});
+  const streamBufferRef = useRef("");
+  const streamFlushTimerRef = useRef<number | null>(null);
 
   const [status, setStatus] = useState<SocketStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -165,6 +308,47 @@ export function useChatSocket(conversationId: string | null) {
     }
   }, []);
 
+  const clearStreamFlushTimer = useCallback(() => {
+    if (streamFlushTimerRef.current) {
+      window.clearTimeout(streamFlushTimerRef.current);
+      streamFlushTimerRef.current = null;
+    }
+  }, []);
+
+  const flushStreamBuffer = useCallback(() => {
+    if (!streamBufferRef.current) {
+      return;
+    }
+
+    const buffered = streamBufferRef.current;
+    streamBufferRef.current = "";
+
+    setStreamState((previous) => {
+      if (!previous.content) {
+        return {
+          messageId: previous.messageId,
+          content: buffered,
+        };
+      }
+
+      return {
+        messageId: previous.messageId,
+        content: `${previous.content}${buffered}`,
+      };
+    });
+  }, []);
+
+  const scheduleStreamFlush = useCallback(() => {
+    if (streamFlushTimerRef.current) {
+      return;
+    }
+
+    streamFlushTimerRef.current = window.setTimeout(() => {
+      streamFlushTimerRef.current = null;
+      flushStreamBuffer();
+    }, 50);
+  }, [flushStreamBuffer]);
+
   const stopHeartbeat = useCallback(() => {
     if (heartbeatIntervalRef.current) {
       window.clearInterval(heartbeatIntervalRef.current);
@@ -179,6 +363,8 @@ export function useChatSocket(conversationId: string | null) {
   const resetSocket = useCallback(() => {
     stopHeartbeat();
     clearReconnectTimer();
+    clearStreamFlushTimer();
+    streamBufferRef.current = "";
     if (socketRef.current) {
       manualCloseRef.current = true;
       try {
@@ -189,26 +375,11 @@ export function useChatSocket(conversationId: string | null) {
       socketRef.current = null;
     }
     activeConversationRef.current = null;
-  }, [clearReconnectTimer, stopHeartbeat]);
+  }, [clearReconnectTimer, clearStreamFlushTimer, stopHeartbeat]);
 
-  const updateMentorTyping = useCallback(
-    (value: boolean) => {
-      if (mentorTypingTimeoutRef.current) {
-        window.clearTimeout(mentorTypingTimeoutRef.current);
-        mentorTypingTimeoutRef.current = null;
-      }
-
-      setMentorTypingState(value);
-
-      if (value) {
-        mentorTypingTimeoutRef.current = window.setTimeout(() => {
-          setMentorTypingState(false);
-          mentorTypingTimeoutRef.current = null;
-        }, MENTOR_TYPING_TIMEOUT);
-      }
-    },
-    [],
-  );
+  const updateMentorTyping = useCallback((value: boolean) => {
+    setMentorTypingState(value);
+  }, []);
 
   const scheduleReconnect = useCallback(() => {
     if (!conversationId) {
@@ -249,14 +420,23 @@ export function useChatSocket(conversationId: string | null) {
             socket.close();
           }
         }, HEARTBEAT_TIMEOUT);
-      } catch (err) {
-        telemetry.warn("Failed to send heartbeat", { err });
+      } catch (heartbeatError) {
+        telemetry.warn("Failed to send heartbeat", { heartbeatError });
       }
     }, HEARTBEAT_INTERVAL);
   }, [stopHeartbeat]);
 
   const connect = useCallback(() => {
     if (!conversationId) {
+      return;
+    }
+
+    if (
+      socketRef.current &&
+      activeConversationRef.current === conversationId &&
+      (socketRef.current.readyState === WebSocket.OPEN ||
+        socketRef.current.readyState === WebSocket.CONNECTING)
+    ) {
       return;
     }
 
@@ -275,6 +455,7 @@ export function useChatSocket(conversationId: string | null) {
         : null) ||
       Cookies.get("token") ||
       null;
+
     if (!token) {
       setStatus("error");
       setError("Missing authentication token");
@@ -292,7 +473,6 @@ export function useChatSocket(conversationId: string | null) {
       const socket = new WebSocket(wsUrl);
       socketRef.current = socket;
       activeConversationRef.current = conversationId;
-      reconnectAttemptsRef.current = 0;
       setStatus("connecting");
       setError(null);
       setStreamState({ content: null });
@@ -305,6 +485,7 @@ export function useChatSocket(conversationId: string | null) {
           return;
         }
         lastPongRef.current = Date.now();
+        reconnectAttemptsRef.current = 0;
         setStatus("open");
         setError(null);
         startHeartbeat();
@@ -312,6 +493,10 @@ export function useChatSocket(conversationId: string | null) {
 
       socket.onclose = (event) => {
         stopHeartbeat();
+        updateMentorTyping(false);
+        setActiveAgent(null);
+        setToolThinking(null);
+        setStreamState({ messageId: undefined, content: null });
 
         if (manualCloseRef.current) {
           manualCloseRef.current = false;
@@ -329,15 +514,28 @@ export function useChatSocket(conversationId: string | null) {
           return;
         }
 
-        setStatus("closed");
-        telemetry.warn("Chat socket closed", { code: event.code, reason: event.reason });
+        setStatus("connecting");
+        setError("Reconnecting...");
+        telemetry.warn("Chat socket closed", {
+          code: event.code,
+          reason: event.reason,
+        });
         scheduleReconnect();
       };
 
       socket.onerror = (socketError) => {
         telemetry.warn("Chat socket error", { socketError });
-        setStatus("error");
-        setError("Chat connection error");
+        updateMentorTyping(false);
+        setActiveAgent(null);
+        setToolThinking(null);
+        setStreamState({ messageId: undefined, content: null });
+        setStatus("connecting");
+        setError("Reconnecting...");
+        try {
+          socket.close();
+        } catch {
+          // no-op
+        }
       };
 
       socket.onmessage = (event) => {
@@ -365,45 +563,29 @@ export function useChatSocket(conversationId: string | null) {
               const message = payload?.message as ChatMessage | undefined;
               const tempId = payload?.temp_id as string | undefined;
 
-              if (message) {
-                message.conversation ??= conversationId;
-
-                if (tempId && conversationId) {
-                  // This is a confirmed user message, replace the optimistic one.
-                  queryClient.setQueryData<
-                    InfiniteData<PaginatedResponse<ChatMessage>> | undefined
-                  >(
-                    ["conversations", conversationId, "messages"],
-                    (previous) => {
-                      if (!previous) return previous;
-
-                      const newPages = previous.pages.map((page) => ({
-                        ...page,
-                        results: page.results.map((m) =>
-                          m.id === tempId ? message : m,
-                        ),
-                      }));
-
-                      return { ...previous, pages: newPages };
-                    },
-                  );
-                } else if (conversationId) {
-                  // This is a new message from AI or another user.
-                  appendMessageToCache(queryClient, conversationId, message);
-                }
-
-                if (conversationId) {
-                  updateConversationSnapshot(
-                    queryClient,
-                    conversationId,
-                    message,
-                  );
-                }
-                updateMentorTyping(false);
+              if (!message || !conversationId) {
+                break;
               }
+
+              message.conversation ??= conversationId;
+
+              if (tempId) {
+                replaceMessageInCache(queryClient, conversationId, tempId, message);
+                updateConversationSnapshot(queryClient, conversationId, message, {
+                  incrementCount: false,
+                });
+              } else {
+                appendMessageToCache(queryClient, conversationId, message);
+                updateConversationSnapshot(queryClient, conversationId, message);
+              }
+              updateMentorTyping(false);
+              setActiveAgent(null);
+              setToolThinking(null);
               break;
             }
             case "stream_start": {
+              streamBufferRef.current = "";
+              clearStreamFlushTimer();
               setStreamState({
                 messageId: payload?.message_id,
                 content: "",
@@ -412,55 +594,52 @@ export function useChatSocket(conversationId: string | null) {
               break;
             }
             case "stream_chunk": {
-              setStreamState((previous) => {
-                if (
-                  previous.messageId &&
-                  payload?.message_id &&
-                  previous.messageId !== payload.message_id
-                ) {
-                  return previous;
-                }
-                return {
-                  messageId: payload?.message_id ?? previous.messageId,
-                  content: `${previous.content ?? ""}${payload?.content ?? ""}`,
-                };
-              });
+              const chunk =
+                typeof payload?.content === "string" ? payload.content : "";
+              if (chunk) {
+                streamBufferRef.current += chunk;
+                scheduleStreamFlush();
+              }
               updateMentorTyping(true);
               break;
             }
             case "stream_complete": {
+              flushStreamBuffer();
               const message = payload?.message as ChatMessage | undefined;
-              const toolRuntime = payload?.tool_runtime_invocations || payload?.tool_invocations;
+              const toolRuntime =
+                payload?.tool_runtime_invocations || payload?.tool_invocations;
 
-              if (message) {
+              if (message && conversationId) {
                 message.conversation ??= conversationId;
-                
-                // Merge tool runtime logs if provided separately in the event
                 if (toolRuntime && Array.isArray(toolRuntime)) {
                   message.metadata = {
                     ...message.metadata,
                     tool_runtime_invocations: toolRuntime,
                   };
                 }
-
-                if (conversationId) {
-                  appendMessageToCache(queryClient, conversationId, message);
-                  updateConversationSnapshot(
-                    queryClient,
-                    conversationId,
-                    message,
-                  );
-                }
+                appendMessageToCache(queryClient, conversationId, message);
+                updateConversationSnapshot(queryClient, conversationId, message);
               }
-              setStreamState({ messageId: undefined, content: null });
+
+              setStreamState((previous) => ({
+                messageId: message?.id ?? previous.messageId,
+                content:
+                  typeof message?.content === "string"
+                    ? message.content
+                    : previous.content,
+              }));
               updateMentorTyping(false);
               setActiveAgent(null);
+              setToolThinking(null);
               break;
             }
             case "stream_error": {
+              clearStreamFlushTimer();
+              streamBufferRef.current = "";
               setStreamState({ messageId: undefined, content: null });
               updateMentorTyping(false);
               setActiveAgent(null);
+              setToolThinking(null);
               if (payload?.error) {
                 telemetry.toastError(payload.error);
               }
@@ -469,25 +648,47 @@ export function useChatSocket(conversationId: string | null) {
             case "agent_start": {
               const agentName = (payload?.agent as string) || "General Mentor";
               const reason = (payload?.reason as string) || "Routing...";
-              // "confidence" might be in payload if the backend sends it early, otherwise optional.
-              
+
               setActiveAgent({ name: agentName });
               updateMentorTyping(true);
-
-              // Log routing decision if present
-              if (payload?.agent) {
-                 pushRoutingDecision({
-                     agent: agentName,
-                     reason: reason,
-                     confidence: (payload?.confidence as number) ?? 1.0, 
-                     timestamp: new Date().toISOString(),
-                 });
-              }
+              pushRoutingDecision({
+                agent: agentName,
+                reason,
+                confidence: (payload?.confidence as number) ?? 1,
+                timestamp: new Date().toISOString(),
+              });
+              break;
+            }
+            case "tool_thinking": {
+              clearStreamFlushTimer();
+              setToolThinking({
+                tool: (payload?.tool as string) ?? "",
+                label: (payload?.label as string) ?? "Thinking...",
+                query: (payload?.query as string) ?? "",
+              });
               break;
             }
             case "typing_status": {
-              const isTyping = Boolean(payload?.is_typing);
-              updateMentorTyping(isTyping);
+              updateMentorTyping(Boolean(payload?.is_typing));
+              break;
+            }
+            case "safety_alert": {
+              dispatchSafetyAlert({
+                type: "safety_alert",
+                severity:
+                  payload?.risk_level === "critical"
+                    ? "critical"
+                    : payload?.risk_level === "high"
+                      ? "high"
+                      : "medium",
+                message:
+                  (payload?.message as string) ??
+                  "We've detected a safety concern in this conversation.",
+                resources: Array.isArray(payload?.resources)
+                  ? (payload.resources as string[])
+                  : undefined,
+              });
+              updateMentorTyping(false);
               break;
             }
             case "plan_update": {
@@ -501,6 +702,9 @@ export function useChatSocket(conversationId: string | null) {
                     conversation_id?: string;
                     step_type?: string;
                     tool?: string;
+                    plan_id?: string;
+                    plan_title?: string;
+                    task_count?: number;
                   })
                 | undefined;
 
@@ -514,6 +718,11 @@ export function useChatSocket(conversationId: string | null) {
                 break;
               }
 
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
+
               const eventId =
                 data?.event_id ??
                 (typeof crypto !== "undefined" && crypto.randomUUID
@@ -526,28 +735,40 @@ export function useChatSocket(conversationId: string | null) {
                   id: eventId,
                   conversation_id: targetConversation ?? undefined,
                   status: (data?.status as PlanBuildStatus) ?? "in_progress",
-                  message: (data?.message as string) ?? "Working on your plan...",
+                  message:
+                    (data?.message as string) ?? "Working on your plan...",
                   plan_id: data?.plan_id as string | undefined,
                   plan_title: data?.plan_title as string | undefined,
                   task_count: data?.task_count as number | undefined,
                   agent: data?.agent as string | undefined,
                   tool: data?.tool as string | undefined,
                   step_type: data?.step_type as string | undefined,
-                  timestamp: data?.timestamp ? (data.timestamp as string) : new Date().toISOString(),
-                }
+                  timestamp: data?.timestamp
+                    ? (data.timestamp as string)
+                    : new Date().toISOString(),
+                },
               });
 
-              // Update global plan build status in store
               if (data?.status) {
-                // Cast to specific PlanBuildStatus to avoid type errors, defaulting to "in_progress" if unknown
-                const status = (data.status as PlanBuildStatus) || "in_progress";
                 setPlanBuildStatus(
-                  status,
+                  (data.status as PlanBuildStatus) || "in_progress",
                   (data.message as string) ?? undefined,
                   (data.plan_id as string) ?? undefined,
                   (data.plan_title as string) ?? undefined,
                 );
                 updateLastPlanActivity();
+
+                const normalizedStatus = String(data.status).toLowerCase();
+                if (normalizedStatus === "completed" || normalizedStatus === "failed") {
+                  dispatchBackendStageComplete({
+                    conversationId: targetConversation ?? undefined,
+                    sessionId: data.session_id as string | undefined,
+                    eventType: "plan_update",
+                    stage: (data.step_type as string | undefined) ?? "plan_update",
+                    status: normalizedStatus,
+                    message: (data.message as string) ?? undefined,
+                  });
+                }
               }
 
               if (data?.status === "failed" && data?.message) {
@@ -557,115 +778,221 @@ export function useChatSocket(conversationId: string | null) {
             }
             case "agent_runtime": {
               const step = payload?.data;
-              if (step) {
-                 pushRuntimeStep({
-                     id: step.id ?? crypto.randomUUID(),
-                     agent: step.agent ?? "System",
-                     step: step.step ?? "Processing",
-                     status: step.status ?? "running",
-                     timestamp: step.timestamp ?? new Date().toISOString(),
-                     details: step.details,
-                     input: step.input,
-                     output: step.output,
-                     confidence: step.confidence
-                 });
-                 // Also set active agent/typing if running
-                 if (step.status === "running") {
-                    setActiveAgent({ name: step.agent });
-                    updateMentorTyping(true);
-                 } else if (step.status === "completed" || step.status === "failed") {
-                    // Don't clear immediately, let UI linger
-                    updateMentorTyping(false);
-                 }
+              if (!step) {
+                break;
+              }
 
-                 if (step.status) {
-                    const mapped =
-                      step.status === "initializing" || step.status === "queued"
-                        ? "queued"
-                        : step.status === "completed"
-                          ? "completed"
-                          : step.status === "error" || step.status === "failed"
-                            ? "failed"
-                            : "in_progress";
-                    setPlanBuildStatus(
-                      mapped,
-                      step.step ?? "Working on your plan...",
-                    );
-                    updateLastPlanActivity();
-                 }
+              const stepConversationId =
+                (step.conversation_id as string | undefined) ??
+                (step.session_id as string | undefined);
+              if (
+                stepConversationId &&
+                conversationId &&
+                stepConversationId !== conversationId
+              ) {
+                break;
+              }
+
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
+
+              pushRuntimeStep({
+                id: step.id ?? crypto.randomUUID(),
+                agent: step.agent ?? "System",
+                step: step.step ?? "Processing",
+                status: step.status ?? "running",
+                timestamp: step.timestamp ?? new Date().toISOString(),
+                details: step.details,
+                input: step.input,
+                output: step.output,
+                confidence: step.confidence,
+              });
+
+              if (step.status === "running") {
+                setActiveAgent({ name: step.agent });
+                updateMentorTyping(true);
+              } else if (
+                step.status === "completed" ||
+                step.status === "failed"
+              ) {
+                updateMentorTyping(false);
+                dispatchBackendStageComplete({
+                  conversationId: (step.conversation_id as string | undefined) ?? conversationId ?? undefined,
+                  sessionId: step.session_id as string | undefined,
+                  eventType: "agent_runtime",
+                  stage: (step.step as string | undefined) ?? "agent_runtime",
+                  status: String(step.status),
+                  message: (step.step as string | undefined) ?? undefined,
+                });
               }
               break;
             }
             case "insight_generated": {
-               const insight = payload?.data;
-               if (insight) {
-                  pushInsight({
-                      id: insight.id ?? crypto.randomUUID(),
-                      type: insight.type ?? "recommendation",
-                      title: insight.title ?? "New Insight",
-                      message: insight.message ?? "",
-                      data: insight.data,
-                      timestamp: insight.timestamp ?? new Date().toISOString(),
-                      is_read: false
-                  });
-                  telemetry.toastInfo(insight.title, insight.message);
-               }
-               break;
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
+              const insight = payload?.data;
+              if (!insight) {
+                break;
+              }
+              pushInsight({
+                id: insight.id ?? crypto.randomUUID(),
+                type: insight.type ?? "recommendation",
+                title: insight.title ?? "New Insight",
+                message: insight.message ?? "",
+                data: insight.data,
+                timestamp: insight.timestamp ?? new Date().toISOString(),
+                is_read: false,
+              });
+              telemetry.toastInfo(insight.title, insight.message);
+              break;
             }
             case "missing_information": {
-               const info = payload?.data;
-               if (info) {
-                  const messageId = info.id ?? crypto.randomUUID();
-                  const context = info.context ? `\n\nWhy I'm asking: ${info.context}` : "";
-                  const unblocks = info.unblocks ? `\n\nHow this helps: ${info.unblocks}` : "";
-                  pushMissingInfo({
-                      id: messageId,
-                      field: info.field,
-                      question: info.question,
-                      context: info.context,
-                      unblocks: info.unblocks,
-                      status: "pending",
-                      timestamp: new Date().toISOString()
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
+              const info = payload?.data;
+              if (!info) {
+                break;
+              }
+
+              const messageId = info.id ?? crypto.randomUUID();
+              const context = info.context
+                ? `\n\nWhy I'm asking: ${info.context}`
+                : "";
+              const unblocks = info.unblocks
+                ? `\n\nHow this helps: ${info.unblocks}`
+                : "";
+
+              pushMissingInfo({
+                id: messageId,
+                field: info.field,
+                question: info.question,
+                context: info.context,
+                unblocks: info.unblocks,
+                status: "pending",
+                timestamp: new Date().toISOString(),
+              });
+
+              if (conversationId) {
+                const isoTimestamp = new Date().toISOString();
+                const missingInfoMessage: ChatMessage = {
+                  id: `missing-info-${messageId}`,
+                  conversation: conversationId,
+                  message_type: "text",
+                  sender_type: "ai",
+                  content:
+                    (info.question ??
+                      "I need a bit more information to continue.") +
+                    context +
+                    unblocks,
+                  sequence_number: Date.now(),
+                  ai_model_used: undefined,
+                  tokens_used: undefined,
+                  processing_time: undefined,
+                  is_edited: false,
+                  is_flagged: false,
+                  created_at: isoTimestamp,
+                  updated_at: isoTimestamp,
+                  metadata: {
+                    missing_info_id: messageId,
+                    missing_info_field: info.field,
+                    missing_info_context: info.context,
+                    missing_info_unblocks: info.unblocks,
+                  },
+                };
+                appendMessageToCache(queryClient, conversationId, missingInfoMessage);
+                updateConversationSnapshot(
+                  queryClient,
+                  conversationId,
+                  missingInfoMessage,
+                );
+              }
+
+              pushPlanUpdate({
+                type: "plan_update",
+                data: {
+                  id: `missing-info-${messageId}`,
+                  status: "warning",
+                  message:
+                    info.question ?? "Additional info needed to continue.",
+                  timestamp: new Date().toISOString(),
+                },
+              });
+              break;
+            }
+            case "level_completed": {
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
+              const levelTitle = (payload?.level_title as string) ?? "Level";
+              const xpAwarded = (payload?.xp_awarded as number) ?? 100;
+              import("canvas-confetti")
+                .then(({ default: confetti }) => {
+                  confetti({
+                    particleCount: 120,
+                    spread: 80,
+                    origin: { y: 0.6 },
+                    colors: ["#10b981", "#3b82f6", "#f59e0b", "#8b5cf6"],
                   });
-                  if (conversationId) {
-                    const isoTimestamp = new Date().toISOString();
-                    const missingInfoMessage: ChatMessage = {
-                      id: `missing-info-${messageId}`,
-                      conversation: conversationId,
-                      message_type: "text",
-                      sender_type: "ai",
-                      content:
-                        (info.question ??
-                          "I need a bit more information to continue.") + context + unblocks,
-                      sequence_number: Date.now(),
-                      ai_model_used: undefined,
-                      tokens_used: undefined,
-                      processing_time: undefined,
-                      is_edited: false,
-                      is_flagged: false,
-                      created_at: isoTimestamp,
-                      updated_at: isoTimestamp,
-                      metadata: {
-                        missing_info_id: messageId,
-                        missing_info_field: info.field,
-                        missing_info_context: info.context,
-                        missing_info_unblocks: info.unblocks,
-                      },
-                    };
-                    appendMessageToCache(queryClient, conversationId, missingInfoMessage);
-                    updateConversationSnapshot(queryClient, conversationId, missingInfoMessage);
-                  }
-                  pushPlanUpdate({
-                    type: "plan_update",
-                    data: {
-                      id: `missing-info-${messageId}`,
-                      status: "warning",
-                      message: info.question ?? "Additional info needed to continue.",
-                      timestamp: new Date().toISOString(),
-                    },
-                  });
-               }
-               break;
+                })
+                .catch(() => {
+                  // no-op
+                });
+              telemetry.toastSuccess(
+                "Level completed",
+                `${levelTitle} finished. +${xpAwarded} XP earned.`,
+              );
+              queryClient.invalidateQueries({ queryKey: ["roadmap"] });
+              break;
+            }
+            case "artifact_verified": {
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
+              window.dispatchEvent(
+                new CustomEvent("artifact_verified", { detail: payload }),
+              );
+              break;
+            }
+            case "mirror_analysis_ready": {
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
+              const snapshotId = payload?.mirror_snapshot_id as string | undefined;
+              setMirrorAnalysisReady(snapshotId ?? null);
+              queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
+              telemetry.toastSuccess(
+                "Profile analysis ready",
+                "Your mentor now has full context about your background.",
+              );
+              break;
+            }
+            case "proactive_mentor_message": {
+              if (hasHandledChatEvent(type, payload)) {
+                break;
+              }
+              markHandledChatEvent(type, payload);
+              window.dispatchEvent(
+                new CustomEvent("proactive_mentor_message", {
+                  detail: {
+                    conversationId: payload?.conversation_id,
+                    triggerType: payload?.trigger_type,
+                  },
+                }),
+              );
+              telemetry.toastInfo(
+                "Your mentor sent you a message",
+                "Open the chat to see what they said.",
+              );
+              break;
             }
             default:
               telemetry.info("Unhandled chat socket event", { type });
@@ -682,17 +1009,26 @@ export function useChatSocket(conversationId: string | null) {
       scheduleReconnect();
     }
   }, [
+    clearStreamFlushTimer,
+    flushStreamBuffer,
     conversationId,
+    pushInsight,
+    pushMissingInfo,
     pushPlanUpdate,
     pushRoutingDecision,
-    setActiveAgent,
+    pushRuntimeStep,
     queryClient,
     resetSocket,
     scheduleReconnect,
+    scheduleStreamFlush,
+    setActiveAgent,
+    setMirrorAnalysisReady,
+    setPlanBuildStatus,
+    setToolThinking,
     startHeartbeat,
     stopHeartbeat,
+    updateLastPlanActivity,
     updateMentorTyping,
-   
   ]);
 
   connectRef.current = connect;
@@ -712,16 +1048,17 @@ export function useChatSocket(conversationId: string | null) {
       }
 
       const trimmed = content.trim();
-      if (!trimmed) {
+      if (!trimmed || !conversationId) {
         return;
       }
 
-      // Optimistic update
       const tempId = `temp-${Date.now()}`;
+      const requestId = createClientId();
+      const traceId = requestId;
       const isoTimestamp = new Date().toISOString();
       const optimisticMessage: ChatMessage = {
         id: tempId,
-        conversation: conversationId!,
+        conversation: conversationId,
         message_type: "text",
         sender_type: "user",
         content: trimmed,
@@ -738,39 +1075,76 @@ export function useChatSocket(conversationId: string | null) {
         flag_reason: undefined,
       };
 
-      if (conversationId) {
-        try {
-          appendMessageToCache(queryClient, conversationId, optimisticMessage);
-          updateConversationSnapshot(queryClient, conversationId, optimisticMessage);
-        } catch (error) {
-            telemetry.error("Failed to add optimistic message to cache", { error });
-            telemetry.toastError("Could not send message. Please try again.");
-            return;
-        }
+      try {
+        appendMessageToCache(queryClient, conversationId, optimisticMessage);
+        updateConversationSnapshot(queryClient, conversationId, optimisticMessage);
+      } catch (cacheError) {
+        telemetry.error("Failed to add optimistic message to cache", {
+          cacheError,
+        });
+        telemetry.toastError("Could not send message. Please try again.");
+        return;
       }
 
+      try {
+        socket.send(
+          JSON.stringify({
+            type: "streaming_message",
+            message: {
+              content: trimmed,
+              temp_id: tempId,
+              context: options?.context,
+              metadata: {
+                ...(options?.metadata ?? {}),
+                request_id: requestId,
+                trace_id: traceId,
+              },
+            },
+          }),
+        );
+        updateMentorTyping(false);
+      } catch (sendError) {
+        removeMessageFromCache(queryClient, conversationId, tempId);
+        rollbackConversationSnapshot(queryClient, conversationId, tempId);
+        queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        telemetry.error("Failed to send message over chat socket", { sendError });
+        telemetry.toastError("Could not send message. Please try again.");
+        throw sendError;
+      }
+    },
+    [conversationId, queryClient, updateMentorTyping],
+  );
+
+  const setTypingStatus = useCallback((isTyping: boolean) => {
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    if (lastTypingSentRef.current === isTyping) {
+      return;
+    }
+
+    try {
       socket.send(
         JSON.stringify({
-          type: "streaming_message",
-          message: {
-            content: trimmed,
-            temp_id: tempId,
-            context: options?.context,
-            metadata: options?.metadata,
-          },
+          type: "typing_status",
+          is_typing: isTyping,
         }),
       );
-
-      updateMentorTyping(false);
-    },
-    [queryClient, conversationId, updateMentorTyping],
-  );
+      lastTypingSentRef.current = isTyping;
+    } catch (typingError) {
+      telemetry.warn("Failed to send typing status", { typingError });
+    }
+  }, []);
 
   useEffect(() => {
     reconnectAttemptsRef.current = 0;
+    lastTypingSentRef.current = false;
     setStreamState({ content: null });
     updateMentorTyping(false);
     setActiveAgent(null);
+    setToolThinking(null);
 
     if (!conversationId) {
       resetSocket();
@@ -787,43 +1161,104 @@ export function useChatSocket(conversationId: string | null) {
       resetSocket();
       setError(null);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId, connect, resetSocket, updateMentorTyping]);
+  }, [
+    connect,
+    conversationId,
+    resetSocket,
+    setActiveAgent,
+    setToolThinking,
+    updateMentorTyping,
+  ]);
+
+  useEffect(() => {
+    if (!conversationId) {
+      return;
+    }
+
+    const ensureConnected = () => {
+      if (document.visibilityState === "hidden" || navigator.onLine === false) {
+        return;
+      }
+      const socket = socketRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        clearReconnectTimer();
+        setStatus("connecting");
+        setError("Reconnecting...");
+        connectRef.current();
+      }
+    };
+
+    const onVisible = () => ensureConnected();
+    const onFocus = () => ensureConnected();
+    const onOnline = () => ensureConnected();
+
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [conversationId, clearReconnectTimer]);
+
+  useEffect(() => {
+    if (!conversationId) {
+      return;
+    }
+
+    const handleStageComplete = (event: Event) => {
+      const detail = (event as CustomEvent<BackendStageCompleteEventDetail>).detail;
+      if (!detail) {
+        return;
+      }
+
+      const matchesConversation =
+        detail.conversationId === conversationId ||
+        detail.sessionId === conversationId ||
+        (!detail.conversationId && !detail.sessionId);
+
+      if (!matchesConversation) {
+        return;
+      }
+
+      setStreamState({ messageId: undefined, content: null });
+      updateMentorTyping(false);
+      setActiveAgent(null);
+      setToolThinking(null);
+    };
+
+    window.addEventListener(
+      BACKEND_STAGE_COMPLETE_EVENT,
+      handleStageComplete as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        BACKEND_STAGE_COMPLETE_EVENT,
+        handleStageComplete as EventListener,
+      );
+    };
+  }, [conversationId, setActiveAgent, setToolThinking, updateMentorTyping]);
 
   useEffect(() => {
     return () => {
-      if (mentorTypingTimeoutRef.current) {
-        window.clearTimeout(mentorTypingTimeoutRef.current);
-        mentorTypingTimeoutRef.current = null;
-      }
+      clearStreamFlushTimer();
+      streamBufferRef.current = "";
     };
-  }, []);
-
-  const streamingMessage = useMemo(() => streamState.content, [streamState]);
+  }, [clearStreamFlushTimer]);
 
   return {
     status,
     error,
     sendMessage,
     mentorTyping,
-    streamingMessage,
+    streamingMessage: streamState.content,
     streamingMessageId: streamState.messageId,
-    setTypingStatus: useCallback((isTyping: boolean) => {
-      const socket = socketRef.current;
-      if (!socket || socket.readyState !== WebSocket.OPEN) {
-        return;
-      }
-
-      try {
-        socket.send(
-          JSON.stringify({
-            type: "typing_status",
-            is_typing: isTyping,
-          }),
-        );
-      } catch (err) {
-        telemetry.warn("Failed to send typing status", { err });
-      }
-    }, []),
+    setTypingStatus,
   };
 }
+
+export type { SafetyAlertEventDetail };
+export { SAFETY_ALERT_EVENT };

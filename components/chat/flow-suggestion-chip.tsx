@@ -74,14 +74,29 @@ export function FlowSuggestionChip({
     });
 
     // Navigate based on suggestion type
-    if (suggestion.type === 'continue' && suggestion.metadata?.plan_id) {
-      router.push(`/learning-plans/${suggestion.metadata.plan_id}`);
+    const planId =
+      typeof suggestion.metadata?.plan_id === "string"
+        ? suggestion.metadata.plan_id
+        : undefined;
+    const taskId =
+      typeof suggestion.metadata?.task_id === "string"
+        ? suggestion.metadata.task_id
+        : undefined;
+
+    if (suggestion.type === 'continue' && planId) {
+      router.push(`/plans?plan=${planId}`);
     } else if (suggestion.type === 'explore') {
-      router.push('/learning-plans');
+      router.push('/plans');
     } else if (suggestion.type === 'celebrate') {
       router.push('/profile');
-    } else if (suggestion.type === 'apply' && suggestion.metadata?.task_id) {
-      router.push(`/learning-plans?task=${suggestion.metadata.task_id}`);
+    } else if (suggestion.type === 'apply') {
+      if (planId && taskId) {
+        router.push(`/plans?plan=${planId}&task=${taskId}`);
+      } else if (planId) {
+        router.push(`/plans?plan=${planId}`);
+      } else {
+        router.push('/plans');
+      }
     }
   };
 

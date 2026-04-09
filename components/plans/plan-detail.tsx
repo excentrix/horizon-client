@@ -9,8 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Progress } from "@/components/ui/progress";
 import type { DailyTask, LearningPlan } from "@/types";
 import { planningApi, roadmapApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
@@ -19,6 +17,13 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { CalendarDays, Sparkles } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface PlanDetailProps {
   plan: LearningPlan;
@@ -36,6 +41,22 @@ interface PlanDetailProps {
     switchingMentor: boolean;
   };
 }
+
+type PlanMilestone = NonNullable<LearningPlan["milestones"]>[number];
+type MilestoneProgress = PlanMilestone & {
+  index: number;
+  total: number;
+  completed: number;
+  percent: number;
+  isComplete: boolean;
+};
+type StepMilestone = {
+  id: string;
+  index: number;
+  title: string;
+  isComplete: boolean;
+};
+type MilestoneDisplay = MilestoneProgress | StepMilestone;
 
 export function PlanDetail({
   plan,
@@ -101,6 +122,37 @@ export function PlanDetail({
   }`;
   const [resourceRefreshing, setResourceRefreshing] = useState(false);
   const [exportingRoadmap, setExportingRoadmap] = useState(false);
+  const veloContext = (plan.source_analysis as Record<string, unknown> | null)?.velo_context as
+    | Record<string, unknown>
+    | undefined;
+  const hasVeloContext = Boolean(veloContext && Object.keys(veloContext).length);
+  const gapCoverage = useMemo(() => {
+    const gapTasks = tasks.filter((task) => {
+      const env = (task.environment_requirements || {}) as Record<string, unknown>;
+      return Boolean(env.velo_origin) && typeof env.gap_category === "string" && String(env.gap_category).trim();
+    });
+    if (!gapTasks.length) {
+      return { total: 0, completed: 0, progress: 0 };
+    }
+    const totalGaps = new Set<string>();
+    const coveredGaps = new Set<string>();
+    gapTasks.forEach((task) => {
+      const env = (task.environment_requirements || {}) as Record<string, unknown>;
+      const gap = String(env.gap_category || "").trim();
+      if (!gap) return;
+      totalGaps.add(gap);
+      if (task.status === "completed") {
+        coveredGaps.add(gap);
+      }
+    });
+    const total = totalGaps.size;
+    const completed = coveredGaps.size;
+    return {
+      total,
+      completed,
+      progress: total ? Math.round((completed / total) * 100) : 0,
+    };
+  }, [tasks]);
 
   const handleExportRoadmap = async () => {
     if (!plan.roadmap_details) return;
@@ -171,7 +223,9 @@ export function PlanDetail({
         });
         
         // Update startY to end of table
-        startY = (doc as any).lastAutoTable.finalY + 15;
+        const lastTableY = (doc as { lastAutoTable?: { finalY?: number } })
+          .lastAutoTable?.finalY;
+        startY = (lastTableY ?? startY) + 15;
         
         if (startY > doc.internal.pageSize.height - 40) {
           doc.addPage();
@@ -233,7 +287,7 @@ export function PlanDetail({
     if (!milestones.length) {
       return [];
     }
-    return milestones.map((milestone, index) => {
+    return milestones.map((milestone, index): MilestoneProgress => {
       const milestoneTasks = tasks.filter(
         (task) =>
           task.milestone_id && task.milestone_id === milestone.milestone_id,
@@ -253,17 +307,6 @@ export function PlanDetail({
       };
     });
   }, [milestones, tasks]);
-  const milestoneTrackWeeks = useMemo(() => {
-    if (!milestones.length) {
-      return displayWeeks || 1;
-    }
-    const maxWeek = Math.max(
-      1,
-      ...milestones.map((milestone) => Math.max(1, milestone.week || 1)),
-    );
-    return Math.max(maxWeek, 1);
-  }, [milestones, displayWeeks]);
-  const milestoneCount = milestoneProgress.length;
   const lastCompletedMilestone = useMemo(() => {
     return milestoneProgress
       .filter((milestone) => milestone.isComplete)
@@ -274,6 +317,13 @@ export function PlanDetail({
   const renderControls = () => {
     switch (plan.status) {
       case "draft":
+        if (!plan.pre_assessed) {
+          return (
+            <Button asChild>
+              <Link href={`/plans/${plan.id}/assessment`}>Take quiz to start</Link>
+            </Button>
+          );
+        }
         return (
           <Button onClick={onStart} disabled={actionStatus.starting}>
             {actionStatus.starting ? "Starting…" : "Start plan"}
@@ -327,6 +377,17 @@ export function PlanDetail({
       return { label, href };
     }
     return { label: "Resource", href: undefined };
+  };
+
+  const getPersonalizationBadge = (task: DailyTask) => {
+    const env = task.environment_requirements ?? {};
+    const level = (env as Record<string, string>).user_competency_level;
+    if (!level) return null;
+    return (
+      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+        Tailored · {level}
+      </span>
+    );
   };
 
   const renderTaskResources = (task?: DailyTask) => {
@@ -398,6 +459,25 @@ export function PlanDetail({
                 </div>
               </div>
             ) : null}
+            {/* Pre-assessment banner — shown for draft plans not yet assessed */}
+            {plan.status === "draft" && !plan.pre_assessed && (
+              <div className="mt-2 flex items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 p-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-violet-900">Personalise this plan</p>
+                  <p className="text-xs text-violet-700">Take a 5-minute quiz to skip tasks you already know.</p>
+                </div>
+                <Button
+                  asChild
+                  size="sm"
+                  className="h-7 shrink-0 bg-violet-600 text-xs text-white hover:bg-violet-700"
+                >
+                  <Link href={`/plans/${plan.id}/assessment`}>Start Quiz</Link>
+                </Button>
+              </div>
+            )}
             {description ? (
               <div className="text-sm text-muted-foreground">
                 <p>{showFullDescription ? description : shortDescription}</p>
@@ -484,15 +564,13 @@ export function PlanDetail({
                             100,
                       }),
                     )
-                ).map((milestone, index, arr) => {
+                ).map((milestone: MilestoneDisplay, index, arr) => {
                   const stepPct =
                     arr.length > 0 ? ((index + 1) / (arr.length + 1)) * 100 : 0;
                   const completed =
                     "percent" in milestone
-                      ? (milestone as any).percent >= 100
-                      : "isComplete" in milestone
-                        ? (milestone as any).isComplete
-                        : plan.progress_percentage >= stepPct;
+                      ? milestone.percent >= 100
+                      : milestone.isComplete ?? plan.progress_percentage >= stepPct;
                   return (
                     <div
                       key={milestone.id ?? `step-${index}`}
@@ -509,7 +587,7 @@ export function PlanDetail({
                           : `Step ${index + 1}`
                       }
                     >
-                      {index + 1}
+                      {index}
                     </div>
                   );
                 })}
@@ -529,7 +607,7 @@ export function PlanDetail({
             </div>
           ) : null}
         </div>
-        {(learningApproach || primaryStyle || maxDailyHours || motivationPatterns.length) ? (
+        {/* {(learningApproach || primaryStyle || maxDailyHours || motivationPatterns.length) ? (
           <div className="rounded-2xl border border-transparent bg-white/80 px-3 py-3 text-[11px] text-muted-foreground shadow-[var(--shadow-1)] ring-1 ring-white/60">
             <p className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
               Why this plan fits you
@@ -560,7 +638,7 @@ export function PlanDetail({
               ))}
             </div>
           </div>
-        ) : null}
+        ) : null} */}
         <div className="flex flex-wrap items-center gap-2">
           {renderControls()}
           <Button
@@ -573,9 +651,41 @@ export function PlanDetail({
           <Button asChild variant="outline">
             <Link href={playgroundHref}>Enter playground</Link>
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="default" className="gap-2">
+                <CalendarDays className="h-4 w-4" /> Export Calendar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => {
+                const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api";
+                window.open(`${apiBase}/plans/${plan.id}/calendar.ics/`, "_blank");
+              }}>
+                Download .ics file
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => {
+                const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api";
+                const icsUrl = encodeURIComponent(`${apiBase}/plans/${plan.id}/calendar.ics/`);
+                window.open(`https://calendar.google.com/calendar/r/settings/addbyurl?url=${icsUrl}`, "_blank");
+              }}>
+                Add to Google Calendar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
+        {hasVeloContext ? (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
+              Personalized using VELO + Mentor Intake
+            </p>
+            <p className="mt-1 text-xs text-emerald-800">
+              Gap coverage progress: {gapCoverage.progress}% ({gapCoverage.completed}/{gapCoverage.total})
+            </p>
+          </div>
+        ) : null}
         <div className="rounded-2xl border border-transparent bg-white/85 p-4 shadow-[var(--shadow-1)] ring-1 ring-white/60">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Focus today
@@ -592,6 +702,15 @@ export function PlanDetail({
                     <span className="text-xs text-muted-foreground">
                       {task.estimated_duration_minutes} min
                     </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span>Difficulty: {task.difficulty_level}</span>
+                    {getPersonalizationBadge(task)}
+                    {task.is_skippable ? (
+                      <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-violet-700">
+                        Skippable
+                      </span>
+                    ) : null}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {task.description}
