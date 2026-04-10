@@ -4,6 +4,7 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig: NextConfig = {
   /* config options here */
   transpilePackages: ["tldraw"],
+
   webpack: (config) => {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
@@ -14,14 +15,7 @@ const nextConfig: NextConfig = {
     };
     return config;
   },
-  experimental: {
-    turbo: {
-      resolveAlias: {
-        react: "react",
-        "react-dom": "react-dom",
-      },
-    },
-  },
+
   async rewrites() {
     return [
       {
@@ -34,8 +28,16 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+
   // This is required to support PostHog trailing slash API requests
   skipTrailingSlashRedirect: true,
+
+  turbopack: {
+    resolveAlias: {
+      react: "react",
+      "react-dom": "react-dom",
+    }
+  }
 };
 
 // Wrap with Sentry configuration
