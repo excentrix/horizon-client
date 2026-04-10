@@ -394,6 +394,14 @@ export function VeloProfileTab() {
   const employerPerspective = deep.employer_perspective as
     | EmployerPerspective
     | undefined;
+  const mentorSummary = (deep.mentor_state_v2_summary ?? null) as
+    | {
+        stage?: string;
+        debrief_progress_percent?: number;
+        missing_fields?: string[];
+        weakest_dimensions?: Array<{ name: string; score: number }>;
+      }
+    | null;
 
   const demonstrated = skillMastery.filter((s) => s.level === "demonstrated");
   const mentioned = skillMastery.filter((s) => s.level === "mentioned");
@@ -809,6 +817,69 @@ export function VeloProfileTab() {
           </div>
         </div>
       )}
+
+      {/* ── Mentor Readiness View ───────────────────────────────────────── */}
+      {mentorSummary ? (
+        <Card>
+          <CardContent className="pb-4 pt-4">
+            <SectionLabel className="mb-2">Mentor Readiness View</SectionLabel>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="text-sm">
+                <span className="font-medium">Debrief stage: </span>
+                <span className="capitalize text-muted-foreground">
+                  {mentorSummary.stage || "exploring"}
+                </span>
+              </div>
+              <Badge variant="outline" className="text-[11px]">
+                {Math.round(mentorSummary.debrief_progress_percent ?? 0)}% ready
+              </Badge>
+            </div>
+            {mentorSummary.weakest_dimensions?.length ? (
+              <div className="mb-3 space-y-2">
+                {mentorSummary.weakest_dimensions.slice(0, 3).map((dim) => (
+                  <div key={dim.name} className="flex items-center gap-3">
+                    <span className="w-44 text-xs capitalize text-muted-foreground">
+                      {dim.name.replace(/_/g, " ")}
+                    </span>
+                    <Progress
+                      value={dim.score}
+                      className={cn("h-1.5 flex-1", scoreBarColor(dim.score))}
+                    />
+                    <span
+                      className={cn(
+                        "w-8 text-right text-[11px] font-semibold",
+                        scoreColor(dim.score),
+                      )}
+                    >
+                      {dim.score}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              {mentorSummary.missing_fields?.length ? (
+                <span className="text-xs text-muted-foreground">
+                  Missing: {mentorSummary.missing_fields.join(", ")}
+                </span>
+              ) : (
+                <span className="text-xs text-emerald-600">
+                  Debrief context complete
+                </span>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="ml-auto h-8 text-xs"
+                onClick={() => router.push("/chat?context=mirror_review")}
+              >
+                <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
+                Review with mentor
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* ── Skill Mastery ─────────────────────────────────────────────────── */}
       {skillMastery.length > 0 && (

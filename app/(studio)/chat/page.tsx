@@ -208,6 +208,12 @@ function ChatContent() {
   const [intakeState, setIntakeState] = useState<Record<string, unknown> | null>(null);
   const [intakeSubmitted, setIntakeSubmitted] = useState(false);
   const [dismissedMentorActionKeys, setDismissedMentorActionKeys] = useState<string[]>([]);
+  const [softGateDialogOpen, setSoftGateDialogOpen] = useState(false);
+  const [softGatePayload, setSoftGatePayload] = useState<{
+    message?: string;
+    missing_fields?: string[];
+    handoff_url?: string;
+  } | null>(null);
 
   const createPlan = useCreatePlanFromConversation();
   const { analysisEvents } = useNotifications();
@@ -236,6 +242,15 @@ function ChatContent() {
       : intakeMissing > 0
         ? `${intakeMissing} details left`
         : "Collecting insights";
+  const mentorStateV2 =
+    (intakeState?.mentor_state_v2 as Record<string, unknown> | undefined) ?? null;
+  const debriefMissingFields = Array.isArray(mentorStateV2?.missing_fields)
+    ? (mentorStateV2?.missing_fields as string[])
+    : [];
+  const debriefTotal = 5;
+  const debriefCompleted = Math.max(0, debriefTotal - debriefMissingFields.length);
+  const debriefStage =
+    typeof mentorStateV2?.stage === "string" ? (mentorStateV2.stage as string) : "exploring";
 
   useEffect(() => {
     if (selectedConversationId) {
@@ -897,12 +912,33 @@ useEffect(() => {
           setLatestPlan(data);
         },
         onError: (error) => {
-          const guardPayload = (error as { response?: { data?: { error?: string; handoff_url?: string; message?: string } } })?.response?.data;
+          const guardPayload = (
+            error as {
+              response?: {
+                data?: {
+                  error?: string;
+                  handoff_url?: string;
+                  message?: string;
+                  blocking?: boolean;
+                  missing_fields?: string[];
+                };
+              };
+            }
+          )?.response?.data;
           if (guardPayload?.error === "mentor_context_required") {
             telemetry.track("plan_generation_blocked_by_guard", {
               conversation_id: selectedConversationId,
               context: "general",
             });
+            if (guardPayload.blocking === false) {
+              setSoftGatePayload({
+                message: guardPayload.message,
+                missing_fields: guardPayload.missing_fields,
+                handoff_url: guardPayload.handoff_url,
+              });
+              setSoftGateDialogOpen(true);
+              return;
+            }
             telemetry.toastError("Mentor context required", guardPayload.message || "Continue with mentor to personalize roadmap.");
             if (guardPayload.handoff_url && typeof window !== "undefined") {
               window.location.href = guardPayload.handoff_url;
@@ -914,6 +950,12 @@ useEffect(() => {
       },
     );
   };
+
+  const handleForceCreatePlan = useCallback(() => {
+    if (!selectedConversationId) return;
+    createPlan.mutate({ conversationId: selectedConversationId, forceGuardOverride: true });
+    setSoftGateDialogOpen(false);
+  }, [createPlan, selectedConversationId]);
 
 
   const handleSendMessage = useCallback(
@@ -1446,6 +1488,41 @@ useEffect(() => {
                           </DialogFooter>
                         </DialogContent>
                       </Dialog>
+                      <Dialog open={softGateDialogOpen} onOpenChange={setSoftGateDialogOpen}>
+                        <DialogContent className="max-w-xl">
+                          <DialogHeader>
+                            <DialogTitle>Complete mentor debrief first</DialogTitle>
+                            <DialogDescription>
+                              {softGatePayload?.message ||
+                                "You can generate now, but completing debrief gives better roadmap personalization."}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                            <div className="font-medium">Missing details</div>
+                            <div className="mt-1 text-muted-foreground">
+                              {softGatePayload?.missing_fields?.length
+                                ? softGatePayload.missing_fields.join(", ")
+                                : "No missing-field breakdown provided"}
+                            </div>
+                          </div>
+                          <DialogFooter className="gap-2">
+                            <Button
+                              variant="outline"
+                              onClick={() => {
+                                setSoftGateDialogOpen(false);
+                                if (softGatePayload?.handoff_url && typeof window !== "undefined") {
+                                  window.location.href = softGatePayload.handoff_url;
+                                }
+                              }}
+                            >
+                              Complete Debrief
+                            </Button>
+                            <Button onClick={handleForceCreatePlan}>
+                              Generate Anyway
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                       <div className="space-y-3 border-t border-white/80 bg-white/65 px-4 pb-4 pt-3">
                         {(socketStatus === "closed" || socketStatus === "error") && (
                           <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -1460,6 +1537,16 @@ useEffect(() => {
                         <MentorActionShelf
                           actions={visibleMentorActions}
                           onSendQuickReply={(message) => handleSendMessage(message)}
+                          debriefProgress={
+                            mentorStateV2
+                              ? {
+                                  completed: debriefCompleted,
+                                  total: debriefTotal,
+                                  stage: debriefStage,
+                                  missingFields: debriefMissingFields,
+                                }
+                              : null
+                          }
                           onDismissAction={(action) => {
                             const key = mentorActionKey(action);
                             setDismissedMentorActionKeys((previous) =>

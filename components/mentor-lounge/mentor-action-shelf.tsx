@@ -9,12 +9,19 @@ import { Button } from "@/components/ui/button";
 import { telemetry } from "@/lib/telemetry";
 import { planningApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface MentorActionShelfProps {
   actions: MentorAction[];
   onSendQuickReply: (message: string) => Promise<void> | void;
   disabled?: boolean;
   onDismissAction?: (action: MentorAction) => void;
+  debriefProgress?: {
+    completed: number;
+    total: number;
+    stage: string;
+    missingFields?: string[];
+  } | null;
 }
 
 export function MentorActionShelf({
@@ -22,6 +29,7 @@ export function MentorActionShelf({
   onSendQuickReply,
   disabled,
   onDismissAction,
+  debriefProgress,
 }: MentorActionShelfProps) {
   const router = useRouter();
   const [loadingIndex, setLoadingIndex] = useState<number | null>(null);
@@ -101,6 +109,27 @@ export function MentorActionShelf({
 
   return (
     <div className="mb-2 space-y-2">
+      {debriefProgress ? (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs text-emerald-800">
+                <span className="font-medium">
+                  Debrief {debriefProgress.completed}/{debriefProgress.total}
+                </span>
+                <span className="rounded border border-emerald-300 bg-white px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                  {debriefProgress.stage}
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent sideOffset={6}>
+              {debriefProgress.missingFields?.length
+                ? `Missing: ${debriefProgress.missingFields.join(", ")}`
+                : "Debrief complete"}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ) : null}
       {actions.map((action, index) => {
         const isPlanAction =
           action.type === "view_plan" || action.type === "open_plan_task";

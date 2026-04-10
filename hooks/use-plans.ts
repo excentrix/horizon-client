@@ -72,9 +72,10 @@ export function useCreatePlanFromConversation() {
   const { setPlanBuildStatus, setPlanSessionId } = useMentorLoungeStore();
 
   return useMutation({
-    mutationFn: (payload: { conversationId: string }) => {
+    mutationFn: (payload: { conversationId: string; forceGuardOverride?: boolean }) => {
       return planningApi.createPlanFromConversation({
         conversation_id: payload.conversationId,
+        force_guard_override: payload.forceGuardOverride,
       });
     },
     onSuccess: (data) => {
@@ -95,6 +96,22 @@ export function useCreatePlanFromConversation() {
       queryClient.invalidateQueries({ queryKey: plansKey });
     },
     onError: (error: unknown) => {
+      const guardPayload = (
+        error as {
+          response?: {
+            data?: {
+              error?: string;
+              blocking?: boolean;
+            };
+          };
+        }
+      )?.response?.data;
+      if (
+        guardPayload?.error === "mentor_context_required" &&
+        guardPayload?.blocking === false
+      ) {
+        return;
+      }
       const message =
         (error as { response?: { data?: { error?: string } } })?.response?.data
           ?.error ||

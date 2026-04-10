@@ -252,6 +252,7 @@ export const planningApi = {
   createPlanFromConversation: (payload: {
     conversation_id: string;
     user_requirements?: Record<string, unknown>;
+    force_guard_override?: boolean;
   }) =>
     extract<PlanCreationResponse>(
       http.post("/planning/plans/create_from_conversation/", payload)
@@ -513,6 +514,7 @@ export const planningApi = {
   createStandalonePlan: (payload: {
     intent: string;
     plan_type: "academic" | "exploration" | "project_based";
+    force_guard_override?: boolean;
   }) =>
     extract<{ success: boolean; session_id: string; message: string }>(
       http.post("/planning/standalone/", payload)
@@ -1362,6 +1364,16 @@ export const auditApi = {
               current_issue: string;
               suggested_fix: string;
             }>;
+          };
+          mentor_state_v2_summary?: {
+            stage?: string;
+            debrief_progress_percent?: number;
+            missing_fields?: string[];
+            weakest_dimensions?: Array<{
+              name: string;
+              score: number;
+            }>;
+            core5_slots?: Record<string, unknown>;
           };
         };
         created_at: string;

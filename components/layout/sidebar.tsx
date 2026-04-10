@@ -293,7 +293,7 @@ export function Sidebar() {
         </nav>
 
         {isStudent && <VeloAnalysisStatusPill />}
-        {isStudent && <AnalysisProgressPanel />}
+        {(isStudent || isAdmin || isEducator) && <AnalysisProgressPanel />}
 
         <div className="mt-auto space-y-4 p-4">
           {isStudent && (

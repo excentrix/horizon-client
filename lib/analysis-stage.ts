@@ -19,6 +19,7 @@ const STAGE_EVENT_TYPES = new Set([
   "analysis_complete",
   "analysis_completed",
   "analysis_error",
+  "intelligence_session_started",
 ]);
 
 const STAGE_LABELS: Record<string, string> = {
@@ -43,6 +44,13 @@ const STAGE_LABELS: Record<string, string> = {
   tracking_start: "Tracking progress",
   domain_tracked: "Domain tracking complete",
   tracking_complete: "Progress tracking complete",
+  intelligence_session_started: "Analysis session initiated",
+  summarizing: "Synthesizing conversation context",
+  detecting_concepts: "Scanning for academic concepts",
+  assessing_mastery: "Mapping knowledge landscape",
+  detecting_goals: "Identifying career and learning goals",
+  finalizing_wellness: "Finalizing wellness report",
+  generating_insights: "Generating personal growth insights",
 };
 
 const STAGE_SEVERITY_BY_EVENT: Partial<Record<string, StageSeverity>> = {
@@ -119,6 +127,13 @@ const STAGE_SUMMARY_BUILDERS: Partial<
     if (typeof insights === "number") fragments.push(`${insights} insights`);
     return `Tracking complete${formatList(fragments)}`;
   },
+  intelligence_session_started: () => "Intelligence engine is preparing for deep analysis",
+  summarizing: () => "Summarizing relevant parts of the conversation",
+  detecting_concepts: () => "Discovering skills and concepts discussed",
+  assessing_mastery: () => "Evaluating current understanding and progress",
+  detecting_goals: () => "Recognizing mentioned career or learning objectives",
+  finalizing_wellness: () => "Wrapping up wellness and engagement scan",
+  generating_insights: () => "Synthesizing actionable insights for you",
 };
 
 export interface StageDescriptor {
