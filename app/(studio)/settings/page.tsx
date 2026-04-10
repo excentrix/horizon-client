@@ -21,8 +21,33 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   User, Lock, Bell, FileText, ChevronRight, Save, Loader2,
-  Building2, GraduationCap, Globe, Github, Linkedin,
+  GraduationCap, Globe, Github, Linkedin,
 } from "lucide-react";
+
+interface UserProfile {
+  first_name: string;
+  last_name: string;
+  full_name?: string;
+  username: string;
+  email: string;
+  avatar_url?: string;
+  user_type?: string;
+  phone_number?: string;
+  university?: string;
+  major?: string;
+  year?: string;
+  graduation_year?: number | null;
+  career_goals?: string;
+  resume_url?: string;
+  resume_parsed_at?: string;
+  skills?: string[];
+  linkedin_url?: string;
+  github_url?: string;
+}
+
+interface NotificationPrefs {
+  [key: string]: boolean;
+}
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 const TABS = [
@@ -35,7 +60,7 @@ type TabId = (typeof TABS)[number]["id"];
 
 // ─── Profile tab ─────────────────────────────────────────────────────────────
 function ProfileTab() {
-  const [profile, setProfile] = useState<Record<string, any> | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -183,8 +208,9 @@ function AccountTab() {
       await http.post("/auth/password/change/", form);
       toast.success("Password changed successfully");
       setForm({ current_password: "", new_password: "", confirm_password: "" });
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Failed to change password");
+    } catch (e) {
+      const error = e as { response?: { data?: { detail?: string } } };
+      toast.error(error.response?.data?.detail || "Failed to change password");
     } finally {
       setSaving(false);
     }
@@ -239,7 +265,7 @@ function resolveMediaUrl(url: string | null | undefined): string | null {
 }
 
 function ResumeTab() {
-  const [profile, setProfile] = useState<Record<string, any> | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     http.get("/auth/profile/detail/").then((r) => setProfile(r.data)).catch(() => {});
@@ -286,7 +312,7 @@ function ResumeTab() {
         </CardContent>
       </Card>
 
-      {profile.skills?.length > 0 && (
+      {profile.skills && profile.skills.length > 0 && (
         <Card>
           <CardHeader><CardTitle>Parsed Skills</CardTitle></CardHeader>
           <CardContent>
@@ -328,7 +354,7 @@ function ResumeTab() {
 
 // ─── Notification tab (inline — wraps existing logic) ────────────────────────
 function NotificationTab() {
-  const [prefs, setPrefs] = useState<Record<string, any> | null>(null);
+  const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {

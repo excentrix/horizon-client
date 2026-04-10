@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function OnboardingStartRedirectPage() {
+function OnboardingStartRedirect() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -14,4 +14,13 @@ export default function OnboardingStartRedirectPage() {
 
   return <div className="p-6 text-sm text-muted-foreground">Redirecting to onboarding...</div>;
 }
+
+export default function OnboardingStartRedirectPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading...</div>}>
+      <OnboardingStartRedirect />
+    </Suspense>
+  );
+}
+
 

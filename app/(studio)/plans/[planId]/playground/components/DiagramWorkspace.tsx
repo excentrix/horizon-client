@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useCallback, useState } from "react";
@@ -20,8 +19,7 @@ export function DiagramWorkspace({ onExport }: DiagramWorkspaceProps) {
     const shapeIds = editor.getCurrentPageShapeIds();
     const shapesArray = shapeIds.size ? Array.from(shapeIds) : undefined;
     
-    // cast to any to suppress tldraw version mismatch type errors if any
-    const imageInfo: any = await editor.toImage(shapesArray as any, {
+    const imageInfo = await editor.toImage(shapesArray as import("tldraw").TLShapeId[], {
       format: "png",
       background: true,
       scale: 2,

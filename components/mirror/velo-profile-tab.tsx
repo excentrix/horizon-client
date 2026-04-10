@@ -109,6 +109,45 @@ interface EducationEntry {
   year?: string | number;
 }
 
+interface AtsBreakdownItem {
+  score: number;
+  max: number;
+}
+
+interface AtsBreakdown {
+  keyword_match?: AtsBreakdownItem & { missing?: string[] };
+  impact_statements?: AtsBreakdownItem;
+  summary_quality?: AtsBreakdownItem;
+  skills_coverage?: AtsBreakdownItem;
+  format_signals?: AtsBreakdownItem;
+  [key: string]: AtsBreakdownItem | (AtsBreakdownItem & { missing?: string[] }) | undefined;
+}
+
+interface ExperienceAnalysis {
+  company?: string;
+  role?: string;
+  relevance_to_target?: string;
+  impact_score?: number;
+  ats_commentary?: string;
+  quantified_bullets?: number;
+  total_bullets?: number;
+  improvement_suggestions?: string[];
+}
+
+interface ProjectAnalysis {
+  title?: string;
+  relevance_score?: number;
+  technical_depth_score?: number;
+  commentary?: string;
+  improvement_suggestions?: string[];
+}
+
+interface ImprovementAction {
+  action: string;
+  impact: ImpactLevel;
+  effort: ImpactLevel;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function scoreColor(score: number) {
@@ -386,11 +425,11 @@ export function VeloProfileTab() {
   const roleMatches = (deep.role_matches ?? []) as RoleMatch[];
   const skillMastery = (deep.skill_mastery ?? []) as SkillMastery[];
   const atsScore = deep.ats_score as number | undefined;
-  const atsBreakdown = deep.ats_breakdown as Record<string, any> | undefined;
+  const atsBreakdown = deep.ats_breakdown as AtsBreakdown | undefined;
   const gapDetails = (deep.skill_gap_details ?? []) as SkillGapDetail[];
-  const expAnalysis = (deep.experience_analysis ?? []) as any[];
-  const projAnalysis = (deep.project_analysis ?? []) as any[];
-  const actions = (deep.improvement_actions ?? []) as any[];
+  const expAnalysis = (deep.experience_analysis ?? []) as ExperienceAnalysis[];
+  const projAnalysis = (deep.project_analysis ?? []) as ProjectAnalysis[];
+  const actions = (deep.improvement_actions ?? []) as ImprovementAction[];
   const employerPerspective = deep.employer_perspective as
     | EmployerPerspective
     | undefined;
@@ -470,7 +509,7 @@ export function VeloProfileTab() {
       {/* ── Employer's View ───────────────────────────────────────────────── */}
       {employerPerspective && (
         <div>
-          <SectionLabel>Employer's View</SectionLabel>
+          <SectionLabel>Employer&apos;s View</SectionLabel>
           <Card className="overflow-hidden">
             {/* Verdict banner */}
             {(() => {
@@ -563,7 +602,8 @@ export function VeloProfileTab() {
               </div>
 
               {/* Resume improvements */}
-              {employerPerspective.resume_improvements.length > 0 && (
+              {employerPerspective?.resume_improvements && 
+               employerPerspective.resume_improvements.length > 0 && (
                 <Accordion type="single" collapsible>
                   <AccordionItem value="improvements" className="border-0">
                     <AccordionTrigger className="py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:no-underline hover:text-foreground">
@@ -629,7 +669,7 @@ export function VeloProfileTab() {
                     ]
                       .filter(({ key }) => atsBreakdown[key])
                       .map(({ key, label }) => {
-                        const item = atsBreakdown[key];
+                        const item = atsBreakdown[key] as AtsBreakdownItem;
                         const pct = (item.score / item.max) * 100;
                         return (
                           <div key={key} className="flex items-center gap-3">
@@ -646,12 +686,13 @@ export function VeloProfileTab() {
                           </div>
                         );
                       })}
-                    {atsBreakdown.keyword_match?.missing?.length > 0 && (
-                      <p className="pt-1 text-xs text-muted-foreground">
-                        <span className="font-medium">Missing: </span>
-                        {atsBreakdown.keyword_match.missing.join(", ")}
-                      </p>
-                    )}
+                    {atsBreakdown.keyword_match?.missing &&
+                      atsBreakdown.keyword_match.missing.length > 0 && (
+                        <p className="pt-1 text-xs text-muted-foreground">
+                          <span className="font-medium">Missing: </span>
+                          {atsBreakdown.keyword_match.missing.join(", ")}
+                        </p>
+                      )}
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -764,7 +805,7 @@ export function VeloProfileTab() {
         <div>
           <SectionLabel>Priority Actions</SectionLabel>
           <div className="grid gap-3 sm:grid-cols-3">
-            {actions.slice(0, 3).map((action: any, i: number) => {
+            {actions.slice(0, 3).map((action, i) => {
               const isQuickWin =
                 action.impact === "high" && action.effort === "low";
               return (
@@ -888,7 +929,7 @@ export function VeloProfileTab() {
           <Card>
             <CardContent className="pb-4 pt-4">
               <p className="mb-4 text-xs text-muted-foreground">
-                Skills you've actively proven in projects vs. merely listed vs.
+                Skills you&apos;ve actively proven in projects vs. merely listed vs.
                 critical gaps.
               </p>
               <div className="grid gap-4 sm:grid-cols-3">
@@ -1096,10 +1137,10 @@ export function VeloProfileTab() {
                           Impact
                         </span>
                         <Progress
-                          value={analysis.impact_score}
+                          value={analysis.impact_score ?? 0}
                           className={cn(
                             "h-1 flex-1",
-                            scoreBarColor(analysis.impact_score),
+                            scoreBarColor(analysis.impact_score ?? 0),
                           )}
                         />
                       </div>
@@ -1151,9 +1192,9 @@ export function VeloProfileTab() {
                                 quantified outcomes.
                               </p>
                             )}
-                            {analysis.improvement_suggestions?.length > 0 && (
+                            {(analysis.improvement_suggestions?.length ?? 0) > 0 && (
                               <div className="space-y-1">
-                                {analysis.improvement_suggestions.map(
+                                {analysis.improvement_suggestions?.map(
                                   (s: string, k: number) => (
                                     <p
                                       key={k}
@@ -1211,16 +1252,16 @@ export function VeloProfileTab() {
                             Relevance
                           </span>
                           <Progress
-                            value={analysis.relevance_score}
+                            value={analysis.relevance_score ?? 0}
                             className={cn(
                               "h-1 flex-1",
-                              scoreBarColor(analysis.relevance_score),
+                              scoreBarColor(analysis.relevance_score ?? 0),
                             )}
                           />
                           <span
                             className={cn(
                               "w-7 text-right text-[10px] font-bold",
-                              scoreColor(analysis.relevance_score),
+                              scoreColor(analysis.relevance_score ?? 0),
                             )}
                           >
                             {analysis.relevance_score}%
@@ -1231,16 +1272,16 @@ export function VeloProfileTab() {
                             Depth
                           </span>
                           <Progress
-                            value={analysis.technical_depth_score}
+                            value={analysis.technical_depth_score ?? 0}
                             className={cn(
                               "h-1 flex-1",
-                              scoreBarColor(analysis.technical_depth_score),
+                              scoreBarColor(analysis.technical_depth_score ?? 0),
                             )}
                           />
                           <span
                             className={cn(
                               "w-7 text-right text-[10px] font-bold",
-                              scoreColor(analysis.technical_depth_score),
+                              scoreColor(analysis.technical_depth_score ?? 0),
                             )}
                           >
                             {analysis.technical_depth_score}%
@@ -1272,9 +1313,9 @@ export function VeloProfileTab() {
                             <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
                               {analysis.commentary}
                             </p>
-                            {analysis.improvement_suggestions?.length > 0 && (
+                            {(analysis.improvement_suggestions?.length ?? 0) > 0 && (
                               <div className="space-y-1">
-                                {analysis.improvement_suggestions.map(
+                                {analysis.improvement_suggestions?.map(
                                   (s: string, k: number) => (
                                     <p
                                       key={k}
@@ -1330,7 +1371,7 @@ export function VeloProfileTab() {
                     <div key={i} className="mb-1.5 flex items-center gap-2">
                       <Award className="h-3.5 w-3.5 shrink-0 text-amber-500" />
                       <span className="text-xs">
-                        {typeof cert === "string" ? cert : (cert as any).name}
+                        {typeof cert === "string" ? cert : (cert as { name: string }).name}
                       </span>
                     </div>
                   ))}

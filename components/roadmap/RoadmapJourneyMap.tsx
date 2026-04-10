@@ -19,7 +19,7 @@ import RegionNode from "./nodes/RegionNode";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Briefcase, CheckCircle2, Lock, Sparkles, Swords } from "lucide-react";
+import { CheckCircle2, Lock, Sparkles, Swords } from "lucide-react";
 import { LevelDetailsSheet } from "./LevelDetailsSheet";
 import { Roadmap } from "@/types";
 import { useGamificationSummary } from "@/hooks/use-gamification";

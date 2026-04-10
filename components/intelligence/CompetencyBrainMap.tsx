@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import {
   ReactFlow,
   useNodesState,
@@ -18,6 +18,31 @@ import "@xyflow/react/dist/style.css";
 import dagre from "dagre";
 import { http } from "@/lib/http-client";
 import { Loader2 } from "lucide-react";
+
+interface BrainMapNode {
+  data: {
+    id: string;
+    label: string;
+    proficiency: string;
+    color: string;
+  };
+}
+
+interface BrainMapEdge {
+  data: {
+    id: string;
+    source: string;
+    target: string;
+  };
+}
+
+interface BrainMapEdge {
+  data: {
+    id: string;
+    source: string;
+    target: string;
+  };
+}
 
 // Custom Node for Competencies
 const CompetencyNode = ({ data }: NodeProps) => {
@@ -48,7 +73,7 @@ const nodeTypes = {
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
+const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
   const isHorizontal = direction === 'LR';
   dagreGraph.setGraph({ rankdir: direction });
 
@@ -66,8 +91,8 @@ const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
     const nodeWithPosition = dagreGraph.node(node.id);
     return {
       ...node,
-      targetPosition: isHorizontal ? 'left' : 'top',
-      sourcePosition: isHorizontal ? 'right' : 'bottom',
+      targetPosition: isHorizontal ? Position.Left : Position.Top,
+      sourcePosition: isHorizontal ? Position.Right : Position.Bottom,
       position: {
         x: nodeWithPosition.x - 75,
         y: nodeWithPosition.y - 30,
@@ -95,7 +120,7 @@ export function CompetencyBrainMap() {
         if (!mounted) return;
         
         // Map backend data to React Flow props
-        const mappedNodes = data.nodes.map((n: any) => ({
+        const mappedNodes: Node[] = data.nodes.map((n: BrainMapNode) => ({
           id: n.data.id,
           type: "competency",
           data: {
@@ -106,7 +131,7 @@ export function CompetencyBrainMap() {
           position: { x: 0, y: 0 } // Gets overwritten by dagre
         }));
 
-        const mappedEdges = data.edges.map((e: any) => ({
+        const mappedEdges: Edge[] = data.edges.map((e: BrainMapEdge) => ({
           id: e.data.id,
           source: e.data.source,
           target: e.data.target,
@@ -121,8 +146,11 @@ export function CompetencyBrainMap() {
 
         setNodes(layoutedNodes);
         setEdges(layoutedEdges);
-      } catch (err: any) {
-        if (mounted) setError(err.message || "Failed to load competencies");
+      } catch (err) {
+        if (mounted) {
+          const message = err instanceof Error ? err.message : "Failed to load competencies";
+          setError(message);
+        }
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -130,7 +158,7 @@ export function CompetencyBrainMap() {
 
     fetchBrainMap();
     return () => { mounted = false; };
-  }, []);
+  }, [setNodes, setEdges]);
 
   if (isLoading) {
     return (

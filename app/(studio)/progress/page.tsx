@@ -37,6 +37,7 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import Link from "next/link";
+import Image from "next/image";
 
 // ─── status config ────────────────────────────────────────────────────────────
 
@@ -318,12 +319,14 @@ function HorizonVerifiedStrip({
                   <DialogTitle>Share your portfolio</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 pt-1">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <div className="mx-auto flex h-48 w-48 items-center justify-center rounded-xl border bg-muted/30">
                     {publicUrl ? (
-                      <img
+                      <Image
                         src={`https://api.qrserver.com/v1/create-qr-code/?size=192x192&data=${encodeURIComponent(publicUrl)}`}
                         alt="Portfolio QR"
+                        width={176}
+                        height={176}
+                        unoptimized
                         className="h-44 w-44"
                       />
                     ) : (

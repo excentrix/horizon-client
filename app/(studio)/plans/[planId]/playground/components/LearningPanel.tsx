@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DailyTask } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   BookOpen,
@@ -13,7 +12,6 @@ import {
   ThumbsUp,
   ThumbsDown,
   FlaskConical,
-  RefreshCw,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -244,7 +242,7 @@ function ProgressiveHints({ hints }: { hints: string[] }) {
   );
 }
 
-export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeedbackChange, onRegenerateLesson }: LearningPanelProps) {
+export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeedbackChange }: LearningPanelProps) {
   const panelMountTime = useRef(Date.now());
   const [activeBlockIndex, setActiveBlockIndex] = useState(0);
   const [readingMode, setReadingMode] = useState<"focus" | "full">("focus");
@@ -648,7 +646,7 @@ export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeed
               </div>
             </div>
 
-            {activeTask.ai_generated_hints?.length > 0 && (
+            {(activeTask.ai_generated_hints?.length ?? 0) > 0 && (
               <ProgressiveHints hints={activeTask.ai_generated_hints} />
             )}
 

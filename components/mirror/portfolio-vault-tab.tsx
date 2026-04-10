@@ -50,7 +50,6 @@ import {
   Plus,
   Settings,
   Eye,
-  ExternalLink,
 } from "lucide-react";
 import { portfolioApi } from "@/lib/api";
 import { toast } from "sonner";

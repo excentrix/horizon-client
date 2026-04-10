@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Loader2, MessageSquare } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
-export default function MentorIntakePage() {
+function MentorIntakeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [sessionKey, setSessionKey] = useState<string | null>(null);
@@ -88,7 +88,7 @@ export default function MentorIntakePage() {
                     conversationId
                       ? `/chat?context=mentor_intake&conversation=${conversationId}`
                       : "/chat?context=mentor_intake"
-                  )
+                   )
                 }
               >
                 <MessageSquare className="mr-2 h-4 w-4" />
@@ -133,3 +133,16 @@ export default function MentorIntakePage() {
     </div>
   );
 }
+
+export default function MentorIntakePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#f6f4ff] dark:bg-[#0b0b0f] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    }>
+      <MentorIntakeContent />
+    </Suspense>
+  );
+}
+

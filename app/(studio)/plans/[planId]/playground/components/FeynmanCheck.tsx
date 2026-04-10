@@ -264,7 +264,7 @@ export function FeynmanCheck({
               </p>
               <p className="text-xs text-slate-500 max-w-xs">
                 Start explaining <span className="font-medium">{conceptTitle}</span>{" "}
-                below. Imagine you're talking to a junior developer who has
+                below. Imagine you&apos;re talking to a junior developer who has
                 never heard of it.
               </p>
             </div>

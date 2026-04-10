@@ -15,9 +15,6 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
   Globe, Github, Linkedin, Twitter, ExternalLink, Eye, EyeOff,
   Save, Loader2, Copy, Check, ArrowLeft, Palette, BarChart3,
 } from "lucide-react";
@@ -65,7 +62,7 @@ export default function PortfolioSettingsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const set = (key: keyof PortfolioProfile, value: any) =>
+  const set = (key: keyof PortfolioProfile, value: PortfolioProfile[keyof PortfolioProfile]) =>
     setProfile((prev) => prev ? { ...prev, [key]: value } : prev);
 
   const save = async () => {
@@ -263,7 +260,7 @@ export default function PortfolioSettingsPage() {
                 <Icon className="h-3.5 w-3.5" /> {label}
               </Label>
               <Input
-                value={(profile as any)[key] ?? ""}
+                value={(profile[key as keyof PortfolioProfile] as string) ?? ""}
                 onChange={(e) => set(key as keyof PortfolioProfile, e.target.value)}
                 placeholder={placeholder}
                 type="url"
@@ -320,7 +317,7 @@ export default function PortfolioSettingsPage() {
                   <p className="text-xs text-muted-foreground">{description}</p>
                 </div>
                 <Switch
-                  checked={(profile as any)[key]}
+                  checked={profile[key as keyof PortfolioProfile] as boolean}
                   onCheckedChange={(v) => set(key as keyof PortfolioProfile, v)}
                 />
               </div>

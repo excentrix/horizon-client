@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
@@ -71,7 +71,8 @@ export function RichTextCanvas({
         codeBlock: false, // replaced by CodeBlockLowlight
       }),
       CodeBlockLowlight.configure({ lowlight }),
-    ],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ] as any,
     content: "",
     editorProps: {
       attributes: {
@@ -162,7 +163,8 @@ export function RichTextCanvas({
           <ListOrdered className="h-3.5 w-3.5" />
         </ToolbarButton>
         <ToolbarButton
-          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onClick={() => (editor.chain().focus() as any).toggleCodeBlock().run()}
           active={editor.isActive("codeBlock")}
           title="Code block"
         >

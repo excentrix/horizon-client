@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function LegacyAuditRedirectPage() {
+function LegacyAuditRedirect() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -14,3 +14,12 @@ export default function LegacyAuditRedirectPage() {
 
   return <div className="p-6 text-sm text-muted-foreground">Redirecting to onboarding...</div>;
 }
+
+export default function LegacyAuditRedirectPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading...</div>}>
+      <LegacyAuditRedirect />
+    </Suspense>
+  );
+}
+

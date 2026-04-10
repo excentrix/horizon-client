@@ -112,8 +112,9 @@ export function ArtifactDetailModal({
     try {
       await setVisibility({ artifactId: artifact.id, visibility });
       toast.success("Visibility updated");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update visibility");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update visibility";
+      toast.error(message);
     } finally {
       setVisibilityUpdating(false);
     }
