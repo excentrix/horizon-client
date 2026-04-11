@@ -341,22 +341,11 @@ function ChatContent() {
     setIntakeSubmitting(true);
     setIntakeError(null);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/onboarding/mentor-intake/extract/`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session_key: sessionKey,
-            conversation_id: activeConversation.id,
-            complete: true,
-          }),
-        },
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to finalize mentor intake");
-      }
+      await authApi.extractMentorIntake({
+        session_key: sessionKey,
+        conversation_id: activeConversation.id,
+        complete: true,
+      });
       setIntakeSubmitted(true);
       setIntakeModalOpen(false);
     } catch (err: unknown) {
@@ -381,23 +370,12 @@ function ChatContent() {
     setIntakePreviewLoading(true);
     setIntakeError(null);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/onboarding/mentor-intake/extract/`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session_key: sessionKey,
-            conversation_id: activeConversation.id,
-            complete: false,
-          }),
-        },
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to extract mentor intake");
-      }
-      setIntakePreview(data.intake_data || {});
+      const data = await authApi.extractMentorIntake({
+        session_key: sessionKey,
+        conversation_id: activeConversation.id,
+        complete: false,
+      });
+      setIntakePreview((data.intake_data as Record<string, unknown>) || {});
       setIntakeModalOpen(true);
     } catch (err: unknown) {
       setIntakeError(err instanceof Error ? err.message : "Something went wrong");
@@ -494,20 +472,8 @@ function ChatContent() {
       if (!user) return;
       
       try {
-        const Cookies = (await import('js-cookie')).default;
-        const token = Cookies.get('accessToken');
-        if (!token) return;
-        
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/intelligence/my-analyses/`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          setAnalysisHistory(data);
-        }
+        const data = await intelligenceApi.getMyAnalyses();
+        setAnalysisHistory(data);
       } catch (error) {
         console.error('Failed to fetch analysis history:', error);
       }
@@ -1151,20 +1117,18 @@ useEffect(() => {
                           <div className="mt-1">
                             <PersonalitySelector 
                                 currentPersonalityId={activeConversation.ai_personality?.id}
-                                onSelect={() => {
-                                    // We need a mutation to update the conversation's personality
-                                    // For now, let's just log it or we need to add that endpoint/mutation
-                                    // actually, usually you don't change personality of an existing chat, 
-                                    // you start a new one. But the user asked to "change the personality in a dropdown".
-                                    // So we probably need an update endpoint.
-                                    // Let's assume we can't update it easily yet without backend changes.
-                                    // Wait, the user said "The user should be able to change the personality in a dropdown".
-                                    // I'll implement the UI but maybe disable it or show a toast if backend doesn't support it.
-                                    // Actually, let's just show the name for now if we can't update it, 
-                                    // OR we can trigger a "New Conversation" with that personality?
-                                    // No, "change the personality". 
-                                    // I will add a TODO and just show the selector.
-                                    telemetry.toastError("Changing personality mid-conversation is coming soon.");
+                                onSelect={async (personalityId) => {
+                                    if (!activeConversation?.id) return;
+                                    try {
+                                      await chatApi.updateConversation(activeConversation.id, {
+                                        ai_personality_id: personalityId,
+                                      });
+                                      await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+                                      telemetry.toastSuccess("Mentor personality updated.");
+                                    } catch (error) {
+                                      telemetry.toastError("Couldn't update mentor personality.");
+                                      telemetry.error("Failed to update conversation personality", { error });
+                                    }
                                 }}
                                 disabled={false} 
                             />

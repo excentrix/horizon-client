@@ -12,7 +12,14 @@ import { Loader2, Rocket, Mail, Lock, User, Globe } from "lucide-react";
 import { authApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+function getApiUrl() {
+  if (!API_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured");
+  }
+  return API_URL;
+}
 
 export default function FinalizePage() {
   const router = useRouter();
@@ -57,7 +64,7 @@ export default function FinalizePage() {
         return;
       }
       
-      const response = await fetch(`${API_URL}/onboarding/complete/`, {
+      const response = await fetch(`${getApiUrl()}/onboarding/complete/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

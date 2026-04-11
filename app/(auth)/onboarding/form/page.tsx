@@ -9,7 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, ArrowRight, Target, Trophy } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+function getApiUrl() {
+  if (!API_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured");
+  }
+  return API_URL;
+}
 
 type OnboardingData = {
   target_role: string;
@@ -37,21 +44,26 @@ export default function OnboardingFormPage() {
     setSessionKey(key);
 
     // Fetch session data to pre-fill
-    fetch(`${API_URL}/onboarding/session/${key}/`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.parsed_data) {
-          setHasResumePrefill(true);
-          const { parsed_data } = data;
-          setFormData((prev) => ({
-            ...prev,
-            target_role: parsed_data.current_role || "",
-            experience_level: (parsed_data.experience_level || "beginner") as OnboardingData["experience_level"],
-          }));
-        }
-      })
-      .catch((err) => console.error("Failed to fetch session", err))
-      .finally(() => setLoading(false));
+    try {
+      fetch(`${getApiUrl()}/onboarding/session/${key}/`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.parsed_data) {
+            setHasResumePrefill(true);
+            const { parsed_data } = data;
+            setFormData((prev) => ({
+              ...prev,
+              target_role: parsed_data.current_role || "",
+              experience_level: (parsed_data.experience_level || "beginner") as OnboardingData["experience_level"],
+            }));
+          }
+        })
+        .catch((err) => console.error("Failed to fetch session", err))
+        .finally(() => setLoading(false));
+    } catch (err) {
+      console.error("API configuration error", err);
+      setLoading(false);
+    }
   }, [router]);
 
   const suggestedRoles = [
@@ -69,7 +81,7 @@ export default function OnboardingFormPage() {
 
     setSubmitting(true);
     try {
-      const response = await fetch(`${API_URL}/onboarding/submit-form/`, {
+      const response = await fetch(`${getApiUrl()}/onboarding/submit-form/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

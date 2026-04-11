@@ -8,7 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, ArrowRight, Calendar, BookOpen, Trophy, RefreshCw, LayoutDashboard, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+function getApiUrl() {
+  if (!API_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured");
+  }
+  return API_URL;
+}
 
 type PlanPreview = {
   id: string;
@@ -55,23 +62,12 @@ export default function PlanPreviewPage({ params }: { params: Promise<{ planId: 
         // But the frontend doesn't have the token yet.
         // So we need a public preview endpoint or use the session key.
         
-        // Simulating plan data fetch for now until endpoint is confirmed.
-        // In real implementation, we'd fetch `${API_URL}/plans/${id}/preview/`
-        
-        // HACK: For Phase 3 demo, let's assume we get minimal data or mock it if fetch fails
-        // because we haven't built GET /api/plans/{id}/preview yet.
-        // Wait, I should build that endpoint.
-        
-        // Let's try to fetch session again to get the draft plan details?
-        // Or specific preview endpoint.
-        
-        // I will add a preview endpoint in backend quickly.
-        const response = await fetch(`${API_URL}/onboarding/plan-preview/${id}/`);
+        const response = await fetch(`${getApiUrl()}/onboarding/plan-preview/${id}/`);
         if (response.ok) {
             const data = await response.json();
             setPlan(data);
         } else {
-             console.error("Failed to fetch plan preview");
+             throw new Error("Failed to fetch plan preview");
         }
     } catch (err) {
         console.error(err);

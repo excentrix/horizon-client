@@ -45,11 +45,10 @@ export function InlineWorkspace({ content, onComplete }: InlineWorkspaceProps) {
       );
 
     case 'code':
-      // CodePlayground will be implemented in Phase 3
       return (
         <div className="rounded-lg border border-dashed border-muted-foreground/30 p-6 text-center">
           <p className="text-sm text-muted-foreground">
-            Code playground coming soon...
+            Open this task in Playground to run and verify code for this exercise.
           </p>
         </div>
       );

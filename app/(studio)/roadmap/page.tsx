@@ -59,7 +59,7 @@ export default function RoadmapPage() {
       ((levelStats.inProgress + levelStats.available) / total) * 100;
     const unlock = ((total - levelStats.locked) / total) * 100;
     const consistency =
-      levelStats.inProgress > 0 ? 68 : levelStats.completed > 0 ? 52 : 30;
+      ((levelStats.completed + levelStats.inProgress) / total) * 100;
     const depth = Math.min(100, 35 + levelStats.completed * 8);
     const readiness = Math.round(completion * 0.6 + unlock * 0.4);
     return [
@@ -71,6 +71,12 @@ export default function RoadmapPage() {
       { metric: "Readiness", value: readiness },
     ];
   }, [levelStats]);
+
+  const holisticScore = useMemo(() => {
+    if (!radarData.length) return 0;
+    const avg = radarData.reduce((sum, item) => sum + item.value, 0) / radarData.length;
+    return Math.round(avg);
+  }, [radarData]);
 
   const nextLevel = useMemo(() => {
     return (
@@ -316,10 +322,10 @@ export default function RoadmapPage() {
               </ResponsiveContainer>
               <div className="flex flex-col items-center text-center w-full text-xs my-10 text-slate-500">
                 <div className="text-[1rem] uppercase font-semibold">
-                  Holistic Score
+                  Holistic Score (Estimated)
                 </div>
                 <div className="text-2xl uppercase font-semibold text-[#3b82f6]">
-                  547
+                  {holisticScore}
                 </div>
               </div>
             </CardContent>

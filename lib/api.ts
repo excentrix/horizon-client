@@ -142,6 +142,14 @@ export const authApi = {
 
   completeOnboarding: () =>
     extract<{ message: string }>(http.post("/auth/onboarding/complete/")),
+  extractMentorIntake: (payload: {
+    session_key: string;
+    conversation_id: string;
+    complete: boolean;
+  }) =>
+    extract<Record<string, unknown>>(
+      http.post("/onboarding/mentor-intake/extract/", payload)
+    ),
 
   requestPasswordReset: (email: string) =>
     extract<{ message: string }>(
@@ -174,6 +182,19 @@ export const chatApi = {
   pinConversation: (conversationId: string) =>
     extract<{ message: string; is_pinned: boolean }>(
       http.post(`/chat/conversations/${conversationId}/pin/`)
+    ),
+  updateConversation: (
+    conversationId: string,
+    payload: {
+      title?: string;
+      topic?: string;
+      status?: Conversation["status"];
+      priority?: Conversation["priority"];
+      ai_personality_id?: string;
+    }
+  ) =>
+    extract<Conversation>(
+      http.patch(`/chat/conversations/${conversationId}/`, payload)
     ),
 
   fetchMessagesPage: (
@@ -669,6 +690,8 @@ export const intelligenceApi = {
         params: { conversation_id: conversationId },
       })
     ),
+  getMyAnalyses: () =>
+    extract<Record<string, unknown>[]>(http.get("/intelligence/my-analyses/")),
 
   previewCortexRouting: (conversationId: string, message: string) =>
     extract<{

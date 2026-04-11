@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
@@ -17,6 +18,13 @@ import type { AIPersonality, Conversation } from "@/types";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
 import { http } from "@/lib/http-client";
 import { telemetry } from "@/lib/telemetry";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface CreateConversationModalProps {
   isOpen: boolean;
@@ -65,6 +73,7 @@ export function CreateConversationModal({
   const setSelectedConversationId = useMentorLoungeStore(
     (state) => state.setSelectedConversationId
   );
+  const [selectedPersonalityId, setSelectedPersonalityId] = useState<string>("");
   
   // Fetch personalities to find the General Mentor
   const { data: personalities = [], isLoading: personalitiesLoading } =
@@ -73,6 +82,23 @@ export function CreateConversationModal({
       queryFn: fetchPersonalities,
       enabled: isOpen,
     });
+
+  const selectedPersonality = useMemo(
+    () => personalities.find((p) => p.id === selectedPersonalityId),
+    [personalities, selectedPersonalityId],
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!personalities.length) {
+      setSelectedPersonalityId("");
+      return;
+    }
+    const generalMentor =
+      personalities.find((p) => p.type === "general" || p.name.toLowerCase().includes("general")) ??
+      personalities[0];
+    setSelectedPersonalityId(generalMentor.id);
+  }, [isOpen, personalities]);
 
   const createConversationMutation = useMutation<Conversation, Error, string>({
     mutationFn: createConversation,
@@ -101,13 +127,8 @@ export function CreateConversationModal({
   });
 
   const handleCreate = () => {
-    // Find General Mentor or default to first available
-    const personalitiesArray = Array.isArray(personalities) ? personalities : [];
-    // Use type assertion or check name since 'general' might not be in the strict type definition yet
-    const generalMentor = personalitiesArray.find(p => p.type === "general" || p.name.toLowerCase().includes("general")) || personalitiesArray[0];
-
-    if (generalMentor) {
-      createConversationMutation.mutate(generalMentor.id);
+    if (selectedPersonalityId) {
+      createConversationMutation.mutate(selectedPersonalityId);
     } else {
         telemetry.toastError("No mentor personalities available.");
     }
@@ -119,7 +140,7 @@ export function CreateConversationModal({
         <DialogHeader>
           <DialogTitle>Start a New Conversation</DialogTitle>
           <DialogDescription>
-            Start a fresh session with your General Adaptive Mentor.
+            Choose which mentor you want to start this session with.
           </DialogDescription>
         </DialogHeader>
         
@@ -127,11 +148,33 @@ export function CreateConversationModal({
             <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
                 <Bot className="h-8 w-8 text-primary" />
             </div>
-            <div>
-                <h3 className="font-medium">General Adaptive Mentor</h3>
-                <p className="text-sm text-muted-foreground mt-1 max-w-[260px] mx-auto">
-                    Your primary guide for exploring goals, creating plans, and navigating your learning journey.
+            <div className="w-full max-w-[320px] space-y-3 text-left">
+              <Select
+                value={selectedPersonalityId}
+                onValueChange={setSelectedPersonalityId}
+                disabled={personalitiesLoading || personalities.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select mentor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {personalities.map((personality) => (
+                    <SelectItem key={personality.id} value={personality.id}>
+                      {personality.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="rounded-md border bg-muted/30 p-3">
+                <h3 className="font-medium">
+                  {selectedPersonality?.name ?? "No mentor selected"}
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {selectedPersonality?.description
+                    ?? "Pick a mentor to begin a new conversation."}
                 </p>
+              </div>
             </div>
         </div>
 
@@ -141,7 +184,11 @@ export function CreateConversationModal({
           </Button>
           <Button
             onClick={handleCreate}
-            disabled={personalitiesLoading || createConversationMutation.isPending}
+            disabled={
+              personalitiesLoading ||
+              createConversationMutation.isPending ||
+              !selectedPersonalityId
+            }
           >
             {createConversationMutation.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,6 +18,7 @@ import { useMirrorSnapshot } from "@/hooks/use-mirror-snapshot";
 import { useGamificationStats } from "@/hooks/use-gamification";
 import { useReadiness } from "@/hooks/use-portfolio";
 import { usePortfolioArtifacts, usePortfolioProfile } from "@/hooks/use-portfolio";
+import { useLocalQrCode } from "@/hooks/use-local-qr";
 import { VeloProfileTab } from "@/components/mirror/velo-profile-tab";
 import { PortfolioVaultTab } from "@/components/mirror/portfolio-vault-tab";
 import { MomentumTab } from "@/components/mirror/momentum-tab";
@@ -37,7 +39,6 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import Link from "next/link";
-import Image from "next/image";
 
 // ─── status config ────────────────────────────────────────────────────────────
 
@@ -249,6 +250,7 @@ function HorizonVerifiedStrip({
 }) {
   const [copied, setCopied] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const { qrDataUrl, qrError } = useLocalQrCode(publicUrl);
 
   const copyLink = async () => {
     if (!publicUrl) return;
@@ -320,18 +322,20 @@ function HorizonVerifiedStrip({
                 </DialogHeader>
                 <div className="space-y-4 pt-1">
                   <div className="mx-auto flex h-48 w-48 items-center justify-center rounded-xl border bg-muted/30">
-                    {publicUrl ? (
+                    {qrDataUrl ? (
                       <Image
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=192x192&data=${encodeURIComponent(publicUrl)}`}
-                        alt="Portfolio QR"
-                        width={176}
-                        height={176}
+                        src={qrDataUrl}
+                        alt="Portfolio share QR code"
+                        width={192}
+                        height={192}
                         unoptimized
-                        className="h-44 w-44"
+                        className="h-48 w-48 rounded-lg"
                       />
                     ) : (
-                      <p className="text-center text-xs text-muted-foreground px-4">
-                        Enable public portfolio to generate QR
+                      <p className="px-4 text-center text-xs text-muted-foreground">
+                        {qrError
+                          ? "Could not generate QR code locally. Use copy link instead."
+                          : "Enable your public portfolio to generate a QR code."}
                       </p>
                     )}
                   </div>

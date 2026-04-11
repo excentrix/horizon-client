@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { gamificationApi } from "@/lib/api";
 import { Flame, Loader2, Trophy, Zap } from "lucide-react";
 
 type LeaderboardEntry = {
@@ -20,16 +21,8 @@ type LeaderboardData = {
   updated_at: string;
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
-
 async function fetchLeaderboard(): Promise<LeaderboardData> {
-  const token = typeof localStorage !== "undefined" ? localStorage.getItem("access_token") : "";
-  const res = await fetch(`${API_BASE}/api/gamification/points/leaderboard/`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error("Failed to fetch leaderboard");
-  return res.json();
+  return gamificationApi.getLeaderboard();
 }
 
 const PODIUM_CONFIG = [

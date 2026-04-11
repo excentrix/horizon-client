@@ -30,6 +30,7 @@ import {
   useGrowthTimeline,
   useAddReflection,
 } from "@/hooks/use-portfolio";
+import { useLocalQrCode } from "@/hooks/use-local-qr";
 import type { PortfolioArtifact } from "@/types";
 
 
@@ -69,6 +70,7 @@ export function PortfolioTab() {
     if (!profile?.slug || typeof window === "undefined") return "";
     return `${window.location.origin}/p/${profile.slug}`;
   }, [profile?.slug]);
+  const { qrDataUrl, qrError } = useLocalQrCode(publicUrl);
   const highlightArtifacts = useMemo(() => {
     if (!artifacts.length) return [];
     const preferred = artifacts
@@ -184,17 +186,13 @@ export function PortfolioTab() {
                   </DialogHeader>
                   <div className="space-y-4">
                     <div className="mx-auto flex w-full max-w-[240px] items-center justify-center rounded-2xl border border-border bg-muted/40 p-4">
-                      {publicUrl ? (
-                        <img
-                          alt="Portfolio QR"
-                          className="h-48 w-48"
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
-                            publicUrl
-                          )}`}
-                        />
+                      {qrDataUrl ? (
+                        <img src={qrDataUrl} alt="Portfolio share QR code" className="h-48 w-48 rounded-lg" />
                       ) : (
                         <div className="text-center text-xs text-muted-foreground">
-                          Enable your public portfolio to generate a QR code.
+                          {qrError
+                            ? "Could not generate QR code locally. Use copy link instead."
+                            : "Enable your public portfolio to generate a QR code."}
                         </div>
                       )}
                     </div>

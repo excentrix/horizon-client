@@ -7,7 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, MessageSquare } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+function getApiUrl() {
+  if (!API_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured");
+  }
+  return API_URL;
+}
 
 function MentorIntakeContent() {
   const router = useRouter();
@@ -40,7 +47,7 @@ function MentorIntakeContent() {
     setError("");
 
     try {
-      const res = await fetch(`${API_URL}/onboarding/mentor-intake/complete/`, {
+      const res = await fetch(`${getApiUrl()}/onboarding/mentor-intake/complete/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -145,4 +152,3 @@ export default function MentorIntakePage() {
     </Suspense>
   );
 }
-

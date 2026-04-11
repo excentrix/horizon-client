@@ -81,7 +81,7 @@ export default function DashboardPage() {
   const currentStreak = profile?.current_streak ?? 0;
   const longestStreak = profile?.longest_streak ?? 0;
   const badgeCount = gamificationData?.badge_count ?? 0;
-  const tasksThisWeek = 0; 
+  const tasksThisWeek = homeData?.weekly_stats?.tasks_completed ?? 0;
   const hasPlan = todaysTasksData && todaysTasksData.count > 0;
   console.log("Stats:", { homeData, homeLoading, hasPlan, longestStreak, badgeCount, tasksThisWeek }); // Silence warnings
 
