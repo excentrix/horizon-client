@@ -468,6 +468,26 @@ export const planningApi = {
       count: data.count ?? data.summary?.total ?? (data.tasks?.length ?? 0),
     };
   },
+  getCalendarTasks: (params: {
+    view?: "day" | "week" | "month";
+    anchor_date?: string;
+    start_date?: string;
+    end_date?: string;
+  }) =>
+    extract<{
+      view: "day" | "week" | "month";
+      anchor_date: string;
+      range: { start_date: string; end_date: string };
+      summary: {
+        total: number;
+        completed: number;
+        in_progress: number;
+        scheduled: number;
+        overdue: number;
+      };
+      tasks: DailyTask[];
+      tasks_by_date: Record<string, DailyTask[]>;
+    }>(http.get("/planning/tasks/calendar/", { params })),
 
   getPreAssessment: (planId: string) =>
     extract<{

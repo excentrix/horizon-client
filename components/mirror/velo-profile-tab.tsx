@@ -318,10 +318,6 @@ function VeloSkeleton() {
   );
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const IS_DEV = process.env.NODE_ENV !== "production";
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function VeloProfileTab() {
@@ -449,27 +445,22 @@ export function VeloProfileTab() {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-8">
-      {/* ── Dev toolbar ───────────────────────────────────────────────────── */}
-      {IS_DEV && (
-        <div className="flex items-center gap-2 rounded-lg border border-dashed border-amber-300 bg-amber-50/60 px-3 py-2 dark:border-amber-700/40 dark:bg-amber-950/20">
-          <FlaskConical className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-          <span className="flex-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
-            Dev
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 gap-1.5 border-amber-300 text-xs text-amber-700 hover:bg-amber-50"
-            disabled={reanalysing}
-            onClick={handleReanalyse}
-          >
-            <RefreshCw
-              className={cn("h-3 w-3", reanalysing && "animate-spin")}
-            />
-            {reanalysing ? "Queuing…" : "Re-analyse"}
-          </Button>
-        </div>
-      )}
+      <div className="flex items-center gap-2 rounded-lg border border-dashed border-amber-300 bg-amber-50/60 px-3 py-2 dark:border-amber-700/40 dark:bg-amber-950/20">
+        <FlaskConical className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+        <span className="flex-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+          Resume Analysis
+        </span>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1.5 border-amber-300 text-xs text-amber-700 hover:bg-amber-50"
+          disabled={reanalysing}
+          onClick={handleReanalyse}
+        >
+          <RefreshCw className={cn("h-3 w-3", reanalysing && "animate-spin")} />
+          {reanalysing ? "Queuing…" : "Re-analyse"}
+        </Button>
+      </div>
 
       {/* ── Overview: ATS ring + Narrative ────────────────────────────────── */}
       <div

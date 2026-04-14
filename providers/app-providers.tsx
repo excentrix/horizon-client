@@ -9,6 +9,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { AuthProvider } from "@/context/AuthContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { ThemeProvider } from "@/components/theme-provider";
+import { DesignModeToggle } from "@/components/dev/design-mode-toggle";
 import { Toaster } from "@/components/ui/sonner";
 
 type AppProvidersProps = {
@@ -39,6 +40,7 @@ export function AppProviders({ children }: AppProvidersProps) {
           <NotificationProvider>
             {children}
             <Toaster richColors closeButton />
+            {/* <DesignModeToggle /> */}
           </NotificationProvider>
         </AuthProvider>
         {process.env.NODE_ENV === "development" ? (

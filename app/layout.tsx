@@ -1,12 +1,41 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import {
+  IBM_Plex_Mono,
+  Inter,
+  Roboto_Mono,
+  Silkscreen,
+  Space_Grotesk,
+} from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "@/providers/app-providers";
 import { cn } from "@/lib/utils";
 
 const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-sans",
+  variable: "--font-body",
+});
+
+const display = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-display",
+});
+
+const mono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono-ui",
+  weight: ["400", "500", "600"],
+});
+
+const retroDisplay = Silkscreen({
+  subsets: ["latin"],
+  variable: "--font-retro-display",
+  weight: ["400", "700"],
+});
+
+const retroBody = Roboto_Mono({
+  subsets: ["latin"],
+  variable: "--font-retro-body",
+  weight: ["400", "700"],
 });
 
 export const metadata: Metadata = {
@@ -40,6 +69,10 @@ export default function RootLayout({
         className={cn(
           "min-h-screen bg-background font-sans antialiased",
           inter.variable,
+          display.variable,
+          mono.variable,
+          retroDisplay.variable,
+          retroBody.variable,
         )}
       >
         <AppProviders>{children}</AppProviders>

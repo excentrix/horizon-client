@@ -53,24 +53,49 @@ export default function RoadmapPage() {
   }, [roadmap]);
 
   const radarData = useMemo(() => {
+    const stages = roadmap?.stages || [];
     const total = Math.max(levelStats.total, 1);
-    const completion = (levelStats.completed / total) * 100;
-    const momentum =
-      ((levelStats.inProgress + levelStats.available) / total) * 100;
+    const totalStages = Math.max(stages.length, 1);
+
+    // Mastery: what fraction of all levels is fully done
+    const mastery = (levelStats.completed / total) * 100;
+
+    // Breadth: how many distinct stages have at least one completed level
+    const stagesWithProgress = stages.filter((s) =>
+      s.levels.some((l) => l.status === "completed")
+    ).length;
+    const breadth = (stagesWithProgress / totalStages) * 100;
+
+    // Depth: how deep into the roadmap (furthest stage reached with a completion)
+    const deepestStageIdx = stages.reduce((maxIdx, stage, idx) => {
+      return stage.levels.some((l) => l.status === "completed") ? idx : maxIdx;
+    }, -1);
+    const depth = deepestStageIdx >= 0
+      ? Math.round(((deepestStageIdx + 1) / totalStages) * 100)
+      : 0;
+
+    // Momentum: fraction of started levels that were actually finished
+    // (reflects follow-through, not just starts)
+    const started = levelStats.completed + levelStats.inProgress;
+    const consistency = started > 0
+      ? Math.round((levelStats.completed / started) * 100)
+      : 0;
+
+    // Unlock: how much of the roadmap is accessible (not locked)
     const unlock = ((total - levelStats.locked) / total) * 100;
-    const consistency =
-      ((levelStats.completed + levelStats.inProgress) / total) * 100;
-    const depth = Math.min(100, 35 + levelStats.completed * 8);
-    const readiness = Math.round(completion * 0.6 + unlock * 0.4);
+
+    // Readiness: weighted blend of completion depth and breadth
+    const readiness = Math.round(mastery * 0.5 + depth * 0.3 + breadth * 0.2);
+
     return [
-      { metric: "Mastery", value: Math.round(completion) },
-      { metric: "Momentum", value: Math.round(momentum) },
+      { metric: "Mastery", value: Math.round(mastery) },
+      { metric: "Breadth", value: Math.round(breadth) },
+      { metric: "Depth", value: depth },
+      { metric: "Consistency", value: consistency },
       { metric: "Unlock", value: Math.round(unlock) },
-      { metric: "Consistency", value: Math.round(consistency) },
-      { metric: "Depth", value: Math.round(depth) },
       { metric: "Readiness", value: readiness },
     ];
-  }, [levelStats]);
+  }, [levelStats, roadmap]);
 
   const holisticScore = useMemo(() => {
     if (!radarData.length) return 0;

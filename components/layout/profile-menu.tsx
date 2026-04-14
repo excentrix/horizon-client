@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, LogOut, Settings } from "lucide-react";
+import { ChevronDown, Eye, LogOut, Settings } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
+import { useGamificationSummary } from "@/hooks/use-gamification";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,8 +20,20 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { telemetry } from "@/lib/telemetry";
 
-export function ProfileMenu() {
+type ProfileMenuVariant = "default" | "compact";
+
+function toTitleCase(name?: string | null) {
+  if (!name) return "";
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+export function ProfileMenu({ variant = "default" }: { variant?: ProfileMenuVariant } = {}) {
   const { user, logout } = useAuth();
+  const { data: gamificationData } = useGamificationSummary({ enabled: !!user });
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
@@ -27,12 +41,14 @@ export function ProfileMenu() {
     return null;
   }
 
+  const displayName = toTitleCase(user.full_name) || user.email;
   const initials =
-    user.full_name?.split(" ")
+    displayName?.split(" ")
       .map((part) => part.charAt(0))
       .join("")
       .slice(0, 2)
       .toUpperCase() || user.email.charAt(0).toUpperCase();
+  const level = gamificationData?.profile?.level ?? 1;
 
   const handleLogout = async () => {
     try {
@@ -49,7 +65,10 @@ export function ProfileMenu() {
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
-            className="flex h-10 w-full items-center justify-between gap-3 rounded-full px-3 text-sm shadow-sm"
+            className={cn(
+              "flex items-center justify-between gap-3 rounded-full px-3 text-sm shadow-sm",
+              variant === "compact" ? "h-10 w-auto min-w-[220px] max-w-[320px]" : "h-10 w-full",
+            )}
           >
             <Avatar className="h-7 w-7">
               <AvatarFallback className="text-xs font-semibold">
@@ -58,28 +77,32 @@ export function ProfileMenu() {
             </Avatar>
             <span
               className={cn(
-                "hidden flex-1 text-left leading-tight md:block"
+                "flex-1 text-left leading-tight"
               )}
             >
               <span className="block font-medium">
-                {user.full_name ?? user.email}
+                {displayName}
               </span>
               <span className="block text-xs text-muted-foreground">
                 {user.email}
               </span>
             </span>
-            <span className="ml-auto hidden text-xs text-muted-foreground md:inline">
-              Account
-            </span>
+            <Badge variant="outline" className="font-mono-ui text-[10px]">
+              L{level}
+            </Badge>
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>
           <div className="space-y-1">
             <p className="text-sm font-medium">
-              {user.full_name ?? user.email}
+              {displayName}
             </p>
             <p className="text-xs text-muted-foreground">{user.email}</p>
+            <Badge variant="outline" className="mt-1 font-mono-ui text-[10px]">
+              Level {level}
+            </Badge>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
