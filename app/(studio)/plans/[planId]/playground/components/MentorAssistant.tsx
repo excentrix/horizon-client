@@ -91,7 +91,15 @@ export function MentorAssistant({
     if (existingIdx >= 0) {
       allMessages[existingIdx] = { ...allMessages[existingIdx], content: streamContent };
     } else {
-      allMessages.push(createStreamingMessage(streamId, streamContent));
+      // Only add the streaming overlay if the real message isn't already in the cache.
+      // After stream_complete the message is appended to the cache; without this guard
+      // the streamed content would appear twice (once from cache, once as overlay).
+      const alreadyCached = allMessages.some(
+        (m) => (m.sender_type === "ai" || m.sender_type === "system") && m.content === streamContent,
+      );
+      if (!alreadyCached) {
+        allMessages.push(createStreamingMessage(streamId, streamContent));
+      }
     }
   }
 

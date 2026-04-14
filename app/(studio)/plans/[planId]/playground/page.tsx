@@ -21,13 +21,45 @@ import { VerificationEngine, type ArtifactVerifiedEvent } from "./components/Ver
 import { MentorAssistant } from "./components/MentorAssistant";
 import { Badge } from "@/components/ui/badge";
 
-const STEPS = [
-  { id: "ingest", label: "Knowledge Ingestion", icon: BookOpen },
-  { id: "micro", label: "Micro-Practice", icon: RefreshCw },
-  { id: "prove", label: "Teach It Back", icon: Brain },
-  { id: "omni", label: "Omni-Environment", icon: Code2 },
-  { id: "verify", label: "Neural Verification", icon: ShieldCheck },
-];
+type StepId = "ingest" | "micro" | "prove" | "omni" | "verify";
+
+const ALL_STEPS_DEF: Record<StepId, { label: string; icon: React.ElementType }> = {
+  ingest: { label: "Learn",          icon: BookOpen   },
+  micro:  { label: "Practice",       icon: RefreshCw  },
+  prove:  { label: "Teach It Back",  icon: Brain      },
+  omni:   { label: "Build",          icon: Code2      },
+  verify: { label: "Submit Proof",   icon: ShieldCheck },
+};
+
+/**
+ * Decide which steps are relevant for a given task.
+ * Rules:
+ *  - "Learn"  : always, when lesson blocks exist
+ *  - "Practice": when there are lesson blocks to quiz on (skip for pure code tasks with no lesson)
+ *  - "Teach It Back": always — explaining is valuable regardless of task type
+ *  - "Build"  : only for tasks that involve coding / STEM / project work
+ *  - "Submit Proof": always
+ */
+function computeSteps(task: { task_type?: string; lesson_blocks?: unknown[]; environment_requirements?: unknown } | undefined): StepId[] {
+  const taskType = (task?.task_type || "").toLowerCase();
+  const envReqs = task?.environment_requirements as Record<string, unknown> | undefined;
+  const subject  = ((envReqs?.subject_category as string) || "").toLowerCase();
+  const hasLesson = (task?.lesson_blocks?.length || 0) > 0;
+
+  const isCoding     = /coding|implement|build|develop|program|project/.test(taskType);
+  const isConceptual = /reading|concept|study|research|theory|overview|understand/.test(taskType);
+  const needsWorkspace = isCoding || subject === "stem";
+  // Show practice quiz only when there's lesson content to quiz on
+  const needsPractice = hasLesson || isConceptual;
+
+  const steps: StepId[] = [];
+  if (hasLesson || isConceptual) steps.push("ingest");
+  if (needsPractice)              steps.push("micro");
+                                  steps.push("prove");   // always
+  if (needsWorkspace)             steps.push("omni");
+                                  steps.push("verify");  // always
+  return steps;
+}
 
 const getInitialCode = (task: { ai_generated_examples?: unknown[] } | undefined) => {
   const examples = task?.ai_generated_examples;
@@ -107,8 +139,13 @@ function PlaygroundFlow() {
     return tasks.find((t) => t.id === selectedTaskId) ?? tasks[0];
   }, [tasks, selectedTaskId]);
 
+
   // -- Flow State --
   const [activeStepIndex, setActiveStepIndex] = useState(0);
+  // Track which steps have been genuinely completed (not just visited)
+  // Step 1 (micro) completes when quiz is submitted, step 2 (feynman) when the check passes,
+  // step 3 (omni) when user advances past it, step 4 (verify) when proof is submitted.
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
   const [stepEntryTime, setStepEntryTime] = useState<number>(Date.now());
   const [stepDurations, setStepDurations] = useState<Record<number, number>>({ 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 });
@@ -118,6 +155,10 @@ function PlaygroundFlow() {
     const elapsed = Date.now() - stepEntryTime;
     setStepDurations(prev => ({ ...prev, [activeStepIndex]: (prev[activeStepIndex] || 0) + elapsed }));
     setStepEntryTime(Date.now());
+    // Mark the current step as completed when moving forward past it
+    if (newIndex > activeStepIndex) {
+      setCompletedSteps(prev => new Set([...prev, activeStepIndex]));
+    }
     setActiveStepIndex(newIndex);
   };
   
@@ -135,6 +176,15 @@ function PlaygroundFlow() {
   const [quizResults, setQuizResults] = useState<QuizResults | null>(null);
   const [quizBannerDismissed, setQuizBannerDismissed] = useState(false);
   const [blockFeedback, setBlockFeedback] = useState<Record<string, "helpful" | "unhelpful" | null>>({});
+
+  // Adaptive step list — recomputed when task type / lesson blocks change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const steps = useMemo(() => {
+    const ids = computeSteps(activeTask);
+    return ids.map((id) => ({ id, ...ALL_STEPS_DEF[id] }));
+  }, [activeTask?.task_type, activeTask?.lesson_blocks, activeTask?.environment_requirements]);
+
+  const currentStepId = steps[activeStepIndex]?.id as StepId | undefined;
 
   // -- Verification Result State --
   const [isVerifying, setIsVerifying] = useState(false);
@@ -219,6 +269,7 @@ function PlaygroundFlow() {
   // every 3s until task.verification has a real problem_set.
   const challengeRequestRef = useRef<Record<string, boolean>>({});
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (activeStepIndex !== 4 || !activeTask?.id) return;
@@ -237,6 +288,14 @@ function PlaygroundFlow() {
         } else {
           // Generating async — poll until task data updates
           challengePollRef.current = setInterval(() => refetchPlan(), 3000);
+          // Hard timeout: stop polling after 45s and fall back to task criteria
+          challengeTimeoutRef.current = setTimeout(() => {
+            if (challengePollRef.current) {
+              clearInterval(challengePollRef.current);
+              challengePollRef.current = null;
+            }
+            setChallengeLoading(false);
+          }, 45_000);
         }
       })
       .catch(() => {
@@ -252,14 +311,19 @@ function PlaygroundFlow() {
     if (isComplete && challengePollRef.current) {
       clearInterval(challengePollRef.current);
       challengePollRef.current = null;
+      if (challengeTimeoutRef.current) {
+        clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null;
+      }
       setChallengeVerification(v as unknown as Record<string, unknown>);
       setChallengeLoading(false);
     }
   }, [activeTask?.verification]);
 
-  // Clean up challenge poll on unmount
+  // Clean up challenge poll and timeout on unmount
   useEffect(() => () => {
     if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
   }, []);
 
   // Load starter code lazily when the user enters the Omni-Environment step.
@@ -403,6 +467,7 @@ function PlaygroundFlow() {
       queryClient.invalidateQueries({ queryKey: ["plan", planId] });
 
       // Show verifying state — WS will fire artifact_verified when done
+      setCompletedSteps(prev => new Set([...prev, 3, 4]));
       setIsVerifying(true);
       telemetry.toastSuccess("Submitted! AI is reviewing your proof…");
 
@@ -469,7 +534,12 @@ function PlaygroundFlow() {
 
   if (!plan) return null;
 
-  const progressPercent = ((activeStepIndex + 1) / STEPS.length) * 100;
+  // Progress = steps genuinely completed (not just visited). The current step
+  // counts as half-done so the bar always moves when switching tabs.
+  const progressPercent = Math.min(
+    100,
+    ((completedSteps.size + 0.5) / STEPS.length) * 100
+  );
   const envReqs = activeTask?.environment_requirements as Record<string, unknown> | undefined;
   const recommendedEnvRaw = envReqs?.recommended_environment as EnvMode | undefined;
   const subjectCategory = envReqs?.subject_category as string | undefined;
@@ -529,7 +599,7 @@ function PlaygroundFlow() {
         <div className="flex flex-wrap items-center gap-2">
           {STEPS.map((step, index) => {
             const isActive = index === activeStepIndex;
-            const isDone = index < activeStepIndex;
+            const isDone = completedSteps.has(index);
             return (
               <button
                 key={step.id}
@@ -588,6 +658,7 @@ function PlaygroundFlow() {
                 onComplete={(results) => {
                   setQuizResults(results);
                   setQuizBannerDismissed(false);
+                  setCompletedSteps(prev => new Set([...prev, 1]));
                   changeStep(2);
                 }}
               />
@@ -604,6 +675,7 @@ function PlaygroundFlow() {
                 onSendMessage={handleMentorSend}
                 onComplete={(gaps) => {
                   setFeynmanGaps(gaps);
+                  setCompletedSteps(prev => new Set([...prev, 2]));
                   changeStep(3);
                 }}
               />

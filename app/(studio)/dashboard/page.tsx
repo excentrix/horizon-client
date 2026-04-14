@@ -19,6 +19,10 @@ import { telemetry } from "@/lib/telemetry";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { SkillRadarChart } from "@/components/intelligence/SkillRadarChart";
+import { MentorInbox } from "@/components/intelligence/MentorInbox";
+import { VeloTracker, XPQuests, TheCircleTeaser, BackgroundTaskMonitor, MoodSensor } from "./DashboardWidgets";
+import { useNotificationsSocket } from "@/hooks/use-notifications";
 
 interface DashboardTask {
   id: string;
@@ -89,47 +93,24 @@ function formatMinutes(mins: number) {
     .padStart(2, "0")} ${period}`;
 }
 
-function MiniChartTile({
+function StatTile({
   label,
   value,
   caption,
-  color,
-  series,
   className,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   caption: string;
-  color: "indigo" | "orange" | "neutral";
-  series: number[];
   className?: string;
 }) {
-  const barTone =
-    color === "indigo"
-      ? "bg-[color:var(--brand-indigo)]"
-      : color === "orange"
-        ? "bg-[color:var(--cta)]"
-        : "bg-[color:var(--brand-ink)]";
-
   return (
     <div
       className={`flex h-full min-h-0 flex-col rounded-xl border border-border/90 bg-background p-3.5 shadow-[var(--shadow-1)] ${className ?? ""}`}
     >
       <p className="text-[11px] text-muted-foreground">{label}</p>
-      <p className="font-mono-ui mt-1 text-xl font-semibold">{value}</p>
-      <p className="mt-0.5 text-[11px] text-muted-foreground">{caption}</p>
-      <div className="mt-auto flex h-8 items-end gap-1 pt-2">
-        {series.map((point, index) => (
-          <span
-            key={`${label}-${index}`}
-            className={`w-2.5 rounded-sm ${barTone}`}
-            style={{
-              height: `${Math.max(12, Math.min(100, point))}%`,
-              opacity: 0.42 + index * 0.08,
-            }}
-          />
-        ))}
-      </div>
+      <div className="font-mono-ui mt-1 text-xl font-semibold">{value}</div>
+      <p className="mt-1 text-[11px] text-muted-foreground">{caption}</p>
     </div>
   );
 }
@@ -299,7 +280,7 @@ function CalendarBoard({
                 const endMin = startMin + duration;
                 const tone =
                   task.status === "overdue"
-                    ? "border-[color:var(--cta)]/40 bg-[color:var(--cta)]/14"
+                    ? "border-[color:var(--brand-indigo)]/30 bg-[color:var(--surface-2)]"
                     : task.status === "in_progress"
                       ? "border-[color:var(--brand-indigo)]/40 bg-[color:var(--brand-indigo)]/16"
                       : "border-border bg-background";
@@ -323,7 +304,7 @@ function CalendarBoard({
                         {task.status === "in_progress"
                           ? "In Progress"
                           : task.status === "overdue"
-                            ? "Overdue"
+                            ? "Backlog"
                             : "Scheduled"}
                       </Badge>
                     </div>
@@ -417,7 +398,7 @@ function CalendarBoard({
                     const height = Math.max(26, (endMin - startMin) * pxPerMinute);
                     const tone =
                       task.status === "overdue"
-                        ? "border-[color:var(--cta)]/40 bg-[color:var(--cta)]/14"
+                        ? "border-[color:var(--brand-indigo)]/30 bg-[color:var(--surface-2)]"
                         : task.status === "in_progress"
                           ? "border-[color:var(--brand-indigo)]/40 bg-[color:var(--brand-indigo)]/16"
                           : "border-border bg-background";
@@ -453,6 +434,7 @@ export default function DashboardPage() {
   const { data: homeData } = useHomeDashboard({ enabled: canQuery });
   const { data: gamificationData } = useGamificationSummary({ enabled: canQuery });
   const { data: flowData } = useFlowSuggestion("dashboard", { enabled: canQuery });
+  const { analysisEvents } = useNotificationsSocket();
 
   const [todaysTasksData, setTodaysTasksData] = useState<TodaysTasksData | null>(null);
   const [tasksLoading, setTasksLoading] = useState(true);
@@ -564,26 +546,6 @@ export default function DashboardPage() {
       }));
   }, [allTasks, homeData?.additional_tasks, homeData?.today_task]);
 
-  const miniSeriesA = useMemo(() => {
-    const base = Math.max(1, homeData?.weekly_stats?.tasks_completed ?? 1);
-    return [30, 48, 40, 58, 52, 64, 70].map((value, idx) =>
-      Math.max(14, Math.min(92, value + (base % 7) * (idx % 2 === 0 ? 1 : -1))),
-    );
-  }, [homeData?.weekly_stats?.tasks_completed]);
-
-  const miniSeriesB = useMemo(() => {
-    const base = Math.max(1, currentStreak);
-    return [24, 30, 42, 36, 50, 62, 54].map((value, idx) =>
-      Math.max(12, Math.min(92, value + (base % 5) * (idx % 3 === 0 ? 2 : -1))),
-    );
-  }, [currentStreak]);
-
-  const miniSeriesC = useMemo(() => {
-    const base = Math.max(1, badgeCount);
-    return [18, 22, 30, 28, 34, 46, 42].map((value, idx) =>
-      Math.max(12, Math.min(90, value + (base % 4) * (idx % 2 === 0 ? 3 : 1))),
-    );
-  }, [badgeCount]);
 
   const isLoading = authLoading || tasksLoading;
   const isCalendarExpanded = calendarView !== "day";
@@ -651,7 +613,9 @@ export default function DashboardPage() {
             </p>
             <p className="text-xs text-muted-foreground">{momentumHeadline}</p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <VeloTracker />
+            <div className="h-6 w-px bg-border my-auto hidden sm:block"></div>
             <Button
               variant="cta"
               size="sm"
@@ -686,87 +650,21 @@ export default function DashboardPage() {
         </header>
 
         <div className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)_minmax(0,1fr)] xl:grid-rows-[auto_minmax(0,1fr)]">
-          <section className="grid min-h-0 content-start gap-4 overflow-y-auto pr-1 xl:col-start-1 xl:row-start-1 xl:row-span-2 xl:grid-rows-[auto_repeat(3,minmax(0,1fr))] xl:overflow-hidden">
-            <div className={`${SHELL} p-4`}>
-              <p className="font-display text-base">Today&apos;s Focus</p>
-              <p className="mt-1 line-clamp-2 text-sm font-medium">
-                {focusTasks[0]?.title || "No mission selected yet."}
-              </p>
-              <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
-                {focusTasks[0]?.planTitle || momentumHeadline}
-              </p>
-              <div className="mt-3">
-                {focusTasks[0] ? (
-                  <Button
-                    variant="cta"
-                    size="sm"
-                    className="h-8 px-3 font-mono-ui text-[11px]"
-                    onClick={() => openTask(focusTasks[0])}
-                  >
-                    Start Current Mission
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-3 font-mono-ui text-[11px]"
-                    onClick={() => router.push("/plans")}
-                  >
-                    Open Plan Workspace
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <MiniChartTile
-              label="Missions Running"
-              value={String(statusCounts.active)}
-              caption="Active right now"
-              color="indigo"
-              series={miniSeriesA}
-            />
-            <MiniChartTile
-              label="Queued Today"
-              value={String(statusCounts.scheduled)}
-              caption="Ready to start"
-              color="neutral"
-              series={miniSeriesB}
-            />
-            <MiniChartTile
-              label="Needs Recovery"
-              value={String(statusCounts.overdue)}
-              caption="Behind schedule"
-              color="orange"
-              series={miniSeriesC}
-            />
+          {/* ── Column 1: Identity & Action ───────────────────────────── */}
+          <section className="grid min-h-0 content-start gap-4 overflow-y-auto pr-1 xl:col-start-1 xl:row-start-1 xl:row-span-2 xl:overflow-hidden">
+            <TheCircleTeaser />
+            <SkillRadarChart />
+            <XPQuests />
+            <BackgroundTaskMonitor analysisEvents={analysisEvents} />
           </section>
 
-          <section className="grid min-h-0 content-start gap-4 overflow-hidden xl:col-start-2 xl:row-start-1">
-            <div className={`${SHELL} p-3`}>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-xl border border-border/80 bg-background p-3">
-                  <p className="text-[11px] text-muted-foreground">Level</p>
-                  <p className="font-mono-ui mt-1 text-xl font-semibold">L{currentLevel}</p>
-                </div>
-                <div className="rounded-xl border border-border/80 bg-background p-3">
-                  <p className="text-[11px] text-muted-foreground">Total XP</p>
-                  <p className="font-mono-ui mt-1 text-xl font-semibold">{totalXP.toLocaleString()}</p>
-                </div>
-                <div className="rounded-xl border border-border/80 bg-background p-3">
-                  <p className="text-[11px] text-muted-foreground">Signals</p>
-                  <p className="font-mono-ui mt-1 text-xl font-semibold">{statusCounts.active + statusCounts.scheduled}</p>
-                </div>
-              </div>
-              <div className="mt-3 rounded-xl border border-border/80 bg-background p-3">
-                <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
-                  <span>Level progress</span>
-                  <span className="font-mono-ui">{xpProgress}/{xpNeeded}</span>
-                </div>
-                <ProgressBar value={progressPercent} />
-              </div>
-            </div>
+          {/* ── Column 2: Horizon Inbox + Mood ─────────────────────────── */}
+          <section className="grid min-h-0 content-start gap-4 overflow-y-auto pr-1 xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:overflow-hidden">
+            <MentorInbox />
+            <MoodSensor />
           </section>
 
+          {/* ── Column 3: Mentor / Calendar ────────────────────────────── */}
           <section className="min-h-0 xl:col-start-3 xl:row-start-1">
             <div
               className={`flex h-full min-h-0 rounded-2xl border border-[color:var(--brand-indigo)]/25 bg-gradient-to-b from-[color:var(--brand-indigo)]/20 via-[color:var(--brand-indigo)]/14 to-[color:var(--surface)] p-4 shadow-[var(--shadow-1)] transition-all duration-300 ${
@@ -891,120 +789,7 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          {!isCalendarExpanded ? (
-            <section className="min-h-0 overflow-hidden xl:col-start-2 xl:row-start-2">
-              <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3">
-                <div className={`${SHELL} p-3`}>
-                <div className="mb-2 flex items-center justify-between">
-                  <div>
-                    <p className="font-display text-base">Today&apos;s Mission Queue</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Execute one mission at a time with clear intent.
-                    </p>
-                  </div>
-                  <Button
-                    variant="accent"
-                    size="sm"
-                    className="h-8 font-mono-ui text-[11px]"
-                    onClick={() => router.push("/chat?context=dashboard")}
-                  >
-                    Open Mentor
-                  </Button>
-                </div>
-                <div className="grid gap-2 lg:grid-cols-2">
-                  {isLoading ? (
-                    [1, 2, 3].map((item) => (
-                      <div key={item} className="h-16 animate-pulse rounded-lg bg-muted" />
-                    ))
-                  ) : focusTasks.length ? (
-                    <>
-                      <article className="rounded-lg border border-[color:var(--brand-indigo)]/35 bg-[color:var(--brand-indigo)]/10 p-3 lg:col-span-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="line-clamp-1 text-sm font-semibold">
-                              {focusTasks[0].title}
-                            </p>
-                            <p className="font-mono-ui line-clamp-1 text-[11px] text-muted-foreground">
-                              {focusTasks[0].planTitle || "Horizon mission path"}
-                            </p>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="accent"
-                            className="h-8 px-3 text-[11px]"
-                            onClick={() => openTask(focusTasks[0])}
-                          >
-                            Start now
-                          </Button>
-                        </div>
-                      </article>
-                      {focusTasks.slice(1, 3).map((task) => (
-                        <article key={task.id} className="rounded-lg border border-border bg-background p-2.5">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="line-clamp-1 text-xs font-semibold">{task.title}</p>
-                              <p className="font-mono-ui line-clamp-1 text-[10px] text-muted-foreground">
-                                {task.planTitle || "Horizon mission path"}
-                              </p>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 px-2.5 text-[11px]"
-                              onClick={() => openTask(task)}
-                            >
-                              Open
-                            </Button>
-                          </div>
-                        </article>
-                      ))}
-                    </>
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-border bg-background p-4 text-xs text-muted-foreground lg:col-span-2">
-                      No missions queued. Ask Mentor to generate your next focused mission.
-                    </div>
-                  )}
-                </div>
-              </div>
-                <div className={`${SHELL} min-h-0 p-3`}>
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="font-display text-base">Mentor Brief</p>
-                    <Badge variant="outline" className="font-mono-ui text-[10px]">
-                      Live
-                    </Badge>
-                  </div>
 
-                  <div className="rounded-lg border border-border/80 bg-background p-2.5">
-                    <p className="text-[11px] text-muted-foreground">
-                      Recommended next move
-                    </p>
-                    <p className="mt-1 text-sm font-medium">
-                      {flowData?.suggestion?.description ||
-                        "Run one focused mission block, then close with a short reflection in Mentor."}
-                    </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Button
-                        variant="accent"
-                        size="sm"
-                        className="h-8 px-3 font-mono-ui text-[11px]"
-                        onClick={() => router.push("/chat?context=dashboard")}
-                      >
-                        Open Mentor
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-3 font-mono-ui text-[11px]"
-                        onClick={() => router.push("/plans")}
-                      >
-                        Open Plans
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-          ) : null}
 
           <section
             className={`min-h-0 transition-all duration-300 ${

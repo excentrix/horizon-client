@@ -102,8 +102,8 @@ export function VerificationEngine({
   // Dynamic Rule Parsing
   const rules = useMemo(() => {
     if (!verificationCriteria) return ["Complete the primary objective."];
-    // Split criteria by periods or newlines into manageable rules
-    return verificationCriteria.split(/[.\\n]/).map(s => s.trim()).filter(s => s.length > 5);
+    // Split criteria by sentence boundaries (period + whitespace or newline)
+    return verificationCriteria.split(/\.\s+|\n/).map(s => s.trim()).filter(s => s.length > 5);
   }, [verificationCriteria]);
 
   const readableMethod = useMemo(() => {
