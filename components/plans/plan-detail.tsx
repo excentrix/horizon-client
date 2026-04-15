@@ -88,9 +88,13 @@ export function PlanDetail({
     return `${description.slice(0, 220).trim()}...`;
   }, [description]);
   const sortedTasks = useMemo(() => [...tasks].sort(
-    (a, b) =>
-      new Date(a.scheduled_date).getTime() -
-      new Date(b.scheduled_date).getTime(),
+    (a, b) => {
+      // Curriculum sequence_order is the primary sort — preserves intended learning order
+      // even when tasks share the same date or are overdue.
+      const seqDiff = (a.sequence_order ?? 0) - (b.sequence_order ?? 0);
+      if (seqDiff !== 0) return seqDiff;
+      return new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime();
+    }
   ), [tasks]);
   const today = startOfDay(new Date());
   const todayTasks = sortedTasks.filter((task) =>
