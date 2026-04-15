@@ -272,7 +272,7 @@ function PlaygroundFlow() {
   const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (activeStepIndex !== 4 || !activeTask?.id) return;
+    if (currentStepId !== "verify" || !activeTask?.id) return;
     const v = activeTask.verification || {};
     const isComplete = Array.isArray(v.problem_set) && v.problem_set.length >= 2;
     if (challengeVerification || isComplete) return;
@@ -302,7 +302,7 @@ function PlaygroundFlow() {
         challengeRequestRef.current[activeTask.id] = false;
         setChallengeLoading(false);
       });
-  }, [activeStepIndex, activeTask, challengeVerification, refetchPlan]);
+  }, [currentStepId, activeTask, challengeVerification, refetchPlan]);
 
   // Stop challenge polling when task.verification arrives
   useEffect(() => {
@@ -332,7 +332,7 @@ function PlaygroundFlow() {
   const starterCodePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (activeStepIndex !== 3 || !activeTask?.id) return;
+    if (currentStepId !== "omni" || !activeTask?.id) return;
     if (getInitialCode(activeTask)) return;
     if (starterCode !== undefined) return;
     if (starterCodeRequestRef.current[activeTask.id]) return;
@@ -352,7 +352,7 @@ function PlaygroundFlow() {
         starterCodeRequestRef.current[activeTask.id] = false;
         setStarterCodeLoading(false);
       });
-  }, [activeStepIndex, activeTask, starterCode, refetchPlan]);
+  }, [currentStepId, activeTask, starterCode, refetchPlan]);
 
   // Stop starter code polling when ai_generated_examples arrives
   useEffect(() => {
@@ -467,7 +467,7 @@ function PlaygroundFlow() {
       queryClient.invalidateQueries({ queryKey: ["plan", planId] });
 
       // Show verifying state — WS will fire artifact_verified when done
-      setCompletedSteps(prev => new Set([...prev, 3, 4]));
+      setCompletedSteps(prev => new Set([...prev, activeStepIndex]));
       setIsVerifying(true);
       telemetry.toastSuccess("Submitted! AI is reviewing your proof…");
 
@@ -487,7 +487,7 @@ function PlaygroundFlow() {
   const buildMentorContext = (): string => {
     const parts: string[] = [
       `Task: ${activeTask?.title ?? ""}`,
-      `Phase: ${STEPS[activeStepIndex]?.label ?? ""}`,
+      `Phase: ${steps[activeStepIndex]?.label ?? ""}`,
     ];
     if (quizResults) {
       parts.push(`Quiz score: ${quizResults.correct}/${quizResults.total}`);
@@ -499,7 +499,7 @@ function PlaygroundFlow() {
       .map(([k]) => k);
     if (unhelpful.length) parts.push(`Found confusing: lesson blocks ${unhelpful.join(", ")}`);
     if (feynmanGaps.length) parts.push(`Feynman gaps: ${feynmanGaps.slice(0, 3).join(", ")}`);
-    if (activeStepIndex === 3) {
+    if (currentStepId === "omni") {
       const envReqs = activeTask?.environment_requirements as Record<string, unknown> | undefined;
       const env = envReqs?.recommended_environment as string | undefined;
       if (env) parts.push(`Working in: ${env} environment`);
@@ -538,7 +538,7 @@ function PlaygroundFlow() {
   // counts as half-done so the bar always moves when switching tabs.
   const progressPercent = Math.min(
     100,
-    ((completedSteps.size + 0.5) / STEPS.length) * 100
+    (completedSteps.size / steps.length) * 100
   );
   const envReqs = activeTask?.environment_requirements as Record<string, unknown> | undefined;
   const recommendedEnvRaw = envReqs?.recommended_environment as EnvMode | undefined;
@@ -597,7 +597,7 @@ function PlaygroundFlow() {
 
       <div className="flex items-center justify-between shrink-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
-          {STEPS.map((step, index) => {
+          {steps.map((step, index) => {
             const isActive = index === activeStepIndex;
             const isDone = completedSteps.has(index);
             return (
@@ -638,7 +638,7 @@ function PlaygroundFlow() {
       <div className="grid flex-1 grid-cols-1 gap-6 overflow-hidden md:grid-cols-12">
         {/* Main Workspace Area (Left 2/3) */}
         <div className="flex flex-col gap-4 md:col-span-8 overflow-y-auto pr-2 custom-scrollbar">
-          {activeStepIndex === 0 && (
+          {currentStepId === "ingest" && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
               <LearningPanel
                 activeTask={activeTask}
@@ -649,7 +649,7 @@ function PlaygroundFlow() {
             </div>
           )}
 
-          {activeStepIndex === 1 && (
+          {currentStepId === "micro" && (
             <div className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
               <MicroPracticeLab
                 taskId={activeTask?.id || ""}
@@ -658,14 +658,14 @@ function PlaygroundFlow() {
                 onComplete={(results) => {
                   setQuizResults(results);
                   setQuizBannerDismissed(false);
-                  setCompletedSteps(prev => new Set([...prev, 1]));
-                  changeStep(2);
+                  setCompletedSteps(prev => new Set([...prev, activeStepIndex]));
+                  changeStep(activeStepIndex + 1);
                 }}
               />
             </div>
           )}
 
-          {activeStepIndex === 2 && (
+          {currentStepId === "prove" && (
             <div className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
               <FeynmanCheck
                 task={activeTask}
@@ -675,14 +675,14 @@ function PlaygroundFlow() {
                 onSendMessage={handleMentorSend}
                 onComplete={(gaps) => {
                   setFeynmanGaps(gaps);
-                  setCompletedSteps(prev => new Set([...prev, 2]));
-                  changeStep(3);
+                  setCompletedSteps(prev => new Set([...prev, activeStepIndex]));
+                  changeStep(activeStepIndex + 1);
                 }}
               />
             </div>
           )}
 
-          {activeStepIndex === 3 && (
+          {currentStepId === "omni" && (
             <div className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both flex flex-col gap-3">
               {quizFailed && !quizBannerDismissed && (
                 <div className="shrink-0 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -743,7 +743,7 @@ function PlaygroundFlow() {
             </div>
           )}
 
-          {activeStepIndex === 4 && (
+          {currentStepId === "verify" && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both h-full">
               <VerificationEngine
                 taskId={activeTask?.id || ""}
@@ -812,14 +812,14 @@ function PlaygroundFlow() {
               <ArrowLeft className="mr-2 h-4 w-4" /> Previous Step
             </Button>
 
-            {activeStepIndex < STEPS.length - 1 ? (
+            {activeStepIndex < steps.length - 1 ? (
               <Button
                 onClick={() =>
-                  changeStep(Math.min(activeStepIndex + 1, STEPS.length - 1))
+                  changeStep(Math.min(activeStepIndex + 1, steps.length - 1))
                 }
                 className="bg-slate-900 text-white hover:bg-slate-800"
               >
-                Proceed to {STEPS[activeStepIndex + 1].label}{" "}
+                Proceed to {steps[activeStepIndex + 1]?.label}{" "}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             ) : (

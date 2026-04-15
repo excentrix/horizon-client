@@ -77,7 +77,7 @@ export function PlanIntelligencePanel({
           {plan.difficulty_level} · {plan.estimated_duration_weeks} weeks
         </div>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0">
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto  px-3">
         <section className="rounded-2xl border border-transparent bg-gradient-to-br from-slate-50 to-white p-3 shadow-[var(--shadow-1)] ring-1 ring-white/60">
           <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
             <span>Focus timer</span>

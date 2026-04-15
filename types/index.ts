@@ -351,6 +351,7 @@ export interface DailyTask {
   title: string;
   description: string;
   task_type: TaskType;
+  sequence_order: number;
   scheduled_date: string;
   scheduled_time?: string | null;
   estimated_duration_minutes: number;

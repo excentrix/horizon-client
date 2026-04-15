@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LiveAnalysisPanel } from "@/components/mirror/live-analysis-panel";
+import { ProjectVerificationSheet } from "@/components/mirror/ProjectVerificationSheet";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMirrorSnapshot } from "@/hooks/use-mirror-snapshot";
 import { authApi } from "@/lib/api";
@@ -36,6 +37,9 @@ import {
   ThumbsUp,
   AlertTriangle,
   Wrench,
+  Shield,
+  ShieldCheck,
+  ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -325,6 +329,7 @@ export function VeloProfileTab() {
   const queryClient = useQueryClient();
   const { data, isLoading } = useMirrorSnapshot();
   const [reanalysing, setReanalysing] = useState(false);
+  const [verifyingProjectIndex, setVerifyingProjectIndex] = useState<number | null>(null);
 
   const handleReanalyse = async () => {
     setReanalysing(true);
@@ -358,6 +363,7 @@ export function VeloProfileTab() {
     (normalized.education as EducationEntry[] | undefined) ?? [];
   const gaps = mirror?.skill_gaps ?? [];
   const deep = mirror?.deep_analysis ?? {};
+  const projectVerifications = mirror?.project_verifications ?? [];
 
   const isRunning = data?.status === "running" || data?.status === "empty";
   const isFailed = data?.status === "failed";
@@ -1217,6 +1223,7 @@ export function VeloProfileTab() {
           <div className="grid gap-3 sm:grid-cols-2">
             {projects.map((proj, i) => {
               const analysis = findAnalysis(proj, projAnalysis, i);
+              const pv = projectVerifications.find((v) => v.project_index === i);
               return (
                 <Card key={i}>
                   <CardContent className="pb-3 pt-4">
@@ -1224,16 +1231,51 @@ export function VeloProfileTab() {
                       <p className="text-sm font-semibold leading-snug">
                         {proj.title || "Project"}
                       </p>
-                      {(proj.repo_url || proj.demo_url) && (
-                        <a
-                          href={proj.repo_url || proj.demo_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="shrink-0 text-muted-foreground hover:text-foreground"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      )}
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {(proj.repo_url || proj.demo_url) && (
+                          <a
+                            href={proj.repo_url || proj.demo_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                        {(!pv || pv.status === "unverified") && (
+                          <button
+                            onClick={() => setVerifyingProjectIndex(i)}
+                            className="flex items-center gap-1 rounded-md border border-dashed border-muted-foreground/40 px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary"
+                          >
+                            <Shield className="h-2.5 w-2.5" />
+                            Verify
+                          </button>
+                        )}
+                        {pv?.status === "verified" && (
+                          <span className="flex items-center gap-1 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                            <ShieldCheck className="h-2.5 w-2.5" />
+                            Verified
+                          </span>
+                        )}
+                        {(pv?.status === "evidence_submitted" || pv?.status === "interrogating") && (
+                          <span className="flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                            <Shield className="h-2.5 w-2.5" />
+                            In Progress
+                          </span>
+                        )}
+                        {pv?.status === "suspicious" && (
+                          <span className="flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                            <ShieldAlert className="h-2.5 w-2.5" />
+                            Review Needed
+                          </span>
+                        )}
+                        {pv?.status === "failed" && (
+                          <span className="flex items-center gap-1 rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">
+                            <XCircle className="h-2.5 w-2.5" />
+                            Not Verified
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {analysis && (
@@ -1393,6 +1435,25 @@ export function VeloProfileTab() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* ── Project Verification Sheet ─────────────────────────────────────── */}
+      {mirror?.id && verifyingProjectIndex !== null && (
+        <ProjectVerificationSheet
+          open={verifyingProjectIndex !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setVerifyingProjectIndex(null);
+              queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
+            }
+          }}
+          snapshotId={mirror.id}
+          projectIndex={verifyingProjectIndex}
+          projectTitle={
+            (projects[verifyingProjectIndex]?.title as string | undefined) ??
+            `Project ${verifyingProjectIndex + 1}`
+          }
+        />
       )}
     </div>
   );

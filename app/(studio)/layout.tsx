@@ -12,6 +12,7 @@ import Link from "next/link";
 export default function StudioLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isDashboard = pathname.startsWith("/dashboard");
+  const isPlansV2 = pathname === "/plans/v2";
   const isNoPageScrollRoute = pathname === "/chat" || isDashboard;
   const hideDock =
     (pathname.includes("/plans/") && pathname.includes("/playground")) ||
@@ -35,6 +36,9 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
               "flex min-h-0 flex-1 flex-col overflow-hidden",
               isNoPageScrollRoute
                 ? "pb-0"
+                : isPlansV2
+                  ? "pb-0"
+                  // ? "pb-[calc(2.5rem+env(safe-area-inset-bottom))]"
                 : hideDock
                   ? "pb-0"
                   : "pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-[calc(7rem+env(safe-area-inset-bottom))]",

@@ -211,7 +211,7 @@ export function PlanScheduleView({ plan, tasks }: PlanScheduleViewProps) {
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
   const tasksByDate = useMemo(() => {
-    return tasks.reduce((acc, task) => {
+    const map = tasks.reduce((acc, task) => {
       try {
         const dateKey = format(parseISO(task.scheduled_date as unknown as string), "yyyy-MM-dd");
         if (!acc[dateKey]) acc[dateKey] = [];
@@ -221,6 +221,11 @@ export function PlanScheduleView({ plan, tasks }: PlanScheduleViewProps) {
       }
       return acc;
     }, {} as Record<string, DailyTask[]>);
+    // Sort each day's tasks by curriculum sequence_order
+    for (const key of Object.keys(map)) {
+      map[key].sort((a, b) => (a.sequence_order ?? 0) - (b.sequence_order ?? 0));
+    }
+    return map;
   }, [tasks]);
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -232,15 +237,37 @@ export function PlanScheduleView({ plan, tasks }: PlanScheduleViewProps) {
     const { over, active } = event;
 
     if (over && active.id) {
-        const taskId = active.id as string;
-        const newDate = over.id as string;
-        const taskData = active.data.current as DailyTask;
-        const oldDate = format(parseISO(taskData.scheduled_date as unknown as string), "yyyy-MM-dd");
+      const taskId = active.id as string;
+      const newDate = over.id as string;
+      const taskData = active.data.current as DailyTask;
+      const oldDate = format(parseISO(taskData.scheduled_date as unknown as string), "yyyy-MM-dd");
 
-        if (newDate !== oldDate) {
-            rescheduleTask.mutate({ taskId, scheduled_date: newDate });
-            toast.info(`Moving "${taskData.title}" to ${format(parseISO(newDate), "MMM do")}`);
-        }
+      if (newDate === oldDate) return;
+
+      // Enforce curriculum sequence: prevent dragging a task before the preceding
+      // task or after the following task in sequence_order.
+      const sorted = [...tasks].sort(
+        (a, b) => (a.sequence_order ?? 0) - (b.sequence_order ?? 0)
+      );
+      const idx = sorted.findIndex((t) => t.id === taskId);
+      const prev = idx > 0 ? sorted[idx - 1] : null;
+      const next = idx < sorted.length - 1 ? sorted[idx + 1] : null;
+
+      if (prev && newDate < prev.scheduled_date) {
+        toast.error(
+          `"${taskData.title}" must stay after "${prev.title}" — tasks follow the learning sequence.`
+        );
+        return;
+      }
+      if (next && newDate > next.scheduled_date) {
+        toast.error(
+          `"${taskData.title}" must stay before "${next.title}" — tasks follow the learning sequence.`
+        );
+        return;
+      }
+
+      rescheduleTask.mutate({ taskId, scheduled_date: newDate });
+      toast.info(`Moving "${taskData.title}" to ${format(parseISO(newDate), "MMM do")}`);
     }
   };
 
