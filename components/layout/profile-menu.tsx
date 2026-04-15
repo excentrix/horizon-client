@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, ChevronDown, Eye, LogOut, Settings, Sparkles } from "lucide-react";
 
@@ -36,18 +36,17 @@ export function ProfileMenu({ variant = "default" }: { variant?: ProfileMenuVari
   const { data: gamificationData } = useGamificationSummary({ enabled: !!user });
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [highlightAction, setHighlightAction] = useState(false);
+  const prevActionLabelRef = useRef<string | null>(null);
+  const hasUser = !!user;
 
-  if (!user) {
-    return null;
-  }
-
-  const displayName = toTitleCase(user.full_name) || user.email;
+  const displayName = toTitleCase(user?.full_name) || user?.email || "";
   const initials =
     displayName?.split(" ")
       .map((part) => part.charAt(0))
       .join("")
       .slice(0, 2)
-      .toUpperCase() || user.email.charAt(0).toUpperCase();
+      .toUpperCase() || user?.email?.charAt(0).toUpperCase() || "U";
   const level = gamificationData?.profile?.level ?? 1;
   const totalXP = gamificationData?.profile?.total_points ?? 0;
   const xpProgressPct = Math.max(
@@ -56,9 +55,7 @@ export function ProfileMenu({ variant = "default" }: { variant?: ProfileMenuVari
   );
   const xpProgress = gamificationData?.profile?.level_progress ?? 0;
   const xpNeeded = gamificationData?.profile?.xp_for_next_level ?? 100;
-  const profileCompletion = Math.round(
-    Math.max(0, Math.min(100, user.profile_completion ?? 0)),
-  );
+  const profileCompletion = Math.round(Math.max(0, Math.min(100, user?.profile_completion ?? 0)));
   const identityRing = Math.max(xpProgressPct, profileCompletion);
   const ringState = identityRing >= 90 ? "stable" : identityRing >= 60 ? "growing" : "starting";
 
@@ -80,6 +77,23 @@ export function ProfileMenu({ variant = "default" }: { variant?: ProfileMenuVari
             description: "Use Mentor for your next best move and close the loop with a reflection.",
             href: "/chat?context=dashboard",
           };
+
+  useEffect(() => {
+    if (prevActionLabelRef.current === null) {
+      prevActionLabelRef.current = nextAction.label;
+      return;
+    }
+    if (prevActionLabelRef.current !== nextAction.label) {
+      prevActionLabelRef.current = nextAction.label;
+      setHighlightAction(true);
+      const timer = window.setTimeout(() => setHighlightAction(false), 1400);
+      return () => window.clearTimeout(timer);
+    }
+  }, [nextAction.label]);
+
+  if (!hasUser) {
+    return null;
+  }
 
   const handleLogout = async () => {
     try {
@@ -131,7 +145,9 @@ export function ProfileMenu({ variant = "default" }: { variant?: ProfileMenuVari
                     <TooltipTrigger asChild>
                       <Badge
                         variant="outline"
-                        className="h-7 shrink-0 gap-1 border-[color:var(--brand-indigo)]/35 bg-[color:var(--brand-indigo)]/10 px-2 font-mono-ui text-[10px] text-[color:var(--brand-indigo)]"
+                        className={`h-7 shrink-0 gap-1 border-[color:var(--brand-indigo)]/35 bg-[color:var(--brand-indigo)]/10 px-2 font-mono-ui text-[10px] text-[color:var(--brand-indigo)] transition-all duration-300 ${
+                          highlightAction ? "scale-[1.04] shadow-[0_0_0_3px_rgba(88,88,204,0.18)]" : ""
+                        }`}
                       >
                         <Sparkles className="h-3 w-3" />
                         {nextAction.label}
@@ -205,7 +221,9 @@ export function ProfileMenu({ variant = "default" }: { variant?: ProfileMenuVari
               <Button
                 size="sm"
                 variant="accent"
-                className="mt-2 h-7 w-full justify-between px-2 font-mono-ui text-[11px]"
+                className={`mt-2 h-7 w-full justify-between px-2 font-mono-ui text-[11px] transition-all duration-300 ${
+                  highlightAction ? "shadow-[0_0_0_3px_rgba(88,88,204,0.18)]" : ""
+                }`}
                 onClick={() => {
                   router.push(nextAction.href);
                   setOpen(false);

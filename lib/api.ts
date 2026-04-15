@@ -164,6 +164,34 @@ export const authApi = {
     extract<{ message: string }>(
       http.post("/auth/password/change/", payload)
     ),
+
+  getGithubOAuthUrl: () =>
+    extract<{ auth_url: string }>(http.get("/auth/github/oauth/initiate/")),
+
+  getGithubRepos: (includeForks = false) =>
+    extract<{
+      connected: boolean;
+      username?: string;
+      repos: Array<{
+        id: number;
+        name: string;
+        full_name: string;
+        url: string;
+        description: string;
+        language: string;
+        stars: number;
+        pushed_at: string;
+        private: boolean;
+        fork: boolean;
+        topics: string[];
+      }>;
+      error?: string;
+    }>(http.get(`/auth/github/repos/?forks=${includeForks}`)),
+
+  disconnectGithub: () =>
+    extract<{ disconnected: boolean }>(
+      http.delete("/auth/github/disconnect/")
+    ),
 };
 
 // CHAT -----------------------------------------------------------------------
@@ -1285,7 +1313,8 @@ export const auditApi = {
       session_id: string;
       question: string | null;
       question_index: number;
-      total_questions: number;
+      total_questions: number | null;  // null for adaptive project verification
+      adaptive?: boolean;
       question_generation?: { source: "ai" | "template" | "static"; fallback_reason: string };
     }>(
       http.post("/interrogations/start/", { audit_id: auditId })
@@ -1419,10 +1448,88 @@ export const auditApi = {
             core5_slots?: Record<string, unknown>;
           };
         };
+        project_verifications?: Array<{
+          verification_id: string;
+          project_index: number;
+          project_title: string;
+          status: "unverified" | "evidence_submitted" | "interrogating" | "verified" | "failed" | "suspicious";
+          verification_score: number | null;
+          github_check_status: "pending" | "passed" | "failed" | "skipped";
+          audit_doc_status: "pending" | "accepted" | "rejected" | "missing";
+          submitted_repos: Array<{ url: string; label: string; check_status: string; language?: string }>;
+          audit_id: string | null;
+        }>;
         created_at: string;
         updated_at: string;
       };
     }>(http.get("/mirror/latest/")),
+
+  startProjectVerification: (snapshotId: string, projectIndex: number) =>
+    extract<{
+      verification_id: string;
+      audit_id: string | null;
+      project: { index: number; title: string; technologies: string[]; description: string };
+      status: string;
+      github_check_status: string;
+    }>(
+      http.post("/project-verifications/", { snapshot_id: snapshotId, project_index: projectIndex })
+    ),
+
+  checkRepos: (
+    verificationId: string,
+    repos: Array<{ url: string; label: string }>,
+    demoUrl?: string,
+  ) =>
+    extract<{
+      repos: Array<{
+        url: string;
+        label: string;
+        check_status: "passed" | "failed" | "skipped";
+        language?: string;
+        stars?: number;
+        pushed_at?: string;
+        description?: string;
+        readme_snippet?: string;
+        reason?: string;
+      }>;
+      overall_github_status: "passed" | "failed" | "skipped";
+      audit_doc: {
+        status: "accepted" | "rejected" | "missing";
+        sections: Array<{
+          name: string;
+          found: boolean;
+          word_count: number;
+          passed: boolean;
+          required_words: number;
+        }>;
+        feedback: string;
+        template?: string;
+      };
+    }>(
+      http.post(`/project-verifications/${verificationId}/check-repos/`, {
+        repos,
+        demo_url: demoUrl || "",
+      })
+    ),
+
+  recheckAuditDoc: (verificationId: string) =>
+    extract<{
+      status: "accepted" | "rejected" | "missing";
+      sections: Array<{ name: string; found: boolean; word_count: number; passed: boolean; required_words: number }>;
+      feedback: string;
+      template?: string;
+    }>(http.post(`/project-verifications/${verificationId}/recheck-audit-doc/`)),
+
+  finalizeProjectVerification: (verificationId: string) =>
+    extract<{
+      status: string;
+      verification_score: number | null;
+      verdict_summary: string;
+      badge: boolean;
+      verified_at: string | null;
+    }>(
+      http.post(`/project-verifications/${verificationId}/finalize/`)
+    ),
 
   reviewVeloMentorIntake: (auditId: string) =>
     extract<VeloMentorReviewResponse>(http.post(`/audits/${auditId}/mentor-intake/review/`)),
