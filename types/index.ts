@@ -1113,13 +1113,73 @@ export interface PlaygroundEventPayload {
     | "test_passed"
     | "test_failed"
     | "hint_requested"
-    | "idle_detected";
+    | "idle_detected"
+    | "scenario_started"
+    | "submission_drafted"
+    | "submission_submitted"
+    | "rubric_scored"
+    | "nudge_sent";
   timestamp?: string;
   language?: string;
   run_id?: string;
   status?: string;
   error_type?: string;
   meta?: Record<string, unknown>;
+}
+
+export interface DomainScenarioPayload {
+  id: UUID;
+  task: UUID;
+  user: UUID;
+  scenario_type: "business_kpi" | "marketing_campaign";
+  domain_family: "business" | "marketing" | "design" | "finance" | "tech" | "other";
+  scenario_payload: Record<string, unknown>;
+  learner_submission: Record<string, unknown>;
+  rubric_scores: {
+    aggregate?: number;
+    criterion_scores?: Record<string, number>;
+  };
+  rubric_breakdown: DomainRubricBreakdown;
+  verification_status: "verified" | "failed" | "not_verifiable";
+  evaluator_rationale: {
+    summary?: string;
+    strengths?: string[];
+    gaps?: string[];
+    next_actions?: string[];
+  };
+  portfolio_evidence_draft: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  started_at: string;
+  submitted_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DomainRubricBreakdown = Record<
+  string,
+  {
+    label: string;
+    score: number;
+    rationale: string;
+  }
+>;
+
+export interface SimulationResultEnvelope {
+  scenario: DomainScenarioPayload;
+  execution_diagnostics: {
+    scenario_type: string;
+    domain_family: string;
+    rubric_breakdown: DomainRubricBreakdown;
+    verification_status: "verified" | "failed" | "not_verifiable";
+    evaluator_rationale?: Record<string, unknown>;
+  };
+  efficacy_metrics: {
+    attempt_count: number;
+    time_to_verify_seconds: number | null;
+    error_pattern_count: number;
+    nudge_count: number;
+    self_check_pass_rate: number;
+  };
 }
 
 export type AuditStatus =

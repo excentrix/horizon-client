@@ -50,6 +50,8 @@ import {
   VeloOnboardingTrack,
   VeloAuditMode,
   VeloRoadmapEligibility,
+  DomainScenarioPayload,
+  SimulationResultEnvelope,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -429,7 +431,12 @@ export const planningApi = {
         | "test_passed"
         | "test_failed"
         | "hint_requested"
-        | "idle_detected";
+        | "idle_detected"
+        | "scenario_started"
+        | "submission_drafted"
+        | "submission_submitted"
+        | "rubric_scored"
+        | "nudge_sent";
       timestamp?: string;
       language?: string;
       run_id?: string;
@@ -449,6 +456,29 @@ export const planningApi = {
         message_id: string;
       } | null;
     }>(http.post(`/planning/tasks/${taskId}/playground-events/`, payload)),
+  startSimulationScenario: (
+    taskId: string,
+    payload?: {
+      scenario_type?: "business_kpi" | "marketing_campaign";
+      domain_family?: "business" | "marketing";
+      scenario_payload?: Record<string, unknown>;
+    }
+  ) =>
+    extract<{ message: string; scenario: DomainScenarioPayload }>(
+      http.post(`/planning/tasks/${taskId}/simulation-scenarios/start/`, payload ?? {})
+    ),
+  submitSimulationScenario: (
+    taskId: string,
+    scenarioId: string,
+    payload: { learner_submission: Record<string, unknown> | string | string[] }
+  ) =>
+    extract<SimulationResultEnvelope & { message: string }>(
+      http.post(`/planning/tasks/${taskId}/simulation-scenarios/${scenarioId}/submit/`, payload)
+    ),
+  getSimulationScenarioResult: (taskId: string, scenarioId: string) =>
+    extract<SimulationResultEnvelope>(
+      http.get(`/planning/tasks/${taskId}/simulation-scenarios/${scenarioId}/result/`)
+    ),
   generateTaskLesson: (
     taskId: string,
     payload?: { scope?: "task" | "milestone"; force?: boolean }
@@ -779,7 +809,20 @@ export const intelligenceApi = {
       })
     ),
   getMyAnalyses: () =>
-    extract<Record<string, unknown>[]>(http.get("/intelligence/my-analyses/")),
+    extract<
+      Array<{
+        id: string;
+        conversation_id: string;
+        conversation_title: string;
+        status: "running" | "completed" | "failed";
+        started_at: string;
+        completed_at?: string;
+        progress?: number;
+        current_stage?: string;
+        stage_messages?: Array<{ stage: string; message: string; timestamp: string }>;
+        results?: Record<string, unknown>;
+      }>
+    >(http.get("/intelligence/my-analyses/")),
 
   previewCortexRouting: (conversationId: string, message: string) =>
     extract<{
