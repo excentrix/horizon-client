@@ -580,20 +580,21 @@ function PlaygroundFlow() {
 
   useEffect(() => {
     if (!activeTask?.id || currentStepId !== "omni") return;
+    const idleLanguage = inferDefaultLanguage(activeTask);
     const interval = setInterval(() => {
       const idleMs = Date.now() - lastActivityAtRef.current;
       if (idleMs >= 10 * 60 * 1000 && !idleReportedRef.current) {
         idleReportedRef.current = true;
         void emitPlaygroundEvent({
           event_type: "idle_detected",
-          language: defaultLanguage,
+          language: idleLanguage,
           status: "idle_10m",
           meta: { idle_ms: idleMs },
         });
       }
     }, 15000);
     return () => clearInterval(interval);
-  }, [activeTask?.id, currentStepId, defaultLanguage, emitPlaygroundEvent]);
+  }, [activeTask?.id, activeTask?.title, activeTask?.description, currentStepId, emitPlaygroundEvent]);
 
   if (!plan) return null;
 
