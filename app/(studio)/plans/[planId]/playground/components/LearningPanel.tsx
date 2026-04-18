@@ -30,6 +30,7 @@ interface LearningPanelProps {
   blockFeedback: FeedbackState;
   onFeedbackChange: (feedback: FeedbackState) => void;
   onRegenerateLesson?: () => void;
+  onHintRequested?: () => void;
 }
 
 type LessonBlock = NonNullable<DailyTask["lesson_blocks"]>[number];
@@ -159,7 +160,7 @@ function BlockFeedback({
   );
 }
 
-function ProgressiveHints({ hints }: { hints: string[] }) {
+function ProgressiveHints({ hints, onReveal }: { hints: string[]; onReveal?: () => void }) {
   const [revealed, setRevealed] = useState(0);
   const [revealedAt, setRevealedAt] = useState<number[]>([]);
   const [now, setNow] = useState(Date.now());
@@ -193,6 +194,7 @@ function ProgressiveHints({ hints }: { hints: string[] }) {
     if (!canRevealNext() || revealed >= hints.length) return;
     setRevealedAt((prev) => [...prev, Date.now()]);
     setRevealed((n) => n + 1);
+    onReveal?.();
   };
 
   const BUTTON_LABELS = ["Need a hint?", "Still stuck?", "Show me more"];
@@ -242,7 +244,13 @@ function ProgressiveHints({ hints }: { hints: string[] }) {
   );
 }
 
-export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeedbackChange }: LearningPanelProps) {
+export function LearningPanel({
+  activeTask,
+  lessonLoading,
+  blockFeedback,
+  onFeedbackChange,
+  onHintRequested,
+}: LearningPanelProps) {
   const panelMountTime = useRef(Date.now());
   const [activeBlockIndex, setActiveBlockIndex] = useState(0);
   const [readingMode, setReadingMode] = useState<"focus" | "full">("focus");
@@ -647,7 +655,7 @@ export function LearningPanel({ activeTask, lessonLoading, blockFeedback, onFeed
             </div>
 
             {(activeTask.ai_generated_hints?.length ?? 0) > 0 && (
-              <ProgressiveHints hints={activeTask.ai_generated_hints} />
+              <ProgressiveHints hints={activeTask.ai_generated_hints} onReveal={onHintRequested} />
             )}
 
             {contentBlocks

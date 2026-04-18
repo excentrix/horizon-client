@@ -44,9 +44,28 @@ interface CodeRunnerProps {
   defaultLanguage?: string;
   initialCode?: string;
   onRequestMentorReview?: (content: string) => void;
+  onExecutionEvent?: (payload: {
+    event_type:
+      | "run_started"
+      | "run_completed"
+      | "runtime_error"
+      | "compile_error"
+      | "test_passed"
+      | "test_failed";
+    language?: string;
+    run_id?: string;
+    status?: string;
+    error_type?: string;
+    meta?: Record<string, unknown>;
+  }) => void;
 }
 
-export function CodeRunner({ defaultLanguage = "python", initialCode, onRequestMentorReview }: CodeRunnerProps) {
+export function CodeRunner({
+  defaultLanguage = "python",
+  initialCode,
+  onRequestMentorReview,
+  onExecutionEvent,
+}: CodeRunnerProps) {
   const language = defaultLanguage in DEFAULT_SNIPPETS ? defaultLanguage : "python";
   const [selectedLanguage, setSelectedLanguage] = useState(language);
   const [code, setCode] = useState(initialCode || DEFAULT_SNIPPETS[language]);
@@ -71,6 +90,15 @@ export function CodeRunner({ defaultLanguage = "python", initialCode, onRequestM
   const handleRun = async () => {
     setIsRunning(true);
     setOutput(null);
+    const runId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    onExecutionEvent?.({
+      event_type: "run_started",
+      language: selectedLanguage,
+      run_id: runId,
+    });
     try {
       const result = await playgroundApi.executeCode({
         language: selectedLanguage,
@@ -83,8 +111,53 @@ export function CodeRunner({ defaultLanguage = "python", initialCode, onRequestM
         compile_output: result.compile_output ?? "",
         message: result.message,
       });
+      const statusDescription = (result.status_description || "").toLowerCase();
+      const stderrText = `${result.stderr ?? ""} ${result.compile_output ?? ""} ${result.message ?? ""}`.toLowerCase();
+      const compileError =
+        statusDescription.includes("compilation error") || stderrText.includes("syntax");
+      const runtimeError = statusDescription.includes("runtime error");
+      let errorType: string | undefined;
+      if (compileError) errorType = "syntax";
+      else if (runtimeError) errorType = "runtime";
+      else if (statusDescription.includes("time limit")) errorType = "timeout";
+
+      onExecutionEvent?.({
+        event_type: compileError ? "compile_error" : runtimeError ? "runtime_error" : "run_completed",
+        language: selectedLanguage,
+        run_id: runId,
+        status: result.status_description ?? result.status,
+        error_type: errorType,
+        meta: {
+          has_stdout: Boolean(result.stdout),
+          has_stderr: Boolean(result.stderr || result.compile_output || result.message),
+          exit_code: result.exit_code,
+        },
+      });
+      onExecutionEvent?.({
+        event_type: compileError || runtimeError ? "test_failed" : "test_passed",
+        language: selectedLanguage,
+        run_id: runId,
+        status: result.status_description ?? result.status,
+        error_type: errorType ?? (compileError || runtimeError ? "runtime" : undefined),
+        meta: { scope: "visible", source: "code_runner" },
+      });
     } catch {
       setOutput({ message: "Execution failed. Please try again." });
+      onExecutionEvent?.({
+        event_type: "runtime_error",
+        language: selectedLanguage,
+        run_id: runId,
+        status: "request_failed",
+        error_type: "runtime",
+      });
+      onExecutionEvent?.({
+        event_type: "test_failed",
+        language: selectedLanguage,
+        run_id: runId,
+        status: "request_failed",
+        error_type: "runtime",
+        meta: { scope: "visible", source: "code_runner" },
+      });
     } finally {
       setIsRunning(false);
     }

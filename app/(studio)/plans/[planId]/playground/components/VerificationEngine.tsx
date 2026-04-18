@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Link, FileText, Upload, ShieldCheck, CheckCircle2, Loader2, Trophy, AlertTriangle, ExternalLink, ArrowRight, ListChecks, ClipboardList, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { ExecutionDiagnostics } from "@/types";
 
 export interface ArtifactVerifiedEvent {
   type: string;
@@ -50,6 +51,14 @@ interface VerificationEngineProps {
   prefilledFile?: File | null;
   isVerifying?: boolean;
   verificationResult?: ArtifactVerifiedEvent | null;
+  executionDiagnostics?: ExecutionDiagnostics | null;
+  efficacyMetrics?: {
+    attempt_count: number;
+    time_to_verify_seconds: number | null;
+    error_pattern_count: number;
+    nudge_count: number;
+    self_check_pass_rate: number;
+  } | null;
   onNextTask?: () => void;
 }
 
@@ -72,6 +81,8 @@ export function VerificationEngine({
   prefilledFile,
   isVerifying,
   verificationResult,
+  executionDiagnostics,
+  efficacyMetrics,
   onNextTask,
 }: VerificationEngineProps) {
   void taskId;
@@ -301,6 +312,40 @@ export function VerificationEngine({
                   <li key={`hidden-intent-${idx}`}>{intent}</li>
                 ))}
               </ul>
+            )}
+          </div>
+        )}
+
+        {(executionDiagnostics || efficacyMetrics) && (
+          <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Execution Diagnostics
+            </p>
+            {executionDiagnostics && (
+              <div className="grid grid-cols-2 gap-2 text-xs text-slate-700 md:grid-cols-3">
+                <p>Syntax: {executionDiagnostics.failure_clusters.syntax}</p>
+                <p>Runtime: {executionDiagnostics.failure_clusters.runtime}</p>
+                <p>Assertion: {executionDiagnostics.failure_clusters.assertion}</p>
+                <p>Timeout: {executionDiagnostics.failure_clusters.timeout}</p>
+                <p>Wrong Output: {executionDiagnostics.failure_clusters.wrong_output}</p>
+                <p>Dominant: {executionDiagnostics.dominant_failure || "none"}</p>
+              </div>
+            )}
+            {efficacyMetrics && (
+              <div className="grid grid-cols-2 gap-2 text-xs text-slate-700 md:grid-cols-3">
+                <p>Attempts: {efficacyMetrics.attempt_count}</p>
+                <p>Error Patterns: {efficacyMetrics.error_pattern_count}</p>
+                <p>Nudges: {efficacyMetrics.nudge_count}</p>
+                <p>
+                  Self-check Pass: {Math.round((efficacyMetrics.self_check_pass_rate || 0) * 100)}%
+                </p>
+                <p>
+                  Time to Verify:{" "}
+                  {typeof efficacyMetrics.time_to_verify_seconds === "number"
+                    ? `${Math.round(efficacyMetrics.time_to_verify_seconds)}s`
+                    : "N/A"}
+                </p>
+              </div>
             )}
           </div>
         )}

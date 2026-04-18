@@ -405,11 +405,50 @@ export const planningApi = {
       proof: Record<string, unknown>;
       artifact_id?: string;
       execution_report?: Record<string, unknown> | null;
+      execution_diagnostics?: Record<string, unknown>;
+      efficacy_metrics?: {
+        attempt_count: number;
+        time_to_verify_seconds: number | null;
+        error_pattern_count: number;
+        nudge_count: number;
+        self_check_pass_rate: number;
+      };
     }>(
       http.post(`/planning/tasks/${taskId}/submit-proof/`, payload, {
         headers: payload instanceof FormData ? { "Content-Type": "multipart/form-data" } : undefined,
       })
     ),
+  emitPlaygroundEvent: (
+    taskId: string,
+    payload: {
+      event_type:
+        | "run_started"
+        | "run_completed"
+        | "runtime_error"
+        | "compile_error"
+        | "test_passed"
+        | "test_failed"
+        | "hint_requested"
+        | "idle_detected";
+      timestamp?: string;
+      language?: string;
+      run_id?: string;
+      status?: string;
+      error_type?: string;
+      meta?: Record<string, unknown>;
+    }
+  ) =>
+    extract<{
+      event_id: string;
+      event_type: string;
+      aggregate: Record<string, unknown>;
+      nudge?: {
+        trigger: string;
+        message: string;
+        conversation_id: string;
+        message_id: string;
+      } | null;
+    }>(http.post(`/planning/tasks/${taskId}/playground-events/`, payload)),
   generateTaskLesson: (
     taskId: string,
     payload?: { scope?: "task" | "milestone"; force?: boolean }
@@ -607,6 +646,7 @@ export const playgroundApi = {
       memory?: number;
       exit_code?: number;
       message?: string;
+      status_description?: string;
     }>(http.post("/playground/execute/", payload)),
 };
 
@@ -1530,6 +1570,13 @@ export const auditApi = {
     }>(
       http.post(`/project-verifications/${verificationId}/finalize/`)
     ),
+
+  resetProjectVerification: (verificationId: string) =>
+    extract<{
+      verification_id: string;
+      status: string;
+      audit_id: string;
+    }>(http.post(`/project-verifications/${verificationId}/reset/`)),
 
   reviewVeloMentorIntake: (auditId: string) =>
     extract<VeloMentorReviewResponse>(http.post(`/audits/${auditId}/mentor-intake/review/`)),

@@ -516,6 +516,15 @@ export default function DashboardPage() {
     const scheduled = allTasks.filter((task) => task.status === "scheduled").length;
     return { active, overdue, scheduled };
   }, [allTasks]);
+  const weeklyStats = homeData?.weekly_stats;
+  const efficacy = homeData?.learning_efficacy;
+  const medianFirstPassMins =
+    typeof efficacy?.median_time_to_first_pass === "number"
+      ? Math.max(0, Math.round(efficacy.median_time_to_first_pass / 60))
+      : null;
+  const stuckRatePct = Math.round((efficacy?.stuck_session_rate ?? 0) * 100);
+  const verifiedRatePct = Math.round((efficacy?.verified_submission_rate ?? 0) * 100);
+  const nudgeRecoveryPct = Math.round((efficacy?.nudge_recovery_rate ?? 0) * 100);
 
   const focusTasks = useMemo<FocusTask[]>(() => {
     const fromHome = [homeData?.today_task, ...(homeData?.additional_tasks ?? [])]
@@ -652,6 +661,38 @@ export default function DashboardPage() {
         <div className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)_minmax(0,1fr)] xl:grid-rows-[auto_minmax(0,1fr)]">
           {/* ── Column 1: Identity & Action ───────────────────────────── */}
           <section className="grid min-h-0 content-start gap-4 overflow-y-auto pr-1 xl:col-start-1 xl:row-start-1 xl:row-span-2 xl:overflow-hidden">
+            {/* <div className={`${SHELL} grid grid-cols-2 gap-2 p-3`}>
+              <StatTile
+                label="Weekly Tasks"
+                value={weeklyStats?.tasks_completed ?? 0}
+                caption="Completed in last 7 days"
+              />
+              <StatTile
+                label="XP This Week"
+                value={weeklyStats?.xp_earned ?? 0}
+                caption="Verified progress points"
+              />
+              <StatTile
+                label="Median First Pass"
+                value={medianFirstPassMins !== null ? `${medianFirstPassMins}m` : "N/A"}
+                caption="Code run to first passing check"
+              />
+              <StatTile
+                label="Stuck Session Rate"
+                value={`${stuckRatePct}%`}
+                caption="Idle-detected sessions"
+              />
+              <StatTile
+                label="Verified Submission Rate"
+                value={`${verifiedRatePct}%`}
+                caption="Passed checks per run"
+              />
+              <StatTile
+                label="Nudge Recovery"
+                value={`${nudgeRecoveryPct}%`}
+                caption="Pass after mentor nudge"
+              />
+            </div> */}
             <TheCircleTeaser />
             <SkillRadarChart />
             <XPQuests />

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState, useRef } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlan, usePlanMutations } from "@/hooks/use-plans";
@@ -8,6 +8,7 @@ import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useConversationMessages } from "@/hooks/use-conversations";
 import { chatApi, planningApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
+import type { ExecutionDiagnostics, PlaygroundEventPayload } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { BookOpen, Code2, ShieldCheck, ArrowRight, ArrowLeft, RefreshCw, CheckCircle2, Brain } from "lucide-react";
@@ -171,6 +172,8 @@ function PlaygroundFlow() {
   const [starterCodeLoading, setStarterCodeLoading] = useState(false);
   const [challengeVerification, setChallengeVerification] = useState<Record<string, unknown> | null>(null);
   const [challengeLoading, setChallengeLoading] = useState(false);
+  const lastActivityAtRef = useRef<number>(Date.now());
+  const idleReportedRef = useRef<boolean>(false);
 
   // -- Quiz & Block Feedback State (lifted for mentor context) --
   const [quizResults, setQuizResults] = useState<QuizResults | null>(null);
@@ -189,6 +192,14 @@ function PlaygroundFlow() {
   // -- Verification Result State --
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState<ArtifactVerifiedEvent | null>(null);
+  const [executionDiagnostics, setExecutionDiagnostics] = useState<ExecutionDiagnostics | null>(null);
+  const [efficacyMetrics, setEfficacyMetrics] = useState<{
+    attempt_count: number;
+    time_to_verify_seconds: number | null;
+    error_pattern_count: number;
+    nudge_count: number;
+    self_check_pass_rate: number;
+  } | null>(null);
   const verifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // -- Chat & Mentor State --
@@ -248,6 +259,8 @@ function PlaygroundFlow() {
     setBlockFeedback({});
     setIsVerifying(false);
     setVerificationResult(null);
+    setExecutionDiagnostics(null);
+    setEfficacyMetrics(null);
   }, [activeTask?.id]);
 
   // Listen for artifact_verified WebSocket event dispatched by use-chat-socket.ts
@@ -432,13 +445,29 @@ function PlaygroundFlow() {
       const executionReport = proofResponse.execution_report as
         | { ran?: boolean; passed?: boolean; summary?: string }
         | undefined;
+      const diagnostics = proofResponse.execution_diagnostics as ExecutionDiagnostics | undefined;
+      const primaryFailure = diagnostics?.dominant_failure || undefined;
+      setExecutionDiagnostics(diagnostics ?? null);
+      setEfficacyMetrics(proofResponse.efficacy_metrics ?? null);
 
       if (executionReport?.ran) {
         if (executionReport.passed) {
+          void emitPlaygroundEvent({
+            event_type: "test_passed",
+            language: defaultLanguage,
+            error_type: undefined,
+            meta: { scope: "hidden", source: "submit-proof" },
+          });
           telemetry.toastSuccess(
             executionReport.summary || "Auto-tests passed for your submission."
           );
         } else {
+          void emitPlaygroundEvent({
+            event_type: "test_failed",
+            language: defaultLanguage,
+            error_type: primaryFailure || "assertion",
+            meta: { scope: "hidden", source: "submit-proof" },
+          });
           telemetry.toastError(
             executionReport.summary || "Auto-tests failed. Review your code and resubmit."
           );
@@ -531,6 +560,40 @@ function PlaygroundFlow() {
       `Please review this work against the task criteria: "${criteria.slice(0, 200)}"\n\nHere is what I have done so far:\n\n${content.slice(0, 2000)}`
     );
   };
+
+  const emitPlaygroundEvent = useCallback(
+    async (payload: PlaygroundEventPayload) => {
+      if (!activeTask?.id) return;
+      lastActivityAtRef.current = Date.now();
+      idleReportedRef.current = false;
+      try {
+        await planningApi.emitPlaygroundEvent(activeTask.id, {
+          ...payload,
+          timestamp: payload.timestamp ?? new Date().toISOString(),
+        });
+      } catch {
+        // best-effort analytics path; ignore on UI
+      }
+    },
+    [activeTask?.id]
+  );
+
+  useEffect(() => {
+    if (!activeTask?.id || currentStepId !== "omni") return;
+    const interval = setInterval(() => {
+      const idleMs = Date.now() - lastActivityAtRef.current;
+      if (idleMs >= 10 * 60 * 1000 && !idleReportedRef.current) {
+        idleReportedRef.current = true;
+        void emitPlaygroundEvent({
+          event_type: "idle_detected",
+          language: defaultLanguage,
+          status: "idle_10m",
+          meta: { idle_ms: idleMs },
+        });
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [activeTask?.id, currentStepId, defaultLanguage, emitPlaygroundEvent]);
 
   if (!plan) return null;
 
@@ -645,6 +708,13 @@ function PlaygroundFlow() {
                 lessonLoading={lessonLoading}
                 blockFeedback={blockFeedback}
                 onFeedbackChange={setBlockFeedback}
+                onHintRequested={() => {
+                  void emitPlaygroundEvent({
+                    event_type: "hint_requested",
+                    language: defaultLanguage,
+                    meta: { source: "learning_panel" },
+                  });
+                }}
               />
             </div>
           )}
@@ -739,6 +809,12 @@ function PlaygroundFlow() {
                   telemetry.toastSuccess("Diagram attached for verification.");
                 }}
                 onRequestMentorReview={handleMentorReviewRequest}
+                onExecutionEvent={(event) => {
+                  void emitPlaygroundEvent({
+                    ...event,
+                    language: event.language || defaultLanguage,
+                  });
+                }}
               />
             </div>
           )}
@@ -797,6 +873,8 @@ function PlaygroundFlow() {
                 prefilledFile={diagramAttachment}
                 isVerifying={isVerifying}
                 verificationResult={verificationResult}
+                executionDiagnostics={executionDiagnostics}
+                efficacyMetrics={efficacyMetrics}
                 onNextTask={() => router.push(`/plans/${planId}`)}
               />
             </div>

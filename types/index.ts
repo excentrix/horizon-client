@@ -562,6 +562,12 @@ export interface PublicPortfolioResponse {
     featured_count: number;
     profile_views: number;
   };
+  velo_verified_projects?: Array<{
+    project_title: string;
+    verification_score: number | null;
+    verified_at: string | null;
+    submitted_repos: Array<{ url: string; label: string }>;
+  }>;
 }
 
 export interface SpacedRepetitionCard {
@@ -1048,6 +1054,15 @@ export interface WeeklyStats {
   days_to_milestone: number | null;
 }
 
+export interface LearningEfficacySnapshot {
+  window_days: number;
+  median_time_to_first_pass: number | null;
+  stuck_session_rate: number;
+  verified_submission_rate: number;
+  nudge_recovery_rate: number;
+  updated_at: string;
+}
+
 export interface ActivityItem {
   type: "task_completed" | "badge_earned" | "artifact_created";
   title: string;
@@ -1063,8 +1078,48 @@ export interface HomeDashboard {
   additional_tasks: TodayTask[];
   streak: DashboardStreak;
   weekly_stats: WeeklyStats;
+  learning_efficacy: LearningEfficacySnapshot;
   recent_activity: ActivityItem[];
   generated_at: string;
+}
+
+export interface ExecutionDiagnostics {
+  ran: boolean;
+  passed: boolean;
+  score?: number | null;
+  summary?: string;
+  failure_clusters: {
+    syntax: number;
+    runtime: number;
+    assertion: number;
+    timeout: number;
+    wrong_output: number;
+    unknown: number;
+  };
+  dominant_failure?: string | null;
+  visible_passed: number;
+  visible_total: number;
+  hidden_passed: number;
+  hidden_total: number;
+  aggregate_error_families?: Record<string, number>;
+}
+
+export interface PlaygroundEventPayload {
+  event_type:
+    | "run_started"
+    | "run_completed"
+    | "runtime_error"
+    | "compile_error"
+    | "test_passed"
+    | "test_failed"
+    | "hint_requested"
+    | "idle_detected";
+  timestamp?: string;
+  language?: string;
+  run_id?: string;
+  status?: string;
+  error_type?: string;
+  meta?: Record<string, unknown>;
 }
 
 export type AuditStatus =

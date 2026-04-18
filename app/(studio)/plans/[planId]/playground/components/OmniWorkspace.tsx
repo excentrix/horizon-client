@@ -30,6 +30,20 @@ interface OmniWorkspaceProps {
   defaultCodeLanguage?: string;
   visibleEnvModes?: EnvMode[];
   onRequestMentorReview?: (content: string) => void;
+  onExecutionEvent?: (payload: {
+    event_type:
+      | "run_started"
+      | "run_completed"
+      | "runtime_error"
+      | "compile_error"
+      | "test_passed"
+      | "test_failed";
+    language?: string;
+    run_id?: string;
+    status?: string;
+    error_type?: string;
+    meta?: Record<string, unknown>;
+  }) => void;
 }
 
 /** Inner component to access sandpack state for mentor review */
@@ -60,6 +74,7 @@ export function OmniWorkspace({
   defaultCodeLanguage,
   visibleEnvModes,
   onRequestMentorReview,
+  onExecutionEvent,
 }: OmniWorkspaceProps) {
   const visible = visibleEnvModes ?? ALL_ENV_MODES;
 
@@ -361,6 +376,7 @@ code .
               defaultLanguage={defaultCodeLanguage}
               initialCode={initialCode}
               onRequestMentorReview={onRequestMentorReview}
+              onExecutionEvent={onExecutionEvent}
             />
           </div>
         )}

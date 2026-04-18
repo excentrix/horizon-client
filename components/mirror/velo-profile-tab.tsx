@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { LiveAnalysisPanel } from "@/components/mirror/live-analysis-panel";
 import { ProjectVerificationSheet } from "@/components/mirror/ProjectVerificationSheet";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMirrorSnapshot } from "@/hooks/use-mirror-snapshot";
-import { authApi } from "@/lib/api";
+import { useGithubRepos } from "@/hooks/use-github-repos";
+import { authApi, auditApi } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,6 +41,7 @@ import {
   Shield,
   ShieldCheck,
   ShieldAlert,
+  Github,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -330,6 +332,8 @@ export function VeloProfileTab() {
   const { data, isLoading } = useMirrorSnapshot();
   const [reanalysing, setReanalysing] = useState(false);
   const [verifyingProjectIndex, setVerifyingProjectIndex] = useState<number | null>(null);
+  const [resettingVerificationId, setResettingVerificationId] = useState<string | null>(null);
+  const github = useGithubRepos();
 
   const handleReanalyse = async () => {
     setReanalysing(true);
@@ -348,6 +352,25 @@ export function VeloProfileTab() {
     }
   };
 
+  const handleReVerify = async (verificationId: string, projectIndex: number) => {
+    setResettingVerificationId(verificationId);
+    try {
+      await auditApi.resetProjectVerification(verificationId);
+      await queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
+      setVerifyingProjectIndex(projectIndex);
+    } catch {
+      toast.error("Couldn't reset verification. Please try again.");
+    } finally {
+      setResettingVerificationId(null);
+    }
+  };
+
+  // Fetch GitHub repos once on mount (cheap — returns {connected:false} if no token)
+  useEffect(() => {
+    github.fetchRepos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const mirror = data?.mirror;
   const normalized = (mirror?.normalized_profile ?? {}) as Record<
     string,
@@ -364,6 +387,17 @@ export function VeloProfileTab() {
   const gaps = mirror?.skill_gaps ?? [];
   const deep = mirror?.deep_analysis ?? {};
   const projectVerifications = mirror?.project_verifications ?? [];
+
+  // Compute GitHub repos not referenced in resume
+  const resumeUrls = new Set(
+    projects
+      .flatMap((p) => [p.repo_url, p.demo_url])
+      .filter(Boolean)
+      .map((u) => u!.toLowerCase()),
+  );
+  const unlinkedRepos = github.repos.filter(
+    (r) => !resumeUrls.has(r.url.toLowerCase()),
+  );
 
   const isRunning = data?.status === "running" || data?.status === "empty";
   const isFailed = data?.status === "failed";
@@ -1264,16 +1298,36 @@ export function VeloProfileTab() {
                           </span>
                         )}
                         {pv?.status === "suspicious" && (
-                          <span className="flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
-                            <ShieldAlert className="h-2.5 w-2.5" />
-                            Review Needed
-                          </span>
+                          <>
+                            <span className="flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                              <ShieldAlert className="h-2.5 w-2.5" />
+                              Review Needed
+                            </span>
+                            <button
+                              disabled={resettingVerificationId === pv.verification_id}
+                              onClick={() => handleReVerify(pv.verification_id, i)}
+                              className="flex items-center gap-1 rounded-md border border-dashed border-amber-400/60 px-1.5 py-0.5 text-[10px] text-amber-600 transition-colors hover:border-amber-500 hover:text-amber-700 disabled:opacity-50"
+                            >
+                              <RefreshCw className="h-2.5 w-2.5" />
+                              Re-verify
+                            </button>
+                          </>
                         )}
                         {pv?.status === "failed" && (
-                          <span className="flex items-center gap-1 rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">
-                            <XCircle className="h-2.5 w-2.5" />
-                            Not Verified
-                          </span>
+                          <>
+                            <span className="flex items-center gap-1 rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">
+                              <XCircle className="h-2.5 w-2.5" />
+                              Not Verified
+                            </span>
+                            <button
+                              disabled={resettingVerificationId === pv.verification_id}
+                              onClick={() => handleReVerify(pv.verification_id, i)}
+                              className="flex items-center gap-1 rounded-md border border-dashed border-rose-400/60 px-1.5 py-0.5 text-[10px] text-rose-600 transition-colors hover:border-rose-500 hover:text-rose-700 disabled:opacity-50"
+                            >
+                              <RefreshCw className="h-2.5 w-2.5" />
+                              Re-verify
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -1369,6 +1423,49 @@ export function VeloProfileTab() {
                 </Card>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ── GitHub — repos not on resume ──────────────────────────────────── */}
+      {github.connected && unlinkedRepos.length > 0 && (
+        <div>
+          <SectionLabel className="flex items-center gap-1.5">
+            <Github className="h-3.5 w-3.5" />
+            From GitHub — not on your resume
+          </SectionLabel>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {unlinkedRepos.map((repo) => (
+              <Card key={repo.id} className="border-dashed">
+                <CardContent className="pb-3 pt-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <a
+                        href={repo.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium hover:underline"
+                      >
+                        {repo.name}
+                      </a>
+                      {repo.description && (
+                        <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                          {repo.description}
+                        </p>
+                      )}
+                    </div>
+                    {repo.language && (
+                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                        {repo.language}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-[10px] italic text-muted-foreground">
+                    Add this project to your resume to verify it with VELO
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       )}
