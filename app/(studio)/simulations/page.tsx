@@ -80,6 +80,16 @@ const STANDARD_SCENARIOS: Record<string, Record<string, unknown>> = {
     context: "Audience: PMs + engineering managers, 6-week cycle.",
     constraints: ["Budget $15k", "Channels limited to content + paid search"],
   },
+  process_redesign: {
+    brief: "Order fulfillment workflow misses SLAs during month-end spikes.",
+    context: "Operations team faces heavy handoff delays and high rework volume.",
+    constraints: ["No additional headcount", "Pilot must start within 2 weeks"],
+  },
+  funnel_experiment: {
+    brief: "Activation rate dropped after onboarding changes.",
+    context: "B2B product with self-serve signup and sales-assisted conversion.",
+    constraints: ["3 experiments max this cycle", "Budget cap $20k/month"],
+  },
   code_challenge: {
     brief: "Implement a robust sum function for integer arrays.",
     context: "Hidden tests include empty array and negative numbers.",
@@ -113,6 +123,32 @@ const STANDARD_SUBMISSIONS: Record<string, string> = {
     null,
     2
   ),
+  process_redesign: JSON.stringify(
+    {
+      diagnosis:
+        "Primary bottleneck is cross-team handoff latency and repeated manual approval loops.",
+      redesign:
+        "Introduce a single intake owner, automate validation checks, and standardize stage handoff criteria.",
+      rollout:
+        "Run a phased pilot by segment, monitor throughput and SLA breach rate weekly, and rollback on guardrail trigger.",
+    },
+    null,
+    2
+  ),
+  funnel_experiment: JSON.stringify(
+    {
+      diagnosis:
+        "Largest drop-off is signup-to-activation due to unclear onboarding steps and weak lifecycle prompts.",
+      experiments: [
+        "Activation checklist variant with role-based paths",
+        "Lifecycle email sequence test with behavior triggers",
+      ],
+      measurement:
+        "Track stage conversion uplift, activation-to-paid lag, and predefined ship/kill decision thresholds.",
+    },
+    null,
+    2
+  ),
   code_challenge:
     "def solve(nums):\n    if not nums:\n        return 0\n    return sum(nums)\n",
 };
@@ -135,6 +171,26 @@ const SCENARIO_CATALOG: ScenarioCatalogItem[] = [
     severity: "high",
     purpose: "Validate marketing simulation evaluation and metadata contract.",
     expectedBehavior: "Returns evaluator rationale and additive scoring fields.",
+    expectedFailureModes: ["schema_mismatch", "server_error"],
+    requiresTaskContext: false,
+  },
+  {
+    id: "sim-pack-process_redesign",
+    surface: "simulator",
+    title: "Business process redesign rubric loop",
+    severity: "high",
+    purpose: "Validate bottleneck diagnosis and rollout-safety scoring path.",
+    expectedBehavior: "Returns criterion-level process redesign rubric + evaluator rationale.",
+    expectedFailureModes: ["schema_mismatch", "server_error"],
+    requiresTaskContext: false,
+  },
+  {
+    id: "sim-pack-funnel_experiment",
+    surface: "simulator",
+    title: "Marketing funnel experiment rubric loop",
+    severity: "high",
+    purpose: "Validate growth experiment design scoring and measurement-rigor evaluation.",
+    expectedBehavior: "Returns additive verification metadata with rubric/pack fields.",
     expectedFailureModes: ["schema_mismatch", "server_error"],
     requiresTaskContext: false,
   },
