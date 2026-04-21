@@ -2,6 +2,23 @@
 
 All notable changes to frontend are documented in this file.
 
+## 2026-04-21
+
+### Added
+- Simulation APIs/types integration for scenario lifecycle, result envelopes, and simulation definition/lab endpoints.
+- New Simulation Lab route (`/simulations`) with studio navigation integration.
+- Simulation Lab scenario presets expanded with `process_redesign` and `funnel_experiment`.
+- Simulation Lab scenario presets further expanded with `design_critique` and `finance_forecast`.
+- Local `qrcode` module type declaration for typed QR generation usage.
+
+### Changed
+- Playground telemetry flow now supports fallback mentor nudge UX (toast + message refetch when websocket delivery is delayed).
+- Dashboard and studio task/playground surfaces received targeted stability and contract-alignment updates.
+
+### Notes
+- Captures commit batches on `v0.2` for simulation lab rollout, API contract alignment, and nudge delivery resiliency.
+- Validation in this batch relied on scoped diff/type review; no full frontend test suite was run during changelog update.
+
 ## 2026-04-15
 
 ### Added
