@@ -567,15 +567,20 @@ function PlaygroundFlow() {
       lastActivityAtRef.current = Date.now();
       idleReportedRef.current = false;
       try {
-        await planningApi.emitPlaygroundEvent(activeTask.id, {
+        const response = await planningApi.emitPlaygroundEvent(activeTask.id, {
           ...payload,
           timestamp: payload.timestamp ?? new Date().toISOString(),
         });
+        if (response?.nudge?.message) {
+          telemetry.toastInfo("Mentor nudge", response.nudge.message);
+          // Fallback when WS delivery is delayed/missed: pull latest messages explicitly.
+          refetchMentorMessages();
+        }
       } catch {
         // best-effort analytics path; ignore on UI
       }
     },
-    [activeTask?.id]
+    [activeTask?.id, refetchMentorMessages]
   );
 
   useEffect(() => {
