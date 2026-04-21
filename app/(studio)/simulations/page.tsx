@@ -90,6 +90,16 @@ const STANDARD_SCENARIOS: Record<string, Record<string, unknown>> = {
     context: "B2B product with self-serve signup and sales-assisted conversion.",
     constraints: ["3 experiments max this cycle", "Budget cap $20k/month"],
   },
+  design_critique: {
+    brief: "Checkout step has high abandonment and mobile usability complaints.",
+    context: "Consumer app with growing mobile traffic and accessibility audit gaps.",
+    constraints: ["One sprint delivery", "Must improve keyboard/screen-reader flow"],
+  },
+  finance_forecast: {
+    brief: "Quarterly margin dipped despite stable revenue growth.",
+    context: "Need revised forecast with variance analysis and risk scenarios.",
+    constraints: ["Quarterly planning cycle", "No additional budget this month"],
+  },
   code_challenge: {
     brief: "Implement a robust sum function for integer arrays.",
     context: "Hidden tests include empty array and negative numbers.",
@@ -149,6 +159,34 @@ const STANDARD_SUBMISSIONS: Record<string, string> = {
     null,
     2
   ),
+  design_critique: JSON.stringify(
+    {
+      diagnosis:
+        "Primary usability friction is unclear hierarchy and validation feedback on mobile checkout.",
+      accessibility:
+        "Contrast and focus states violate accessibility expectations; semantic labeling is inconsistent.",
+      revisions:
+        "Prioritize clearer CTA hierarchy, keyboard-safe flow, and error messaging tied to field-level guidance.",
+      measurement:
+        "Track completion rate uplift, form error recovery time, and usability test confidence scores.",
+    },
+    null,
+    2
+  ),
+  finance_forecast: JSON.stringify(
+    {
+      forecast:
+        "Model base/upside/downside revenue with explicit volume, price, and acquisition efficiency assumptions.",
+      variance:
+        "Main variance drivers are paid channel CAC increase and support cost escalation by segment.",
+      risks:
+        "Define downside triggers for liquidity and margin compression with contingency actions.",
+      decision:
+        "Reallocate spend toward efficient channels and stage discretionary costs against variance thresholds.",
+    },
+    null,
+    2
+  ),
   code_challenge:
     "def solve(nums):\n    if not nums:\n        return 0\n    return sum(nums)\n",
 };
@@ -191,6 +229,26 @@ const SCENARIO_CATALOG: ScenarioCatalogItem[] = [
     severity: "high",
     purpose: "Validate growth experiment design scoring and measurement-rigor evaluation.",
     expectedBehavior: "Returns additive verification metadata with rubric/pack fields.",
+    expectedFailureModes: ["schema_mismatch", "server_error"],
+    requiresTaskContext: false,
+  },
+  {
+    id: "sim-pack-design_critique",
+    surface: "simulator",
+    title: "Design critique rubric loop",
+    severity: "high",
+    purpose: "Validate usability/accessibility critique scoring and revision planning.",
+    expectedBehavior: "Returns rubric breakdown with design-specific rationale and metadata.",
+    expectedFailureModes: ["schema_mismatch", "server_error"],
+    requiresTaskContext: false,
+  },
+  {
+    id: "sim-pack-finance_forecast",
+    surface: "simulator",
+    title: "Finance forecast rubric loop",
+    severity: "high",
+    purpose: "Validate forecast and variance analysis scoring path.",
+    expectedBehavior: "Returns additive verification metadata with confidence and scoring components.",
     expectedFailureModes: ["schema_mismatch", "server_error"],
     requiresTaskContext: false,
   },
