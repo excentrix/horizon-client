@@ -4,6 +4,7 @@ import {
   Briefcase,
   BrainCircuit,
   Compass,
+  FlaskConical,
   MessageCircle,
   Radar,
   Trophy,
@@ -24,6 +25,7 @@ const STUDENT_ITEMS: DockItem[] = [
   { href: "/dashboard", title: "Dashboard", icon: <Compass className="h-full w-full" /> },
   { href: "/chat", title: "Mentor", icon: <MessageCircle className="h-full w-full" /> },
   { href: "/plans", title: "Plans", icon: <BrainCircuit className="h-full w-full" /> },
+  { href: "/simulations", title: "Sim Lab", icon: <FlaskConical className="h-full w-full" /> },
   { href: "/roadmap", title: "Roadmap", icon: <Compass className="h-full w-full" /> },
   { href: "/progress", title: "Mirror", icon: <Trophy className="h-full w-full" /> },
 ];

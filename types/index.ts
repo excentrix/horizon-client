@@ -1131,7 +1131,8 @@ export interface DomainScenarioPayload {
   id: UUID;
   task: UUID;
   user: UUID;
-  scenario_type: "business_kpi" | "marketing_campaign";
+  scenario_type: string;
+  simulation_type?: string;
   domain_family: "business" | "marketing" | "design" | "finance" | "tech" | "other";
   scenario_payload: Record<string, unknown>;
   learner_submission: Record<string, unknown>;
@@ -1146,7 +1147,11 @@ export interface DomainScenarioPayload {
     strengths?: string[];
     gaps?: string[];
     next_actions?: string[];
+    verification_confidence?: number;
   };
+  pack_version?: string | null;
+  scoring_components?: ScoringComponents;
+  verification_confidence?: number | null;
   portfolio_evidence_draft: Record<string, unknown>;
   metadata: Record<string, unknown>;
   started_at: string;
@@ -1166,6 +1171,10 @@ export type DomainRubricBreakdown = Record<
 
 export interface SimulationResultEnvelope {
   scenario: DomainScenarioPayload;
+  simulation_type?: string;
+  pack_version?: string | null;
+  scoring_components?: ScoringComponents;
+  verification_confidence?: number | null;
   execution_diagnostics: {
     scenario_type: string;
     domain_family: string;
@@ -1180,6 +1189,23 @@ export interface SimulationResultEnvelope {
     nudge_count: number;
     self_check_pass_rate: number;
   };
+}
+
+export interface ScoringComponents {
+  deterministic_weight: number;
+  llm_weight: number;
+  deterministic_aggregate: number;
+  llm_aggregate: number;
+  final_aggregate: number;
+  llm_available: boolean;
+}
+
+export interface SimulationDefinitionRef {
+  simulation_type: string;
+  domain_family: string;
+  sdl_version: string;
+  pack_version: string;
+  criterion_count: number;
 }
 
 export type AuditStatus =

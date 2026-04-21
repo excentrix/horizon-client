@@ -52,6 +52,7 @@ import {
   VeloRoadmapEligibility,
   DomainScenarioPayload,
   SimulationResultEnvelope,
+  SimulationDefinitionRef,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -459,8 +460,8 @@ export const planningApi = {
   startSimulationScenario: (
     taskId: string,
     payload?: {
-      scenario_type?: "business_kpi" | "marketing_campaign";
-      domain_family?: "business" | "marketing";
+      scenario_type?: string;
+      domain_family?: string;
       scenario_payload?: Record<string, unknown>;
     }
   ) =>
@@ -479,6 +480,44 @@ export const planningApi = {
     extract<SimulationResultEnvelope>(
       http.get(`/planning/tasks/${taskId}/simulation-scenarios/${scenarioId}/result/`)
     ),
+  getSimulationDefinitions: (simulationType?: string) =>
+    extract<{
+      sdl_version: string;
+      count: number;
+      packs: SimulationDefinitionRef[];
+    }>(
+      http.get("/planning/simulation-definitions/", {
+        params: simulationType ? { simulation_type: simulationType } : undefined,
+      })
+    ),
+  qualifySimulationDefinition: (payload: Record<string, unknown>) =>
+    extract<{
+      qualified: boolean;
+      reasons: string[];
+      errors?: unknown[];
+      simulation_type?: string;
+      pack_version?: string;
+      sdl_version?: string;
+      criterion_count?: number;
+    }>(http.post("/planning/simulation-definitions/", payload)),
+  runSimulationLabUseCase: (payload: {
+    simulation_type: string;
+    scenario_payload?: Record<string, unknown>;
+    learner_submission: Record<string, unknown> | string | string[];
+    persist_records?: boolean;
+  }) =>
+    extract<{
+      qualified: boolean;
+      simulation_type: string;
+      task_id?: string;
+      scenario_id?: string;
+      report?: Record<string, unknown>;
+      scenario?: import("@/types").DomainScenarioPayload;
+      pack_version?: string | null;
+      scoring_components?: Record<string, unknown>;
+      verification_confidence?: number | null;
+      error?: string;
+    }>(http.post("/planning/simulation-lab/run-usecase/", payload)),
   generateTaskLesson: (
     taskId: string,
     payload?: { scope?: "task" | "milestone"; force?: boolean }

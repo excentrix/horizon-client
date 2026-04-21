@@ -9,6 +9,7 @@ import {
   Compass,
   MessageCircle,
   Radar,
+  FlaskConical,
   Trophy,
   QrCode,
   Copy,
@@ -50,6 +51,12 @@ const STUDENT_NAV_ITEMS = [
     label: "Plan Workbench",
     icon: BrainCircuit,
     description: "Active learning campaigns",
+  },
+  {
+    href: "/simulations",
+    label: "Simulation Lab",
+    icon: FlaskConical,
+    description: "Validate simulators and mentor triggers",
   },
   {
     href: "/roadmap",
