@@ -335,6 +335,11 @@ export function VeloProfileTab() {
   const [resettingVerificationId, setResettingVerificationId] = useState<string | null>(null);
   const github = useGithubRepos();
 
+  useEffect(() => {
+    github.fetchRepos();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleReanalyse = async () => {
     setReanalysing(true);
     try {

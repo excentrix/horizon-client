@@ -481,6 +481,51 @@ export default function PublicPortfolioPage() {
             </section>
           )}
 
+          {/* VELO Verified Projects */}
+          {hasVeloProjects && (
+            <section id="velo">
+              <div className="flex items-center gap-2 mb-6">
+                <h2 className="text-2xl font-bold">VELO Verified Projects</h2>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  AI-Verified
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                These projects were verified by Horizon&apos;s VELO engine — GitHub repo checked and technical ownership confirmed via AI interrogation.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {veloProjects.map((vp, i) => (
+                  <Card key={i} className="border-emerald-200 bg-emerald-50/30">
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                            <span className="font-semibold text-sm">{vp.project_title}</span>
+                          </div>
+                          {vp.verified_at && (
+                            <p className="text-xs text-muted-foreground">
+                              Verified {new Date(vp.verified_at).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                        {vp.verification_score != null && (
+                          <div className="shrink-0 text-right">
+                            <span className="text-lg font-bold text-emerald-700">
+                              {Math.round(vp.verification_score * 100)}
+                            </span>
+                            <span className="text-xs text-muted-foreground">/100</span>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Footer */}
           <div className="text-center text-sm text-muted-foreground pt-8 border-t">
             <p>
