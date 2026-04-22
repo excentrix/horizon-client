@@ -2,6 +2,20 @@
 
 All notable changes to frontend are documented in this file.
 
+## v0.3.0 (2026-04-22)
+
+### Added
+- Simulation Lab support for expanded universal runtime scenarios and surface-aware execution controls.
+- Learning Runtime Console visibility in Simulation Lab for runtime/completion/intervention state inspection.
+
+### Changed
+- Planning API contract/types now include additive universal runtime fields: `surface_type`, `pack_ref`, `runtime_state`, `completion_state`, `intervention_state`, `execution_descriptor`.
+- Playground event typing now supports additive surface-event metadata and intervention telemetry fields.
+- Simulation Lab flows now handle intervention-state compatible responses during trigger execution.
+
+### Notes
+- Entry reflects in-flight frontend runtime-console and contract-alignment updates paired with backend universal runtime work.
+
 ## 2026-04-21
 
 ### Added
