@@ -20,6 +20,8 @@ type EventResponse = {
   event_id: string;
   event_type: string;
   aggregate: Record<string, unknown>;
+  surface_type?: string;
+  intervention_state?: Record<string, unknown>;
   nudge?: {
     trigger: string;
     message: string;
@@ -100,9 +102,64 @@ const STANDARD_SCENARIOS: Record<string, Record<string, unknown>> = {
     context: "Need revised forecast with variance analysis and risk scenarios.",
     constraints: ["Quarterly planning cycle", "No additional budget this month"],
   },
+  sales_discovery_call: {
+    brief: "High-potential prospect is stalled after initial demo.",
+    context: "Need structured discovery to uncover pain, qualification, and next steps.",
+    constraints: ["No direct pitching in first pass", "Capture stakeholder map"],
+  },
+  customer_renewal_risk: {
+    brief: "Enterprise account shows declining usage 45 days before renewal.",
+    context: "CS team needs save plan with stakeholder alignment and decision checkpoints.",
+    constraints: ["Renewal timeline fixed", "Must include downside contingency"],
+  },
+  education_intervention_case: {
+    brief: "Professor needs a support plan for students with dropping engagement and grades.",
+    context: "Course-level intervention planning with limited weekly support bandwidth.",
+    constraints: ["Keep plan realistic for one semester", "Define measurable learning checkpoints"],
+  },
   code_challenge: {
     brief: "Implement a robust sum function for integer arrays.",
     context: "Hidden tests include empty array and negative numbers.",
+  },
+  rag_retrieval_debug: {
+    brief: "RAG assistant misses relevant docs in top-3 retrieval under enterprise queries.",
+    context: "Regulated KB with hybrid retrieval and reranker stack.",
+    constraints: ["Latency budget <= 1200ms", "No retraining in first mitigation pass"],
+  },
+  llm_eval_design: {
+    brief: "Need release-ready eval plan for multilingual support assistant.",
+    context: "Recent incidents include hallucinations on edge-case policy questions.",
+    constraints: ["Must include safety regression checks", "Define explicit ship/rollback thresholds"],
+  },
+  guardrail_policy_test: {
+    brief: "Guardrail policy is inconsistent across abuse and regulated-advice prompts.",
+    context: "High-risk launch window with elevated adversarial traffic.",
+    constraints: ["Map allow/block/escalate policy paths", "Add incident escalation playbook"],
+  },
+  agent_failure_replay: {
+    brief: "Agent entered retry loop after stale tool output and missed state reset.",
+    context: "Customer-facing workflow impacted with intermittent failures.",
+    constraints: ["Produce timeline + root cause", "Add safeguards and observability controls"],
+  },
+  ai_product_experiment: {
+    brief: "Need testable launch experiment for AI workflow copilot in operations teams.",
+    context: "Budget-constrained rollout, uncertain adoption by target ICP.",
+    constraints: ["Define hypothesis + holdout", "Include ROI and downside risk model"],
+  },
+  exec_prioritization_tradeoff: {
+    brief: "Leadership must prioritize four initiatives under fixed quarterly capacity.",
+    context: "Reliability debt, growth pressure, and compliance commitments conflict.",
+    constraints: ["Explicit opportunity-cost reasoning", "Decision checkpoints with owners"],
+  },
+  ai_ops_rollout_incident: {
+    brief: "Post-rollout incident: latency spikes and unsafe output regression.",
+    context: "15% tenant traffic affected, enterprise customers escalated.",
+    constraints: ["Immediate stabilization plan", "Postmortem + prevention roadmap"],
+  },
+  decision_memo_defense: {
+    brief: "Present and defend strategic decision memo to mixed executive stakeholders.",
+    context: "Competing incentives across Finance, Product, and Operations.",
+    constraints: ["Evidence-backed recommendation", "Objection handling and fallback plan"],
   },
 };
 
@@ -187,8 +244,148 @@ const STANDARD_SUBMISSIONS: Record<string, string> = {
     null,
     2
   ),
+  sales_discovery_call: JSON.stringify(
+    {
+      questions:
+        "Lead with open-ended questions on goals, blockers, and current workflow impact before discussing solutions.",
+      diagnosis:
+        "Key pain is inefficient handoff between RevOps and Enablement, causing forecast slippage and rep friction.",
+      qualification:
+        "Confirm decision authority, budget ownership, urgency, and success timeline with identified stakeholders.",
+      next_steps:
+        "Define owner-based action plan with timeline, measurable success criteria, and follow-up checkpoint.",
+    },
+    null,
+    2
+  ),
+  customer_renewal_risk: JSON.stringify(
+    {
+      risk:
+        "Primary risk signals are declining adoption, support escalation growth, and weak executive sponsor engagement.",
+      strategy:
+        "Prioritize high-impact recovery interventions, value-realization milestones, and coordinated stakeholder outreach.",
+      stakeholders:
+        "Assign champion recovery owner, executive sponsor touchpoint, and cross-functional response cadence.",
+      governance:
+        "Set renewal decision checkpoints, success/failure triggers, and contingency actions for downgrade or save.",
+    },
+    null,
+    2
+  ),
+  education_intervention_case: JSON.stringify(
+    {
+      diagnosis:
+        "Signals show declining attendance, weak formative assessment retention, and delayed submissions.",
+      intervention:
+        "Run scaffolded remediation blocks with weekly retrieval practice and targeted feedback sessions.",
+      stakeholders:
+        "Assign coordination between professor, TA, and academic support counselor with owner-specific actions.",
+      checkpoints:
+        "Track quiz uplift, assignment timeliness, and participation recovery with adaptation triggers.",
+    },
+    null,
+    2
+  ),
   code_challenge:
     "def solve(nums):\n    if not nums:\n        return 0\n    return sum(nums)\n",
+  rag_retrieval_debug: JSON.stringify(
+    {
+      diagnosis:
+        "Failure is driven by metadata over-filtering and weak reranker calibration for long-tail enterprise intents.",
+      fixes: [
+        "Relax metadata filters for ambiguous queries and add query rewrite fallback",
+        "Tune reranker weights and add hybrid sparse+dense retrieval"
+      ],
+      evaluation:
+        "Run golden-set eval with recall@k, mrr, and grounded-answer rate against baseline thresholds.",
+    },
+    null,
+    2
+  ),
+  llm_eval_design: JSON.stringify(
+    {
+      rubric:
+        "Criteria include factuality, instruction adherence, safety policy compliance, and multilingual robustness.",
+      dataset:
+        "Build stratified eval set with standard, adversarial, and edge-case prompts across target locales.",
+      policy:
+        "Ship only if all critical thresholds pass; rollback if safety or hallucination guardrails regress.",
+    },
+    null,
+    2
+  ),
+  guardrail_policy_test: JSON.stringify(
+    {
+      policy_map:
+        "Define allow/block/escalate outcomes by risk class with explicit exception handling for ambiguous cases.",
+      tests:
+        "Run adversarial prompt injection, jailbreak, and policy boundary tests with FP/FN tracking.",
+      response:
+        "Assign incident owner, severity matrix, rollback trigger, and postmortem action log.",
+    },
+    null,
+    2
+  ),
+  agent_failure_replay: JSON.stringify(
+    {
+      timeline:
+        "Tool timeout occurred, stale result reused, retry loop triggered, and missing reset condition amplified failures.",
+      root_cause:
+        "State machine lacked guard on stale tool state and retry budget did not enforce bailout.",
+      hardening:
+        "Add retry cap, stale-state validator, circuit breaker, and alerting on loop-pattern signatures.",
+    },
+    null,
+    2
+  ),
+  ai_product_experiment: JSON.stringify(
+    {
+      hypothesis:
+        "Role-aware copilot suggestions reduce task completion time while preserving quality and trust.",
+      design:
+        "A/B test with control + treatment, guardrail metrics for error rate and override behavior.",
+      impact:
+        "Model adoption, productivity uplift, cost-to-serve, and downside scenarios before scale-up.",
+    },
+    null,
+    2
+  ),
+  exec_prioritization_tradeoff: JSON.stringify(
+    {
+      portfolio:
+        "Prioritize reliability upgrade and compliance uplift first, sequence expansion feature after risk reduction.",
+      tradeoffs:
+        "Short-term growth impact is accepted to prevent compounding incident and regulatory downside.",
+      governance:
+        "Set owner-led review gates with go/no-go criteria and replan triggers by checkpoint outcomes.",
+    },
+    null,
+    2
+  ),
+  ai_ops_rollout_incident: JSON.stringify(
+    {
+      triage:
+        "Classify incident severity, isolate affected tenants, and execute staged rollback with customer comms.",
+      stabilization:
+        "Introduce throttling, fallback policy model, and hotfix for unsafe-output regression path.",
+      prevention:
+        "Run postmortem, add launch canaries, and enforce pre-release safety and latency gates.",
+    },
+    null,
+    2
+  ),
+  decision_memo_defense: JSON.stringify(
+    {
+      thesis:
+        "Recommend phased AI rollout with reliability-first milestones before broader expansion.",
+      evidence:
+        "Baseline metrics, projected ROI, risk profile, and confidence assumptions are explicitly documented.",
+      defense:
+        "Address objections on cost, speed, and complexity with mitigation plans and fallback decisions.",
+    },
+    null,
+    2
+  ),
 };
 
 const SCENARIO_CATALOG: ScenarioCatalogItem[] = [
@@ -249,6 +446,36 @@ const SCENARIO_CATALOG: ScenarioCatalogItem[] = [
     severity: "high",
     purpose: "Validate forecast and variance analysis scoring path.",
     expectedBehavior: "Returns additive verification metadata with confidence and scoring components.",
+    expectedFailureModes: ["schema_mismatch", "server_error"],
+    requiresTaskContext: false,
+  },
+  {
+    id: "sim-pack-sales_discovery_call",
+    surface: "simulator",
+    title: "Sales discovery call rubric loop",
+    severity: "high",
+    purpose: "Validate consultative questioning, qualification, and next-step scoring path.",
+    expectedBehavior: "Returns rubric breakdown + confidence fields for sales discovery flow.",
+    expectedFailureModes: ["schema_mismatch", "server_error"],
+    requiresTaskContext: false,
+  },
+  {
+    id: "sim-pack-customer_renewal_risk",
+    surface: "simulator",
+    title: "Customer renewal-risk rubric loop",
+    severity: "high",
+    purpose: "Validate renewal-risk diagnosis and retention strategy scoring path.",
+    expectedBehavior: "Returns additive verification metadata with renewal governance rationale.",
+    expectedFailureModes: ["schema_mismatch", "server_error"],
+    requiresTaskContext: false,
+  },
+  {
+    id: "sim-pack-education_intervention_case",
+    surface: "simulator",
+    title: "Education intervention-case rubric loop",
+    severity: "high",
+    purpose: "Validate professor-focused learner intervention planning and checkpoint design scoring.",
+    expectedBehavior: "Returns additive verification metadata with intervention rationale and rubric breakdown.",
     expectedFailureModes: ["schema_mismatch", "server_error"],
     requiresTaskContext: false,
   },
@@ -511,6 +738,7 @@ export default function SimulationLabPage() {
   const [packs, setPacks] = useState<SimulationDefinitionRef[]>([]);
   const [tasks, setTasks] = useState<DailyTask[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState("");
+  const [selectedSurfaceType, setSelectedSurfaceType] = useState("simulation_scenario");
   const [selectedSimulationType, setSelectedSimulationType] = useState("");
   const [scenarioPayload, setScenarioPayload] = useState(DEFAULT_SCENARIO_PAYLOAD);
   const [submissionPayload, setSubmissionPayload] = useState(DEFAULT_SUBMISSION);
@@ -526,6 +754,8 @@ export default function SimulationLabPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [showOnlyFailures, setShowOnlyFailures] = useState(false);
+  const [qualificationPayload, setQualificationPayload] = useState("{}");
+  const [qualificationResult, setQualificationResult] = useState<Record<string, unknown> | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -711,6 +941,46 @@ export default function SimulationLabPage() {
     }
   };
 
+  const prefillQualificationFromSelectedPack = async () => {
+    if (!selectedSimulationType) {
+      telemetry.toastError("Pick a simulator pack first");
+      return;
+    }
+    await runAction(async () => {
+      const defs = await planningApi.getSimulationDefinitions(selectedSimulationType, true);
+      const fullPack = defs.packs?.[0];
+      if (!fullPack) {
+        telemetry.toastError("No pack definition found");
+        return;
+      }
+      setQualificationPayload(JSON.stringify(fullPack, null, 2));
+      telemetry.toastSuccess(`Loaded ${selectedSimulationType} definition`);
+    });
+  };
+
+  const runQualification = async () => {
+    await runAction(async () => {
+      const parsed = safeParse(qualificationPayload);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        telemetry.toastError("Qualification payload must be a JSON object");
+        return;
+      }
+      try {
+        const result = await planningApi.qualifySimulationDefinition(parsed as Record<string, unknown>);
+        setQualificationResult(result as unknown as Record<string, unknown>);
+        telemetry.toastSuccess(`Qualification complete: ${result.qualified ? "qualified" : "not qualified"}`);
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.data && typeof error.response.data === "object") {
+          const responseData = error.response.data as Record<string, unknown>;
+          setQualificationResult(responseData);
+          telemetry.toastInfo("Qualification returned non-qualified result");
+          return;
+        }
+        throw error;
+      }
+    });
+  };
+
   const runStandardSuite = async () => {
     if (suiteMode === "selected_task" && !selectedTaskId) {
       telemetry.toastError("Pick a task first");
@@ -751,6 +1021,7 @@ export default function SimulationLabPage() {
           if (suiteMode === "synthetic") {
             const run = await planningApi.runSimulationLabUseCase({
               simulation_type: pack.simulation_type,
+              surface_type: pack.surface_type,
               scenario_payload: scenarioCase,
               learner_submission: learnerSubmission,
               persist_records: false,
@@ -785,6 +1056,7 @@ export default function SimulationLabPage() {
           }
 
           const started = await planningApi.startSimulationScenario(taskId, {
+            surface_type: pack.surface_type,
             scenario_type: pack.simulation_type,
             scenario_payload: scenarioCase,
           });
@@ -1136,6 +1408,7 @@ export default function SimulationLabPage() {
     }
     await runAction(async () => {
       const scenario = await planningApi.startSimulationScenario(selectedTaskId, {
+        surface_type: selectedSurfaceType || undefined,
         scenario_type: selectedSimulationType || undefined,
         scenario_payload:
           (safeParse(scenarioPayload) as Record<string, unknown>) || {},
@@ -1181,10 +1454,15 @@ export default function SimulationLabPage() {
       return;
     }
     await runAction(async () => {
-      const response = await planningApi.emitPlaygroundEvent(selectedTaskId, payload);
+      const response = await planningApi.emitPlaygroundEvent(selectedTaskId, {
+        surface_type: selectedSurfaceType,
+        ...payload,
+      });
       setLatestEvent(response as EventResponse);
       if (response.nudge?.message) {
         telemetry.toastSuccess("Mentor nudge triggered");
+      } else if ((response as EventResponse).intervention_state) {
+        telemetry.toastInfo("Intervention state updated");
       } else {
         telemetry.toastInfo(`Event emitted: ${payload.event_type}`);
       }
@@ -1487,9 +1765,55 @@ export default function SimulationLabPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>SDL Qualification Harness</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Validate an SDL pack against qualification gates (schema + deterministic coverage + threshold rules).
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={prefillQualificationFromSelectedPack} disabled={busy || !selectedSimulationType}>
+              Prefill From Selected Pack
+            </Button>
+            <Button onClick={runQualification} disabled={busy}>
+              Run Qualification
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setQualificationPayload("{}");
+                setQualificationResult(null);
+              }}
+              disabled={busy}
+            >
+              Clear
+            </Button>
+          </div>
+          <label className="flex flex-col gap-1 text-sm">
+            <span>Qualification Payload (SDL JSON)</span>
+            <textarea
+              className="min-h-40 rounded-md border bg-background p-3 font-mono text-xs"
+              value={qualificationPayload}
+              onChange={(event) => setQualificationPayload(event.target.value)}
+            />
+          </label>
+          {qualificationResult ? (
+            <pre className="max-h-64 overflow-auto rounded-md border bg-muted p-3 text-xs">
+              {JSON.stringify(qualificationResult, null, 2)}
+            </pre>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Result fields include `qualified`, `reasons[]`, and optional schema errors.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>1. Context</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2">
+        <CardContent className="grid gap-3 md:grid-cols-3">
           <label className="flex flex-col gap-1 text-sm">
             <span>Task</span>
             <select
@@ -1517,6 +1841,21 @@ export default function SimulationLabPage() {
                   {pack.simulation_type} · {pack.domain_family} · v{pack.pack_version}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span>Surface Type</span>
+            <select
+              className="rounded-md border bg-background px-3 py-2"
+              value={selectedSurfaceType}
+              onChange={(event) => setSelectedSurfaceType(event.target.value)}
+            >
+              <option value="simulation_scenario">simulation_scenario</option>
+              <option value="code_playground">code_playground</option>
+              <option value="diagram_workspace">diagram_workspace</option>
+              <option value="canvas_workspace">canvas_workspace</option>
+              <option value="flashcard_session">flashcard_session</option>
+              <option value="teachback_session">teachback_session</option>
             </select>
           </label>
         </CardContent>
@@ -1549,6 +1888,7 @@ export default function SimulationLabPage() {
                 {
                   id: activeScenario.id,
                   simulation_type: activeScenario.simulation_type || activeScenario.scenario_type,
+                  surface_type: activeScenario.surface_type || selectedSurfaceType,
                   verification_status: activeScenario.verification_status,
                   pack_version: activeScenario.pack_version,
                 },
@@ -1580,6 +1920,12 @@ export default function SimulationLabPage() {
             <pre className="overflow-auto rounded-md border bg-muted p-3 text-xs">
               {JSON.stringify(
                 {
+                  surface_type: resultEnvelope.surface_type,
+                  pack_ref: resultEnvelope.pack_ref,
+                  execution_descriptor: resultEnvelope.execution_descriptor,
+                  runtime_state: resultEnvelope.runtime_state,
+                  completion_state: resultEnvelope.completion_state,
+                  intervention_state: resultEnvelope.intervention_state,
                   simulation_type: resultEnvelope.simulation_type,
                   pack_version: resultEnvelope.pack_version,
                   verification_status: resultEnvelope.scenario.verification_status,
@@ -1641,6 +1987,42 @@ export default function SimulationLabPage() {
               Emit events to inspect aggregate updates and nudge payloads.
             </p>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>5. Learning Runtime Console</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Runtime orchestration state across session, completion, and interventions.
+          </p>
+          <pre className="overflow-auto rounded-md border bg-muted p-3 text-xs">
+            {JSON.stringify(
+              {
+                result_envelope: resultEnvelope
+                  ? {
+                      surface_type: resultEnvelope.surface_type,
+                      pack_ref: resultEnvelope.pack_ref,
+                      execution_descriptor: resultEnvelope.execution_descriptor,
+                      runtime_state: resultEnvelope.runtime_state,
+                      completion_state: resultEnvelope.completion_state,
+                      intervention_state: resultEnvelope.intervention_state,
+                    }
+                  : null,
+                latest_event: latestEvent
+                  ? {
+                      event_type: latestEvent.event_type,
+                      surface_type: latestEvent.surface_type,
+                      intervention_state: latestEvent.intervention_state,
+                    }
+                  : null,
+              },
+              null,
+              2
+            )}
+          </pre>
         </CardContent>
       </Card>
     </main>

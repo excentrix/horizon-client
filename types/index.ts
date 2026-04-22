@@ -1060,6 +1060,15 @@ export interface LearningEfficacySnapshot {
   stuck_session_rate: number;
   verified_submission_rate: number;
   nudge_recovery_rate: number;
+  domain_family_breakdown?: Record<
+    string,
+    {
+      sessions: number;
+      verified_rate: number;
+      median_time_to_verify_seconds: number | null;
+      average_rubric_score: number | null;
+    }
+  >;
   updated_at: string;
 }
 
@@ -1124,7 +1133,57 @@ export interface PlaygroundEventPayload {
   run_id?: string;
   status?: string;
   error_type?: string;
+  surface_type?: string;
+  surface_event_type?: string;
+  intervention_action?: string;
+  evaluation_checkpoint?: string;
+  evidence_checkpoint?: string;
   meta?: Record<string, unknown>;
+}
+
+export interface ExecutionDescriptor {
+  surface_type:
+    | "simulation_scenario"
+    | "code_playground"
+    | "diagram_workspace"
+    | "canvas_workspace"
+    | "flashcard_session"
+    | "teachback_session";
+  simulation_type_or_pack_ref?: string | null;
+  pack_ref?: string | null;
+  evaluation_mode?: string;
+  evidence_target?: string;
+  adapter?: string;
+  source?: string;
+}
+
+export interface CompletionContract {
+  status: "complete" | "incomplete";
+  verified: boolean;
+  verification_status: "verified" | "failed" | "not_verifiable";
+  completion_contract?: Record<string, unknown>;
+}
+
+export interface InterventionEnvelope {
+  tier: "observe" | "nudge" | "guided_debug" | "explain_after_action";
+  intervention_action: string;
+  reason: string;
+  surface_type: string;
+  event_type?: string | null;
+  cooldown_blocked?: boolean;
+  cap_blocked?: boolean;
+  max_interventions_per_surface?: number;
+  observed_metrics?: Record<string, unknown>;
+  should_dispatch?: boolean;
+}
+
+export interface UniversalSurfaceSession {
+  surface_type: string;
+  pack_ref?: string | null;
+  runtime_state?: Record<string, unknown>;
+  completion_state?: CompletionContract | Record<string, unknown>;
+  intervention_state?: InterventionEnvelope | Record<string, unknown>;
+  execution_descriptor?: ExecutionDescriptor | Record<string, unknown>;
 }
 
 export interface DomainScenarioPayload {
@@ -1133,6 +1192,8 @@ export interface DomainScenarioPayload {
   user: UUID;
   scenario_type: string;
   simulation_type?: string;
+  surface_type?: string | null;
+  pack_ref?: string | null;
   domain_family: "business" | "marketing" | "design" | "finance" | "tech" | "other";
   scenario_payload: Record<string, unknown>;
   learner_submission: Record<string, unknown>;
@@ -1149,6 +1210,10 @@ export interface DomainScenarioPayload {
     next_actions?: string[];
     verification_confidence?: number;
   };
+  execution_descriptor?: ExecutionDescriptor | Record<string, unknown>;
+  runtime_state?: Record<string, unknown>;
+  completion_state?: CompletionContract | Record<string, unknown>;
+  intervention_state?: InterventionEnvelope | Record<string, unknown>;
   pack_version?: string | null;
   scoring_components?: ScoringComponents;
   verification_confidence?: number | null;
@@ -1171,12 +1236,19 @@ export type DomainRubricBreakdown = Record<
 
 export interface SimulationResultEnvelope {
   scenario: DomainScenarioPayload;
+  surface_type?: string;
+  pack_ref?: string | null;
   simulation_type?: string;
   pack_version?: string | null;
   scoring_components?: ScoringComponents;
   verification_confidence?: number | null;
+  runtime_state?: Record<string, unknown>;
+  completion_state?: CompletionContract | Record<string, unknown>;
+  intervention_state?: InterventionEnvelope | Record<string, unknown>;
+  execution_descriptor?: ExecutionDescriptor | Record<string, unknown>;
   execution_diagnostics: {
     scenario_type: string;
+    surface_type?: string;
     domain_family: string;
     rubric_breakdown: DomainRubricBreakdown;
     verification_status: "verified" | "failed" | "not_verifiable";
@@ -1202,10 +1274,20 @@ export interface ScoringComponents {
 
 export interface SimulationDefinitionRef {
   simulation_type: string;
+  surface_type?: string;
   domain_family: string;
   sdl_version: string;
   pack_version: string;
   criterion_count: number;
+  execution_mode?: string;
+  input_contract?: Record<string, unknown>;
+  submission_contract?: Record<string, unknown>;
+  rubric?: Record<string, unknown>;
+  scoring_policy?: Record<string, unknown>;
+  nudge_triggers?: Record<string, unknown>;
+  evidence_mapping?: Record<string, unknown>;
+  fallback_policy?: Record<string, unknown>;
+  scenario_template?: Record<string, unknown>;
 }
 
 export type AuditStatus =

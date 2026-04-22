@@ -443,6 +443,11 @@ export const planningApi = {
       run_id?: string;
       status?: string;
       error_type?: string;
+      surface_type?: string;
+      surface_event_type?: string;
+      intervention_action?: string;
+      evaluation_checkpoint?: string;
+      evidence_checkpoint?: string;
       meta?: Record<string, unknown>;
     }
   ) =>
@@ -450,6 +455,8 @@ export const planningApi = {
       event_id: string;
       event_type: string;
       aggregate: Record<string, unknown>;
+      surface_type?: string;
+      intervention_state?: Record<string, unknown>;
       nudge?: {
         trigger: string;
         message: string;
@@ -462,10 +469,17 @@ export const planningApi = {
     payload?: {
       scenario_type?: string;
       domain_family?: string;
+      surface_type?: string;
       scenario_payload?: Record<string, unknown>;
     }
   ) =>
-    extract<{ message: string; scenario: DomainScenarioPayload }>(
+    extract<{
+      message: string;
+      scenario: DomainScenarioPayload;
+      execution_descriptor?: Record<string, unknown>;
+      surface_type?: string;
+      pack_ref?: string | null;
+    }>(
       http.post(`/planning/tasks/${taskId}/simulation-scenarios/start/`, payload ?? {})
     ),
   submitSimulationScenario: (
@@ -480,14 +494,21 @@ export const planningApi = {
     extract<SimulationResultEnvelope>(
       http.get(`/planning/tasks/${taskId}/simulation-scenarios/${scenarioId}/result/`)
     ),
-  getSimulationDefinitions: (simulationType?: string) =>
+  getSimulationDefinitions: (simulationType?: string, includeFull?: boolean) =>
     extract<{
       sdl_version: string;
+      surface_adapters?: Record<string, string>;
       count: number;
       packs: SimulationDefinitionRef[];
     }>(
       http.get("/planning/simulation-definitions/", {
-        params: simulationType ? { simulation_type: simulationType } : undefined,
+        params:
+          simulationType || includeFull
+            ? {
+                ...(simulationType ? { simulation_type: simulationType } : {}),
+                ...(includeFull ? { include_full: true } : {}),
+              }
+            : undefined,
       })
     ),
   qualifySimulationDefinition: (payload: Record<string, unknown>) =>
@@ -502,6 +523,7 @@ export const planningApi = {
     }>(http.post("/planning/simulation-definitions/", payload)),
   runSimulationLabUseCase: (payload: {
     simulation_type: string;
+    surface_type?: string;
     scenario_payload?: Record<string, unknown>;
     learner_submission: Record<string, unknown> | string | string[];
     persist_records?: boolean;
