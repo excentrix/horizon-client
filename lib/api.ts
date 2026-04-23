@@ -254,6 +254,13 @@ export const chatApi = {
     extract<ChatMessage>(
       http.post(`/chat/conversations/${conversationId}/messages/`, payload)
     ),
+  reviewDraft: (content: string, conversationId?: string) =>
+    extract<{ warning: string | null }>(
+      http.post("/chat/draft-review/", {
+        content,
+        conversation_id: conversationId,
+      })
+    ),
   recordPlaygroundEvent: (payload: {
     conversation_id: string;
     event_type: string;
@@ -494,6 +501,69 @@ export const planningApi = {
     extract<SimulationResultEnvelope>(
       http.get(`/planning/tasks/${taskId}/simulation-scenarios/${scenarioId}/result/`)
     ),
+  startSurfaceSession: (
+    taskId: string,
+    payload: {
+      surface_type:
+        | "simulation_scenario"
+        | "code_playground"
+        | "diagram_workspace"
+        | "canvas_workspace"
+        | "flashcard_session"
+        | "teachback_session";
+      pack_ref?: string;
+      session_payload?: Record<string, unknown>;
+    }
+  ) =>
+    extract<{
+      message: string;
+      session: DomainScenarioPayload;
+      surface_type?: string;
+      pack_ref?: string | null;
+      runtime_state?: Record<string, unknown>;
+      completion_state?: Record<string, unknown>;
+      intervention_state?: Record<string, unknown>;
+      execution_descriptor?: Record<string, unknown>;
+      session_state?: Record<string, unknown>;
+    }>(http.post(`/planning/tasks/${taskId}/surface-sessions/start/`, payload)),
+  interactSurfaceSession: (
+    taskId: string,
+    sessionId: string,
+    payload: { interaction_payload?: Record<string, unknown> }
+  ) =>
+    extract<{
+      message: string;
+      session: DomainScenarioPayload;
+      surface_type?: string;
+      pack_ref?: string | null;
+      runtime_state?: Record<string, unknown>;
+      completion_state?: Record<string, unknown>;
+      intervention_state?: Record<string, unknown>;
+      execution_descriptor?: Record<string, unknown>;
+      session_state?: Record<string, unknown>;
+      verification_status?: string;
+      rubric_scores?: Record<string, unknown>;
+    }>(
+      http.post(
+        `/planning/tasks/${taskId}/surface-sessions/${sessionId}/interact/`,
+        payload
+      )
+    ),
+  getSurfaceSessionState: (taskId: string, sessionId: string) =>
+    extract<{
+      session: DomainScenarioPayload;
+      surface_type?: string;
+      pack_ref?: string | null;
+      runtime_state?: Record<string, unknown>;
+      completion_state?: Record<string, unknown>;
+      intervention_state?: Record<string, unknown>;
+      execution_descriptor?: Record<string, unknown>;
+      session_state?: Record<string, unknown>;
+      verification_status?: string;
+      rubric_scores?: Record<string, unknown>;
+      rubric_breakdown?: Record<string, unknown>;
+      evaluator_rationale?: Record<string, unknown>;
+    }>(http.get(`/planning/tasks/${taskId}/surface-sessions/${sessionId}/state/`)),
   getSimulationDefinitions: (simulationType?: string, includeFull?: boolean) =>
     extract<{
       sdl_version: string;

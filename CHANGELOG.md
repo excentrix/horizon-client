@@ -2,63 +2,59 @@
 
 All notable changes to frontend are documented in this file.
 
-## v0.3.0 (2026-04-22)
+Versioning policy:
+- Bumps are decided at release time (not per commit):
+- `major` if any breaking change is included.
+- else `minor` if any backward-compatible feature/public capability is included.
+- else `patch` (fix/docs/chore/refactor/perf/test only).
+- Entries are tracked per commit for precise release traceability.
+
+## Unreleased
 
 ### Added
-- Simulation Lab support for expanded universal runtime scenarios and surface-aware execution controls.
-- Learning Runtime Console visibility in Simulation Lab for runtime/completion/intervention state inspection.
+- Simulation Lab now routes non-simulation surfaces (`diagram_workspace`, `canvas_workspace`, `flashcard_session`, `teachback_session`) through dedicated universal surface-session APIs.
+- Dashboard now shows runtime outcome-gate visibility (`status`, envelope coverage, false-verify risk).
+- Draft review UX in mentor composer with opt-in pre-send warning checks.
+- Runtime console card in Simulation Lab for completion criteria, rubric progress, copilot guidance, and intervention state visibility.
 
 ### Changed
-- Planning API contract/types now include additive universal runtime fields: `surface_type`, `pack_ref`, `runtime_state`, `completion_state`, `intervention_state`, `execution_descriptor`.
-- Playground event typing now supports additive surface-event metadata and intervention telemetry fields.
-- Simulation Lab flows now handle intervention-state compatible responses during trigger execution.
+- Simulation Lab result handling now supports session-based envelopes for non-simulation adapters while preserving existing simulation endpoint behavior.
+- Planning API client/types expanded for surface-session lifecycle endpoints and outcome-gate efficacy payload fields.
+
+## v0.1.4 (2026-04-22)
+
+### Commits
+- `b68da85` docs(changelog): record v0.3.0 runtime and intervention updates
+- `4512aa6` feat(studio): surface runtime/intervention data in dashboard and profile views
+- `d02ec69` feat(runtime-ui): add simulation lab runtime console and intervention compatibility
 
 ### Notes
-- Entry reflects in-flight frontend runtime-console and contract-alignment updates paired with backend universal runtime work.
+- No major/breaking designation applied in this cycle; additive runtime UI and contract compatibility updates only.
 
-## 2026-04-21
+## v0.1.3 (2026-04-21)
 
-### Added
-- Simulation APIs/types integration for scenario lifecycle, result envelopes, and simulation definition/lab endpoints.
-- New Simulation Lab route (`/simulations`) with studio navigation integration.
-- Simulation Lab scenario presets expanded with `process_redesign` and `funnel_experiment`.
-- Simulation Lab scenario presets further expanded with `design_critique` and `finance_forecast`.
-- Local `qrcode` module type declaration for typed QR generation usage.
+### Commits
+- `9b3334b` docs(changelog): record 2026-04-21 release updates
+- `6e187c0` feat(simulation-lab): add design and finance scenario presets
+- `a646156` fix(playground): show fallback nudge toast and refetch mentor messages
+- `c10bad2` feat(simulation-lab): add process and funnel scenario presets
+- `d047030` chore(types): add qrcode module declaration
+- `2acadbc` feat(studio): add simulation lab screen, nav entry, and API contracts
 
-### Changed
-- Playground telemetry flow now supports fallback mentor nudge UX (toast + message refetch when websocket delivery is delayed).
-- Dashboard and studio task/playground surfaces received targeted stability and contract-alignment updates.
+## v0.1.2 (2026-04-18)
 
-### Notes
-- Captures commit batches on `v0.2` for simulation lab rollout, API contract alignment, and nudge delivery resiliency.
-- Validation in this batch relied on scoped diff/type review; no full frontend test suite was run during changelog update.
+### Commits
+- `35d63df` fix(studio): stabilize playground idle telemetry and dashboard rendering
+- `656c945` feat(planning): add simulation scenario client APIs and types
+- `f6ad595` feat: surface simulation diagnostics and efficacy across playground UX
 
-## 2026-04-15
+## v0.1.1 (2026-04-15)
 
-### Added
-- New Plans V2 workspace route: `/plans/v2` with single-flow, action-first information architecture.
-- Sticky workspace header and sticky right rail with viewport-aware behavior.
-- Compact focus console with Pomodoro controls and in-panel Lo-fi playback controls.
-- Project verification UX: verification sheet, GitHub repository hooks, and verification API integration.
+### Commits
+- `fc43f88` docs(changelog): record 2026-04-15 plans v2 and verification release
+- `cda2435` feat: plans v2 workspace + project verification ui integration (#4)
 
-### Changed
-- Plans experience refactored away from tab-heavy flows into contextual queue + schedule management.
-- Profile menu, playground, and mirror surfaces aligned to verification and workflow updates.
-- Schedule manager and task queue interactions tightened for immediate task actioning.
+## v0.1.0 (2026-04-14)
 
 ### Notes
-- Merged from PR `#4` into `v0.2`.
-- Validation included targeted lint checks on modified plans/mirror/layout components.
-
-## 2026-04-14
-
-### Added
-- New dashboard intelligence modules: `DashboardWidgets`, `MentorInbox`, and `SkillRadarChart`.
-
-### Changed
-- Dashboard layout refactor for mission/intelligence presentation.
-- Competency brain map and profile menu UX updates.
-- Playground mentor assistant and verification flow alignment updates.
-
-### Notes
-- Validation run included targeted lint on touched dashboard/playground/intelligence files.
+- Initial baseline for this changelog series (pre-commitized historical state).

@@ -1069,6 +1069,15 @@ export interface LearningEfficacySnapshot {
       average_rubric_score: number | null;
     }
   >;
+  outcome_gate?: {
+    status: "pass" | "fail";
+    runtime_envelope_coverage: number;
+    false_verified_risk_rate: number;
+    thresholds?: {
+      runtime_envelope_coverage_min: number;
+      false_verified_risk_rate_max: number;
+    };
+  };
   updated_at: string;
 }
 

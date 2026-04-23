@@ -624,6 +624,14 @@ export default function DashboardPage() {
   const nudgeRecoveryPct = Math.round(
     (efficacy?.nudge_recovery_rate ?? 0) * 100,
   );
+  const outcomeGate = efficacy?.outcome_gate;
+  const outcomeGateStatus = String(outcomeGate?.status ?? "not_run").toLowerCase();
+  const outcomeGateTone =
+    outcomeGateStatus === "pass"
+      ? "border-emerald-500/35 bg-emerald-500/10"
+      : outcomeGateStatus === "fail"
+        ? "border-red-500/35 bg-red-500/10"
+        : "border-amber-500/35 bg-amber-500/10";
   const domainBreakdownRows = useMemo(() => {
     const raw = efficacy?.domain_family_breakdown ?? {};
     return Object.entries(raw)
@@ -818,7 +826,7 @@ export default function DashboardPage() {
                 </p>
               )} */}
             {/* </div> */}
-            {/* <div className={`${SHELL} grid grid-cols-2 gap-2 p-3`}>
+            <div className={`${SHELL} grid grid-cols-2 gap-2 p-3`}>
               <StatTile
                 label="Weekly Tasks"
                 value={weeklyStats?.tasks_completed ?? 0}
@@ -849,7 +857,31 @@ export default function DashboardPage() {
                 value={`${nudgeRecoveryPct}%`}
                 caption="Pass after mentor nudge"
               />
-            </div> */}
+            </div>
+            <div className={`${SHELL} p-3`}>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold text-foreground">Runtime Outcome Gate</p>
+                <span
+                  className={`rounded-full border px-2 py-0.5 font-mono-ui text-[10px] uppercase ${outcomeGateTone}`}
+                >
+                  {outcomeGateStatus}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div className="rounded-lg border border-border/80 bg-background p-2">
+                  <p className="text-muted-foreground">Envelope Coverage</p>
+                  <p className="font-mono-ui text-sm font-semibold">
+                    {Math.round(Number(outcomeGate?.runtime_envelope_coverage ?? 0) * 100)}%
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border/80 bg-background p-2">
+                  <p className="text-muted-foreground">False Verify Risk</p>
+                  <p className="font-mono-ui text-sm font-semibold">
+                    {Math.round(Number(outcomeGate?.false_verified_risk_rate ?? 0) * 100)}%
+                  </p>
+                </div>
+              </div>
+            </div>
             <TheCircleTeaser />
             <SkillRadarChart />
             {/* <XPQuests /> */}

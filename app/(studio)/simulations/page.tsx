@@ -14,7 +14,9 @@ import type {
   SimulationResultEnvelope,
 } from "@/types";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 
 type EventResponse = {
   event_id: string;
@@ -734,6 +736,170 @@ function buildUserExplanation(
   }
 }
 
+// ── Runtime Console ───────────────────────────────────────────────────────────
+
+function RuntimeConsole({ envelope }: { envelope: SimulationResultEnvelope }) {
+  const scenario = envelope.scenario;
+  const verificationStatus = scenario.verification_status ?? "not_verifiable";
+  const confidence = typeof envelope.verification_confidence === "number"
+    ? Math.round(envelope.verification_confidence * 100)
+    : null;
+
+  const completionState = (envelope.completion_state ?? {}) as Record<string, unknown>;
+  const interventionState = (envelope.intervention_state ?? {}) as Record<string, unknown>;
+  const rationale = (scenario.evaluator_rationale ?? {}) as Record<string, unknown>;
+  const rubricBreakdown = (scenario.rubric_breakdown ?? {}) as Record<string, { label: string; score: number; rationale: string }>;
+  const portfolioEvidence = scenario.portfolio_evidence_draft as Record<string, unknown> | undefined;
+
+  const copilotGuidance = rationale.copilot_guidance as string | undefined;
+  const weakestCriterion = rationale.weakest_criterion as string | undefined;
+  const gaps = (rationale.gaps ?? []) as string[];
+
+  const statusColor: Record<string, string> = {
+    verified: "bg-emerald-50 border-emerald-200 text-emerald-800",
+    failed: "bg-rose-50 border-rose-200 text-rose-800",
+    not_verifiable: "bg-amber-50 border-amber-200 text-amber-800",
+  };
+  const statusLabel: Record<string, string> = {
+    verified: "Verified",
+    failed: "Not Verified",
+    not_verifiable: "Needs More Evidence",
+  };
+
+  const tier = interventionState.tier as string | undefined;
+  const interventionAction = interventionState.intervention_action as string | undefined;
+  const interventionReason = interventionState.reason as string | undefined;
+  const tierLabel: Record<string, string> = {
+    observe: "Observing",
+    nudge: "Nudge sent",
+    guided_debug: "Guided debug active",
+    explain_after_action: "Micro-debrief queued",
+  };
+
+  const verifiedThreshold = (completionState.completion_contract as Record<string, number> | undefined)?.verified_threshold;
+
+  const criterionEntries = Object.entries(rubricBreakdown);
+
+  return (
+    <div className="mt-4 space-y-3">
+      {/* ── Status header ─────────────────────────────────────────────────── */}
+      <div className={`flex items-center justify-between rounded-lg border px-4 py-3 ${statusColor[verificationStatus] ?? statusColor.not_verifiable}`}>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide opacity-60">Completion state</p>
+          <p className="mt-0.5 font-bold">{statusLabel[verificationStatus] ?? verificationStatus}</p>
+        </div>
+        {confidence !== null && (
+          <div className="text-right">
+            <p className="text-2xl font-bold">{confidence}<span className="text-sm font-normal opacity-60">%</span></p>
+            <p className="text-[11px] opacity-60">confidence</p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Completion criteria ───────────────────────────────────────────── */}
+      {verifiedThreshold !== undefined && (
+        <div className="rounded-lg border bg-muted/40 px-4 py-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Completion criteria</p>
+          <div className="flex items-center gap-3">
+            <Progress value={confidence ?? 0} className="h-2 flex-1" />
+            <span className="shrink-0 text-xs text-muted-foreground">
+              need {Math.round(verifiedThreshold * 100)}% to verify
+            </span>
+          </div>
+          {gaps.length > 0 && (
+            <ul className="mt-2 space-y-0.5">
+              {gaps.map((g, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                  <span className="mt-0.5 shrink-0 text-rose-400">▸</span>{g}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* ── Criterion scorecard ───────────────────────────────────────────── */}
+      {criterionEntries.length > 0 && (
+        <div className="rounded-lg border px-4 py-3">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rubric criteria</p>
+          <div className="space-y-2.5">
+            {criterionEntries.map(([key, crit]) => {
+              const pct = Math.round((crit.score ?? 0) * 100);
+              const isWeakest = key === weakestCriterion;
+              return (
+                <div key={key}>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className={`text-xs font-medium ${isWeakest ? "text-amber-700" : ""}`}>
+                      {crit.label ?? key}{isWeakest && " ◀ weakest"}
+                    </span>
+                    <span className="text-xs tabular-nums text-muted-foreground">{pct}%</span>
+                  </div>
+                  <Progress
+                    value={pct}
+                    className={`h-1.5 ${pct >= 67 ? "[&>div]:bg-emerald-500" : pct >= 34 ? "[&>div]:bg-amber-500" : "[&>div]:bg-rose-500"}`}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── ARIA copilot guidance ─────────────────────────────────────────── */}
+      {copilotGuidance && (
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 px-4 py-3">
+          <div className="mb-1.5 flex items-center gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-indigo-700">ARIA copilot</span>
+            {tier && (
+              <Badge variant="outline" className="border-indigo-300 text-[10px] text-indigo-600">
+                {tierLabel[tier] ?? tier}
+              </Badge>
+            )}
+          </div>
+          <p className="text-sm leading-relaxed text-indigo-900">{copilotGuidance}</p>
+          {interventionReason && interventionAction !== "none" && (
+            <p className="mt-1.5 text-[11px] text-indigo-500">
+              Why now: {interventionReason.replace(/_/g, " ")}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ── Evidence draft preview ────────────────────────────────────────── */}
+      {portfolioEvidence && (
+        <div className="rounded-lg border bg-muted/30 px-4 py-3">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Evidence draft</p>
+          <p className="text-sm font-medium">{portfolioEvidence.title as string}</p>
+          {typeof portfolioEvidence.summary === "string" && (
+            <p className="mt-0.5 text-xs text-muted-foreground">{portfolioEvidence.summary}</p>
+          )}
+          <Badge variant="outline" className="mt-2 text-[10px]">
+            {String(portfolioEvidence.status ?? "draft")}
+          </Badge>
+        </div>
+      )}
+
+      {/* ── Raw JSON (dev collapse) ───────────────────────────────────────── */}
+      <details className="text-xs">
+        <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Raw envelope JSON</summary>
+        <pre className="mt-2 overflow-auto rounded-md border bg-muted p-3">
+          {JSON.stringify({
+            surface_type: envelope.surface_type,
+            runtime_state: envelope.runtime_state,
+            completion_state: envelope.completion_state,
+            intervention_state: envelope.intervention_state,
+            verification_status: scenario.verification_status,
+            verification_confidence: envelope.verification_confidence,
+            scoring_components: envelope.scoring_components,
+          }, null, 2)}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function SimulationLabPage() {
   const [packs, setPacks] = useState<SimulationDefinitionRef[]>([]);
   const [tasks, setTasks] = useState<DailyTask[]>([]);
@@ -939,6 +1105,74 @@ export default function SimulationLabPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const isUniversalSessionSurface = (surfaceType: string) =>
+    !["simulation_scenario", "code_playground"].includes(surfaceType);
+
+  const normalizeInteractionPayload = (): Record<string, unknown> => {
+    const parsed = safeParse(submissionPayload);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    if (Array.isArray(parsed)) {
+      return { items: parsed };
+    }
+    return { content: String(parsed ?? "") };
+  };
+
+  const buildSessionEnvelope = (payload: {
+    session: DomainScenarioPayload;
+    surface_type?: string;
+    pack_ref?: string | null;
+    runtime_state?: Record<string, unknown>;
+    completion_state?: Record<string, unknown>;
+    intervention_state?: Record<string, unknown>;
+    execution_descriptor?: Record<string, unknown>;
+    session_state?: Record<string, unknown>;
+    verification_status?: string;
+    rubric_scores?: Record<string, unknown>;
+    rubric_breakdown?: Record<string, unknown>;
+    evaluator_rationale?: Record<string, unknown>;
+  }): SimulationResultEnvelope => {
+    const scenario = payload.session;
+    const aggregateRaw = (payload.rubric_scores?.aggregate ??
+      scenario.rubric_scores?.aggregate ??
+      0) as number;
+    const aggregate = Number.isFinite(Number(aggregateRaw)) ? Number(aggregateRaw) : 0;
+    return {
+      scenario,
+      surface_type: payload.surface_type ?? scenario.surface_type ?? selectedSurfaceType,
+      pack_ref: payload.pack_ref ?? scenario.pack_ref ?? scenario.scenario_type,
+      simulation_type: scenario.simulation_type ?? scenario.scenario_type,
+      pack_version: scenario.pack_version ?? null,
+      scoring_components: scenario.scoring_components,
+      verification_confidence: scenario.verification_confidence ?? null,
+      runtime_state: payload.runtime_state ?? scenario.runtime_state ?? {},
+      completion_state: payload.completion_state ?? scenario.completion_state ?? {},
+      intervention_state: payload.intervention_state ?? scenario.intervention_state ?? {},
+      execution_descriptor: payload.execution_descriptor ?? scenario.execution_descriptor ?? {},
+      execution_diagnostics: {
+        scenario_type: scenario.simulation_type ?? scenario.scenario_type,
+        surface_type: payload.surface_type ?? scenario.surface_type ?? selectedSurfaceType,
+        domain_family: scenario.domain_family,
+        rubric_breakdown:
+          (payload.rubric_breakdown as Record<string, { label: string; score: number; rationale: string }>) ??
+          scenario.rubric_breakdown ??
+          {},
+        verification_status:
+          (payload.verification_status as "verified" | "failed" | "not_verifiable") ??
+          scenario.verification_status,
+        evaluator_rationale: payload.evaluator_rationale ?? scenario.evaluator_rationale ?? {},
+      },
+      efficacy_metrics: {
+        attempt_count: Number(payload.session_state?.turn_index ?? 1),
+        time_to_verify_seconds: null,
+        error_pattern_count: aggregate < 0.34 ? 1 : 0,
+        nudge_count: Number(payload.session_state?.interventions_count ?? 0),
+        self_check_pass_rate: aggregate,
+      },
+    };
   };
 
   const prefillQualificationFromSelectedPack = async () => {
@@ -1407,6 +1641,27 @@ export default function SimulationLabPage() {
       return;
     }
     await runAction(async () => {
+      if (isUniversalSessionSurface(selectedSurfaceType)) {
+        const session = await planningApi.startSurfaceSession(selectedTaskId, {
+          surface_type: selectedSurfaceType as
+            | "simulation_scenario"
+            | "code_playground"
+            | "diagram_workspace"
+            | "canvas_workspace"
+            | "flashcard_session"
+            | "teachback_session",
+          pack_ref: selectedSimulationType || undefined,
+          session_payload:
+            (safeParse(scenarioPayload) as Record<string, unknown>) || {},
+        });
+        setActiveScenario(session.session);
+        setResultEnvelope(buildSessionEnvelope(session));
+        telemetry.toastSuccess(
+          `Session started: ${session.session.simulation_type || session.session.scenario_type}`
+        );
+        return;
+      }
+
       const scenario = await planningApi.startSimulationScenario(selectedTaskId, {
         surface_type: selectedSurfaceType || undefined,
         scenario_type: selectedSimulationType || undefined,
@@ -1425,6 +1680,20 @@ export default function SimulationLabPage() {
       return;
     }
     await runAction(async () => {
+      const surfaceType = activeScenario.surface_type || selectedSurfaceType;
+      if (isUniversalSessionSurface(surfaceType)) {
+        const result = await planningApi.interactSurfaceSession(
+          selectedTaskId,
+          activeScenario.id,
+          { interaction_payload: normalizeInteractionPayload() }
+        );
+        const envelope = buildSessionEnvelope(result);
+        setResultEnvelope(envelope);
+        setActiveScenario(result.session);
+        telemetry.toastSuccess(`Session processed: ${envelope.scenario.verification_status}`);
+        return;
+      }
+
       const result = await planningApi.submitSimulationScenario(
         selectedTaskId,
         activeScenario.id,
@@ -1442,6 +1711,16 @@ export default function SimulationLabPage() {
       return;
     }
     await runAction(async () => {
+      const surfaceType = activeScenario.surface_type || selectedSurfaceType;
+      if (isUniversalSessionSurface(surfaceType)) {
+        const result = await planningApi.getSurfaceSessionState(selectedTaskId, activeScenario.id);
+        const envelope = buildSessionEnvelope(result);
+        setResultEnvelope(envelope);
+        setActiveScenario(result.session);
+        telemetry.toastSuccess("Latest surface session state loaded");
+        return;
+      }
+
       const result = await planningApi.getSimulationScenarioResult(selectedTaskId, activeScenario.id);
       setResultEnvelope(result);
       telemetry.toastSuccess("Latest simulation result loaded");
@@ -1917,26 +2196,7 @@ export default function SimulationLabPage() {
             Submit Scenario
           </Button>
           {resultEnvelope ? (
-            <pre className="overflow-auto rounded-md border bg-muted p-3 text-xs">
-              {JSON.stringify(
-                {
-                  surface_type: resultEnvelope.surface_type,
-                  pack_ref: resultEnvelope.pack_ref,
-                  execution_descriptor: resultEnvelope.execution_descriptor,
-                  runtime_state: resultEnvelope.runtime_state,
-                  completion_state: resultEnvelope.completion_state,
-                  intervention_state: resultEnvelope.intervention_state,
-                  simulation_type: resultEnvelope.simulation_type,
-                  pack_version: resultEnvelope.pack_version,
-                  verification_status: resultEnvelope.scenario.verification_status,
-                  verification_confidence: resultEnvelope.verification_confidence,
-                  scoring_components: resultEnvelope.scoring_components,
-                  efficacy_metrics: resultEnvelope.efficacy_metrics,
-                },
-                null,
-                2
-              )}
-            </pre>
+            <RuntimeConsole envelope={resultEnvelope} />
           ) : null}
         </CardContent>
       </Card>
