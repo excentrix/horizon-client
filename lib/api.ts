@@ -53,6 +53,11 @@ import {
   DomainScenarioPayload,
   SimulationResultEnvelope,
   SimulationDefinitionRef,
+  CanvasSceneData,
+  CanvasAnnotation,
+  CanvasSuggestion,
+  CanvasPresence,
+  CanvasSnapshot,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -260,6 +265,14 @@ export const chatApi = {
         content,
         conversation_id: conversationId,
       })
+    ),
+  extractConceptMap: (text: string, conversationId?: string) =>
+    extract<{
+      nodes: Array<{ id: string; label: string; description: string }>;
+      edges: Array<{ source: string; target: string; relationship?: string }>;
+      mastery: Record<string, "mastered" | "in_progress" | "gap">;
+    }>(
+      http.post("/chat/concept-map/", { text, conversation_id: conversationId })
     ),
   recordPlaygroundEvent: (payload: {
     conversation_id: string;
@@ -534,11 +547,39 @@ export const planningApi = {
       intervention_state?: Record<string, unknown>;
       execution_descriptor?: Record<string, unknown>;
       session_state?: Record<string, unknown>;
+      scene_data?: CanvasSceneData;
+      annotations?: CanvasAnnotation[];
+      suggestions?: CanvasSuggestion[];
+      presence_state?: CanvasPresence;
+      snapshot_ref?: CanvasSnapshot;
+      budget_status?: Record<string, unknown>;
     }>(http.post(`/planning/tasks/${taskId}/surface-sessions/start/`, payload)),
   interactSurfaceSession: (
     taskId: string,
     sessionId: string,
-    payload: { interaction_payload?: Record<string, unknown> }
+    payload: {
+      interaction_payload?: {
+        action_type?:
+          | "save_scene"
+          | "update_presence"
+          | "resolve_thread"
+          | "convert_to_task"
+          | "snapshot"
+          | "request_suggestion"
+          | "review_selection"
+          | "explain_tradeoff"
+          | string;
+        scene_data?: CanvasSceneData;
+        annotations?: CanvasAnnotation[];
+        presence_state?: CanvasPresence;
+        snapshot_ref?: CanvasSnapshot;
+        selection?: Record<string, unknown>;
+        thread_id?: string;
+        suggestion_id?: string;
+        status?: string;
+        [key: string]: unknown;
+      };
+    }
   ) =>
     extract<{
       message: string;
@@ -552,6 +593,12 @@ export const planningApi = {
       session_state?: Record<string, unknown>;
       verification_status?: string;
       rubric_scores?: Record<string, unknown>;
+      scene_data?: CanvasSceneData;
+      annotations?: CanvasAnnotation[];
+      suggestions?: CanvasSuggestion[];
+      presence_state?: CanvasPresence;
+      snapshot_ref?: CanvasSnapshot;
+      budget_status?: Record<string, unknown>;
     }>(
       http.post(
         `/planning/tasks/${taskId}/surface-sessions/${sessionId}/interact/`,
@@ -572,6 +619,12 @@ export const planningApi = {
       rubric_scores?: Record<string, unknown>;
       rubric_breakdown?: Record<string, unknown>;
       evaluator_rationale?: Record<string, unknown>;
+      scene_data?: CanvasSceneData;
+      annotations?: CanvasAnnotation[];
+      suggestions?: CanvasSuggestion[];
+      presence_state?: CanvasPresence;
+      snapshot_ref?: CanvasSnapshot;
+      budget_status?: Record<string, unknown>;
     }>(http.get(`/planning/tasks/${taskId}/surface-sessions/${sessionId}/state/`)),
   getSimulationDefinitions: (simulationType?: string, includeFull?: boolean) =>
     extract<{
