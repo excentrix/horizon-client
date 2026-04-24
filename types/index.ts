@@ -1195,6 +1195,52 @@ export interface UniversalSurfaceSession {
   execution_descriptor?: ExecutionDescriptor | Record<string, unknown>;
 }
 
+export interface CanvasSceneData {
+  version?: string;
+  elements?: Array<Record<string, unknown>>;
+  app_state?: Record<string, unknown>;
+  files?: Record<string, unknown>;
+  updated_at?: string;
+}
+
+export interface CanvasAnnotation {
+  id: string;
+  title?: string;
+  body?: string;
+  status?: "open" | "resolved" | "dismissed";
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: unknown;
+}
+
+export interface CanvasSuggestion {
+  id: string;
+  title: string;
+  body: string;
+  status?: "draft" | "accepted" | "rejected" | "converted_to_task";
+  source?: "llm" | "deterministic" | "cache";
+  priority?: "low" | "normal" | "high" | string;
+  intent?: string;
+  selection_hash?: string;
+  updated_at?: string;
+  [key: string]: unknown;
+}
+
+export interface CanvasPresence {
+  mentor_online?: boolean;
+  learner_active_at?: string;
+  mentor_active_at?: string;
+  session_id?: string;
+  [key: string]: unknown;
+}
+
+export interface CanvasSnapshot {
+  id?: string;
+  created_at?: string;
+  image_url?: string;
+  [key: string]: unknown;
+}
+
 export interface DomainScenarioPayload {
   id: UUID;
   task: UUID;

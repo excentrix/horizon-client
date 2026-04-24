@@ -13,7 +13,10 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isDashboard = pathname.startsWith("/dashboard");
   const isPlansV2 = pathname === "/plans/v2";
-  const isNoPageScrollRoute = pathname === "/chat" || isDashboard;
+  const isPlaygroundRoute =
+    pathname.includes("/plans/") && pathname.includes("/playground");
+  const isNoPageScrollRoute =
+    pathname === "/chat" || isDashboard || isPlaygroundRoute;
   const hideDock =
     (pathname.includes("/plans/") && pathname.includes("/playground")) ||
     pathname.startsWith("/onboarding");

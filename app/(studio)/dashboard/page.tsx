@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Play,
   Sparkles,
+  BookOpen,
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
@@ -535,6 +536,7 @@ export default function DashboardPage() {
   );
   const [calendarTasks, setCalendarTasks] = useState<DashboardTask[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
+  const [dueCardCount, setDueCardCount] = useState(0);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -589,6 +591,13 @@ export default function DashboardPage() {
       mounted = false;
     };
   }, [calendarAnchorDate, calendarView, canQuery]);
+
+  useEffect(() => {
+    if (!canQuery) return;
+    planningApi.getSpacedRepetitionDue({ limit: 1 })
+      .then(({ count }) => setDueCardCount(count))
+      .catch(() => {});
+  }, [canQuery]);
 
   const profile = gamificationData?.profile;
   const currentLevel = profile?.level ?? 1;
@@ -826,6 +835,25 @@ export default function DashboardPage() {
                 </p>
               )} */}
             {/* </div> */}
+            {dueCardCount > 0 && (
+              <button
+                onClick={() => router.push("/review")}
+                className="flex items-center justify-between gap-3 rounded-2xl border border-[color:var(--brand-indigo)]/30 bg-[color:var(--brand-indigo)]/5 px-4 py-3 text-left transition-colors hover:bg-[color:var(--brand-indigo)]/10"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[color:var(--brand-indigo)]/15">
+                    <BookOpen className="h-4 w-4 text-[color:var(--brand-indigo)]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium leading-none">
+                      {dueCardCount} card{dueCardCount !== 1 ? "s" : ""} due for review
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Spaced repetition · ~{Math.max(5, dueCardCount * 2)} min</p>
+                  </div>
+                </div>
+                <span className="shrink-0 text-xs font-medium text-[color:var(--brand-indigo)]">Start →</span>
+              </button>
+            )}
             <div className={`${SHELL} grid grid-cols-2 gap-2 p-3`}>
               <StatTile
                 label="Weekly Tasks"

@@ -3,8 +3,6 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  transpilePackages: ["tldraw"],
-
   webpack: (config) => {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),

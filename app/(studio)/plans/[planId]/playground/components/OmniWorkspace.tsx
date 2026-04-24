@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   SandpackProvider,
   SandpackLayout,
@@ -8,22 +8,31 @@ import {
   useSandpack,
 } from "@codesandbox/sandpack-react";
 import { Button } from "@/components/ui/button";
-import { Code2, LayoutPanelLeft, RefreshCw, PenTool, Terminal, FileCode2, Copy, ExternalLink, Check, TerminalSquare, Spline, MessageSquare } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { Code2, LayoutPanelLeft, RefreshCw, PenTool, Terminal, FileCode2, Copy, ExternalLink, Check, TerminalSquare, Spline, Layers, MessageSquare } from "lucide-react";
 import { telemetry } from "@/lib/telemetry";
-import { RichTextCanvas } from "./RichTextCanvas";
 import { CodeRunner } from "./CodeRunner";
 import { DiagramWorkspace } from "./DiagramWorkspace";
+import { RichTextCanvas } from "./RichTextCanvas";
+
+const SCAFFOLD_LABELS: Record<number, { short: string; desc: string; color: string }> = {
+  1: { short: "Guided",   desc: "Full structure, fill in logic",  color: "text-emerald-600" },
+  2: { short: "Framed",   desc: "Signatures + key TODOs",         color: "text-teal-600"    },
+  3: { short: "Balanced", desc: "Imports + main skeleton",        color: "text-blue-600"    },
+  4: { short: "Minimal",  desc: "Boilerplate only",               color: "text-amber-600"   },
+  5: { short: "Blank",    desc: "Single comment line",            color: "text-rose-600"    },
+};
 
 export type EnvMode = "web" | "colab" | "local" | "canvas" | "code_runner" | "diagram";
 
 const ALL_ENV_MODES: EnvMode[] = ["web", "colab", "local", "code_runner", "diagram", "canvas"];
 
 interface OmniWorkspaceProps {
+  taskId: string;
   initialCode?: string;
   starterCodeLoading?: boolean;
-  notes: string;
-  onNotesChange: (notes: string) => void;
-  onSaveNotes: () => void;
+  scaffoldingLevel?: number;
+  onScaffoldingLevelChange?: (level: number) => void;
   taskTitle: string;
   initialEnvMode?: EnvMode;
   onDiagramExport?: (file: File) => void;
@@ -63,11 +72,11 @@ function SandpackReviewButton({ onReview }: { onReview: (code: string) => void }
 }
 
 export function OmniWorkspace({
+  taskId,
   initialCode,
   starterCodeLoading = false,
-  notes,
-  onNotesChange,
-  onSaveNotes,
+  scaffoldingLevel = 3,
+  onScaffoldingLevelChange,
   taskTitle,
   initialEnvMode,
   onDiagramExport,
@@ -87,6 +96,16 @@ export function OmniWorkspace({
   const [showConsole, setShowConsole] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [showDial, setShowDial] = useState(false);
+  const dialTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleDialChange = (vals: number[]) => {
+    const newLevel = vals[0];
+    if (dialTimeoutRef.current) clearTimeout(dialTimeoutRef.current);
+    dialTimeoutRef.current = setTimeout(() => {
+      onScaffoldingLevelChange?.(newLevel);
+    }, 400);
+  };
 
   useEffect(() => {
     if (initialEnvMode) {
@@ -140,7 +159,7 @@ code .
   const colabBlankUrl = "https://colab.research.google.com/#create=true";
 
   return (
-    <div className="relative flex h-[600px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
       {/* Omni-Toolbar */}
       <div className="flex items-center justify-between border-b bg-white px-4 py-2 text-sm text-slate-700">
         <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
@@ -206,38 +225,79 @@ code .
           )}
         </div>
 
-        {envMode === "web" && (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setShowConsole(!showConsole)}
-            >
-              <LayoutPanelLeft className="mr-1 h-3 w-3" />
-              {showConsole ? "Hide Console" : "Show Console"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs border-slate-300 bg-slate-100 hover:bg-slate-200"
-              onClick={() => setEditorKey(prev => prev + 1)}
-            >
-              <RefreshCw className="mr-1 h-3 w-3" />
-              Reset
-            </Button>
-          </div>
-        )}
-        {envMode === "canvas" && onRequestMentorReview && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
-            onClick={() => onRequestMentorReview(notes)}
-          >
-            <MessageSquare className="mr-1 h-3 w-3" /> Ask Mentor to Review
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Complexity Dial — visible in code modes where starter code exists */}
+          {onScaffoldingLevelChange && envMode !== "canvas" && envMode !== "diagram" && (
+            <div className="relative">
+              <Button
+                variant={showDial ? "default" : "outline"}
+                size="sm"
+                className={`h-7 text-xs ${showDial ? "bg-indigo-600 text-white hover:bg-indigo-700" : "border-indigo-200 text-indigo-600 hover:bg-indigo-50"}`}
+                onClick={() => setShowDial((p) => !p)}
+                title="Complexity Dial — adjust scaffolding level"
+              >
+                <Layers className="mr-1 h-3 w-3" />
+                <span className={SCAFFOLD_LABELS[scaffoldingLevel]?.color ?? ""}>
+                  {SCAFFOLD_LABELS[scaffoldingLevel]?.short ?? "Balanced"}
+                </span>
+              </Button>
+              {showDial && (
+                <div className="absolute right-0 top-9 z-20 w-72 rounded-xl border bg-white p-4 shadow-lg">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-700">Complexity Dial</p>
+                    <span className={`text-xs font-medium ${SCAFFOLD_LABELS[scaffoldingLevel]?.color ?? ""}`}>
+                      Level {scaffoldingLevel} — {SCAFFOLD_LABELS[scaffoldingLevel]?.short}
+                    </span>
+                  </div>
+                  <Slider
+                    min={1}
+                    max={5}
+                    step={1}
+                    defaultValue={[scaffoldingLevel]}
+                    onValueChange={handleDialChange}
+                    className="mb-2"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-400 mb-3">
+                    <span>Guided</span>
+                    <span>Balanced</span>
+                    <span>Blank</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    {SCAFFOLD_LABELS[scaffoldingLevel]?.desc}. Changing the level regenerates starter code.
+                  </p>
+                  {starterCodeLoading && (
+                    <div className="mt-2 flex items-center gap-1.5 text-[11px] text-indigo-600">
+                      <RefreshCw className="h-3 w-3 animate-spin" /> Generating…
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {envMode === "web" && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setShowConsole(!showConsole)}
+              >
+                <LayoutPanelLeft className="mr-1 h-3 w-3" />
+                {showConsole ? "Hide Console" : "Show Console"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs border-slate-300 bg-slate-100 hover:bg-slate-200"
+                onClick={() => setEditorKey(prev => prev + 1)}
+              >
+                <RefreshCw className="mr-1 h-3 w-3" />
+                Reset
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-hidden relative">
@@ -384,37 +444,23 @@ code .
         {/* Diagram Mode */}
         {envMode === "diagram" && (
           <div className="h-full p-2">
-            <DiagramWorkspace onExport={(file) => onDiagramExport?.(file)} />
+            <DiagramWorkspace
+              taskId={taskId}
+              taskTitle={taskTitle}
+              onExport={(file) => onDiagramExport?.(file)}
+              onRequestMentorReview={onRequestMentorReview}
+            />
           </div>
         )}
 
         {/* Canvas Mode */}
         {envMode === "canvas" && (
-          <div className="flex h-full flex-col p-4 bg-slate-50 dark:bg-background">
-            <div className="max-w-3xl mx-auto w-full h-full flex flex-col gap-3">
-              <div className="flex items-center gap-2 text-amber-600">
-                <PenTool className="h-5 w-5" />
-                <h3 className="text-lg font-semibold">Reflective Canvas</h3>
-              </div>
-              <p className="text-sm text-slate-500">
-                Use this rich text space to draft architecture documents, write marketing copy, or brainstorm non-code solutions.
-              </p>
-              <RichTextCanvas
-                storageKey={taskTitle}
-                value={notes}
-                onChange={onNotesChange}
-                placeholder="Start writing here…"
-                className="flex-1"
-              />
-              <div className="flex justify-end gap-3 shrink-0">
-                <Button variant="outline" className="border-slate-200 text-slate-600" onClick={() => onNotesChange("")}>
-                  Clear Canvas
-                </Button>
-                <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={onSaveNotes}>
-                  Save Draft
-                </Button>
-              </div>
-            </div>
+          <div className="h-full p-2">
+            <RichTextCanvas
+              storageKey={`playground-canvas-${taskId}`}
+              placeholder={`Capture ideas, notes, and solution strategy for "${taskTitle}"...`}
+              className="h-full"
+            />
           </div>
         )}
       </div>

@@ -1,50 +1,28 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import dynamic from "next/dynamic";
-import { Button } from "@/components/ui/button";
-import { ImageDown } from "lucide-react";
+import { ExcalidrawWorkspace } from "./ExcalidrawWorkspace";
 
 interface DiagramWorkspaceProps {
+  taskId: string;
+  taskTitle: string;
   onExport: (file: File) => void;
+  onRequestMentorReview?: (content: string) => void;
 }
 
-const TldrawCanvas = dynamic(() => import("./TldrawClient"), { ssr: false });
-
-export function DiagramWorkspace({ onExport }: DiagramWorkspaceProps) {
-  const [editor, setEditor] = useState<import("tldraw").Editor | null>(null);
-
-  const handleExport = useCallback(async () => {
-    if (!editor) return;
-    const shapeIds = editor.getCurrentPageShapeIds();
-    const shapesArray = shapeIds.size ? Array.from(shapeIds) : undefined;
-    
-    const imageInfo = await editor.toImage(shapesArray as import("tldraw").TLShapeId[], {
-      format: "png",
-      background: true,
-      scale: 2,
-    });
-
-    if (!imageInfo || !imageInfo.blob) return;
-
-    const file = new File([imageInfo.blob], `diagram-${Date.now()}.png`, {
-      type: "image/png",
-    });
-    onExport(file);
-  }, [editor, onExport]);
-
+export function DiagramWorkspace({
+  taskId,
+  taskTitle,
+  onExport,
+  onRequestMentorReview,
+}: DiagramWorkspaceProps) {
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b bg-slate-50 px-4 py-2 text-sm text-slate-700">
-        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Diagram Canvas</div>
-        <Button size="sm" className="h-8 bg-slate-900 text-white" onClick={handleExport} disabled={!editor}>
-          <ImageDown className="mr-2 h-3.5 w-3.5" />
-          Use in Verification
-        </Button>
-      </div>
-      <div className="flex-1">
-        <TldrawCanvas onEditorReady={setEditor} />
-      </div>
-    </div>
+    <ExcalidrawWorkspace
+      taskId={taskId}
+      taskTitle={taskTitle}
+      surfaceType="diagram_workspace"
+      variant="diagram"
+      onExport={onExport}
+      onRequestMentorReview={onRequestMentorReview}
+    />
   );
 }

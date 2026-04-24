@@ -164,12 +164,12 @@ function PlaygroundFlow() {
   };
   
   // -- Workspace State --
-  const [workspaceNotes, setWorkspaceNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lessonLoading, setLessonLoading] = useState(false);
   const [diagramAttachment, setDiagramAttachment] = useState<File | null>(null);
   const [starterCode, setStarterCode] = useState<string | undefined>(undefined);
   const [starterCodeLoading, setStarterCodeLoading] = useState(false);
+  const [scaffoldingLevel, setScaffoldingLevel] = useState(3);
   const [challengeVerification, setChallengeVerification] = useState<Record<string, unknown> | null>(null);
   const [challengeLoading, setChallengeLoading] = useState(false);
   const lastActivityAtRef = useRef<number>(Date.now());
@@ -201,6 +201,7 @@ function PlaygroundFlow() {
     self_check_pass_rate: number;
   } | null>(null);
   const verifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const workspaceColumnRef = useRef<HTMLDivElement | null>(null);
 
   // -- Chat & Mentor State --
   // Use a dedicated per-task playground conversation so playground messages don't
@@ -262,6 +263,12 @@ function PlaygroundFlow() {
     setExecutionDiagnostics(null);
     setEfficacyMetrics(null);
   }, [activeTask?.id]);
+
+  useEffect(() => {
+    if (currentStepId !== "omni") return;
+    if (!workspaceColumnRef.current) return;
+    workspaceColumnRef.current.scrollTop = 0;
+  }, [currentStepId]);
 
   // Listen for artifact_verified WebSocket event dispatched by use-chat-socket.ts
   useEffect(() => {
@@ -382,6 +389,20 @@ function PlaygroundFlow() {
   useEffect(() => () => {
     if (starterCodePollRef.current) clearInterval(starterCodePollRef.current);
   }, []);
+
+  const handleScaffoldingLevelChange = async (level: number) => {
+    if (!activeTask?.id) return;
+    setScaffoldingLevel(level);
+    setStarterCodeLoading(true);
+    try {
+      const res = await planningApi.generateStarterCode(activeTask.id, level);
+      if (res.starter_code) setStarterCode(res.starter_code);
+    } catch {
+      // best-effort; keep existing code
+    } finally {
+      setStarterCodeLoading(false);
+    }
+  };
 
   // Detect thin/fallback lesson blocks that should be regenerated.
   // Thin = ≤3 blocks (real LLM output is 4-6) OR the only concept block content
@@ -632,8 +653,7 @@ function PlaygroundFlow() {
                 }
 
   return (
-    <div className="flex h-[100vh] flex-col gap-4 p-4 lg:p-6 bg-slate-50">
-    {/* <div className="flex h-[calc(100vh-4rem)] flex-col gap-4 p-4 lg:p-6 bg-slate-50"> */}
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden bg-slate-50 p-4 lg:p-6">
       {/* Header Pipeline */}
       <div className="flex shrink-0 items-center justify-between rounded-2xl bg-white px-6 py-4 shadow-sm ring-1 ring-slate-200">
         <div>
@@ -691,22 +711,53 @@ function PlaygroundFlow() {
             );
           })}
         </div>
-        {onRegenerateLesson && !lessonLoading && (
+        <div className="flex items-center gap-2">
+          {onRegenerateLesson && !lessonLoading && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[11px] text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+              onClick={onRegenerateLesson}
+              title="Regenerate lesson with AI"
+            >
+              <RefreshCw className="mr-1 h-3 w-3" /> Regenerate
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-[11px] text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
-            onClick={onRegenerateLesson}
-            title="Regenerate lesson with AI"
+            disabled={activeStepIndex === 0}
+            onClick={() => changeStep(Math.max(activeStepIndex - 1, 0))}
+            className="h-7 text-xs text-slate-500 hover:text-slate-900"
           >
-            <RefreshCw className="w-3 h-3 mr-1" /> Regenerate
+            <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Previous
           </Button>
-        )}
+          {activeStepIndex < steps.length - 1 ? (
+            <Button
+              size="sm"
+              onClick={() =>
+                changeStep(Math.min(activeStepIndex + 1, steps.length - 1))
+              }
+              className="h-7 bg-slate-900 text-xs text-white hover:bg-slate-800"
+            >
+              Next <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            </Button>
+          ) : (
+            <p className="text-[11px] font-medium text-muted-foreground">
+              Submit proof to finish.
+            </p>
+          )}
+        </div>
       </div>
 
-      <div className="grid flex-1 grid-cols-1 gap-6 overflow-hidden md:grid-cols-12">
+      <div className="grid min-w-0 flex-1 grid-cols-1 gap-6 overflow-hidden md:grid-cols-12">
         {/* Main Workspace Area (Left 2/3) */}
-        <div className="flex flex-col gap-4 md:col-span-8 overflow-y-auto pr-2 custom-scrollbar">
+        <div
+          ref={workspaceColumnRef}
+          className={`custom-scrollbar flex min-w-0 flex-col gap-4 overflow-x-hidden pr-2 md:col-span-8 ${
+            currentStepId === "omni" ? "overflow-y-hidden" : "overflow-y-auto"
+          }`}
+        >
           {currentStepId === "ingest" && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
               <LearningPanel
@@ -799,13 +850,9 @@ function PlaygroundFlow() {
                 </div>
               )}
               <OmniWorkspace
-                notes={workspaceNotes}
+                taskId={activeTask?.id || ""}
                 initialCode={getInitialCode(activeTask) ?? starterCode}
                 starterCodeLoading={starterCodeLoading}
-                onNotesChange={setWorkspaceNotes}
-                onSaveNotes={() =>
-                  telemetry.toastSuccess("Notes saved locally.")
-                }
                 taskTitle={activeTask?.title || "Coding Challenge"}
                 initialEnvMode={recommendedEnv}
                 defaultCodeLanguage={defaultLanguage}
@@ -886,37 +933,10 @@ function PlaygroundFlow() {
             </div>
           )}
 
-          <div className="mt-auto flex items-center justify-between pt-4 border-t border-slate-200">
-            <Button
-              variant="ghost"
-              disabled={activeStepIndex === 0}
-              onClick={() => changeStep(Math.max(activeStepIndex - 1, 0))}
-              className="text-slate-500 hover:text-slate-900"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" /> Previous Step
-            </Button>
-
-            {activeStepIndex < steps.length - 1 ? (
-              <Button
-                onClick={() =>
-                  changeStep(Math.min(activeStepIndex + 1, steps.length - 1))
-                }
-                className="bg-slate-900 text-white hover:bg-slate-800"
-              >
-                Proceed to {steps[activeStepIndex + 1]?.label}{" "}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            ) : (
-              <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" /> Complete the proof above to
-                finish.
-              </p>
-            )}
-          </div>
         </div>
 
         {/* Sidebar Space (Right 1/3) */}
-        <div className="flex h-full min-h-0 flex-col md:col-span-4">
+        <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden md:col-span-4">
           <MentorAssistant
             messages={mentorMessages ?? []}
             isTyping={mentorTyping}
