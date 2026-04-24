@@ -647,8 +647,7 @@ function PlaygroundFlow() {
                 }
 
   return (
-    <div className="flex h-[100vh] flex-col gap-4 p-4 lg:p-6 bg-slate-50">
-    {/* <div className="flex h-[calc(100vh-4rem)] flex-col gap-4 p-4 lg:p-6 bg-slate-50"> */}
+    <div className="flex h-[calc(100vh-4rem)] min-h-0 flex-col gap-4 overflow-hidden bg-slate-50 p-4 lg:p-6">
       {/* Header Pipeline */}
       <div className="flex shrink-0 items-center justify-between rounded-2xl bg-white px-6 py-4 shadow-sm ring-1 ring-slate-200">
         <div>
@@ -679,7 +678,7 @@ function PlaygroundFlow() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between shrink-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex shrink-0 items-center justify-between rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
           {steps.map((step, index) => {
             const isActive = index === activeStepIndex;
@@ -706,24 +705,55 @@ function PlaygroundFlow() {
             );
           })}
         </div>
-        {onRegenerateLesson && !lessonLoading && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-[11px] text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
-            onClick={onRegenerateLesson}
-            title="Regenerate lesson with AI"
-          >
-            <RefreshCw className="w-3 h-3 mr-1" /> Regenerate
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {activeStepIndex > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => changeStep(Math.max(activeStepIndex - 1, 0))}
+              className="h-8 text-slate-500 hover:text-slate-900"
+            >
+              <ArrowLeft className="mr-1.5 h-4 w-4" />
+              Previous
+            </Button>
+          )}
+
+          {activeStepIndex < steps.length - 1 ? (
+            <Button
+              size="sm"
+              onClick={() =>
+                changeStep(Math.min(activeStepIndex + 1, steps.length - 1))
+              }
+              className="h-8 bg-slate-900 text-white hover:bg-slate-800"
+            >
+              Next
+              <ArrowRight className="ml-1.5 h-4 w-4" />
+            </Button>
+          ) : (
+            <p className="text-xs font-medium text-muted-foreground">
+              Complete proof to finish
+            </p>
+          )}
+
+          {onRegenerateLesson && !lessonLoading && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-[11px] text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
+              onClick={onRegenerateLesson}
+              title="Regenerate lesson with AI"
+            >
+              <RefreshCw className="mr-1 h-3 w-3" /> Regenerate
+            </Button>
+          )}
+        </div>
       </div>
 
-      <div className="grid flex-1 grid-cols-1 gap-6 overflow-hidden md:grid-cols-12">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden md:grid-cols-12">
         {/* Main Workspace Area (Left 2/3) */}
-        <div className="flex flex-col gap-4 md:col-span-8 overflow-y-auto pr-2 custom-scrollbar">
+        <div className="flex min-h-0 flex-col gap-4 md:col-span-8">
           {currentStepId === "ingest" && (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
+            <div className="min-h-0 flex-1 overflow-y-auto pr-2 custom-scrollbar animate-in fill-mode-both fade-in slide-in-from-bottom-4 duration-500">
               <LearningPanel
                 activeTask={activeTask}
                 lessonLoading={lessonLoading}
@@ -741,7 +771,7 @@ function PlaygroundFlow() {
           )}
 
           {currentStepId === "micro" && (
-            <div className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
+            <div className="min-h-0 flex-1 animate-in fill-mode-both fade-in slide-in-from-bottom-4 duration-500">
               <MicroPracticeLab
                 taskId={activeTask?.id || ""}
                 planId={planId}
@@ -757,7 +787,7 @@ function PlaygroundFlow() {
           )}
 
           {currentStepId === "prove" && (
-            <div className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
+            <div className="min-h-0 flex-1 animate-in fill-mode-both fade-in slide-in-from-bottom-4 duration-500">
               <FeynmanCheck
                 task={activeTask}
                 messages={mentorMessages ?? []}
@@ -774,7 +804,7 @@ function PlaygroundFlow() {
           )}
 
           {currentStepId === "omni" && (
-            <div className="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both flex flex-col gap-3">
+            <div className="flex min-h-0 flex-1 animate-in flex-col gap-3 fill-mode-both fade-in slide-in-from-bottom-4 duration-500">
               {quizFailed && !quizBannerDismissed && (
                 <div className="shrink-0 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
                   <span className="text-amber-600 text-sm font-medium flex-1">
@@ -814,6 +844,7 @@ function PlaygroundFlow() {
                 </div>
               )}
               <OmniWorkspace
+                taskId={activeTask?.id}
                 notes={workspaceNotes}
                 initialCode={getInitialCode(activeTask) ?? starterCode}
                 starterCodeLoading={starterCodeLoading}
@@ -843,7 +874,7 @@ function PlaygroundFlow() {
           )}
 
           {currentStepId === "verify" && (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both h-full">
+            <div className="min-h-0 flex-1 animate-in fill-mode-both fade-in slide-in-from-bottom-4 duration-500">
               <VerificationEngine
                 taskId={activeTask?.id || ""}
                 verificationMethod={
@@ -902,34 +933,6 @@ function PlaygroundFlow() {
               />
             </div>
           )}
-
-          <div className="mt-auto flex items-center justify-between pt-4 border-t border-slate-200">
-            <Button
-              variant="ghost"
-              disabled={activeStepIndex === 0}
-              onClick={() => changeStep(Math.max(activeStepIndex - 1, 0))}
-              className="text-slate-500 hover:text-slate-900"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" /> Previous Step
-            </Button>
-
-            {activeStepIndex < steps.length - 1 ? (
-              <Button
-                onClick={() =>
-                  changeStep(Math.min(activeStepIndex + 1, steps.length - 1))
-                }
-                className="bg-slate-900 text-white hover:bg-slate-800"
-              >
-                Proceed to {steps[activeStepIndex + 1]?.label}{" "}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            ) : (
-              <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" /> Complete the proof above to
-                finish.
-              </p>
-            )}
-          </div>
         </div>
 
         {/* Sidebar Space (Right 1/3) */}

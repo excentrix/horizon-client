@@ -4,10 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BookOpen, Check, ChevronLeft, RefreshCw, X } from "lucide-react";
 import { planningApi } from "@/lib/api";
-import type { SpacedRepetitionCard } from "@/lib/api";
+import type { SpacedRepetitionCard } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+
+const SESSION_SIZE = 10;
 
 type Quality = 0 | 2 | 4 | 5;
 
@@ -35,12 +37,16 @@ export default function ReviewPage() {
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<Array<{ card: SpacedRepetitionCard; quality: Quality; nextInterval: number }>>([]);
   const [done, setDone] = useState(false);
+  const [totalDue, setTotalDue] = useState(0);
   const flipRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     planningApi
-      .getSpacedRepetitionDue({ limit: 30 })
-      .then(({ cards: due }) => setCards(due))
+      .getSpacedRepetitionDue({ limit: SESSION_SIZE })
+      .then(({ cards: due, count }) => {
+        setCards(due);
+        setTotalDue(count);
+      })
       .catch(() => setCards([]))
       .finally(() => setLoading(false));
   }, []);
@@ -131,6 +137,7 @@ export default function ReviewPage() {
           <h1 className="text-2xl font-bold">Session complete</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             You reviewed {total} card{total !== 1 ? "s" : ""}
+            {totalDue > total && ` · ${totalDue - total} more due`}
           </p>
         </div>
 
@@ -168,18 +175,25 @@ export default function ReviewPage() {
           <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
             <ChevronLeft className="mr-1 h-4 w-4" /> Dashboard
           </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              setResults([]);
-              setCurrentIndex(0);
-              setFlipped(false);
-              setDone(false);
-              planningApi.getSpacedRepetitionDue({ limit: 30 }).then(({ cards: due }) => setCards(due));
-            }}
-          >
-            <RefreshCw className="mr-1 h-4 w-4" /> Review more
-          </Button>
+          {totalDue > total && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setResults([]);
+                setCurrentIndex(0);
+                setFlipped(false);
+                setDone(false);
+                planningApi
+                  .getSpacedRepetitionDue({ limit: SESSION_SIZE })
+                  .then(({ cards: due, count }) => {
+                    setCards(due);
+                    setTotalDue(count);
+                  });
+              }}
+            >
+              <RefreshCw className="mr-1 h-4 w-4" /> Review {Math.min(SESSION_SIZE, totalDue - total)} more
+            </Button>
+          )}
         </div>
       </div>
     );

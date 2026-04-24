@@ -307,14 +307,6 @@ export const chatApi = {
       http.get("/chat/memories/")
     ),
 
-  extractConceptMap: (text: string, conversationId?: string) =>
-    extract<{
-      nodes: Array<{ id: string; label: string; description: string }>;
-      edges: Array<{ source: string; target: string; relationship?: string }>;
-      mastery: Record<string, "mastered" | "in_progress" | "gap">;
-    }>(
-      http.post("/chat/concept-map/", { text, conversation_id: conversationId })
-    ),
 };
 
 // PLANNING -------------------------------------------------------------------

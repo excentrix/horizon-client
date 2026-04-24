@@ -540,7 +540,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     planningApi
-      .getSpacedRepetitionDue({ limit: 1 })
+      .getSpacedRepetitionDue({ limit: 0 })
       .then(({ count }) => setDueCardCount(count))
       .catch(() => {});
   }, []);

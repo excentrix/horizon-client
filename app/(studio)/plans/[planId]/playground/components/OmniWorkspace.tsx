@@ -30,6 +30,7 @@ const SCAFFOLD_LABELS: Record<number, { short: string; desc: string; color: stri
 };
 
 interface OmniWorkspaceProps {
+  taskId?: string;
   initialCode?: string;
   starterCodeLoading?: boolean;
   scaffoldingLevel?: number;
@@ -76,6 +77,7 @@ function SandpackReviewButton({ onReview }: { onReview: (code: string) => void }
 }
 
 export function OmniWorkspace({
+  taskId,
   initialCode,
   starterCodeLoading = false,
   scaffoldingLevel = 3,
@@ -166,7 +168,7 @@ code .
   const dialLabel = SCAFFOLD_LABELS[scaffoldingLevel] ?? SCAFFOLD_LABELS[3];
 
   return (
-    <div className="relative flex h-[600px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
+    <div className="relative flex h-full min-h-[680px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm">
       {/* Omni-Toolbar */}
       <div className="flex items-center justify-between border-b bg-white px-4 py-2 text-sm text-slate-700">
         <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
@@ -459,7 +461,12 @@ code .
         {/* Diagram Mode */}
         {envMode === "diagram" && (
           <div className="h-full p-2">
-            <DiagramWorkspace onExport={(file) => onDiagramExport?.(file)} />
+            <DiagramWorkspace
+              taskId={taskId || taskTitle}
+              taskTitle={taskTitle}
+              onExport={(file) => onDiagramExport?.(file)}
+              onRequestMentorReview={onRequestMentorReview}
+            />
           </div>
         )}
 
