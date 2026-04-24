@@ -170,6 +170,7 @@ function PlaygroundFlow() {
   const [diagramAttachment, setDiagramAttachment] = useState<File | null>(null);
   const [starterCode, setStarterCode] = useState<string | undefined>(undefined);
   const [starterCodeLoading, setStarterCodeLoading] = useState(false);
+  const [scaffoldingLevel, setScaffoldingLevel] = useState(3);
   const [challengeVerification, setChallengeVerification] = useState<Record<string, unknown> | null>(null);
   const [challengeLoading, setChallengeLoading] = useState(false);
   const lastActivityAtRef = useRef<number>(Date.now());
@@ -382,6 +383,20 @@ function PlaygroundFlow() {
   useEffect(() => () => {
     if (starterCodePollRef.current) clearInterval(starterCodePollRef.current);
   }, []);
+
+  const handleScaffoldingLevelChange = async (level: number) => {
+    if (!activeTask?.id) return;
+    setScaffoldingLevel(level);
+    setStarterCodeLoading(true);
+    try {
+      const res = await planningApi.generateStarterCode(activeTask.id, level);
+      if (res.starter_code) setStarterCode(res.starter_code);
+    } catch {
+      // best-effort; keep existing code on error
+    } finally {
+      setStarterCodeLoading(false);
+    }
+  };
 
   // Detect thin/fallback lesson blocks that should be regenerated.
   // Thin = ≤3 blocks (real LLM output is 4-6) OR the only concept block content
@@ -802,6 +817,8 @@ function PlaygroundFlow() {
                 notes={workspaceNotes}
                 initialCode={getInitialCode(activeTask) ?? starterCode}
                 starterCodeLoading={starterCodeLoading}
+                scaffoldingLevel={scaffoldingLevel}
+                onScaffoldingLevelChange={handleScaffoldingLevelChange}
                 onNotesChange={setWorkspaceNotes}
                 onSaveNotes={() =>
                   telemetry.toastSuccess("Notes saved locally.")

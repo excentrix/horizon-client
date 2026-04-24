@@ -16,10 +16,13 @@ Versioning policy:
 - Dashboard now shows runtime outcome-gate visibility (`status`, envelope coverage, false-verify risk).
 - Draft review UX in mentor composer with opt-in pre-send warning checks.
 - Runtime console card in Simulation Lab for completion criteria, rubric progress, copilot guidance, and intervention state visibility.
+- New review route (`/review`) for spaced-repetition sessions with keyboard shortcuts and session summaries.
+- Concept map widget for mentor chat responses, with mastery-aware node styling and prerequisite graph rendering.
 
 ### Changed
 - Simulation Lab result handling now supports session-based envelopes for non-simulation adapters while preserving existing simulation endpoint behavior.
 - Planning API client/types expanded for surface-session lifecycle endpoints and outcome-gate efficacy payload fields.
+- Playground OmniWorkspace now includes a starter-code complexity dial (scaffolding level 1-5) with live regeneration.
 
 ## v0.1.4 (2026-04-22)
 

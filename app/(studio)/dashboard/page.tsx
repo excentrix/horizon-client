@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  BookOpen,
   BrainCircuit,
   ChevronLeft,
   ChevronRight,
@@ -535,6 +536,14 @@ export default function DashboardPage() {
   );
   const [calendarTasks, setCalendarTasks] = useState<DashboardTask[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
+  const [dueCardCount, setDueCardCount] = useState(0);
+
+  useEffect(() => {
+    planningApi
+      .getSpacedRepetitionDue({ limit: 1 })
+      .then(({ count }) => setDueCardCount(count))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -826,6 +835,27 @@ export default function DashboardPage() {
                 </p>
               )} */}
             {/* </div> */}
+            {dueCardCount > 0 && (
+              <button
+                onClick={() => router.push("/review")}
+                className="flex w-full items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left transition-colors hover:bg-amber-100 dark:border-amber-800/40 dark:bg-amber-950/30 dark:hover:bg-amber-950/50"
+              >
+                <div className="flex items-center gap-3">
+                  <BookOpen className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <div>
+                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                      {dueCardCount} card{dueCardCount !== 1 ? "s" : ""} due for review
+                    </p>
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                      ~{Math.max(1, Math.round(dueCardCount * 0.4))} min · spaced repetition session
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  Start →
+                </span>
+              </button>
+            )}
             <div className={`${SHELL} grid grid-cols-2 gap-2 p-3`}>
               <StatTile
                 label="Weekly Tasks"
