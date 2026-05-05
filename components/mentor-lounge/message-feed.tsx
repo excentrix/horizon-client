@@ -544,13 +544,15 @@ const MessageRow = memo(function MessageRow({
       <Message from={isUser ? "user" : "assistant"}>
         <MessageContent
           className={cn(
-            "max-w-[72%] rounded-2xl px-4 py-3 text-sm shadow-[var(--shadow-1)]",
+            "min-w-0 max-w-[72%] rounded-2xl px-4 py-3 text-sm shadow-[var(--shadow-1)]",
             "group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground",
             !isUser &&
               `${theme?.bubbleBg ?? "bg-white/80"} ${theme?.bubbleText ?? "text-foreground"} border border-white/70`,
           )}
         >
-          <MessageResponse>{normalizeMessageContent(message.content)}</MessageResponse>
+          <MessageResponse className="min-w-0 max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {normalizeMessageContent(message.content)}
+          </MessageResponse>
 
           {message.metadata?.graph_learning_snapshot ? (
             <LearningGraphPill snapshot={message.metadata.graph_learning_snapshot} />
@@ -667,7 +669,7 @@ const StreamingMessageRow = memo(function StreamingMessageRow({
       <Message from="assistant">
         <MessageContent
           className={cn(
-            "max-w-[72%] rounded-2xl border border-white/70 px-4 py-3 text-sm shadow-[var(--shadow-1)]",
+            "min-w-0 max-w-[72%] rounded-2xl border border-white/70 px-4 py-3 text-sm shadow-[var(--shadow-1)]",
             theme?.bubbleBg ?? "bg-white/80",
             theme?.bubbleText ?? "text-foreground",
           )}

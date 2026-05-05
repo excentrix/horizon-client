@@ -122,6 +122,65 @@ const appendMessageToCache = (
   });
 };
 
+const upsertMessageInCache = (
+  queryClient: QueryClient,
+  conversationId: string,
+  message: ChatMessage,
+) => {
+  queryClient.setQueryData<
+    InfiniteData<PaginatedResponse<ChatMessage>> | undefined
+  >(["conversations", conversationId, "messages"], (previous) => {
+    if (!previous) {
+      return {
+        pages: [
+          {
+            results: [message],
+            count: 1,
+            next: null,
+            previous: null,
+          },
+        ],
+        pageParams: [null],
+      };
+    }
+
+    let found = false;
+    const newPages = previous.pages.map((page) => {
+      const nextResults = page.results.map((existing) => {
+        if (existing.id !== message.id) {
+          return existing;
+        }
+        found = true;
+        return {
+          ...existing,
+          ...message,
+          metadata: {
+            ...(existing.metadata ?? {}),
+            ...(message.metadata ?? {}),
+          },
+        };
+      });
+
+      return {
+        ...page,
+        results: nextResults,
+      };
+    });
+
+    if (!found) {
+      const firstPage = { ...newPages[0] };
+      firstPage.results = sortMessages([...firstPage.results, message]);
+      firstPage.count = firstPage.results.length;
+      newPages[0] = firstPage;
+    }
+
+    return {
+      ...previous,
+      pages: newPages,
+    };
+  });
+};
+
 const replaceMessageInCache = (
   queryClient: QueryClient,
   conversationId: string,
@@ -169,6 +228,24 @@ const removeMessageFromCache = (
 
     return { ...previous, pages: newPages };
   });
+};
+
+const messageExistsInCache = (
+  queryClient: QueryClient,
+  conversationId: string,
+  messageId: string,
+) => {
+  const data = queryClient.getQueryData<
+    InfiniteData<PaginatedResponse<ChatMessage>> | undefined
+  >(["conversations", conversationId, "messages"]);
+
+  if (!data) {
+    return false;
+  }
+
+  return data.pages.some((page) =>
+    page.results.some((message) => message.id === messageId),
+  );
 };
 
 const updateConversationSnapshot = (
@@ -610,6 +687,11 @@ export function useChatSocket(conversationId: string | null) {
                 payload?.tool_runtime_invocations || payload?.tool_invocations;
 
               if (message && conversationId) {
+                const existed = messageExistsInCache(
+                  queryClient,
+                  conversationId,
+                  message.id,
+                );
                 message.conversation ??= conversationId;
                 if (toolRuntime && Array.isArray(toolRuntime)) {
                   message.metadata = {
@@ -617,8 +699,10 @@ export function useChatSocket(conversationId: string | null) {
                     tool_runtime_invocations: toolRuntime,
                   };
                 }
-                appendMessageToCache(queryClient, conversationId, message);
-                updateConversationSnapshot(queryClient, conversationId, message);
+                upsertMessageInCache(queryClient, conversationId, message);
+                updateConversationSnapshot(queryClient, conversationId, message, {
+                  incrementCount: !existed,
+                });
               }
 
               setStreamState((previous) => ({
@@ -980,11 +1064,34 @@ export function useChatSocket(conversationId: string | null) {
                 break;
               }
               markHandledChatEvent(type, payload);
+              const message = payload?.message as ChatMessage | undefined;
+              const proactiveConversationId =
+                (payload?.conversation_id as string | undefined) ??
+                message?.conversation;
+
+              if (message && proactiveConversationId) {
+                const existed = messageExistsInCache(
+                  queryClient,
+                  proactiveConversationId,
+                  message.id,
+                );
+                message.conversation ??= proactiveConversationId;
+                upsertMessageInCache(queryClient, proactiveConversationId, message);
+                updateConversationSnapshot(queryClient, proactiveConversationId, message, {
+                  incrementCount: !existed,
+                });
+                void queryClient.invalidateQueries({
+                  queryKey: ["conversations", proactiveConversationId, "messages"],
+                });
+                void queryClient.invalidateQueries({ queryKey: ["conversations"] });
+              }
+
               window.dispatchEvent(
                 new CustomEvent("proactive_mentor_message", {
                   detail: {
-                    conversationId: payload?.conversation_id,
+                    conversationId: proactiveConversationId,
                     triggerType: payload?.trigger_type,
+                    messageId: message?.id,
                   },
                 }),
               );

@@ -214,7 +214,7 @@ export default function RoadmapPage() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col gap-4 p-4 lg:p-6">
+    <div className="flex min-h-full w-full flex-col gap-4 p-4 lg:p-6">
       <div className="rounded-2xl border bg-gradient-to-r from-sky-50 via-white to-indigo-50 p-4 lg:p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -236,9 +236,9 @@ export default function RoadmapPage() {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-        <div className="flex min-h-0 flex-col gap-4">
-          <div className="min-h-0 overflow-hidden rounded-2xl border bg-background shadow-sm">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="overflow-hidden rounded-2xl border bg-background shadow-sm">
             <RoadmapJourneyMap roadmap={roadmap} />
           </div>
 

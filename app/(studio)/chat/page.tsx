@@ -334,15 +334,11 @@ function ChatContent() {
       typeof window !== "undefined"
         ? window.localStorage.getItem("onboarding_session_key")
         : null;
-    if (!sessionKey) {
-      setIntakeError("Onboarding session not found. Please restart onboarding.");
-      return;
-    }
     setIntakeSubmitting(true);
     setIntakeError(null);
     try {
       await authApi.extractMentorIntake({
-        session_key: sessionKey,
+        session_key: sessionKey || undefined,
         conversation_id: activeConversation.id,
         complete: true,
       });
@@ -363,15 +359,11 @@ function ChatContent() {
       typeof window !== "undefined"
         ? window.localStorage.getItem("onboarding_session_key")
         : null;
-    if (!sessionKey) {
-      setIntakeError("Onboarding session not found. Please restart onboarding.");
-      return;
-    }
     setIntakePreviewLoading(true);
     setIntakeError(null);
     try {
       const data = await authApi.extractMentorIntake({
-        session_key: sessionKey,
+        session_key: sessionKey || undefined,
         conversation_id: activeConversation.id,
         complete: false,
       });
@@ -1325,7 +1317,7 @@ useEffect(() => {
                                 Mentor Intake
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                This intake is required before your roadmap is generated.
+                                This debrief sharpens mentor context and improves personalization across your roadmap and plans.
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -1364,9 +1356,9 @@ useEffect(() => {
                           </div>
                           {intakeSubmitted || planUpdates.length ? (
                             <div className="rounded-lg border border-emerald-200/60 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-900">
-                              <div className="font-semibold">Roadmap generation in progress</div>
+                              <div className="font-semibold">Personalization update in progress</div>
                               <div className="text-[11px] text-emerald-700/80">
-                                We&apos;re building your roadmap now. Updates will appear here.
+                                We&apos;re syncing the mentor context you confirmed. Updates will appear here.
                               </div>
                             </div>
                           ) : null}
@@ -1400,9 +1392,9 @@ useEffect(() => {
                       <Dialog open={intakeModalOpen} onOpenChange={setIntakeModalOpen}>
                         <DialogContent className="max-w-xl">
                           <DialogHeader>
-                            <DialogTitle>Mentor Intake Summary</DialogTitle>
+                            <DialogTitle>Mentor Debrief Summary</DialogTitle>
                             <DialogDescription>
-                              Review what the mentor captured. If it looks good, generate your roadmap.
+                              Review what the mentor captured. If it looks right, save it to improve roadmap and plan personalization.
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-3 text-sm">
@@ -1447,7 +1439,7 @@ useEffect(() => {
                               }}
                               disabled={intakeSubmitting}
                             >
-                              {intakeSubmitting ? "Saving..." : "Confirm & generate"}
+                              {intakeSubmitting ? "Saving..." : "Confirm & save"}
                             </Button>
                           </DialogFooter>
                         </DialogContent>

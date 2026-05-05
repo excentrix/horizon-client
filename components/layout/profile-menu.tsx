@@ -22,7 +22,7 @@ import { telemetry } from "@/lib/telemetry";
 
 type ProfileMenuVariant = "default" | "compact";
 
-function toTitleCase(name?: string | null) {
+export function toTitleCase(name?: string | null) {
   if (!name) return "";
   return name
     .trim()

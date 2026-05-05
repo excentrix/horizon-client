@@ -30,6 +30,7 @@ import {
   MoodSensor,
 } from "./DashboardWidgets";
 import { useNotificationsSocket } from "@/hooks/use-notifications";
+import { toTitleCase } from "@/components/layout/profile-menu";
 
 interface DashboardTask {
   id: string;
@@ -634,7 +635,9 @@ export default function DashboardPage() {
     (efficacy?.nudge_recovery_rate ?? 0) * 100,
   );
   const outcomeGate = efficacy?.outcome_gate;
-  const outcomeGateStatus = String(outcomeGate?.status ?? "not_run").toLowerCase();
+  const outcomeGateStatus = String(
+    outcomeGate?.status ?? "not_run",
+  ).toLowerCase();
   const outcomeGateTone =
     outcomeGateStatus === "pass"
       ? "border-emerald-500/35 bg-emerald-500/10"
@@ -751,13 +754,13 @@ export default function DashboardPage() {
         <header className="flex shrink-0 items-center justify-between rounded-2xl border border-border/80 bg-[color:var(--surface)] px-4 py-3">
           <div>
             <p className="font-display text-2xl leading-tight">
-              Good morning{user?.first_name ? `, ${user.first_name}` : ""}
+              Good morning{toTitleCase((user?.first_name) ? `, ${user.first_name}` : "")}
             </p>
             <p className="text-xs text-muted-foreground">{momentumHeadline}</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
-            <VeloTracker />
-            <div className="h-6 w-px bg-border my-auto hidden sm:block"></div>
+            {/* <VeloTracker /> */}
+            {/* <div className="h-6 w-px bg-border my-auto hidden sm:block"></div> */}
             <Button
               variant="cta"
               size="sm"
@@ -770,9 +773,9 @@ export default function DashboardPage() {
                 router.push("/plans");
               }}
             >
-              Continue Mission
+              Continue Learning
             </Button>
-            <Button
+            {/* <Button
               variant="accent"
               size="sm"
               className="h-8 px-3 font-mono-ui text-[11px]"
@@ -787,21 +790,21 @@ export default function DashboardPage() {
               onClick={() => router.push("/plans")}
             >
               View Plans
-            </Button>
+            </Button> */}
           </div>
         </header>
 
         <div className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)_minmax(0,1fr)] xl:grid-rows-[auto_minmax(0,1fr)]">
           {/* ── Column 1: Identity & Action ───────────────────────────── */}
-          <section className="grid min-h-0 content-start gap-4 overflow-y-auto pr-1 xl:col-start-1 xl:row-start-1 xl:row-span-2 xl:overflow-hidden">
+          <section className="grid min-h-0 h-full content-start gap-4 overflow-y-auto pr-1 xl:col-start-1 xl:row-start-1 xl:row-span-2 xl:overflow-hidden">
             {/* <div className={`${SHELL} p-3`}> */}
-              {/* <div className="mb-2 flex items-center justify-between">
+            {/* <div className="mb-2 flex items-center justify-between">
                 <p className="font-mono-ui text-[11px] text-muted-foreground">Cross-Sector Efficacy (7d)</p>
                 <Badge variant="outline" className="text-[10px] font-mono-ui">
                   {domainBreakdownRows.length} domain{domainBreakdownRows.length === 1 ? "" : "s"}
                 </Badge>
               </div> */}
-              {/* {domainBreakdownRows.length ? (
+            {/* {domainBreakdownRows.length ? (
                 <div className="space-y-2">
                   {domainBreakdownRows.map((row) => (
                     <div
@@ -827,8 +830,8 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   ))} */}
-                {/* </div> */}
-              {/* ) : (
+            {/* </div> */}
+            {/* ) : (
                 <p className="text-xs text-muted-foreground">
                   No submitted simulations yet this week. Run a simulator to
                   start seeing sector metrics.
@@ -844,10 +847,12 @@ export default function DashboardPage() {
                   <BookOpen className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
                   <div>
                     <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                      {dueCardCount} card{dueCardCount !== 1 ? "s" : ""} due for review
+                      {dueCardCount} card{dueCardCount !== 1 ? "s" : ""} due for
+                      review
                     </p>
                     <p className="text-xs text-amber-700 dark:text-amber-400">
-                      ~{Math.max(1, Math.round(dueCardCount * 0.4))} min · spaced repetition session
+                      ~{Math.max(1, Math.round(dueCardCount * 0.4))} min ·
+                      spaced repetition session
                     </p>
                   </div>
                 </div>
@@ -856,7 +861,7 @@ export default function DashboardPage() {
                 </span>
               </button>
             )}
-            <div className={`${SHELL} grid grid-cols-2 gap-2 p-3`}>
+            {/* <div className={`${SHELL} grid grid-cols-2 gap-2 p-3`}>
               <StatTile
                 label="Weekly Tasks"
                 value={weeklyStats?.tasks_completed ?? 0}
@@ -887,8 +892,8 @@ export default function DashboardPage() {
                 value={`${nudgeRecoveryPct}%`}
                 caption="Pass after mentor nudge"
               />
-            </div>
-            <div className={`${SHELL} p-3`}>
+            </div> */}
+            {/* <div className={`${SHELL} p-3`}>
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-semibold text-foreground">Runtime Outcome Gate</p>
                 <span
@@ -911,9 +916,9 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </div>
-            </div>
+            </div> */}
             <TheCircleTeaser />
-            <SkillRadarChart />
+            <SkillRadarChart className="" />
             {/* <XPQuests /> */}
             <BackgroundTaskMonitor analysisEvents={analysisEvents} />
           </section>

@@ -26,6 +26,7 @@ Versioning policy:
 
 ### Commits
 - feat(plans-v2): expand assessment, mentor persona context, and planning client contracts
+- feat(studio): improve chat runtime feed, dashboard signals, and roadmap rendering
 
 ## v0.1.4 (2026-04-22)
 
