@@ -385,7 +385,7 @@ export function PlanV2FocusConsole() {
             className="pointer-events-none absolute h-px w-px opacity-0"
           />
 
-          <div className="mb-1.5 flex h-6 items-end gap-1 rounded-lg border border-white/15 bg-white/5 px-1.5 py-1">
+          {/* <div className="mb-1.5 flex h-6 items-end gap-1 rounded-lg border border-white/15 bg-white/5 px-1.5 py-1">
             {[22, 35, 18, 46, 28, 54, 26, 38, 20].map((base, index) => {
               const scaled = Math.max(
                 10,
@@ -402,7 +402,7 @@ export function PlanV2FocusConsole() {
                 />
               );
             })}
-          </div>
+          </div> */}
 
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-white/70">

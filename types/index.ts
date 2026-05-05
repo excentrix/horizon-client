@@ -129,7 +129,7 @@ export type ConversationPriority = "low" | "normal" | "high" | "urgent";
 export interface AIPersonality {
   id: UUID;
   name: string;
-  type: "general" | "supportive" | "analytical" | "creative" | "practical" | "socratic" | "motivational" | "specialized";
+  type: "general" | "supportive" | "analytical" | "creative" | "practical" | "socratic" | "motivational" | "specialized" | "plan_generated";
   description: string;
   system_prompt?: string;
   avatar_url?: string;
@@ -138,6 +138,29 @@ export interface AIPersonality {
   is_active: boolean;
   usage_count: number;
   created_at: string;
+  archetype?: string;
+  is_generated?: boolean;
+  persona_preview?: string;
+  mentor_profile?: {
+    age?: number | null;
+    current_role?: string | null;
+    years_in_domain?: number | null;
+    domain?: string | null;
+    career_entry_story?: string | null;
+    how_i_got_in?: string | null;
+    biggest_time_wasters?: string[];
+    what_actually_worked?: string[];
+    current_honest_gaps?: string[];
+    communication_texture?: string | null;
+    teaching_philosophy?: string | null;
+    adaptation_overlay?: {
+      bridging_paragraph?: string;
+      tone_adjustment?: string;
+      priority_gap_framing?: string;
+      relevant_waster_indices?: number[];
+      relevant_worked_indices?: number[];
+    } | null;
+  } | null;
 }
 
 export interface ConversationSummary {
@@ -772,6 +795,18 @@ export interface LearningPlan {
   }[];
   specialized_mentor?: AIPersonality | null;
   specialized_mentor_data?: (AIPersonality & { created_at?: string }) | null;
+  specialized_mentor_status?: {
+    status: string;
+    mode?: string | null;
+    error?: string | null;
+    has_persona: boolean;
+    mentor_name?: string | null;
+    archetype?: string | null;
+    allow_regenerate?: boolean;
+    mentor_origin?: string | null;
+    mentor_origin_detail?: string | null;
+    is_dev_environment?: boolean;
+  } | null;
   specialized_conversation_id?: string | null;
   conversation_id?: string | null;
   primary_domain_name?: string | null;

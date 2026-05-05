@@ -28,6 +28,9 @@ interface PreAssessmentQuestion {
   explanation: string;
   competency_name: string;
   question_type?: string | null;
+  why_asked?: string | null;
+  signal_source?: string | null;
+  impact_area?: string | null;
 }
 
 interface CompetencyResult {
@@ -37,7 +40,17 @@ interface CompetencyResult {
   total: number;
   proficiency_level: string;
   self_rating?: boolean;
+  impact_areas?: string[];
+  signal_sources?: string[];
 }
+
+const SELF_RATING_TONE: Record<string, string> = {
+  developing: "text-slate-700 bg-slate-50 border-slate-200",
+  emerging: "text-slate-700 bg-slate-50 border-slate-200",
+  proficient: "text-blue-600 bg-blue-50 border-blue-200",
+  advanced: "text-emerald-600 bg-emerald-50 border-emerald-200",
+  expert: "text-violet-600 bg-violet-50 border-violet-200",
+};
 
 const LEVEL_COLORS: Record<string, string> = {
   developing: "text-red-600 bg-red-50 border-red-200",
@@ -55,6 +68,26 @@ const LEVEL_NUMERIC: Record<string, number> = {
   expert: 100,
 };
 
+function getCompetencyChipClass(result: CompetencyResult) {
+  if (result.self_rating) {
+    return SELF_RATING_TONE[result.proficiency_level] ?? "text-slate-700 bg-slate-50 border-slate-200";
+  }
+  return LEVEL_COLORS[result.proficiency_level] ?? "bg-slate-50 border-slate-200 text-slate-700";
+}
+
+function getLearnerFacingLevel(result: CompetencyResult) {
+  if (!result.self_rating) {
+    return result.proficiency_level;
+  }
+  if (result.proficiency_level === "developing") {
+    return "foundational";
+  }
+  if (result.proficiency_level === "emerging") {
+    return "building";
+  }
+  return result.proficiency_level;
+}
+
 export default function PreAssessmentPage() {
   const params = useParams();
   const router = useRouter();
@@ -69,6 +102,12 @@ export default function PreAssessmentPage() {
   const [results, setResults] = useState<{
     competency_results: CompetencyResult[];
     tasks_marked_skippable: number;
+    reinforcement_tasks_created?: {
+      task_id: string;
+      title: string;
+      competency_name: string;
+      existing?: boolean;
+    }[];
   } | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -105,7 +144,6 @@ export default function PreAssessmentPage() {
   });
 
   const questions: PreAssessmentQuestion[] = data?.questions ?? [];
-  const isSelfAssessmentOnly = questions.length > 0 && questions.every((q) => q.correct_index === null);
   const currentQ = questions[currentIndex];
 
   const handleSelect = useCallback(
@@ -179,6 +217,8 @@ export default function PreAssessmentPage() {
 
   // ── Results ──────────────────────────────────────────────────────────────
   if (phase === "results" && results) {
+    const newPrepTasks =
+      results.reinforcement_tasks_created?.filter((task) => !task.existing) ?? [];
     const radarData = results.competency_results.map((r) => ({
       competency: r.competency_name.length > 18
         ? r.competency_name.slice(0, 16) + "…"
@@ -206,7 +246,7 @@ export default function PreAssessmentPage() {
               <p className="text-xs text-muted-foreground">
                 {results.tasks_marked_skippable > 0
                   ? `${results.tasks_marked_skippable} task${results.tasks_marked_skippable > 1 ? "s" : ""} marked as skippable based on your results.`
-                  : "Plan personalised based on your current knowledge."}
+                  : "Your starting point has been applied to the plan."}
               </p>
             </div>
           </div>
@@ -216,8 +256,14 @@ export default function PreAssessmentPage() {
             <div className="mt-1">
               {results.tasks_marked_skippable > 0
                 ? `You can skip ${results.tasks_marked_skippable} task${results.tasks_marked_skippable > 1 ? "s" : ""} you already know.`
-                : "No tasks were skipped, but the difficulty and lesson depth will be tuned to your level."}
+                : "Your plan starting depth has been tuned to your current level."}
             </div>
+            {newPrepTasks.length > 0 && (
+              <div className="mt-2 text-emerald-900">
+                Added {newPrepTasks.length} short prep task
+                {newPrepTasks.length > 1 ? "s" : ""} near the start of the plan.
+              </div>
+            )}
           </div>
 
           {radarData.length >= 3 && (
@@ -245,20 +291,31 @@ export default function PreAssessmentPage() {
             {results.competency_results.map((result) => (
               <div
                 key={result.competency_name}
-                className={`flex items-center justify-between rounded-lg border px-3 py-2 text-xs ${LEVEL_COLORS[result.proficiency_level] ?? "bg-slate-50 border-slate-200 text-slate-700"}`}
+                className={`flex items-center justify-between rounded-lg border px-3 py-2 text-xs ${getCompetencyChipClass(result)}`}
               >
                 <span className="font-medium truncate mr-2">{result.competency_name}</span>
                 <div className="flex items-center gap-2 shrink-0">
                   {result.self_rating ? (
-                    <span className="opacity-75">Self rating</span>
+                    <span className="opacity-75">Starting point</span>
                   ) : (
                     <span className="opacity-75">{result.correct}/{result.total} correct</span>
                   )}
-                  <span className="capitalize font-semibold">{result.proficiency_level}</span>
+                  <span className="capitalize font-semibold">{getLearnerFacingLevel(result)}</span>
                 </div>
               </div>
             ))}
           </div>
+
+          {newPrepTasks.length > 0 && (
+            <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs text-amber-900">
+              <div className="font-semibold">Added prep tasks</div>
+              <div className="mt-2 space-y-1">
+                {newPrepTasks.map((task) => (
+                  <div key={task.task_id}>{task.title}</div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="mt-4 flex flex-wrap justify-end gap-2">
             <Button
@@ -339,13 +396,6 @@ export default function PreAssessmentPage() {
 
         <h2 className="text-base font-medium text-slate-800">{currentQ.question}</h2>
 
-        {isSelfAssessmentOnly && (
-          <div className="rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-xs text-violet-700">
-            This is a self-assessment (no right or wrong). It helps tailor your plan when we don’t yet have
-            detailed competency data.
-          </div>
-        )}
-
         <div className="space-y-2">
           {currentQ.options.map((opt, idx) => {
             let cls =
@@ -384,20 +434,16 @@ export default function PreAssessmentPage() {
           })}
         </div>
 
-        {showExplanation && (
+        {showExplanation && !isSelfRating && (
           <div
             className={`rounded-lg border p-4 text-sm ${
-              (currentQ.correct_index === null || currentQ.correct_index === undefined)
-                ? "border-slate-200 bg-slate-50 text-slate-700"
-                : isCorrect
+              isCorrect
                 ? "border-emerald-100 bg-emerald-50 text-emerald-800"
                 : "border-orange-100 bg-orange-50 text-orange-800"
             }`}
           >
             <p className="font-medium mb-1">
-              {(currentQ.correct_index === null || currentQ.correct_index === undefined)
-                ? "Self-assessment"
-                : isCorrect
+              {isCorrect
                 ? "Correct!"
                 : "Review concept:"}
             </p>
@@ -432,7 +478,7 @@ export default function PreAssessmentPage() {
                 </>
               ) : (
                 <>
-                  See My Results
+                  Apply Personalization
                   <Sparkles className="ml-2 h-4 w-4" />
                 </>
               )}

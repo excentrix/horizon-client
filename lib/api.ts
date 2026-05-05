@@ -151,7 +151,7 @@ export const authApi = {
   completeOnboarding: () =>
     extract<{ message: string }>(http.post("/auth/onboarding/complete/")),
   extractMentorIntake: (payload: {
-    session_key: string;
+    session_key?: string;
     conversation_id: string;
     complete: boolean;
   }) =>
@@ -380,6 +380,16 @@ export const planningApi = {
     extract<{ message: string; mentor_id: string }>(
       http.post(`/planning/plans/${planId}/switch_mentor/`, payload)
     ),
+  regenerateMentor: (planId: string) =>
+    extract<LearningPlan & {
+      mentor_regeneration?: {
+        success: boolean;
+        status: string;
+        message: string;
+        mentor_id?: string;
+        conversation_id?: string | null;
+      };
+    }>(http.post(`/planning/plans/${planId}/regenerate-mentor/`)),
   activateExamMode: (
     planId: string,
     payload: { exam_date: string; exam_topic: string }
@@ -776,6 +786,8 @@ export const planningApi = {
   getPreAssessment: (planId: string) =>
     extract<{
       generated_at: string;
+      context_summary?: string[];
+      unresolved_areas?: string[];
       questions: Array<{
         id: string;
         question: string;
@@ -784,6 +796,9 @@ export const planningApi = {
         explanation: string;
         competency_name: string;
         question_type?: string | null;
+        why_asked?: string | null;
+        signal_source?: string | null;
+        impact_area?: string | null;
       }>;
     }>(http.get(`/planning/plans/${planId}/pre-assessment/`)),
 
@@ -796,8 +811,16 @@ export const planningApi = {
         total: number;
         proficiency_level: string;
         self_rating?: boolean;
+        impact_areas?: string[];
+        signal_sources?: string[];
       }>;
       tasks_marked_skippable: number;
+      reinforcement_tasks_created?: Array<{
+        task_id: string;
+        title: string;
+        competency_name: string;
+        existing?: boolean;
+      }>;
       pre_assessed: boolean;
     }>(http.post(`/planning/plans/${planId}/pre-assessment/`, { answers })),
 

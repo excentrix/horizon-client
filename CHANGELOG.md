@@ -24,6 +24,9 @@ Versioning policy:
 - Planning API client/types expanded for surface-session lifecycle endpoints and outcome-gate efficacy payload fields.
 - Playground OmniWorkspace now includes a starter-code complexity dial (scaffolding level 1-5) with live regeneration.
 
+### Commits
+- feat(plans-v2): expand assessment, mentor persona context, and planning client contracts
+
 ## v0.1.4 (2026-04-22)
 
 ### Commits

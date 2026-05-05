@@ -219,6 +219,23 @@ export function usePlanMutations(planId?: string) {
     },
   });
 
+  const regenerateMentor = useMutation({
+    mutationFn: () => {
+      if (!planId) throw new Error("Missing plan id");
+      return planningApi.regenerateMentor(planId);
+    },
+    onSuccess: (data) => {
+      telemetry.toastInfo(
+        "Mentor updated",
+        data.mentor_regeneration?.message || "Mentor persona regenerated."
+      );
+      invalidate();
+    },
+    onError: (error) => {
+      telemetry.toastError("Unable to regenerate mentor", error instanceof Error ? error.message : undefined);
+    },
+  });
+
   const activateExamMode = useMutation({
     mutationFn: (payload: { exam_date: string; exam_topic: string }) => {
       if (!planId) throw new Error("Missing plan id");
@@ -269,6 +286,7 @@ export function usePlanMutations(planId?: string) {
     completePlan,
     updateTaskStatus,
     switchMentor,
+    regenerateMentor,
     activateExamMode,
     deactivateExamMode,
     rescheduleTask: generateReschedule,

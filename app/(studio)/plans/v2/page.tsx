@@ -64,6 +64,7 @@ function PlansV2Content() {
     resumePlan,
     updateTaskStatus,
     switchMentor,
+    regenerateMentor,
     rescheduleTask,
   } = usePlanMutations(selectedPlanId ?? undefined);
 
@@ -256,7 +257,11 @@ function PlansV2Content() {
       {!plansLoading && !planLoading && plan ? (
         <div className="grid min-h-0 flex-1 items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(360px,0.95fr)]">
           <main className="min-w-0 space-y-4">
-            <PlanV2Context plan={plan} />
+            <PlanV2Context
+              plan={plan}
+              onRegenerateMentor={() => regenerateMentor.mutate()}
+              regeneratingMentor={regenerateMentor.isPending}
+            />
             <PlanV2NextActions
               planId={plan.id}
               tasks={tasks}

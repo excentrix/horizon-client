@@ -21,10 +21,12 @@ function InsightsRailBody({
   switchMentorLoading,
 }: PlanV2InsightsRailProps) {
   const mentorId = plan.specialized_mentor?.id ?? plan.specialized_mentor_data?.id;
+  const mentorStatus = plan.specialized_mentor_status;
   const mentorName =
     plan.specialized_mentor?.name ??
     plan.specialized_mentor_data?.name ??
-    "Horizon mentor";
+    mentorStatus?.mentor_name ??
+    "Mentor persona syncing";
 
   const inProgress = tasks.filter((task) => task.status === "in_progress").length;
   const overdue = tasks.filter((task) => task.status === "overdue").length;
@@ -78,6 +80,12 @@ function InsightsRailBody({
             >
               {switchMentorLoading ? "Switching…" : `Sync ${mentorName}`}
             </Button>
+          ) : mentorStatus?.has_persona === false ? (
+            <p className="text-[11px] text-[#414141]/65">
+              {mentorStatus.status === "failed"
+                ? "Mentor persona unavailable for this plan."
+                : "Mentor persona is still syncing."}
+            </p>
           ) : null}
         </div>
       </section>

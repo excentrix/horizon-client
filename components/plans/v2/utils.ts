@@ -66,7 +66,11 @@ export function statusLabel(status: TaskStatus): string {
 
 export function planContext(plan: LearningPlan) {
   const status = plan.status.replace("_", " ");
-  const mentor = plan.specialized_mentor?.name ?? plan.specialized_mentor_data?.name ?? "Mentor ready";
+  const mentor =
+    plan.specialized_mentor?.name ??
+    plan.specialized_mentor_data?.name ??
+    plan.specialized_mentor_status?.mentor_name ??
+    (plan.specialized_mentor_status?.has_persona === false ? "Mentor persona syncing" : "Mentor ready");
   const today = startOfDay(new Date());
   const tasks = plan.daily_tasks ?? [];
 

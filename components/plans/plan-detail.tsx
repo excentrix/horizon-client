@@ -68,12 +68,14 @@ export function PlanDetail({
   onActivateMentor,
   actionStatus,
 }: PlanDetailProps) {
+  const mentorStatus = plan.specialized_mentor_status;
   const mentorId =
     plan.specialized_mentor?.id ?? plan.specialized_mentor_data?.id;
   const mentorName =
     plan.specialized_mentor?.name ??
     plan.specialized_mentor_data?.name ??
-    "Specialist Mentor";
+    mentorStatus?.mentor_name ??
+    "Mentor persona syncing";
   const mentorAvailable = Boolean(mentorId);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [showAllMilestones, setShowAllMilestones] = useState(false);
@@ -457,7 +459,7 @@ export function PlanDetail({
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-violet-900">Personalise this plan</p>
-                  <p className="text-xs text-violet-700">Take a 5-minute quiz to skip tasks you already know.</p>
+                  <p className="text-xs text-violet-700">Take a 5-minute calibration quiz so Horizon can skip known work, deepen weak areas, and add targeted warm-ups if needed.</p>
                 </div>
                 <Button
                   asChild
