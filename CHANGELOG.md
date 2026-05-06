@@ -25,8 +25,15 @@ Versioning policy:
 - Playground OmniWorkspace now includes a starter-code complexity dial (scaffolding level 1-5) with live regeneration.
 
 ### Commits
-- feat(plans-v2): expand assessment, mentor persona context, and planning client contracts
-- feat(studio): improve chat runtime feed, dashboard signals, and roadmap rendering
+- `175188d` feat(playground): ship multi-surface runtime with feynman teach-back UX
+- `d5b100b` feat(studio): improve roadmap/progress surfaces and mentor feed wiring
+- `b0844f3` feat(studio): improve runtime chat, dashboard, and roadmap UX
+- `dd010e7` feat(plans-v2): extend assessment and mentor persona UX contracts
+- `043a626` feat(review): update spaced repetition logic and enhance review session details
+- `df8f52a` merge: integrate feat/canvas-collab-excalidraw-v1 into v0.2
+- `27cd9bf` feat(learning-ui): add review mode, concept maps, and scaffolding dial
+- `39121ac` feat: ship excalidraw workspace and review flow
+- `4944046` feat(studio-runtime): add surface session UX, runtime console, and draft review
 
 ## v0.1.4 (2026-04-22)
 
