@@ -19,6 +19,8 @@ import {
   Target,
   HelpCircle,
   Lock,
+  ArrowRight,
+  CheckCircle2,
 } from "lucide-react";
 import { MathMarkdown } from "@/components/markdown/MathMarkdown";
 import { planningApi } from "@/lib/api";
@@ -31,6 +33,7 @@ interface LearningPanelProps {
   onFeedbackChange: (feedback: FeedbackState) => void;
   onRegenerateLesson?: () => void;
   onHintRequested?: () => void;
+  onComplete?: () => void;
 }
 
 type LessonBlock = NonNullable<DailyTask["lesson_blocks"]>[number];
@@ -250,11 +253,13 @@ export function LearningPanel({
   blockFeedback,
   onFeedbackChange,
   onHintRequested,
+  onComplete,
 }: LearningPanelProps) {
   const panelMountTime = useRef(Date.now());
   const [activeBlockIndex, setActiveBlockIndex] = useState(0);
   const [readingMode, setReadingMode] = useState<"focus" | "full">("focus");
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(0);
+  const [videoEmbedFailed, setVideoEmbedFailed] = useState(false);
 
   const resources = (activeTask?.online_resources ?? []) as Array<
     string | Record<string, unknown>
@@ -324,11 +329,16 @@ export function LearningPanel({
 
   useEffect(() => {
     setActiveBlockIndex(0);
+    setVideoEmbedFailed(false);
   }, [activeTask?.id]);
 
   useEffect(() => {
     setActiveSegmentIndex(0);
   }, [activeBlockIndex, activeTask?.id]);
+
+  const isLastBlock = activeBlockIndex >= studyBlocks.length - 1;
+  const isLastSegment = activeSegmentIndex >= activeSegments.length - 1;
+  const isAtEnd = isLastBlock && (readingMode !== "focus" || isLastSegment);
 
   const handleFeedback = (blockId: string, helpful: boolean) => {
     onFeedbackChange({
@@ -360,7 +370,7 @@ export function LearningPanel({
         <p className="text-muted-foreground">{activeTask.description}</p> */}
       </div>
 
-      {videoEmbed ? (
+      {videoEmbed && !videoEmbedFailed ? (
         <Card className="overflow-hidden border-none shadow-md ring-1 ring-black/5">
           <div className="aspect-video w-full bg-slate-950">
             <iframe
@@ -369,21 +379,69 @@ export function LearningPanel({
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
               title="Task Resource Video"
+              onError={() => setVideoEmbedFailed(true)}
             />
           </div>
           <div className="bg-slate-50 p-3 text-xs text-slate-500 flex justify-between items-center border-t">
             <span className="flex items-center gap-1.5">
               <Video className="w-3.5 h-3.5" /> Embedded Video Tutorial
             </span>
-            <a
-              href={String(primaryResourceHref)}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1 hover:text-primary"
-            >
-              Open source <ExternalLink className="w-3 h-3" />
-            </a>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setVideoEmbedFailed(true)}
+                className="text-slate-400 hover:text-slate-600 underline underline-offset-2"
+              >
+                Video not loading?
+              </button>
+              <a
+                href={String(primaryResourceHref)}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 hover:text-primary"
+              >
+                Open source <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
           </div>
+        </Card>
+      ) : videoEmbedFailed && primaryResourceHref ? (
+        <Card className="border-slate-200 bg-slate-50">
+          <CardContent className="p-4 flex items-start gap-4">
+            <div className="p-2.5 bg-slate-100 rounded-lg text-slate-500 shrink-0">
+              <Video className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-slate-800">{primaryResourceTitle}</h4>
+              <p className="text-sm text-slate-500 mt-0.5">The embedded player couldn't load. Watch it directly instead.</p>
+              <a
+                href={String(primaryResourceHref)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex mt-3 bg-white border border-slate-200 px-3 py-1.5 rounded-md items-center gap-2 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors shadow-sm"
+              >
+                Watch Video <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      ) : lessonLoading ? (
+        <Card className="border-violet-100 bg-violet-50/40">
+          <CardContent className="p-5 flex items-start gap-4">
+            <div className="p-2.5 bg-violet-100 rounded-lg text-violet-500 shrink-0">
+              <BookOpen className="w-5 h-5 animate-pulse" />
+            </div>
+            <div className="flex-1 space-y-2.5">
+              <div className="h-4 w-2/5 animate-pulse rounded bg-violet-200" />
+              <p className="text-sm text-violet-700/80">
+                Your personalised lesson is being prepared — this usually takes a few seconds.
+              </p>
+              <div className="space-y-2 pt-1">
+                <div className="h-3 w-full animate-pulse rounded bg-violet-100" />
+                <div className="h-3 w-4/5 animate-pulse rounded bg-violet-100" />
+                <div className="h-3 w-3/5 animate-pulse rounded bg-violet-100" />
+              </div>
+            </div>
+          </CardContent>
         </Card>
       ) : primaryResourceHref &&
         (!activeTask.lesson_blocks || activeTask.lesson_blocks.length === 0) ? (
@@ -618,36 +676,48 @@ export function LearningPanel({
                           blockStartTime={panelMountTime.current}
                         />
                       ) : null}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (
-                            readingMode === "focus" &&
-                            activeSegmentIndex < activeSegments.length - 1
-                          ) {
-                            setActiveSegmentIndex((idx) =>
-                              Math.min(activeSegments.length - 1, idx + 1),
+                      {isAtEnd && onComplete ? (
+                        <Button
+                          size="sm"
+                          onClick={onComplete}
+                          className="gap-1.5 bg-indigo-600 text-white hover:bg-indigo-700"
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                          Ready to Practice
+                          <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (
+                              readingMode === "focus" &&
+                              activeSegmentIndex < activeSegments.length - 1
+                            ) {
+                              setActiveSegmentIndex((idx) =>
+                                Math.min(activeSegments.length - 1, idx + 1),
+                              );
+                              return;
+                            }
+                            setActiveBlockIndex((idx) =>
+                              Math.min(studyBlocks.length - 1, idx + 1),
                             );
-                            return;
+                          }}
+                          disabled={
+                            readingMode === "focus"
+                              ? activeBlockIndex >= studyBlocks.length - 1 &&
+                                activeSegmentIndex >= activeSegments.length - 1
+                              : activeBlockIndex >= studyBlocks.length - 1
                           }
-                          setActiveBlockIndex((idx) =>
-                            Math.min(studyBlocks.length - 1, idx + 1),
-                          );
-                        }}
-                        disabled={
-                          readingMode === "focus"
-                            ? activeBlockIndex >= studyBlocks.length - 1 &&
-                              activeSegmentIndex >= activeSegments.length - 1
-                            : activeBlockIndex >= studyBlocks.length - 1
-                        }
-                      >
-                        {readingMode === "focus" &&
-                        activeSegmentIndex < activeSegments.length - 1
-                          ? "Next bite"
-                          : "Next section"}
-                        <ChevronRight className="ml-1 h-4 w-4" />
-                      </Button>
+                        >
+                          {readingMode === "focus" &&
+                          activeSegmentIndex < activeSegments.length - 1
+                            ? "Next bite"
+                            : "Next section"}
+                          <ChevronRight className="ml-1 h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ) : null}

@@ -464,6 +464,8 @@ export interface DailyTask {
   }>;
   lesson_generated_at?: string | null;
   playground_conversation_id?: string | null;
+  feynman_conversation_id?: string | null;
+  surface_rationale?: string | null;
   adaptive_difficulty: boolean;
   is_skippable: boolean;
   status: TaskStatus;

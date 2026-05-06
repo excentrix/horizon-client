@@ -8,7 +8,7 @@ import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useConversationMessages } from "@/hooks/use-conversations";
 import { chatApi, planningApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
-import type { ExecutionDiagnostics, PlaygroundEventPayload } from "@/types";
+import type { ExecutionDescriptor, ExecutionDiagnostics, PlaygroundEventPayload } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { BookOpen, Code2, ShieldCheck, ArrowRight, ArrowLeft, RefreshCw, CheckCircle2, Brain } from "lucide-react";
@@ -20,47 +20,29 @@ import { FeynmanCheck } from "./components/FeynmanCheck";
 import { OmniWorkspace, type EnvMode as OmniEnvMode } from "./components/OmniWorkspace";
 import { VerificationEngine, type ArtifactVerifiedEvent } from "./components/VerificationEngine";
 import { MentorAssistant } from "./components/MentorAssistant";
+import { SimulationScenarioSurface } from "./components/SimulationScenarioSurface";
+import { FlashcardSessionSurface } from "./components/FlashcardSessionSurface";
+import { TaskMissionBrief } from "./components/TaskMissionBrief";
+import { TaskOrientationBanner } from "./components/TaskOrientationBanner";
 import { Badge } from "@/components/ui/badge";
-
-type StepId = "ingest" | "micro" | "prove" | "omni" | "verify";
+import {
+  computeSurfaceSteps,
+  computeVisibleEnvs,
+  recommendedEnvForSurface,
+  resolveSurfaceTypeFromDescriptor,
+  type StepId,
+} from "./components/surface-runtime-router";
+import type { SurfaceRuntimeState } from "@/types";
 
 const ALL_STEPS_DEF: Record<StepId, { label: string; icon: React.ElementType }> = {
   ingest: { label: "Learn",          icon: BookOpen   },
   micro:  { label: "Practice",       icon: RefreshCw  },
   prove:  { label: "Teach It Back",  icon: Brain      },
+  scenario:{ label: "Simulate",      icon: Brain      },
   omni:   { label: "Build",          icon: Code2      },
   verify: { label: "Submit Proof",   icon: ShieldCheck },
 };
 
-/**
- * Decide which steps are relevant for a given task.
- * Rules:
- *  - "Learn"  : always, when lesson blocks exist
- *  - "Practice": when there are lesson blocks to quiz on (skip for pure code tasks with no lesson)
- *  - "Teach It Back": always — explaining is valuable regardless of task type
- *  - "Build"  : only for tasks that involve coding / STEM / project work
- *  - "Submit Proof": always
- */
-function computeSteps(task: { task_type?: string; lesson_blocks?: unknown[]; environment_requirements?: unknown } | undefined): StepId[] {
-  const taskType = (task?.task_type || "").toLowerCase();
-  const envReqs = task?.environment_requirements as Record<string, unknown> | undefined;
-  const subject  = ((envReqs?.subject_category as string) || "").toLowerCase();
-  const hasLesson = (task?.lesson_blocks?.length || 0) > 0;
-
-  const isCoding     = /coding|implement|build|develop|program|project/.test(taskType);
-  const isConceptual = /reading|concept|study|research|theory|overview|understand/.test(taskType);
-  const needsWorkspace = isCoding || subject === "stem";
-  // Show practice quiz only when there's lesson content to quiz on
-  const needsPractice = hasLesson || isConceptual;
-
-  const steps: StepId[] = [];
-  if (hasLesson || isConceptual) steps.push("ingest");
-  if (needsPractice)              steps.push("micro");
-                                  steps.push("prove");   // always
-  if (needsWorkspace)             steps.push("omni");
-                                  steps.push("verify");  // always
-  return steps;
-}
 
 const getInitialCode = (task: { ai_generated_examples?: unknown[] } | undefined) => {
   const examples = task?.ai_generated_examples;
@@ -95,16 +77,51 @@ const inferDefaultLanguage = (task: { title?: string; description?: string } | u
   return "python";
 };
 
-type EnvMode = OmniEnvMode;
+type PlaygroundEnvMode = OmniEnvMode;
 
-const ALL_ENV_MODES: EnvMode[] = ["web", "colab", "local", "code_runner", "diagram", "canvas"];
+function resolveExecutionDescriptor(
+  task: {
+    execution_descriptor?: ExecutionDescriptor | Record<string, unknown> | null;
+    environment_requirements?: Record<string, unknown>;
+    verification?: Record<string, unknown>;
+  } | undefined,
+): ExecutionDescriptor | null {
+  if (!task) return null;
+  const direct = task.execution_descriptor;
+  if (direct && typeof direct === "object") return direct as ExecutionDescriptor;
+  const verification = task.verification;
+  if (verification && typeof verification === "object" && verification.execution_descriptor && typeof verification.execution_descriptor === "object") {
+    return verification.execution_descriptor as ExecutionDescriptor;
+  }
+  const env = task.environment_requirements;
+  if (env && typeof env === "object" && env.execution_descriptor && typeof env.execution_descriptor === "object") {
+    return env.execution_descriptor as ExecutionDescriptor;
+  }
+  return null;
+}
 
-function computeVisibleEnvs(category: string | undefined, recommended: EnvMode | undefined): EnvMode[] {
-  if (!category || category === "stem") return ALL_ENV_MODES;
-  const base = new Set<EnvMode>(["canvas", "diagram"]);
-  if (recommended) base.add(recommended);
-  if (category === "health" || category === "general") base.add("code_runner");
-  return ALL_ENV_MODES.filter((m) => base.has(m));
+function parseCriteriaList(input: unknown): string[] {
+  if (Array.isArray(input)) {
+    return input.map((v) => String(v).trim()).filter((v) => v.length > 4);
+  }
+  if (typeof input === "string") {
+    return input
+      .split(/\.\s+|\n/)
+      .map((v) => v.trim())
+      .filter((v) => v.length > 4);
+  }
+  return [];
+}
+
+function cleanMissionText(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  return raw
+    .replace(/^task\s*:\s*/i, "")
+    .replace(/^objective\s*:\s*/i, "")
+    .replace(/[_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export default function PlanPlaygroundPage() {
@@ -151,6 +168,8 @@ function PlaygroundFlow() {
   const [stepEntryTime, setStepEntryTime] = useState<number>(Date.now());
   const [stepDurations, setStepDurations] = useState<Record<number, number>>({ 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 });
   const [feynmanGaps, setFeynmanGaps] = useState<string[]>([]);
+  const [feynmanConversationId, setFeynmanConversationId] = useState<string | null>(null);
+  const feynmanConvRequestRef = useRef<Record<string, boolean>>({});
 
   const changeStep = (newIndex: number) => {
     const elapsed = Date.now() - stepEntryTime;
@@ -181,14 +200,21 @@ function PlaygroundFlow() {
   const [quizBannerDismissed, setQuizBannerDismissed] = useState(false);
   const [blockFeedback, setBlockFeedback] = useState<Record<string, "helpful" | "unhelpful" | null>>({});
 
-  // Adaptive step list — recomputed when task type / lesson blocks change
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const executionDescriptor = useMemo(() => resolveExecutionDescriptor(activeTask), [activeTask]);
+  const taskSurfaceType = resolveSurfaceTypeFromDescriptor(executionDescriptor);
+
   const steps = useMemo(() => {
-    const ids = computeSteps(activeTask);
+    const ids = computeSurfaceSteps(activeTask, executionDescriptor);
     return ids.map((id) => ({ id, ...ALL_STEPS_DEF[id] }));
-  }, [activeTask?.task_type, activeTask?.lesson_blocks, activeTask?.environment_requirements]);
+  }, [activeTask, executionDescriptor]);
 
   const currentStepId = steps[activeStepIndex]?.id as StepId | undefined;
+
+  useEffect(() => {
+    if (activeStepIndex >= steps.length) {
+      setActiveStepIndex(Math.max(0, steps.length - 1));
+    }
+  }, [activeStepIndex, steps.length]);
 
   // -- Verification Result State --
   const [isVerifying, setIsVerifying] = useState(false);
@@ -232,6 +258,18 @@ function PlaygroundFlow() {
         setPlaygroundConversationId(plan?.specialized_conversation_id ?? plan?.conversation_id ?? null);
       });
   }, [activeTask?.id, playgroundConversationId, plan]);
+
+  // Create Feynman conversation lazily when entering the "prove" step
+  useEffect(() => {
+    if (currentStepId !== "prove" || !activeTask?.id) return;
+    if (feynmanConversationId) return;
+    if (feynmanConvRequestRef.current[activeTask.id]) return;
+
+    feynmanConvRequestRef.current[activeTask.id] = true;
+    planningApi.getOrCreateFeynmanConversation(activeTask.id)
+      .then((res) => setFeynmanConversationId(res.conversation_id))
+      .catch(() => {/* non-fatal — FeynmanCheck shows loading state */});
+  }, [currentStepId, activeTask?.id, feynmanConversationId]);
 
   const mentorConversationId = playgroundConversationId;
 
@@ -415,8 +453,12 @@ function PlaygroundFlow() {
     return false;
   };
 
-  // Load Lessons — generate if missing OR if existing content is thin/fallback
+  // Load Lessons — generate if missing OR if existing content is thin/fallback.
+  // generateTaskLesson only enqueues a Celery job; it does NOT return the blocks.
+  // We must poll refetchPlan until isLessonThin() returns false, then clear loading.
   const lessonRequestRef = useRef<Record<string, boolean>>({});
+  const lessonPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lessonTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!activeTask?.id) return;
@@ -426,12 +468,43 @@ function PlaygroundFlow() {
 
     lessonRequestRef.current[activeTask.id] = true;
     setLessonLoading(true);
-    // force=true so the backend regenerates even if lesson_blocks is non-empty
     planningApi.generateTaskLesson(activeTask.id, { scope: "task", force: thin && (activeTask.lesson_blocks?.length ?? 0) > 0 })
-      .then(() => refetchPlan())
-      .catch(() => { lessonRequestRef.current[activeTask.id] = false; })
-      .finally(() => setLessonLoading(false));
+      .then(() => {
+        // Enqueue succeeded — start polling every 3s until blocks arrive
+        lessonPollRef.current = setInterval(() => refetchPlan(), 3000);
+        // Hard timeout after 45s: stop loading even if blocks are still thin
+        lessonTimeoutRef.current = setTimeout(() => {
+          if (lessonPollRef.current) {
+            clearInterval(lessonPollRef.current);
+            lessonPollRef.current = null;
+          }
+          setLessonLoading(false);
+        }, 45_000);
+      })
+      .catch(() => {
+        lessonRequestRef.current[activeTask.id] = false;
+        setLessonLoading(false);
+      });
   }, [activeTask?.id, activeTask?.lesson_blocks, refetchPlan]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stop lesson polling as soon as the lesson blocks arrive and are no longer thin
+  useEffect(() => {
+    if (!lessonPollRef.current) return;
+    if (!activeTask || isLessonThin(activeTask)) return;
+    clearInterval(lessonPollRef.current);
+    lessonPollRef.current = null;
+    if (lessonTimeoutRef.current) {
+      clearTimeout(lessonTimeoutRef.current);
+      lessonTimeoutRef.current = null;
+    }
+    setLessonLoading(false);
+  }, [activeTask?.lesson_blocks]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clean up lesson poll on unmount
+  useEffect(() => () => {
+    if (lessonPollRef.current) clearInterval(lessonPollRef.current);
+    if (lessonTimeoutRef.current) clearTimeout(lessonTimeoutRef.current);
+  }, []);
 
   const handleProofSubmit = async (type: "link" | "text" | "file", content: string | File) => {
     if (!activeTask) return;
@@ -614,7 +687,7 @@ function PlaygroundFlow() {
       }
     }, 15000);
     return () => clearInterval(interval);
-  }, [activeTask?.id, activeTask?.title, activeTask?.description, currentStepId, emitPlaygroundEvent]);
+  }, [activeTask, activeTask?.id, activeTask?.title, activeTask?.description, currentStepId, emitPlaygroundEvent]);
 
   if (!plan) return null;
 
@@ -625,12 +698,61 @@ function PlaygroundFlow() {
     (completedSteps.size / steps.length) * 100
   );
   const envReqs = activeTask?.environment_requirements as Record<string, unknown> | undefined;
-  const recommendedEnvRaw = envReqs?.recommended_environment as EnvMode | undefined;
+  const recommendedEnvRaw = envReqs?.recommended_environment as PlaygroundEnvMode | undefined;
   const subjectCategory = envReqs?.subject_category as string | undefined;
-  const recommendedEnv = recommendedEnvRaw ?? "code_runner";
+  const recommendedEnv = recommendedEnvForSurface(executionDescriptor, recommendedEnvRaw);
   const defaultLanguage = inferDefaultLanguage(activeTask, recommendedEnv);
-  const visibleEnvModes = computeVisibleEnvs(subjectCategory, recommendedEnv);
+  const visibleEnvModes = computeVisibleEnvs(subjectCategory, recommendedEnv, executionDescriptor);
   const quizFailed = quizResults && (quizResults.correct / quizResults.total) < 0.6;
+  const missionObjective = cleanMissionText(
+    (challengeVerification?.problem_statement as string) ||
+      activeTask?.verification?.problem_statement ||
+      activeTask?.verification?.criteria ||
+      activeTask?.check_in_question ||
+      activeTask?.description ||
+      "Complete this task and submit proof against the rubric.",
+  );
+  const missionCriteria = (() => {
+    const fromChallenge = parseCriteriaList(challengeVerification?.acceptance_criteria).map(cleanMissionText).filter(Boolean);
+    if (fromChallenge.length) return fromChallenge;
+    const fromTaskVerification = parseCriteriaList(activeTask?.verification?.criteria).map(cleanMissionText).filter(Boolean);
+    if (fromTaskVerification.length) return fromTaskVerification;
+    const fromCheckin = parseCriteriaList(activeTask?.check_in_question).map(cleanMissionText).filter(Boolean);
+    return fromCheckin.length ? fromCheckin : ["Demonstrate a complete, testable solution for this task."];
+  })();
+  const missionSandboxGuidance = (() => {
+    if (taskSurfaceType === "simulation_scenario") {
+      return [
+        "Work in the Simulation tab and progress through round feedback.",
+        "Apply mentor interventions to improve weakest rubric criteria each round.",
+        "After verification or round-limit, submit final proof.",
+      ];
+    }
+    if (taskSurfaceType === "teachback_session") {
+      return [
+        "Use Teach It Back to explain core ideas clearly.",
+        "Fix conceptual gaps surfaced by the evaluator.",
+        "Submit your final explanation/proof in Submit Proof.",
+      ];
+    }
+    if (taskSurfaceType === "flashcard_session") {
+      return [
+        "Use Practice cards to improve weak topics.",
+        "Reach the session review threshold before final proof.",
+        "Submit your final artifact/reflection in Submit Proof.",
+      ];
+    }
+    return [
+      "Use Learn for concepts, Build for implementation, and mentor review when blocked.",
+      "Validate your work against the acceptance criteria before submitting.",
+      "Submit final code/artifact/explanation in Submit Proof.",
+    ];
+  })();
+  const missionSubmissionExpectation = cleanMissionText(
+    (challengeVerification?.submission_note as string) ||
+      activeTask?.verification?.detailed_instructions ||
+      "Provide final evidence that directly satisfies the acceptance criteria.",
+  );
 
   const onRegenerateLesson = () => {
     if (!activeTask?.id) return;
@@ -645,6 +767,40 @@ function PlaygroundFlow() {
                     .catch(() => {})
                     .finally(() => setLessonLoading(false));
                 }
+
+  const surfaceRuntimeState: SurfaceRuntimeState | null = (() => {
+    if (currentStepId === "ingest" && lessonLoading) {
+      return {
+        phase: "initializing",
+        readiness: "degraded",
+        metadata: {
+          title: "Curating lesson content",
+          detail: "Horizon is tailoring your Learn tab with examples and guidance.",
+        },
+      };
+    }
+    if (currentStepId === "omni" && starterCodeLoading) {
+      return {
+        phase: "initializing",
+        readiness: "degraded",
+        metadata: {
+          title: "Curating build workspace",
+          detail: "Starter code and scaffolding are being prepared for this task.",
+        },
+      };
+    }
+    if (currentStepId === "verify" && challengeLoading) {
+      return {
+        phase: "initializing",
+        readiness: "degraded",
+        metadata: {
+          title: "Curating verification challenge",
+          detail: "Acceptance criteria and challenge checks are being generated.",
+        },
+      };
+    }
+    return null;
+  })();
 
   return (
     <div className="flex h-[calc(100vh-4rem)] min-h-0 flex-col gap-4 overflow-hidden bg-slate-50 p-4 lg:p-6">
@@ -752,6 +908,45 @@ function PlaygroundFlow() {
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden md:grid-cols-12">
         {/* Main Workspace Area (Left 2/3) */}
         <div className="flex min-h-0 flex-col gap-4 md:col-span-8">
+          {activeTask && (
+            <TaskOrientationBanner
+              taskId={activeTask.id}
+              surfaceRationale={activeTask.surface_rationale ?? `Complete the ${activeTask.title} task using the steps below.`}
+              steps={steps}
+              surfaceType={taskSurfaceType ?? undefined}
+            />
+          )}
+
+          <TaskMissionBrief
+            title={activeTask?.title || "Task Mission"}
+            objective={missionObjective}
+            acceptanceCriteria={missionCriteria}
+            sandboxGuidance={missionSandboxGuidance}
+            submissionExpectation={missionSubmissionExpectation}
+            currentStep={currentStepId}
+            lessonBlockTitles={
+              activeTask?.lesson_blocks
+                ?.filter((b) => b.type === "concept" || b.type === "objective")
+                .slice(0, 2)
+                .map((b) => b.title)
+                .filter((t): t is string => Boolean(t)) ?? []
+            }
+            practiceTopics={
+              activeTask?.lesson_blocks
+                ?.filter((b) => b.type === "concept")
+                .slice(0, 3)
+                .map((b) => b.title)
+                .filter((t): t is string => Boolean(t)) ?? []
+            }
+          />
+
+          {surfaceRuntimeState ? (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-900">
+              <p className="font-semibold">{String(surfaceRuntimeState.metadata?.title || "Preparing your workspace")}</p>
+              <p className="text-xs text-blue-700">{String(surfaceRuntimeState.metadata?.detail || "Please wait a moment.")}</p>
+            </div>
+          ) : null}
+
           {currentStepId === "ingest" && (
             <div className="min-h-0 flex-1 overflow-y-auto pr-2 custom-scrollbar animate-in fill-mode-both fade-in slide-in-from-bottom-4 duration-500">
               <LearningPanel
@@ -766,23 +961,40 @@ function PlaygroundFlow() {
                     meta: { source: "learning_panel" },
                   });
                 }}
+                onComplete={
+                  activeStepIndex < steps.length - 1
+                    ? () => changeStep(activeStepIndex + 1)
+                    : undefined
+                }
               />
             </div>
           )}
 
           {currentStepId === "micro" && (
             <div className="min-h-0 flex-1 animate-in fill-mode-both fade-in slide-in-from-bottom-4 duration-500">
-              <MicroPracticeLab
-                taskId={activeTask?.id || ""}
-                planId={planId}
-                lessonBlocks={activeTask?.lesson_blocks || []}
-                onComplete={(results) => {
-                  setQuizResults(results);
-                  setQuizBannerDismissed(false);
-                  setCompletedSteps(prev => new Set([...prev, activeStepIndex]));
-                  changeStep(activeStepIndex + 1);
-                }}
-              />
+              {taskSurfaceType === "flashcard_session" ? (
+                <FlashcardSessionSurface
+                  taskId={activeTask?.id || ""}
+                  taskTitle={activeTask?.title || "Flashcard Session"}
+                  executionDescriptor={executionDescriptor ?? null}
+                  onComplete={() => {
+                    setCompletedSteps((prev) => new Set([...prev, activeStepIndex]));
+                    changeStep(activeStepIndex + 1);
+                  }}
+                />
+              ) : (
+                <MicroPracticeLab
+                  taskId={activeTask?.id || ""}
+                  planId={planId}
+                  lessonBlocks={activeTask?.lesson_blocks || []}
+                  onComplete={(results) => {
+                    setQuizResults(results);
+                    setQuizBannerDismissed(false);
+                    setCompletedSteps(prev => new Set([...prev, activeStepIndex]));
+                    changeStep(activeStepIndex + 1);
+                  }}
+                />
+              )}
             </div>
           )}
 
@@ -790,15 +1002,24 @@ function PlaygroundFlow() {
             <div className="min-h-0 flex-1 animate-in fill-mode-both fade-in slide-in-from-bottom-4 duration-500">
               <FeynmanCheck
                 task={activeTask}
-                messages={mentorMessages ?? []}
-                streamingMessage={streamingMessage ?? ""}
-                isTyping={mentorTyping}
-                onSendMessage={handleMentorSend}
+                feynmanConversationId={feynmanConversationId}
                 onComplete={(gaps) => {
                   setFeynmanGaps(gaps);
                   setCompletedSteps(prev => new Set([...prev, activeStepIndex]));
                   changeStep(activeStepIndex + 1);
                 }}
+              />
+            </div>
+          )}
+
+          {currentStepId === "scenario" && taskSurfaceType === "simulation_scenario" && (
+            <div className="min-h-0 flex-1 overflow-y-auto pr-2 custom-scrollbar animate-in fill-mode-both fade-in slide-in-from-bottom-4 duration-500">
+              <SimulationScenarioSurface
+                taskId={activeTask?.id || ""}
+                taskTitle={activeTask?.title || "Simulation scenario"}
+                taskDescription={activeTask?.description || ""}
+                executionDescriptor={executionDescriptor ?? null}
+                verificationCriteria={activeTask?.verification?.criteria || activeTask?.check_in_question || ""}
               />
             </div>
           )}
@@ -877,6 +1098,12 @@ function PlaygroundFlow() {
             <div className="min-h-0 flex-1 animate-in fill-mode-both fade-in slide-in-from-bottom-4 duration-500">
               <VerificationEngine
                 taskId={activeTask?.id || ""}
+                taskTitle={activeTask?.title}
+                taskType={activeTask?.task_type}
+                onStepChange={(stepId) => {
+                  const idx = steps.findIndex(s => s.id === stepId);
+                  if (idx !== -1) changeStep(idx);
+                }}
                 verificationMethod={
                   (challengeVerification?.method as string) ||
                   activeTask?.verification?.method ||
@@ -943,6 +1170,7 @@ function PlaygroundFlow() {
             streamingMessage={streamingMessage}
             onSendMessage={handleMentorSend}
             socketStatus={mentorSocketStatus}
+            currentStep={currentStepId}
           />
         </div>
       </div>

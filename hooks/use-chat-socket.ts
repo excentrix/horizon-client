@@ -370,6 +370,9 @@ export function useChatSocket(conversationId: string | null) {
   const connectRef = useRef<() => void>(() => {});
   const streamBufferRef = useRef("");
   const streamFlushTimerRef = useRef<number | null>(null);
+  // Safety-net: if stream_start fires but no stream_complete/stream_error within 45s,
+  // clear the streaming overlay so the UI doesn't show a permanently cut-off bubble.
+  const streamTimeoutRef = useRef<number | null>(null);
 
   const [status, setStatus] = useState<SocketStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -441,6 +444,10 @@ export function useChatSocket(conversationId: string | null) {
     stopHeartbeat();
     clearReconnectTimer();
     clearStreamFlushTimer();
+    if (streamTimeoutRef.current) {
+      window.clearTimeout(streamTimeoutRef.current);
+      streamTimeoutRef.current = null;
+    }
     streamBufferRef.current = "";
     if (socketRef.current) {
       manualCloseRef.current = true;
@@ -663,6 +670,12 @@ export function useChatSocket(conversationId: string | null) {
             case "stream_start": {
               streamBufferRef.current = "";
               clearStreamFlushTimer();
+              if (streamTimeoutRef.current) window.clearTimeout(streamTimeoutRef.current);
+              streamTimeoutRef.current = window.setTimeout(() => {
+                streamTimeoutRef.current = null;
+                setStreamState({ messageId: undefined, content: null });
+                updateMentorTyping(false);
+              }, 45_000);
               setStreamState({
                 messageId: payload?.message_id,
                 content: "",
@@ -681,6 +694,10 @@ export function useChatSocket(conversationId: string | null) {
               break;
             }
             case "stream_complete": {
+              if (streamTimeoutRef.current) {
+                window.clearTimeout(streamTimeoutRef.current);
+                streamTimeoutRef.current = null;
+              }
               flushStreamBuffer();
               const message = payload?.message as ChatMessage | undefined;
               const toolRuntime =
@@ -718,6 +735,10 @@ export function useChatSocket(conversationId: string | null) {
               break;
             }
             case "stream_error": {
+              if (streamTimeoutRef.current) {
+                window.clearTimeout(streamTimeoutRef.current);
+                streamTimeoutRef.current = null;
+              }
               clearStreamFlushTimer();
               streamBufferRef.current = "";
               setStreamState({ messageId: undefined, content: null });
