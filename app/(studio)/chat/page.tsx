@@ -550,9 +550,29 @@ useEffect(() => {
   useEffect(() => {
     if (planBuildStatus === "completed") {
       void queryClient.invalidateQueries({ queryKey: ["learning-plans"] });
+      void queryClient.invalidateQueries({ queryKey: ["roadmap"] });
+      if (selectedConversationId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["conversations", selectedConversationId, "messages"],
+        });
+      }
       // If there are other "workbench" queries, invalidate them here too.
     }
-  }, [planBuildStatus, queryClient]);
+  }, [planBuildStatus, queryClient, selectedConversationId]);
+
+  useEffect(() => {
+    const onStageComplete = () => {
+      void queryClient.invalidateQueries({ queryKey: ["learning-plans"] });
+      void queryClient.invalidateQueries({ queryKey: ["roadmap"] });
+      if (selectedConversationId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["conversations", selectedConversationId, "messages"],
+        });
+      }
+    };
+    window.addEventListener("mentor_stage_complete", onStageComplete);
+    return () => window.removeEventListener("mentor_stage_complete", onStageComplete);
+  }, [queryClient, selectedConversationId]);
 
   // Refresh messages when a proactive mentor message arrives via WS
   useEffect(() => {
@@ -1494,7 +1514,7 @@ useEffect(() => {
                           actions={visibleMentorActions}
                           onSendQuickReply={(message) => handleSendMessage(message)}
                           debriefProgress={
-                            mentorStateV2
+                            mentorStateV2 && planRecord?.status !== "active"
                               ? {
                                   completed: debriefCompleted,
                                   total: debriefTotal,

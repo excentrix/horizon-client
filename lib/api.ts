@@ -734,6 +734,11 @@ export const planningApi = {
       http.post(`/planning/tasks/${taskId}/playground-conversation/`, {})
     ),
 
+  getOrCreateFeynmanConversation: (taskId: string) =>
+    extract<{ conversation_id: string }>(
+      http.post(`/planning/tasks/${taskId}/feynman-conversation/`, {})
+    ),
+
   generateStarterCode: (taskId: string, scaffoldingLevel?: number) =>
     extract<{ task_id: string; starter_code: string; language: string; cached: boolean; scaffolding_level: number }>(
       http.post(`/planning/tasks/${taskId}/generate-starter-code/`, {

@@ -75,6 +75,7 @@ interface MessageFeedProps {
   showHeader?: boolean;
   hasMore?: boolean;
   onLoadMore?: () => Promise<void> | void;
+  suppressFlowSuggestions?: boolean;
   isLoadingMore?: boolean;
   mentorTyping?: boolean;
   streamingMessage?: string | null;
@@ -106,6 +107,7 @@ export function MessageFeed({
   streamingMessageId,
   theme,
   variant = "card",
+  suppressFlowSuggestions = false,
 }: MessageFeedProps) {
   const setMentorActions = useMentorLoungeStore((state) => state.setMentorActions);
   const streamingTimestampRef = useRef<string>(new Date().toISOString());
@@ -240,6 +242,7 @@ export function MessageFeed({
             onLoadMore={onLoadMore}
             streamingMessage={activeStreamingMessage}
             theme={theme}
+            suppressFlowSuggestions={suppressFlowSuggestions}
           />
         </ConversationContent>
         <ConversationScrollButton className="bottom-6" />
@@ -259,6 +262,7 @@ function MessageFeedContent({
   onLoadMore,
   streamingMessage,
   theme,
+  suppressFlowSuggestions = false,
 }: {
   hasMore?: boolean;
   isLoading?: boolean;
@@ -268,11 +272,12 @@ function MessageFeedContent({
   onLoadMore?: () => Promise<void> | void;
   streamingMessage?: ChatMessage | null;
   theme?: PersonaTheme;
+  suppressFlowSuggestions?: boolean;
 }) {
   const toolThinking = useMentorLoungeStore((state) => state.toolThinking);
 
-  // Fetch chat-context flow suggestion (only when not streaming)
-  const { data: flowData } = useFlowSuggestion('chat');
+  // Fetch chat-context flow suggestion (only when not in playground/feynman)
+  const { data: flowData } = useFlowSuggestion('chat', { enabled: !suppressFlowSuggestions });
   const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   const [suggestionShownAt] = useState(() => new Date());
   

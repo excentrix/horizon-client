@@ -413,6 +413,7 @@ export interface DailyTask {
     hidden_test_cases?: Array<Record<string, unknown>>;
     integrity_notice?: string;
   };
+  execution_descriptor?: ExecutionDescriptor | Record<string, unknown> | null;
   assessment_config?: {
     id: string;
     verification_type: "auto_quiz" | "code_execution" | "github_repo" | "file_upload" | "text_analysis" | "manual_rubric";
@@ -1230,6 +1231,17 @@ export interface UniversalSurfaceSession {
   execution_descriptor?: ExecutionDescriptor | Record<string, unknown>;
 }
 
+export interface SurfaceRuntimeState {
+  phase: "initializing" | "ready" | "interacting" | "evaluating" | "intervening" | "evidence" | "completed" | "error";
+  readiness: "not_ready" | "ready" | "degraded";
+  recoverable_error?: {
+    code?: string;
+    message: string;
+    retryable?: boolean;
+  } | null;
+  metadata?: Record<string, unknown>;
+}
+
 export interface CanvasSceneData {
   version?: string;
   elements?: Array<Record<string, unknown>>;
@@ -1333,6 +1345,10 @@ export interface SimulationResultEnvelope {
   scoring_components?: ScoringComponents;
   verification_confidence?: number | null;
   runtime_state?: Record<string, unknown>;
+  round_index?: number;
+  round_context?: Record<string, unknown>;
+  round_outcome?: Record<string, unknown>;
+  session_timeline?: Array<Record<string, unknown>>;
   completion_state?: CompletionContract | Record<string, unknown>;
   intervention_state?: InterventionEnvelope | Record<string, unknown>;
   execution_descriptor?: ExecutionDescriptor | Record<string, unknown>;

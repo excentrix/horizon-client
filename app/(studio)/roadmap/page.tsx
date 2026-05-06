@@ -34,13 +34,32 @@ import {
   Radar,
   ResponsiveContainer,
 } from "recharts";
+import { useNotificationsSocket } from "@/hooks/use-notifications";
+import { PlanProgressTimeline } from "@/components/mentor-lounge/plan-progress-timeline";
 
 export default function RoadmapPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data, isLoading } = useRoadmap();
   const roadmap = data?.roadmap;
-  const { planBuildStatus, planBuildMessage } = useMentorLoungeStore();
+  const { planBuildStatus, planBuildMessage, planUpdates } = useMentorLoungeStore();
+  const isBuilding =
+    planBuildStatus === "queued" ||
+    planBuildStatus === "in_progress" ||
+    planBuildStatus === "warning";
+
+  const buildProgress = useMemo(() => {
+    if (planBuildStatus === "completed") return 100;
+    if (planBuildStatus === "failed") return 0;
+    if (planBuildStatus === "queued") return 10;
+    if (planBuildStatus === "warning") return 75;
+    if (planUpdates.length > 0) return Math.min(92, 20 + planUpdates.length * 9);
+    if (planBuildStatus === "in_progress") return 35;
+    return 0;
+  }, [planBuildStatus, planUpdates.length]);
+
+  // Connect to notifications socket while generating so progress updates in real time
+  useNotificationsSocket();
 
   const levelStats = useMemo(() => {
     const levels = roadmap?.stages.flatMap((s) => s.levels) || [];
@@ -125,6 +144,7 @@ export default function RoadmapPage() {
   useEffect(() => {
     if (planBuildStatus === "completed") {
       queryClient.invalidateQueries({ queryKey: roadmapKey });
+      queryClient.invalidateQueries({ queryKey: ["learning-plans"] });
       // Also clear the status after a delay so the "completed" UI doesn't stick forever if we move back and forth
       const timer = setTimeout(() => {
         // We might want to keep it completed for a bit, but invalidating the query is the key.
@@ -132,6 +152,16 @@ export default function RoadmapPage() {
       return () => clearTimeout(timer);
     }
   }, [planBuildStatus, queryClient]);
+
+  useEffect(() => {
+    const onStageComplete = () => {
+      queryClient.invalidateQueries({ queryKey: roadmapKey });
+      queryClient.invalidateQueries({ queryKey: ["learning-plans"] });
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    };
+    window.addEventListener("mentor_stage_complete", onStageComplete);
+    return () => window.removeEventListener("mentor_stage_complete", onStageComplete);
+  }, [queryClient]);
 
   if (isLoading) {
     return (
@@ -149,7 +179,7 @@ export default function RoadmapPage() {
       planBuildStatus === "in_progress" || planBuildStatus === "queued";
 
     return (
-      <div className="max-w-3xl mx-auto space-y-6 p-6 mt-12">
+      <div className="max-w-3xl mx-auto space-y-6 p-6 pb-24 mt-12">
         {isGenerating ? (
           <Card className="border-primary/20 bg-primary/5 shadow-xl overflow-hidden relative">
             <div className="absolute top-0 right-0 p-4 opacity-10">
@@ -174,14 +204,18 @@ export default function RoadmapPage() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm font-medium">
                   <span>Building Roadmap Structure</span>
-                  <span className="text-primary italic animate-pulse">
-                    Processing...
-                  </span>
+                  <span className="text-primary">{buildProgress}%</span>
                 </div>
                 <div className="h-2 w-full bg-primary/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-primary animate-progress-indeterminate rounded-full" />
+                  <div
+                    className="h-full bg-primary rounded-full transition-all duration-500"
+                    style={{ width: `${buildProgress}%` }}
+                  />
                 </div>
               </div>
+              {planUpdates.length > 0 ? (
+                <PlanProgressTimeline updates={planUpdates} />
+              ) : null}
               <p className="text-sm text-muted-foreground">
                 This usually takes about 20-30 seconds. Feel free to stay here;
                 your roadmap will appear automatically.
@@ -214,7 +248,34 @@ export default function RoadmapPage() {
   }
 
   return (
-    <div className="flex min-h-full w-full flex-col gap-4 p-4 lg:p-6">
+    <div className="flex min-h-full w-full flex-col gap-4 p-4 pb-24 lg:p-6 lg:pb-24">
+      {isBuilding ? (
+        <Card className="border-indigo-200 bg-indigo-50/60">
+          <CardContent className="space-y-3 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-indigo-700">
+                  Roadmap Runtime
+                </p>
+                <p className="text-sm text-indigo-900">
+                  {planBuildMessage || "Your roadmap and plan are being prepared in real time."}
+                </p>
+              </div>
+              <Badge variant="outline" className="border-indigo-300 bg-white text-indigo-700">
+                {buildProgress}%
+              </Badge>
+            </div>
+            <div className="h-2 w-full rounded-full bg-indigo-100">
+              <div
+                className="h-full rounded-full bg-indigo-600 transition-all duration-500"
+                style={{ width: `${buildProgress}%` }}
+              />
+            </div>
+            {planUpdates.length > 0 ? <PlanProgressTimeline updates={planUpdates} /> : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="rounded-2xl border bg-gradient-to-r from-sky-50 via-white to-indigo-50 p-4 lg:p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>

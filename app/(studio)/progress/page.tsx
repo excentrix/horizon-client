@@ -64,7 +64,22 @@ export default function ProgressHubPage() {
   const { totalPoints, level, currentStreak } = useGamificationStats();
   const { data: readiness } = useReadiness();
   const { data: profileData } = usePortfolioProfile();
-  const { data: artifacts = [] } = usePortfolioArtifacts();
+  const { data: rawArtifacts = [] } = usePortfolioArtifacts();
+
+  const artifacts = useMemo(() => {
+    const statusPriority: Record<string, number> = { verified: 4, human_verified: 3, needs_review: 2, needs_revision: 1, pending: 0 };
+    const best = new Map<string, typeof rawArtifacts[number]>();
+    for (const a of rawArtifacts) {
+      const key = a.source_task ?? null;
+      if (!key) continue;
+      const existing = best.get(key);
+      if (!existing || (statusPriority[a.verification_status ?? "pending"] ?? 0) > (statusPriority[existing.verification_status ?? "pending"] ?? 0)) {
+        best.set(key, a);
+      }
+    }
+    const noTaskArtifacts = rawArtifacts.filter(a => !a.source_task);
+    return [...best.values(), ...noTaskArtifacts];
+  }, [rawArtifacts]);
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
