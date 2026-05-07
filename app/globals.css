@@ -2,6 +2,80 @@
 @import "tw-animate-css";
 @import "katex/dist/katex.min.css";
 
+/* ── Lesson content markdown renderer ── */
+.lesson-prose { color: #374151; line-height: 1.75; font-size: 0.9375rem; }
+.lesson-prose h2 { font-size: 1.2rem; font-weight: 700; color: #111827; margin: 1.4em 0 0.6em; }
+.lesson-prose h3 { font-size: 1.05rem; font-weight: 600; color: #1f2937; margin: 1.2em 0 0.5em; }
+.lesson-prose h4 { font-size: 0.95rem; font-weight: 600; color: #374151; margin: 1em 0 0.4em; }
+.lesson-prose p  { margin-bottom: 0.9em; }
+.lesson-prose strong { font-weight: 600; color: #111827; }
+.lesson-prose em { font-style: italic; color: #4b5563; }
+.lesson-prose a  { color: #7c3aed; text-decoration: underline; text-underline-offset: 2px; }
+.lesson-prose code:not(pre code) {
+  background: #f3f0ff; color: #6d28d9;
+  padding: 0.15em 0.45em; border-radius: 4px;
+  font-family: 'Fira Code', 'Cascadia Code', monospace; font-size: 0.85em;
+}
+.lesson-prose pre {
+  background: #0d1117; color: #e6edf3;
+  border: 1px solid #30363d; border-radius: 10px;
+  padding: 1em 1.2em; overflow-x: auto; margin: 1em 0;
+  font-family: 'Fira Code', 'Cascadia Code', monospace; font-size: 0.825rem; line-height: 1.7;
+}
+.lesson-prose pre code { background: transparent; color: inherit; padding: 0; border-radius: 0; font-size: inherit; }
+.lesson-prose blockquote {
+  border-left: 3px solid #7c3aed; background: #faf5ff;
+  padding: 0.6em 1em; border-radius: 0 8px 8px 0; margin: 1em 0; color: #4c1d95;
+  font-size: 0.9rem;
+}
+.lesson-prose blockquote p { margin: 0; }
+.lesson-prose ul { list-style: disc; padding-left: 1.4em; margin-bottom: 0.9em; }
+.lesson-prose ol { list-style: decimal; padding-left: 1.4em; margin-bottom: 0.9em; }
+.lesson-prose li { margin-bottom: 0.35em; }
+.lesson-prose table { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin: 1em 0; }
+.lesson-prose th { background: #f1f5f9; font-weight: 600; color: #1e293b; padding: 0.5em 0.75em; border: 1px solid #e2e8f0; text-align: left; }
+.lesson-prose td { padding: 0.45em 0.75em; border: 1px solid #e2e8f0; color: #374151; }
+.lesson-prose tr:nth-child(even) td { background: #f8fafc; }
+.lesson-prose hr { border: none; border-top: 1px solid #e2e8f0; margin: 1.5em 0; }
+
+/* ── Dark variant for lesson content on dark backgrounds ── */
+.lesson-prose-dark { color: #cbd5e1; line-height: 1.75; font-size: 0.9375rem; }
+.lesson-prose-dark h1 { font-size: 1.5rem; font-weight: 700; color: #f1f5f9; margin: 1.4em 0 0.6em; }
+.lesson-prose-dark h2 { font-size: 1.2rem; font-weight: 700; color: #f1f5f9; margin: 1.4em 0 0.6em; }
+.lesson-prose-dark h3 { font-size: 1.05rem; font-weight: 600; color: #e2e8f0; margin: 1.2em 0 0.5em; }
+.lesson-prose-dark h4 { font-size: 0.95rem; font-weight: 600; color: #cbd5e1; margin: 1em 0 0.4em; }
+.lesson-prose-dark p  { margin-bottom: 0.9em; }
+.lesson-prose-dark strong { font-weight: 600; color: #f8fafc; }
+.lesson-prose-dark em { font-style: italic; color: #94a3b8; }
+.lesson-prose-dark a  { color: #818cf8; text-decoration: underline; text-underline-offset: 2px; }
+.lesson-prose-dark code:not(pre code) {
+  background: rgba(99,102,241,0.15); color: #a5b4fc;
+  padding: 0.15em 0.45em; border-radius: 4px;
+  font-family: 'Fira Code', 'Cascadia Code', monospace; font-size: 0.85em;
+  border: 1px solid rgba(99,102,241,0.2);
+}
+.lesson-prose-dark pre {
+  background: #0d1117; color: #e6edf3;
+  border: 1px solid #30363d; border-radius: 10px;
+  padding: 1em 1.2em; overflow-x: auto; margin: 1em 0;
+  font-family: 'Fira Code', 'Cascadia Code', monospace; font-size: 0.825rem; line-height: 1.7;
+}
+.lesson-prose-dark pre code { background: transparent; color: inherit; padding: 0; border-radius: 0; font-size: inherit; border: none; }
+.lesson-prose-dark blockquote {
+  border-left: 3px solid #6366f1; background: rgba(99,102,241,0.08);
+  padding: 0.6em 1em; border-radius: 0 8px 8px 0; margin: 1em 0; color: #a5b4fc;
+  font-size: 0.9rem;
+}
+.lesson-prose-dark blockquote p { margin: 0; }
+.lesson-prose-dark ul { list-style: disc; padding-left: 1.4em; margin-bottom: 0.9em; }
+.lesson-prose-dark ol { list-style: decimal; padding-left: 1.4em; margin-bottom: 0.9em; }
+.lesson-prose-dark li { margin-bottom: 0.35em; }
+.lesson-prose-dark table { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin: 1em 0; }
+.lesson-prose-dark th { background: rgba(255,255,255,0.06); font-weight: 600; color: #f1f5f9; padding: 0.5em 0.75em; border: 1px solid rgba(255,255,255,0.1); text-align: left; }
+.lesson-prose-dark td { padding: 0.45em 0.75em; border: 1px solid rgba(255,255,255,0.08); color: #cbd5e1; }
+.lesson-prose-dark tr:nth-child(even) td { background: rgba(255,255,255,0.03); }
+.lesson-prose-dark hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1.5em 0; }
+
 
 @custom-variant dark (&:is(.dark *));
 

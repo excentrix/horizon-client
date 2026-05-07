@@ -43,9 +43,9 @@ export function AppProviders({ children }: AppProvidersProps) {
             {/* <DesignModeToggle /> */}
           </NotificationProvider>
         </AuthProvider>
-        {process.env.NODE_ENV === "development" ? (
-          <ReactQueryDevtools initialIsOpen={false} />
-        ) : null}
+        {/* {process.env.NODE_ENV === "development" ? (
+           <ReactQueryDevtools initialIsOpen={false} />
+         ) : null} */}
       </QueryClientProvider>
     </ThemeProvider>
   );

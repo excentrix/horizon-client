@@ -13,6 +13,8 @@ interface MentorAssistantProps {
   onSendMessage: (message: string, actionType?: string) => Promise<void>;
   socketStatus: string;
   currentStep?: StepId;
+  hideComposer?: boolean;
+  compact?: boolean;
 }
 
 interface Suggestion {
@@ -82,6 +84,8 @@ export function MentorAssistant({
   onSendMessage,
   socketStatus,
   currentStep,
+  hideComposer = false,
+  compact = false,
 }: MentorAssistantProps) {
   const [input, setInput] = useState("");
   const [pendingMessages, setPendingMessages] = useState<Array<{ id: string; content: string }>>([]);
@@ -146,12 +150,40 @@ export function MentorAssistant({
     }
   }
 
+  if (compact) {
+    const latestMentor = [...allMessages]
+      .reverse()
+      .find((m) => m.sender_type === "ai" || m.sender_type === "system");
+    return (
+      <div className="flex h-full min-h-0 items-center border border-slate-200 bg-white px-4 py-3">
+        <div className="mr-3 flex items-center gap-2">
+          <div className="relative h-10 w-10 overflow-hidden border border-violet-200 bg-violet-50">
+            <Bot className="m-2 h-6 w-6 text-violet-600" />
+            <span className={cn("absolute -right-0.5 -top-0.5 h-3 w-3 border-2 border-white",
+              socketStatus === "open" ? "bg-emerald-400" : "bg-amber-400")} />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-800">AI Teacher</p>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+              {socketStatus === "open" ? "Live" : "Syncing"}
+            </p>
+          </div>
+        </div>
+        <div className="min-w-0 flex-1 border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700">
+          <p className="line-clamp-2 whitespace-pre-wrap">
+            {latestMentor?.content || emptyStateText}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center gap-2 border-b bg-slate-50 px-4 py-3">
-        <Bot className="h-5 w-5 text-violet-500" />
+    <div className="flex h-full min-h-0 flex-col overflow-hidden border border-slate-200 bg-white">
+      <div className="flex items-center gap-2 border-b bg-slate-50 px-3 py-1.5">
+        <Bot className="h-4 w-4 text-violet-500" />
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-slate-800">Learning Mentor</h3>
+          <h3 className="text-xs font-semibold text-slate-800">Learning Mentor</h3>
           <p className="text-[10px] text-slate-500 uppercase tracking-wider">
             {socketStatus === "open" ? "Connected" : "Syncing..."}
           </p>
@@ -164,10 +196,10 @@ export function MentorAssistant({
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-slate-50/50 p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto bg-slate-50/50 p-3 space-y-3">
         {allMessages.length === 0 && !isTyping && (
           <div className="flex h-full flex-col items-center justify-center text-center">
-            <div className="rounded-2xl bg-violet-50 border border-violet-100 px-6 py-5 max-w-[240px]">
+            <div className="bg-violet-50 border border-violet-100 px-6 py-5 max-w-[240px]">
               <Sparkles className="h-7 w-7 mb-2 mx-auto text-violet-300" />
               <p className="text-xs text-slate-500 leading-relaxed">{emptyStateText}</p>
             </div>
@@ -186,10 +218,10 @@ export function MentorAssistant({
             >
               <div
                 className={cn(
-                  "flex max-w-[85%] gap-2 rounded-2xl px-4 py-3 text-sm shadow-sm",
+                  "flex max-w-[85%] gap-2 px-4 py-3 text-sm shadow-sm",
                   isAssistant
-                    ? "rounded-tl-none bg-white border border-slate-100 text-slate-700"
-                    : "rounded-tr-none bg-primary text-primary-foreground",
+                    ? "bg-white border border-slate-100 text-slate-700"
+                    : "bg-primary text-primary-foreground",
                 )}
               >
                 {isAssistant && <Bot className="mt-0.5 h-4 w-4 shrink-0 opacity-70" />}
@@ -207,7 +239,7 @@ export function MentorAssistant({
         
         {isTyping && !streamingMessage && (
           <div className="flex justify-start">
-            <div className="flex gap-1 rounded-full bg-white border border-slate-100 px-4 py-2 shadow-sm">
+            <div className="flex gap-1 bg-white border border-slate-100 px-4 py-2 shadow-sm">
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300 [animation-delay:-0.3s]" />
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300 [animation-delay:-0.15s]" />
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-300" />
@@ -217,7 +249,7 @@ export function MentorAssistant({
         <div ref={chatEndRef} />
       </div>
 
-      <div className="border-t bg-white p-3">
+      {!hideComposer ? <div className="border-t bg-white p-3">
         {allMessages.length < 3 && (
           <div className="mb-3 flex flex-wrap gap-1.5">
             {stepSuggestions.map((suggestion) => (
@@ -255,7 +287,7 @@ export function MentorAssistant({
             <Send className="h-4 w-4" />
           </Button>
         </div>
-      </div>
+      </div> : null}
     </div>
   );
 }

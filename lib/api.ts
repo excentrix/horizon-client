@@ -676,7 +676,11 @@ export const planningApi = {
     }>(http.post("/planning/simulation-lab/run-usecase/", payload)),
   generateTaskLesson: (
     taskId: string,
-    payload?: { scope?: "task" | "milestone"; force?: boolean }
+    payload?: {
+      scope?: "task" | "milestone";
+      force?: boolean;
+      scene_types?: "basic" | "extended";
+    }
   ) =>
     extract<{
       message: string;

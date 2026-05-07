@@ -60,11 +60,14 @@ export function StudioDockNav() {
     isActive: pathname === item.href || pathname.startsWith(`${item.href}/`),
   }));
 
+  const autoHide= !pathname.includes("dashboard")
+
   return (
     <FloatingDock
       items={activeItems}
       desktopClassName="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-40 -translate-x-1/2"
       mobileClassName="fixed right-5 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50"
+      autohide={autoHide}
     />
   );
 }

@@ -456,11 +456,35 @@ export interface DailyTask {
   lesson_blocks?: Array<{
     id?: string;
     title?: string;
-    type?: "objective" | "concept" | "example" | "recap" | "exercise";
+    type?:
+      | "objective"
+      | "concept"
+      | "example"
+      | "recap"
+      | "exercise"
+      | "interactive_sim"
+      | "agent_dialogue"
+      | "code_challenge"
+      | "whiteboard_sketch"
+      | "project_brief"
+      | "project_checkpoint";
     content?: string;
     resource_id?: string;
     verified?: boolean;
     source_url?: string | null;
+    html_content?: string;
+    description?: string;
+    turns?: Array<{
+      speaker?: string;
+      persona_type?: string;
+      text?: string;
+      voice_hint?: string;
+    }>;
+    starter_code?: string;
+    language?: string;
+    test_cases?: Array<{ input?: string; expected_output?: string }>;
+    hints?: string[];
+    estimated_seconds?: number;
   }>;
   lesson_generated_at?: string | null;
   playground_conversation_id?: string | null;
