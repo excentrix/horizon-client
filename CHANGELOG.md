@@ -11,6 +11,10 @@ Versioning policy:
 
 ## Unreleased
 
+- No changes yet.
+
+## v0.2.5 (2026-05-09)
+
 ### Added
 - Simulation Lab now routes non-simulation surfaces (`diagram_workspace`, `canvas_workspace`, `flashcard_session`, `teachback_session`) through dedicated universal surface-session APIs.
 - Dashboard now shows runtime outcome-gate visibility (`status`, envelope coverage, false-verify risk).
