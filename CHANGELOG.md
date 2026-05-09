@@ -20,6 +20,9 @@ Versioning policy:
 - Concept map widget for mentor chat responses, with mastery-aware node styling and prerequisite graph rendering.
 - Scene player and scene-studio layout primitives (`SceneStage`, `SceneRail`, mentor/roundtable docks) for multi-scene interactive task delivery.
 - New scene surface components for interactive sims, code challenges, quizzes, and agent dialogue.
+- Project workspace flow components for brief selection, checkpoints, gated submissions, and VELO verification prompts.
+- Mermaid and Vega visual scene renderers plus markdown Mermaid block support for diagram/chart-driven lessons.
+- Lesson loading, task-locked, and regeneration-modal UX states for long-running generation and gated progression flows.
 
 ### Changed
 - Simulation Lab result handling now supports session-based envelopes for non-simulation adapters while preserving existing simulation endpoint behavior.
@@ -27,8 +30,11 @@ Versioning policy:
 - Playground OmniWorkspace now includes a starter-code complexity dial (scaffolding level 1-5) with live regeneration.
 - Plans v2 workspace is now the primary `/plans` experience; previous `/plans/v2` route has been retired and archived under `/plans/old`.
 - Studio shell behavior now adapts layout/header and dock treatment for immersive playground sessions.
+- Playground runtime now includes stronger code-execution resilience (lazy sandbox mount, Python runtime handling, and clearer runtime failure states).
+- HQ user management now surfaces and edits feature quota controls alongside governance settings.
 
 ### Commits
+- `e573cb8` feat(studio): deliver project workspace flow and advanced scene runtime UX
 - `de5712a` feat(studio): ship scene-based playground and plans v2 workspace flow
 - `175188d` feat(playground): ship multi-surface runtime with feynman teach-back UX
 - `d5b100b` feat(studio): improve roadmap/progress surfaces and mentor feed wiring
@@ -40,7 +46,7 @@ Versioning policy:
 - `39121ac` feat: ship excalidraw workspace and review flow
 - `4944046` feat(studio-runtime): add surface session UX, runtime console, and draft review
 
-## v0.1.4 (2026-04-22)
+## v0.2.4 (2026-04-22)
 
 ### Commits
 - `b68da85` docs(changelog): record v0.3.0 runtime and intervention updates
@@ -50,7 +56,7 @@ Versioning policy:
 ### Notes
 - No major/breaking designation applied in this cycle; additive runtime UI and contract compatibility updates only.
 
-## v0.1.3 (2026-04-21)
+## v0.2.3 (2026-04-21)
 
 ### Commits
 - `9b3334b` docs(changelog): record 2026-04-21 release updates
@@ -60,20 +66,20 @@ Versioning policy:
 - `d047030` chore(types): add qrcode module declaration
 - `2acadbc` feat(studio): add simulation lab screen, nav entry, and API contracts
 
-## v0.1.2 (2026-04-18)
+## v0.2.2 (2026-04-18)
 
 ### Commits
 - `35d63df` fix(studio): stabilize playground idle telemetry and dashboard rendering
 - `656c945` feat(planning): add simulation scenario client APIs and types
 - `f6ad595` feat: surface simulation diagnostics and efficacy across playground UX
 
-## v0.1.1 (2026-04-15)
+## v0.2.1 (2026-04-15)
 
 ### Commits
 - `fc43f88` docs(changelog): record 2026-04-15 plans v2 and verification release
 - `cda2435` feat: plans v2 workspace + project verification ui integration (#4)
 
-## v0.1.0 (2026-04-14)
+## v0.2.0 (2026-04-14)
 
 ### Notes
 - Initial baseline for this changelog series (pre-commitized historical state).
