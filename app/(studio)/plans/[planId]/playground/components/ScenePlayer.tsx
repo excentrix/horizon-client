@@ -17,6 +17,10 @@ import {
 import { InteractiveSimScene } from "./InteractiveSimScene";
 import { CodeChallengeScene } from "./CodeChallengeScene";
 import { QuizScene } from "./QuizScene";
+import { MermaidScene } from "./MermaidScene";
+import { VegaChartScene } from "./VegaChartScene";
+import { ProjectBriefScene } from "./ProjectBriefScene";
+import { ProjectCheckpointScene } from "./ProjectCheckpointScene";
 
 // Configure marked — v9+ compatible (setOptions still works in v17)
 try { marked.setOptions({ gfm: true, breaks: true }); } catch { /* ignore */ }
@@ -28,6 +32,8 @@ interface ScenePlayerProps {
   onFeedbackChange: (feedback: Record<string, "helpful" | "unhelpful" | null>) => void;
   onHintRequested?: () => void;
   onRequestMentorReview?: (content: string) => void;
+  /** Called when the learner clicks "Open Workspace" on a project_brief or project_checkpoint scene */
+  onOpenWorkspace?: (phase?: string) => void;
   onExecutionEvent?: (payload: {
     event_type:
       | "run_started"
@@ -54,6 +60,10 @@ const SCENE_LABELS: Record<string, string> = {
   interactive_sim: "Interactive Sim",
   code_challenge: "Code Lab",
   quiz: "Quiz",
+  mermaid_diagram: "Diagram",
+  vega_chart: "Chart",
+  project_brief: "Project Brief",
+  project_checkpoint: "Checkpoint",
 };
 
 const SCENE_THEME: Record<string, { accent: string; dot: string; chip: string; badge: string }> = {
@@ -66,6 +76,10 @@ const SCENE_THEME: Record<string, { accent: string; dot: string; chip: string; b
   interactive_sim: { accent: "from-indigo-500/70 to-violet-500/70",  dot: "bg-indigo-500",  chip: "text-indigo-200",  badge: "bg-indigo-500/15 text-indigo-300 border-indigo-500/30" },
   code_challenge:  { accent: "from-green-500/70 to-lime-500/70",     dot: "bg-green-500",   chip: "text-green-200",   badge: "bg-green-500/15 text-green-300 border-green-500/30" },
   quiz:            { accent: "from-rose-500/70 to-pink-500/70",       dot: "bg-rose-500",    chip: "text-rose-200",    badge: "bg-rose-500/15 text-rose-300 border-rose-500/30" },
+  mermaid_diagram: { accent: "from-teal-500/70 to-cyan-500/70",       dot: "bg-teal-500",    chip: "text-teal-200",    badge: "bg-teal-500/15 text-teal-300 border-teal-500/30" },
+  vega_chart:        { accent: "from-rose-500/70 to-orange-500/70",   dot: "bg-rose-400",    chip: "text-rose-200",    badge: "bg-rose-500/15 text-rose-300 border-rose-500/30" },
+  project_brief:     { accent: "from-violet-600/80 to-indigo-600/80", dot: "bg-violet-500",  chip: "text-violet-200",  badge: "bg-violet-500/15 text-violet-300 border-violet-500/30" },
+  project_checkpoint:{ accent: "from-emerald-600/80 to-teal-600/80",  dot: "bg-emerald-500", chip: "text-emerald-200", badge: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
 };
 
 const SCENE_ICONS: Record<string, string> = {
@@ -75,6 +89,10 @@ const SCENE_ICONS: Record<string, string> = {
   example: "🔬",
   recap: "✅",
   exercise: "🏋️",
+  mermaid_diagram: "🗺️",
+  vega_chart: "📊",
+  project_brief: "📁",
+  project_checkpoint: "📋",
 };
 
 function SceneThumbnail({ sceneType }: { sceneType: string }) {
@@ -191,6 +209,7 @@ export function ScenePlayer({
   onFeedbackChange,
   onHintRequested,
   onRequestMentorReview,
+  onOpenWorkspace,
   onExecutionEvent,
 }: ScenePlayerProps) {
   void lessonLoading;
@@ -263,6 +282,49 @@ export function ScenePlayer({
             estimated_seconds?: number;
           }}
           onRequestMentorReview={onRequestMentorReview}
+        />
+      );
+    }
+
+    if (type === "mermaid_diagram") {
+      return (
+        <MermaidScene
+          scene={active as {
+            title?: string;
+            description?: string;
+            mermaid_syntax?: string;
+            mermaid_subtype?: string;
+          }}
+        />
+      );
+    }
+
+    if (type === "vega_chart") {
+      return (
+        <VegaChartScene
+          scene={active as {
+            title?: string;
+            description?: string;
+            vega_spec?: Record<string, unknown>;
+          }}
+        />
+      );
+    }
+
+    if (type === "project_brief") {
+      return (
+        <ProjectBriefScene
+          scene={active as { title?: string; content?: string }}
+          onOpenWorkspace={onOpenWorkspace}
+        />
+      );
+    }
+
+    if (type === "project_checkpoint") {
+      return (
+        <ProjectCheckpointScene
+          scene={active as { title?: string; content?: string }}
+          onOpenWorkspace={onOpenWorkspace}
         />
       );
     }
@@ -368,7 +430,9 @@ export function ScenePlayer({
 
         {/* Scene content */}
         <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-slate-800 bg-[#080C14] p-3 shadow-sm">
-          <div className="min-h-full">{renderActiveScene()}</div>
+          <div className="min-h-full">
+            {renderActiveScene()}
+          </div>
         </div>
 
         {/* Navigation */}

@@ -11,6 +11,7 @@ import {
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlan, usePlanMutations } from "@/hooks/use-plans";
+import { useNotifications } from "@/context/NotificationContext";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useConversationMessages } from "@/hooks/use-conversations";
 import { chatApi, planningApi } from "@/lib/api";
@@ -56,6 +57,10 @@ import { TaskMissionBrief } from "./components/TaskMissionBrief";
 import { TaskOrientationBanner } from "./components/TaskOrientationBanner";
 import { Badge } from "@/components/ui/badge";
 import { SceneStudioLayout } from "./components/scene-studio/SceneStudioLayout";
+import { ProjectWorkspace } from "./components/ProjectWorkspace";
+import { TaskLockedScreen } from "./components/TaskLockedScreen";
+import { LessonLoadingScreen } from "./components/LessonLoadingScreen";
+import { RegenerationModal, type RegenerationModalMode } from "./components/RegenerationModal";
 import {
   computeSurfaceSteps,
   computeVisibleEnvs,
@@ -185,6 +190,57 @@ function cleanMissionText(value: unknown): string {
     .trim();
 }
 
+function ProjectTabBar({
+  activeTab,
+  taskTitle,
+  onTabChange,
+  onBackToPlan,
+}: {
+  activeTab: "learn" | "project";
+  taskTitle: string;
+  onTabChange: (tab: "learn" | "project") => void;
+  onBackToPlan: () => void;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-2 rounded-xl bg-white px-3 py-2 shadow-sm ring-1 ring-slate-200">
+      <button
+        onClick={onBackToPlan}
+        className="mr-1 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        title="Back to plan"
+      >
+        <ArrowLeft className="h-4 w-4" />
+      </button>
+      <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
+        <button
+          onClick={() => onTabChange("learn")}
+          className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+            activeTab === "learn"
+              ? "bg-white text-slate-900 shadow-sm"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <BookOpen className="mr-1.5 inline h-3.5 w-3.5" />
+          Learn
+        </button>
+        <button
+          onClick={() => onTabChange("project")}
+          className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+            activeTab === "project"
+              ? "bg-white text-slate-900 shadow-sm"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <Code2 className="mr-1.5 inline h-3.5 w-3.5" />
+          Project Workspace
+        </button>
+      </div>
+      <span className="ml-3 truncate text-sm font-medium text-slate-600">
+        {taskTitle}
+      </span>
+    </div>
+  );
+}
+
 export default function PlanPlaygroundPage() {
   return (
     <Suspense
@@ -213,6 +269,7 @@ function PlaygroundFlow() {
   const { data: plan, refetch: refetchPlan } = usePlan(planId);
   const { updateTaskStatus } = usePlanMutations(planId);
   const queryClient = useQueryClient();
+  const { lessonProgress } = useNotifications();
 
   const selectedTaskId = searchParams.get("task");
   const planRefetchInFlightRef = useRef(false);
@@ -222,6 +279,13 @@ function PlaygroundFlow() {
     if (!selectedTaskId) return tasks[0];
     return tasks.find((t) => t.id === selectedTaskId) ?? tasks[0];
   }, [tasks, selectedTaskId]);
+
+  // -- Regeneration quota modal --
+  const [regenModal, setRegenModal] = useState<{
+    mode: RegenerationModalMode;
+    limit: number;
+    pendingTaskId: string;
+  } | null>(null);
 
   // -- Flow State --
   const [activeStepIndex, setActiveStepIndex] = useState(0);
@@ -272,6 +336,8 @@ function PlaygroundFlow() {
   > | null>(null);
   const [challengeLoading, setChallengeLoading] = useState(false);
   const [sceneMode, setSceneMode] = useState<SceneMode>("extended");
+  const [activeProjectTab, setActiveProjectTab] = useState<"learn" | "project">("learn");
+  const [workspaceScrollPhase, setWorkspaceScrollPhase] = useState<string | undefined>(undefined);
   const lastActivityAtRef = useRef<number>(Date.now());
   const idleReportedRef = useRef<boolean>(false);
 
@@ -893,6 +959,24 @@ function PlaygroundFlow() {
 
   if (!plan) return null;
 
+  if (activeTask?.is_locked) {
+    return (
+      <TaskLockedScreen
+        task={activeTask}
+        tasks={tasks}
+        onNavigate={(id) => router.push(`?task=${id}`)}
+      />
+    );
+  }
+
+  const hasBlocks = (activeTask?.lesson_blocks?.length ?? 0) > 0;
+  if (lessonLoading && !hasBlocks && activeTask) {
+    const progressForTask = lessonProgress?.task_id === activeTask.id || !lessonProgress?.task_id
+      ? lessonProgress
+      : null;
+    return <LessonLoadingScreen task={activeTask} lessonProgress={progressForTask} />;
+  }
+
   // Progress = steps genuinely completed (not just visited). The current step
   // counts as half-done so the bar always moves when switching tabs.
   const progressPercent = Math.min(
@@ -919,6 +1003,7 @@ function PlaygroundFlow() {
   const isExtendedSceneTask = Boolean(
     activeTask && hasExtendedScenes(activeTask),
   );
+  const isProjectTask = activeTask?.task_type === "project";
   const quizFailed =
     quizResults && quizResults.correct / quizResults.total < 0.6;
   const missionObjective = cleanMissionText(
@@ -983,6 +1068,42 @@ function PlaygroundFlow() {
       "Provide final evidence that directly satisfies the acceptance criteria.",
   );
 
+  const _triggerLessonGeneration = (resolvedTaskId: string, force: boolean, reason?: string) => {
+    planningApi
+      .generateTaskLesson(resolvedTaskId, {
+        scope: "task",
+        force,
+        scene_types: sceneMode,
+        ...(reason ? { reason } : {}),
+      })
+      .then((res) => {
+        if (res?.quota_status === "reason_required") {
+          pendingLessonGenerationRef.current = null;
+          setLessonLoading(false);
+          setRegenModal({ mode: "reason_required", limit: res.limit ?? 1, pendingTaskId: resolvedTaskId });
+          return;
+        }
+        if (res?.quota_status === "exceeded") {
+          pendingLessonGenerationRef.current = null;
+          setLessonLoading(false);
+          setRegenModal({ mode: "exceeded", limit: res.limit ?? 1, pendingTaskId: resolvedTaskId });
+          return;
+        }
+        startLessonPolling();
+        safeRefetchPlan();
+      })
+      .catch((err) => {
+        const data = err?.response?.data ?? err?.data;
+        if (data?.quota_status === "reason_required") {
+          setRegenModal({ mode: "reason_required", limit: data.limit ?? 1, pendingTaskId: resolvedTaskId });
+        } else if (data?.quota_status === "exceeded") {
+          setRegenModal({ mode: "exceeded", limit: data.limit ?? 1, pendingTaskId: resolvedTaskId });
+        }
+        pendingLessonGenerationRef.current = null;
+        setLessonLoading(false);
+      });
+  };
+
   const onRegenerateLesson = () => {
     const urlTaskId = selectedTaskId || null;
     const resolvedTaskId =
@@ -1000,27 +1121,19 @@ function PlaygroundFlow() {
 
     lessonRequestRef.current[resolvedTaskId] = false;
     setLessonLoading(true);
-    // Debug helper for stale-task regenerate reports.
-    console.info("[playground] regenerate_lesson", {
-      selectedTaskId: urlTaskId,
-      activeTaskId: activeTask?.id,
-      resolvedTaskId,
-      sceneMode,
-    });
-    planningApi
-      .generateTaskLesson(resolvedTaskId, {
-        scope: "task",
-        force: true,
-        scene_types: sceneMode,
-      })
-      .then(() => {
-        startLessonPolling();
-        safeRefetchPlan();
-      })
-      .catch(() => {
-        pendingLessonGenerationRef.current = null;
-        setLessonLoading(false);
-      });
+
+    // For extended mode: run preflight gap detection first.
+    // Questions (if any) appear in chat via WebSocket — non-blocking, generation proceeds.
+    if (sceneMode === "extended") {
+      planningApi
+        .lessonPreflight(resolvedTaskId, { scene_types: "extended" })
+        .catch(() => {/* ignore — preflight failure must never block generation */})
+        .finally(() => {
+          _triggerLessonGeneration(resolvedTaskId, true);
+        });
+    } else {
+      _triggerLessonGeneration(resolvedTaskId, true);
+    }
   };
 
   const toggleSceneMode = () => {
@@ -1074,38 +1187,126 @@ function PlaygroundFlow() {
   })();
 
   if (isExtendedSceneTask && activeTask) {
+    const sceneStudio = (
+      <SceneStudioLayout
+        key={`${activeTask.id}:${activeTask.lesson_generated_at ?? "none"}:${activeTask.lesson_blocks?.length ?? 0}`}
+        task={activeTask}
+        isRegenerating={lessonLoading}
+        regenerationLabel={regenerationLabel}
+        onBackToPlan={() => router.push(`/plans?plan=${planId}`)}
+        onOpenWorkspace={isProjectTask ? (phase?: string) => { setWorkspaceScrollPhase(phase); setActiveProjectTab("project"); } : undefined}
+        onRegenerate={onRegenerateLesson}
+        onHintRequested={() => {
+          void emitPlaygroundEvent({
+            event_type: "hint_requested",
+            language: defaultLanguage,
+            meta: { source: "scene_studio" },
+          });
+        }}
+        onRequestMentorReview={handleMentorReviewRequest}
+        onExecutionEvent={(event) => {
+          void emitPlaygroundEvent({
+            ...event,
+            language: event.language || defaultLanguage,
+          });
+        }}
+        mentor={{
+          messages: mentorMessages ?? [],
+          isTyping: mentorTyping,
+          streamingMessage,
+          onSendMessage: handleMentorSend,
+          socketStatus: mentorSocketStatus,
+          currentStep: currentStepId,
+        }}
+        challengeContract={{
+          problemStatement: cleanMissionText(
+            (challengeVerification?.problem_statement as string) ||
+              activeTask?.verification?.problem_statement ||
+              activeTask?.check_in_question ||
+              activeTask?.description,
+          ),
+          expectedOutput:
+            cleanMissionText(challengeVerification?.output_contract as string) ||
+            parseCriteriaList(activeTask?.verification?.acceptance_criteria).join(
+              "\n",
+            ),
+          instructions: cleanMissionText(
+            (challengeVerification?.submission_note as string) ||
+              activeTask?.verification?.detailed_instructions,
+          ),
+          requiredMethods: parseCriteriaList(
+            challengeVerification?.method || activeTask?.verification?.method,
+          ),
+          acceptanceCriteria: missionCriteria,
+          recommendedEnvironment:
+            (activeTask?.environment_requirements as
+              | { recommended_environment?: string }
+              | undefined)?.recommended_environment,
+          sandboxSupported: (recommendedEnv as string) !== "custom",
+        }}
+      />
+    );
+
+    if (!isProjectTask) {
+      return (
+        <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-[#f3f5f9] p-3">
+          {sceneStudio}
+        </div>
+      );
+    }
+
     return (
-      <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-[#f3f5f9] p-3">
-        <SceneStudioLayout
-          key={`${activeTask.id}:${activeTask.lesson_generated_at ?? "none"}:${activeTask.lesson_blocks?.length ?? 0}`}
-          task={activeTask}
-          isRegenerating={lessonLoading}
-          regenerationLabel={regenerationLabel}
+      <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-[#f3f5f9] p-3 gap-2">
+        <ProjectTabBar
+          activeTab={activeProjectTab}
+          taskTitle={activeTask.title}
+          onTabChange={setActiveProjectTab}
           onBackToPlan={() => router.push(`/plans?plan=${planId}`)}
-          onRegenerate={onRegenerateLesson}
-          onHintRequested={() => {
-            void emitPlaygroundEvent({
-              event_type: "hint_requested",
-              language: defaultLanguage,
-              meta: { source: "scene_studio" },
-            });
-          }}
-          onRequestMentorReview={handleMentorReviewRequest}
-          onExecutionEvent={(event) => {
-            void emitPlaygroundEvent({
-              ...event,
-              language: event.language || defaultLanguage,
-            });
-          }}
-          mentor={{
-            messages: mentorMessages ?? [],
-            isTyping: mentorTyping,
-            streamingMessage,
-            onSendMessage: handleMentorSend,
-            socketStatus: mentorSocketStatus,
-            currentStep: currentStepId,
-          }}
         />
+        {activeProjectTab === "learn" ? (
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {sceneStudio}
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <ProjectWorkspace taskId={activeTask.id} scrollToPhase={workspaceScrollPhase} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (isProjectTask && activeTask && !isExtendedSceneTask) {
+    return (
+      <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-[#f3f5f9] p-3 gap-2">
+        <ProjectTabBar
+          activeTab={activeProjectTab}
+          taskTitle={activeTask.title}
+          onTabChange={setActiveProjectTab}
+          onBackToPlan={() => router.push(`/plans?plan=${planId}`)}
+        />
+        {activeProjectTab === "project" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <ProjectWorkspace taskId={activeTask.id} scrollToPhase={workspaceScrollPhase} />
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <LearningPanel
+              activeTask={activeTask}
+              lessonLoading={lessonLoading}
+              blockFeedback={blockFeedback}
+              onFeedbackChange={setBlockFeedback}
+              onHintRequested={() => {
+                void emitPlaygroundEvent({
+                  event_type: "hint_requested",
+                  language: defaultLanguage,
+                  meta: { source: "learning_panel" },
+                });
+              }}
+              onComplete={() => setActiveProjectTab("project")}
+            />
+          </div>
+        )}
       </div>
     );
   }
@@ -1293,6 +1494,7 @@ function PlaygroundFlow() {
                       });
                     }}
                     onRequestMentorReview={handleMentorReviewRequest}
+                    onOpenWorkspace={isProjectTask ? (phase?: string) => { setWorkspaceScrollPhase(phase); setActiveProjectTab("project"); } : undefined}
                     onExecutionEvent={(event) => {
                       void emitPlaygroundEvent({
                         ...event,
@@ -1550,6 +1752,34 @@ function PlaygroundFlow() {
       >
         Scene Mode: {sceneMode === "extended" ? "Extended" : "Basic"}
       </button>
+
+      {regenModal && (
+        <RegenerationModal
+          mode={regenModal.mode}
+          limit={regenModal.limit}
+          onClose={() => setRegenModal(null)}
+          onConfirm={(reason) => {
+            const taskId = regenModal.pendingTaskId;
+            setRegenModal(null);
+            const targetTask = tasks.find((t) => t.id === taskId) ?? activeTask ?? null;
+            pendingLessonGenerationRef.current = {
+              taskId,
+              previousGeneratedAt: targetTask?.lesson_generated_at ?? null,
+              previousSnapshot: lessonSnapshotForTask(targetTask),
+            };
+            lessonRequestRef.current[taskId] = false;
+            setLessonLoading(true);
+            if (sceneMode === "extended") {
+              planningApi
+                .lessonPreflight(taskId, { scene_types: "extended" })
+                .catch(() => {})
+                .finally(() => _triggerLessonGeneration(taskId, true, reason));
+            } else {
+              _triggerLessonGeneration(taskId, true, reason);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

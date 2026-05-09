@@ -63,11 +63,7 @@ export function computeSurfaceSteps(
 }
 
 export function hasExtendedScenes(task: RuntimeTaskShape | undefined): boolean {
-  return (task?.lesson_blocks ?? []).some((block) => {
-    if (!block || typeof block !== "object") return false;
-    const type = (block as { type?: string }).type ?? "";
-    return ["interactive_sim", "code_challenge", "quiz"].includes(type);
-  });
+  return (task?.lesson_blocks?.length ?? 0) > 0;
 }
 
 export function recommendedEnvForSurface(

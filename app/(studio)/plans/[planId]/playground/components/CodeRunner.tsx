@@ -40,6 +40,17 @@ const DEFAULT_SNIPPETS: Record<string, string> = {
   php: "<?php\necho \"Hello, Horizon!\";",
 };
 
+const PYODIDE_INDEX_URL = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
+
+declare global {
+  interface Window {
+    loadPyodide?: (config: { indexURL: string }) => Promise<{
+      runPythonAsync: (code: string) => Promise<unknown>;
+      runPython: (code: string) => string;
+    }>;
+  }
+}
+
 interface CodeRunnerProps {
   defaultLanguage?: string;
   initialCode?: string;
@@ -72,6 +83,12 @@ export function CodeRunner({
   const [stdin, setStdin] = useState("");
   const [output, setOutput] = useState<{ stdout?: string; stderr?: string; compile_output?: string; message?: string } | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [pyodideLoading, setPyodideLoading] = useState(false);
+  const [pyodideError, setPyodideError] = useState<string | null>(null);
+  const [pyodideRuntime, setPyodideRuntime] = useState<{
+    runPythonAsync: (code: string) => Promise<unknown>;
+    runPython: (code: string) => string;
+  } | null>(null);
 
   const extension = useMemo(() => {
     const langKey = LANGUAGE_MAP[selectedLanguage];
@@ -87,6 +104,46 @@ export function CodeRunner({
     }
   }, [defaultLanguage, initialCode]);
 
+  useEffect(() => {
+    if (selectedLanguage !== "python") return;
+    if (pyodideRuntime || pyodideLoading) return;
+
+    let cancelled = false;
+    const load = async () => {
+      setPyodideLoading(true);
+      setPyodideError(null);
+      try {
+        if (!window.loadPyodide) {
+          await new Promise<void>((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = `${PYODIDE_INDEX_URL}pyodide.js`;
+            script.async = true;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error("Failed to load Pyodide script."));
+            document.head.appendChild(script);
+          });
+        }
+        if (!window.loadPyodide) {
+          throw new Error("Pyodide loader unavailable.");
+        }
+        const runtime = await window.loadPyodide({ indexURL: PYODIDE_INDEX_URL });
+        if (!cancelled) {
+          setPyodideRuntime(runtime);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPyodideError(error instanceof Error ? error.message : "Failed to load Python runtime.");
+        }
+      } finally {
+        if (!cancelled) setPyodideLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLanguage, pyodideRuntime, pyodideLoading]);
+
   const handleRun = async () => {
     setIsRunning(true);
     setOutput(null);
@@ -100,6 +157,53 @@ export function CodeRunner({
       run_id: runId,
     });
     try {
+      if (selectedLanguage === "python") {
+        if (!pyodideRuntime) {
+          throw new Error(pyodideError || "Python runtime is still loading.");
+        }
+        const escapedStdin = JSON.stringify(stdin ?? "");
+        const bootstrap = [
+          "import sys",
+          "import io",
+          "import builtins",
+          `__horizon_stdin = io.StringIO(${escapedStdin})`,
+          "sys.stdin = __horizon_stdin",
+          "builtins.input = lambda prompt='': __horizon_stdin.readline().rstrip('\\n')",
+          "sys.stdout = io.StringIO()",
+          "sys.stderr = io.StringIO()",
+        ].join("\n");
+        await pyodideRuntime.runPythonAsync(bootstrap);
+        await pyodideRuntime.runPythonAsync(code);
+        const stdout = pyodideRuntime.runPython("sys.stdout.getvalue()");
+        const stderr = pyodideRuntime.runPython("sys.stderr.getvalue()");
+        setOutput({
+          stdout: stdout ?? "",
+          stderr: stderr ?? "",
+        });
+
+        const runtimeError = Boolean(stderr);
+        onExecutionEvent?.({
+          event_type: runtimeError ? "runtime_error" : "run_completed",
+          language: selectedLanguage,
+          run_id: runId,
+          status: runtimeError ? "runtime_error" : "success",
+          error_type: runtimeError ? "runtime" : undefined,
+          meta: {
+            has_stdout: Boolean(stdout),
+            has_stderr: Boolean(stderr),
+          },
+        });
+        onExecutionEvent?.({
+          event_type: runtimeError ? "test_failed" : "test_passed",
+          language: selectedLanguage,
+          run_id: runId,
+          status: runtimeError ? "runtime_error" : "success",
+          error_type: runtimeError ? "runtime" : undefined,
+          meta: { scope: "visible", source: "code_runner_pyodide" },
+        });
+        return;
+      }
+
       const result = await playgroundApi.executeCode({
         language: selectedLanguage,
         source_code: code,
@@ -142,7 +246,10 @@ export function CodeRunner({
         meta: { scope: "visible", source: "code_runner" },
       });
     } catch {
-      setOutput({ message: "Execution failed. Please try again." });
+      const message = selectedLanguage === "python"
+        ? `Execution failed${pyodideError ? `: ${pyodideError}` : "."}`
+        : "Execution failed. Please try again.";
+      setOutput({ message });
       onExecutionEvent?.({
         event_type: "runtime_error",
         language: selectedLanguage,
@@ -188,6 +295,15 @@ export function CodeRunner({
           </select>
         </div>
         <div className="flex items-center gap-2">
+          {selectedLanguage === "python" && (
+            <span className="text-[11px] text-slate-500">
+              {pyodideLoading
+                ? "Loading Pyodide runtime..."
+                : pyodideError
+                  ? "Pyodide unavailable"
+                  : "Running in-browser via Pyodide"}
+            </span>
+          )}
           {onRequestMentorReview && (
             <Button
               onClick={() => onRequestMentorReview(code)}
@@ -202,7 +318,7 @@ export function CodeRunner({
           <Button
             onClick={handleRun}
             size="sm"
-            disabled={isRunning}
+            disabled={isRunning || (selectedLanguage === "python" && (pyodideLoading || !pyodideRuntime))}
             className="h-8 bg-slate-900 text-white hover:bg-slate-800"
           >
             {isRunning ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Play className="mr-2 h-3.5 w-3.5" />}

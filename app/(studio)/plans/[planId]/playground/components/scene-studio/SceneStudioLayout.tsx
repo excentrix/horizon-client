@@ -20,7 +20,11 @@ import {
 import { InteractiveSimScene } from "../InteractiveSimScene";
 import { AgentDialogueScene } from "../AgentDialogueScene";
 import { CodeChallengeScene } from "../CodeChallengeScene";
+import { ProjectBriefScene } from "../ProjectBriefScene";
+import { ProjectCheckpointScene } from "../ProjectCheckpointScene";
 import { MathMarkdown } from "@/components/markdown/MathMarkdown";
+import { MermaidBlock } from "@/components/markdown/MermaidBlock";
+import { CodeRunner } from "../CodeRunner";
 import { SceneRail } from "./SceneRail";
 import { SceneStage } from "./SceneStage";
 import { RoundtableDock } from "./RoundtableDock";
@@ -46,6 +50,7 @@ interface SceneStudioLayoutProps {
     error_type?: string;
     meta?: Record<string, unknown>;
   }) => void;
+  onOpenWorkspace?: (phase?: string) => void;
   onHintRequested?: () => void;
   onRegenerate?: () => void;
   mentor: {
@@ -56,6 +61,15 @@ interface SceneStudioLayoutProps {
     socketStatus: string;
     currentStep?: StepId;
   };
+  challengeContract?: {
+    problemStatement?: string;
+    expectedOutput?: string;
+    instructions?: string;
+    requiredMethods?: string[];
+    acceptanceCriteria?: string[];
+    recommendedEnvironment?: string;
+    sandboxSupported?: boolean;
+  } | null;
 }
 
 export function SceneStudioLayout({
@@ -63,20 +77,26 @@ export function SceneStudioLayout({
   isRegenerating,
   regenerationLabel,
   onBackToPlan,
+  onOpenWorkspace,
   onRequestMentorReview,
   onExecutionEvent,
   onHintRequested,
   onRegenerate,
   mentor,
+  challengeContract,
 }: SceneStudioLayoutProps) {
   const scenes = useMemo(() => task.lesson_blocks ?? [], [task.lesson_blocks]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [showFullChat, setShowFullChat] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [projectDrafts, setProjectDrafts] = useState<
+    Record<string, Record<string, string>>
+  >({});
 
   useEffect(() => {
     setActiveIndex(0);
+    setProjectDrafts({});
   }, [task.id]);
 
   useEffect(() => {
@@ -88,6 +108,13 @@ export function SceneStudioLayout({
     | Record<string, unknown>
     | undefined;
   const activeType = String(activeScene?.type ?? "concept");
+  const isChallengeScene = activeType === "code_challenge";
+
+  useEffect(() => {
+    if (isChallengeScene && showFullChat) {
+      setShowFullChat(false);
+    }
+  }, [isChallengeScene, showFullChat]);
 
   const toggleFullscreen = async () => {
     if (typeof document === "undefined") return;
@@ -137,25 +164,98 @@ export function SceneStudioLayout({
       );
     }
 
-    if (activeType === "code_challenge") {
+    if (activeType === "project_brief") {
       return (
-        <CodeChallengeScene
-          scene={
-            activeScene as {
-              title?: string;
-              language?: string;
-              starter_code?: string;
-              test_cases?: Array<{ input?: string; expected_output?: string }>;
-              hints?: string[];
-            }
-          }
-          onRequestMentorReview={onRequestMentorReview}
-          onExecutionEvent={onExecutionEvent}
+        <ProjectBriefScene
+          scene={activeScene as { title?: string; content?: string }}
+          onOpenWorkspace={onOpenWorkspace}
         />
       );
     }
 
-    const sceneObj = activeScene as { content?: unknown; description?: unknown; title?: unknown };
+    if (activeType === "project_checkpoint") {
+      return (
+        <ProjectCheckpointScene
+          scene={activeScene as { title?: string; content?: string }}
+          onOpenWorkspace={onOpenWorkspace}
+        />
+      );
+    }
+
+    if (activeType === "code_challenge") {
+      return (
+        <div className="space-y-3">
+          <section className="rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+              Challenge Mode
+            </p>
+            <p className="mt-1 text-sm text-amber-900">
+              Mentor assistance is disabled for this challenge. Complete it independently in the sandbox.
+            </p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-amber-200 bg-white p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Problem Statement</p>
+                <p className="mt-1 text-sm text-slate-700">
+                  {challengeContract?.problemStatement || "Solve the challenge using the task concepts and validate with tests."}
+                </p>
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-white p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Expected Output</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">
+                  {challengeContract?.expectedOutput || "Match required outputs for provided test inputs."}
+                </p>
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-white p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Method Constraints</p>
+                {challengeContract?.requiredMethods?.length ? (
+                  <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-slate-700">
+                    {challengeContract.requiredMethods.map((method) => (
+                      <li key={method}>{method}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-sm text-slate-700">No special method constraints specified.</p>
+                )}
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-white p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Environment</p>
+                <p className="mt-1 text-sm text-slate-700">
+                  {challengeContract?.sandboxSupported === false
+                    ? `Use your own system (${challengeContract?.recommendedEnvironment || "local environment"}) and submit proof after execution.`
+                    : `Use Horizon sandbox (${challengeContract?.recommendedEnvironment || "code runner"}) to implement and validate.`}
+                </p>
+              </div>
+            </div>
+            {challengeContract?.instructions ? (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-white p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Instructions</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">
+                  {challengeContract.instructions}
+                </p>
+              </div>
+            ) : null}
+          </section>
+          <CodeChallengeScene
+            scene={
+              activeScene as {
+                title?: string;
+                language?: string;
+                starter_code?: string;
+                test_cases?: Array<{ input?: string; expected_output?: string }>;
+                hints?: string[];
+              }
+            }
+            onExecutionEvent={onExecutionEvent}
+          />
+        </div>
+      );
+    }
+
+    const sceneObj = activeScene as {
+      content?: unknown;
+      description?: unknown;
+      title?: unknown;
+    };
     const contentRaw = sceneObj.content;
     const content =
       typeof contentRaw === "string" && contentRaw.trim().length > 0
@@ -163,8 +263,57 @@ export function SceneStudioLayout({
         : typeof sceneObj.description === "string" && sceneObj.description.trim().length > 0
           ? sceneObj.description
           : `This scene is still being prepared for "${String(sceneObj.title ?? task.title)}".`;
+
+    const segments = (() => {
+      const output: Array<
+        { kind: "markdown"; value: string } | { kind: "mermaid"; value: string }
+      > = [];
+      const regex = /```mermaid\s*([\s\S]*?)```/gi;
+      let lastIndex = 0;
+      let match: RegExpExecArray | null = regex.exec(content);
+      while (match) {
+        const before = content.slice(lastIndex, match.index).trim();
+        if (before) output.push({ kind: "markdown", value: before });
+        const diagram = (match[1] || "").trim();
+        if (diagram) output.push({ kind: "mermaid", value: diagram });
+        lastIndex = regex.lastIndex;
+        match = regex.exec(content);
+      }
+      const trailing = content.slice(lastIndex).trim();
+      if (trailing) output.push({ kind: "markdown", value: trailing });
+      if (!output.length) output.push({ kind: "markdown", value: content });
+      return output;
+    })();
+
+    const inferredLanguage = (() => {
+      const markdownCodeFence = content.match(/```([a-zA-Z0-9_+-]+)\s*\n/);
+      const lang = (markdownCodeFence?.[1] || "").toLowerCase();
+      if (lang.includes("python")) return "python";
+      if (lang.includes("javascript") || lang === "js" || lang.includes("typescript")) return "javascript";
+      if (lang.includes("java")) return "java";
+      if (lang.includes("cpp") || lang.includes("c++")) return "cpp";
+      if (lang.includes("go")) return "go";
+      if (lang.includes("rust")) return "rust";
+      if (lang.includes("ruby")) return "ruby";
+      if (lang.includes("php")) return "php";
+      const taskText = `${task.title} ${task.description || ""}`.toLowerCase();
+      if (taskText.includes("python")) return "python";
+      if (taskText.includes("javascript") || taskText.includes("typescript")) return "javascript";
+      return "python";
+    })();
+
+    const sceneId = String(sceneObj.title ?? `scene-${activeIndex}`);
+    const placeholders = (() => {
+      const matches = content.match(/\[[^\]\n]{8,220}\]/g) ?? [];
+      const unique = Array.from(new Set(matches.map((m) => m.slice(1, -1).trim())));
+      return unique.slice(0, 8);
+    })();
+    const hasProjectInputs =
+      (activeType === "project_brief" || activeType === "project_checkpoint") &&
+      placeholders.length > 0;
+
     return (
-      <article className="border border-slate-200 bg-white p-4">
+      <article className="space-y-4 border border-slate-200 bg-white p-4">
         {onHintRequested ? (
           <div className="mb-2.5 flex justify-end">
             <Button
@@ -177,11 +326,95 @@ export function SceneStudioLayout({
             </Button>
           </div>
         ) : null}
-        <div className="border border-slate-200 bg-slate-50/80 p-4">
+        <div className="space-y-4 border border-slate-200 bg-slate-50/80 p-4">
           <div className="prose prose-sm md:prose-base max-w-none prose-slate text-slate-800 leading-relaxed">
-            <MathMarkdown>{content}</MathMarkdown>
+            {segments.map((segment, idx) =>
+              segment.kind === "mermaid" ? (
+                <MermaidBlock key={`mermaid-${idx}`} chart={segment.value} />
+              ) : (
+                <MathMarkdown key={`md-${idx}`}>{segment.value}</MathMarkdown>
+              ),
+            )}
           </div>
         </div>
+        {hasProjectInputs ? (
+          <section className="space-y-3 rounded-xl border border-[#EC5B13]/25 bg-[#EC5B13]/5 p-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#EC5B13]">
+                Fill This Scene
+              </p>
+              <p className="text-xs text-slate-600">
+                Complete these responses before moving to the checkpoint.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              {placeholders.map((placeholder, index) => {
+                const currentValue = projectDrafts[sceneId]?.[placeholder] ?? "";
+                const useTextarea =
+                  placeholder.length > 70 ||
+                  /describe|explain|clearly state|value proposition|problem/i.test(placeholder);
+                return (
+                  <label key={`${sceneId}-${index}`} className="space-y-1">
+                    <span className="block text-[11px] font-medium text-slate-700">
+                      {index + 1}. {placeholder}
+                    </span>
+                    {useTextarea ? (
+                      <textarea
+                        value={currentValue}
+                        onChange={(e) =>
+                          setProjectDrafts((prev) => ({
+                            ...prev,
+                            [sceneId]: {
+                              ...(prev[sceneId] ?? {}),
+                              [placeholder]: e.target.value,
+                            },
+                          }))
+                        }
+                        rows={3}
+                        className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none ring-0 focus:border-[#EC5B13]"
+                        placeholder={`Enter: ${placeholder}`}
+                      />
+                    ) : (
+                      <input
+                        value={currentValue}
+                        onChange={(e) =>
+                          setProjectDrafts((prev) => ({
+                            ...prev,
+                            [sceneId]: {
+                              ...(prev[sceneId] ?? {}),
+                              [placeholder]: e.target.value,
+                            },
+                          }))
+                        }
+                        className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm outline-none ring-0 focus:border-[#EC5B13]"
+                        placeholder={`Enter: ${placeholder}`}
+                      />
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+        {activeType === "exercise" ? (
+          <section className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/30 p-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                Hands-on Sandbox
+              </p>
+              <p className="text-xs text-amber-800/90">
+                Implement and run your solution here before final challenge submission.
+              </p>
+            </div>
+            <div className="h-[460px]">
+              <CodeRunner
+                defaultLanguage={inferredLanguage}
+                onExecutionEvent={onExecutionEvent}
+                onRequestMentorReview={onRequestMentorReview}
+              />
+            </div>
+          </section>
+        ) : null}
       </article>
     );
   };
@@ -344,21 +577,39 @@ export function SceneStudioLayout({
                   <Expand className="h-3.5 w-3.5" />
                 )}
               </Button>
-              <Button variant="ghost" size="sm" className="h-7 rounded-lg text-xs" onClick={() => setShowFullChat((p) => !p)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 rounded-lg text-xs"
+                onClick={() => setShowFullChat((p) => !p)}
+                disabled={isChallengeScene}
+                title={isChallengeScene ? "Chat disabled during challenge mode" : "Open chat"}
+              >
                 <MessageSquare className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
-          <RoundtableDock
-            messages={mentor.messages}
-            streamingMessage={mentor.streamingMessage}
-            socketStatus={mentor.socketStatus}
-            onQuickSend={(text) => {
-              void mentor.onSendMessage(text);
-            }}
-          />
+          {isChallengeScene ? (
+            <div className="h-[92px] rounded-xl border border-amber-200 bg-amber-50/40 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                Mentor Locked
+              </p>
+              <p className="mt-1 text-sm text-amber-900">
+                Challenge integrity mode is active. Mentor and hints will unlock after you leave this scene.
+              </p>
+            </div>
+          ) : (
+            <RoundtableDock
+              messages={mentor.messages}
+              streamingMessage={mentor.streamingMessage}
+              socketStatus={mentor.socketStatus}
+              onQuickSend={(text) => {
+                void mentor.onSendMessage(text);
+              }}
+            />
+          )}
         </div>
-        {showFullChat ? (
+        {showFullChat && !isChallengeScene ? (
           <div className="min-h-0 h-full overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="flex h-11 items-center justify-between border-b border-slate-200 bg-slate-50 px-3">
               <div className="flex items-center gap-4 text-sm text-slate-600">

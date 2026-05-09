@@ -21,6 +21,16 @@ export type NotificationSocketStatus =
   | "closed"
   | "error";
 
+export type LessonStage = "analyzing" | "structuring" | "crafting" | "finalizing";
+
+export interface LessonProgress {
+  stage: LessonStage;
+  message: string;
+  task_id?: string;
+  scene_index?: number;
+  total_scenes?: number;
+}
+
 type NotificationEvent =
   | {
       type: "connection_status" | "pong";
@@ -120,6 +130,7 @@ export function useNotificationsSocket() {
   const [latestEvent, setLatestEvent] = useState<Record<string, unknown> | null>(
     null,
   );
+  const [lessonProgress, setLessonProgress] = useState<LessonProgress | null>(null);
   const {
     pushRuntimeStep,
     pushMissingInfo,
@@ -474,6 +485,17 @@ export function useNotificationsSocket() {
               }
               break;
             }
+            case "lesson_generation_progress": {
+              const p = payload as Record<string, unknown>;
+              setLessonProgress({
+                stage: (p.stage as LessonStage) ?? "analyzing",
+                message: (p.message as string) ?? "",
+                task_id: p.task_id as string | undefined,
+                scene_index: p.scene_index as number | undefined,
+                total_scenes: p.total_scenes as number | undefined,
+              });
+              break;
+            }
             case "plan_update": {
               if (hasHandledChatEvent(type, payload)) {
                 break;
@@ -638,6 +660,7 @@ export function useNotificationsSocket() {
     analysisEvents,
     unreadCount,
     latestEvent,
+    lessonProgress,
     markNotificationRead,
   };
 }

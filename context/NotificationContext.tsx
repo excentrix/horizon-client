@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, type ReactNode } from 'react';
-import { useNotificationsSocket } from '@/hooks/use-notifications';
+import { useNotificationsSocket, type LessonProgress } from '@/hooks/use-notifications';
 import type { ToastNotification } from '@/types';
 import type { StageStreamEvent } from '@/lib/analysis-stage';
 
@@ -12,6 +12,7 @@ interface NotificationContextType {
   analysisEvents: StageStreamEvent[];
   unreadCount: number;
   latestEvent: Record<string, unknown> | null;
+  lessonProgress: LessonProgress | null;
   markNotificationRead: (notificationId: string) => void;
 }
 

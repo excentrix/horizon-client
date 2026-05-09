@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, ChevronRight, Lightbulb, Loader2, XCircle } from "lucide-react";
+import { Component, useEffect, useRef, useState } from "react";
+import { CheckCircle2, ChevronRight, Lightbulb, Loader2, Play, XCircle } from "lucide-react";
 import {
   SandpackProvider,
   SandpackLayout,
@@ -23,7 +23,7 @@ interface CodeChallengeSceneProps {
   scene: {
     id?: string;
     title?: string;
-    language?: string;
+    language?: string | null;
     starter_code?: string;
     test_cases?: TestCase[];
     hints?: string[];
@@ -50,14 +50,33 @@ const toDisplayText = (value: unknown): string => {
   try { return JSON.stringify(value); } catch { return String(value); }
 };
 
+// ─── Error boundary ───────────────────────────────────────────────────────────
+
+class SandboxErrorBoundary extends Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  { error: boolean }
+> {
+  state = { error: false };
+  static getDerivedStateFromError() { return { error: true }; }
+  render() {
+    return this.state.error ? this.props.fallback : this.props.children;
+  }
+}
+
+// ─── Main scene ───────────────────────────────────────────────────────────────
+
 export function CodeChallengeScene({ scene, onRequestMentorReview, onExecutionEvent }: CodeChallengeSceneProps) {
-  const language = (scene.language ?? "python").toLowerCase();
-  const isJavaScript = JS_LANGUAGES.has(language);
-  const isPython = PYTHON_LANGUAGES.has(language);
+  const rawLanguage = scene.language ?? null;
+  const language = rawLanguage ? rawLanguage.toLowerCase() : null;
+  const isJavaScript = language ? JS_LANGUAGES.has(language) : false;
+  const isPython = language ? PYTHON_LANGUAGES.has(language) : false;
+  const hasRuntime = isJavaScript || isPython || language != null;
 
   const hints = (scene.hints ?? []).map((h) => toDisplayText(h));
   const [hintsRevealed, setHintsRevealed] = useState(0);
   const [testCases, setTestCases] = useState<TestCase[]>(scene.test_cases ?? []);
+  // Gate: don't mount the heavy sandbox until the user asks for it
+  const [sandboxOpen, setSandboxOpen] = useState(false);
 
   const handleExecutionEvent: CodeChallengeSceneProps["onExecutionEvent"] = (payload) => {
     if (payload.event_type === "run_completed" && payload.meta?.output) {
@@ -82,7 +101,7 @@ export function CodeChallengeScene({ scene, onRequestMentorReview, onExecutionEv
       <div className="flex items-start justify-between px-4 pt-4">
         <div>
           <Badge variant="secondary" className="text-[10px] uppercase tracking-wide bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-            {isPython ? "Python · Pyodide" : isJavaScript ? "JS · Sandpack" : `${language} · Judge0`}
+            {isPython ? "Python · Pyodide" : isJavaScript ? "JS · Sandpack" : language ? `${language} · Judge0` : "Code Challenge"}
           </Badge>
           <h3 className="mt-1 text-sm font-semibold text-slate-900">{scene.title ?? "Code Challenge"}</h3>
         </div>
@@ -133,26 +152,49 @@ export function CodeChallengeScene({ scene, onRequestMentorReview, onExecutionEv
         </div>
       )}
 
-      {/* Executor */}
-      <div className="mx-4" style={{ height: 520 }}>
-        {isPython ? (
-          <PyodideSandbox
-            starterCode={scene.starter_code}
-            testCases={testCases}
-            onTestResults={(results) => setTestCases(results)}
-            onExecutionEvent={handleExecutionEvent}
-          />
-        ) : isJavaScript ? (
-          <JavaScriptSandbox language={language} starterCode={scene.starter_code} />
-        ) : (
-          <CodeRunner
-            defaultLanguage={language}
-            initialCode={scene.starter_code}
-            onRequestMentorReview={onRequestMentorReview}
-            onExecutionEvent={handleExecutionEvent}
-          />
-        )}
-      </div>
+      {/* Executor — lazy-mounted behind a click gate */}
+      {hasRuntime ? (
+        <div className="mx-4">
+          {sandboxOpen ? (
+            <SandboxErrorBoundary
+              fallback={
+                <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <XCircle className="h-4 w-4 shrink-0" />
+                  <span>Sandbox failed to load. Try refreshing or use an external editor.</span>
+                </div>
+              }
+            >
+              <div style={{ height: 520 }}>
+                {isPython ? (
+                  <PyodideSandbox
+                    starterCode={scene.starter_code}
+                    testCases={testCases}
+                    onTestResults={(results) => setTestCases(results)}
+                    onExecutionEvent={handleExecutionEvent}
+                  />
+                ) : isJavaScript ? (
+                  <JavaScriptSandbox language={language!} starterCode={scene.starter_code} />
+                ) : (
+                  <CodeRunner
+                    defaultLanguage={language!}
+                    initialCode={scene.starter_code}
+                    onRequestMentorReview={onRequestMentorReview}
+                    onExecutionEvent={handleExecutionEvent}
+                  />
+                )}
+              </div>
+            </SandboxErrorBoundary>
+          ) : (
+            <button
+              onClick={() => setSandboxOpen(true)}
+              className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-emerald-300 bg-emerald-50 py-5 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100"
+            >
+              <Play className="h-4 w-4" />
+              Open {isPython ? "Python" : isJavaScript ? "JavaScript" : language?.toUpperCase() ?? "Code"} Sandbox
+            </button>
+          )}
+        </div>
+      ) : null}
 
       {/* Progressive hints */}
       {hints.length > 0 && (
@@ -268,7 +310,7 @@ async function runCode() {
   const code = codeEl.value;
   parent.postMessage({type: 'PYODIDE_RUN_STARTED'}, '*');
   try {
-    await pyodide.runPythonAsync('import sys\nimport io\nsys.stdout = io.StringIO()\nsys.stderr = io.StringIO()');
+    await pyodide.runPythonAsync('import sys\\nimport io\\nsys.stdout = io.StringIO()\\nsys.stderr = io.StringIO()');
     await pyodide.runPythonAsync(code);
     const stdout = pyodide.runPython('sys.stdout.getvalue()');
     const stderr = pyodide.runPython('sys.stderr.getvalue()');
@@ -292,10 +334,15 @@ window.addEventListener('message', (e) => {
 
 (async () => {
   document.getElementById('load-msg').textContent = 'Loading Python runtime…';
-  pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/' });
-  loadingEl.style.display = 'none';
-  runBtn.disabled = false;
-  parent.postMessage({type: 'PYODIDE_READY'}, '*');
+  try {
+    pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/' });
+    loadingEl.style.display = 'none';
+    runBtn.disabled = false;
+    parent.postMessage({type: 'PYODIDE_READY'}, '*');
+  } catch(e) {
+    loadingEl.innerHTML = '<p style="color:#f85149;font-size:13px;">Failed to load Python runtime.<br>Check your connection and try again.</p>';
+    parent.postMessage({type: 'PYODIDE_ERROR', error: String(e)}, '*');
+  }
 })();
 </script>
 </body>
@@ -314,8 +361,8 @@ function PyodideSandbox({
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
-  // Inject starter code once Pyodide is ready
   useEffect(() => {
     if (!ready || !iframeRef.current) return;
     iframeRef.current.contentWindow?.postMessage(
@@ -324,13 +371,11 @@ function PyodideSandbox({
     );
   }, [ready, starterCode]);
 
-  // Listen for messages from the iframe
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       if (!e.data) return;
-      if (e.data.type === "PYODIDE_READY") {
-        setReady(true);
-      }
+      if (e.data.type === "PYODIDE_READY") setReady(true);
+      if (e.data.type === "PYODIDE_ERROR") setLoadError(true);
       if (e.data.type === "PYODIDE_RUN_STARTED") {
         onExecutionEvent?.({ event_type: "run_started", language: "python" });
       }
@@ -340,7 +385,6 @@ function PyodideSandbox({
           onExecutionEvent?.({ event_type: "runtime_error", language: "python", error_type: "runtime", meta: { output: error } });
         } else {
           onExecutionEvent?.({ event_type: "run_completed", language: "python", meta: { output: stdout } });
-          // Validate test cases
           const updated = testCases.map((tc) => {
             const expected = toDisplayText(tc.expected_output);
             if (!expected || expected === "—") return { ...tc, status: "pending" as const };
@@ -353,6 +397,16 @@ function PyodideSandbox({
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
   }, [testCases, onTestResults, onExecutionEvent]);
+
+  if (loadError) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+        <XCircle className="h-8 w-8 text-red-400" />
+        <p className="text-sm font-medium text-red-700">Python runtime failed to load</p>
+        <p className="text-xs text-red-500">Check your connection or paste your code into a local Python environment.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-full w-full rounded-lg overflow-hidden border border-slate-800">
