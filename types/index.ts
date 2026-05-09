@@ -456,11 +456,35 @@ export interface DailyTask {
   lesson_blocks?: Array<{
     id?: string;
     title?: string;
-    type?: "objective" | "concept" | "example" | "recap" | "exercise";
+    type?:
+      | "objective"
+      | "concept"
+      | "example"
+      | "recap"
+      | "exercise"
+      | "interactive_sim"
+      | "agent_dialogue"
+      | "code_challenge"
+      | "whiteboard_sketch"
+      | "project_brief"
+      | "project_checkpoint";
     content?: string;
     resource_id?: string;
     verified?: boolean;
     source_url?: string | null;
+    html_content?: string;
+    description?: string;
+    turns?: Array<{
+      speaker?: string;
+      persona_type?: string;
+      text?: string;
+      voice_hint?: string;
+    }>;
+    starter_code?: string;
+    language?: string;
+    test_cases?: Array<{ input?: string; expected_output?: string }>;
+    hints?: string[];
+    estimated_seconds?: number;
   }>;
   lesson_generated_at?: string | null;
   playground_conversation_id?: string | null;
@@ -468,6 +492,8 @@ export interface DailyTask {
   surface_rationale?: string | null;
   adaptive_difficulty: boolean;
   is_skippable: boolean;
+  is_locked: boolean;
+  locked_by_task_title?: string | null;
   status: TaskStatus;
   started_at?: string | null;
   completed_at?: string | null;
@@ -1637,4 +1663,125 @@ export interface AuditInstitutionStudentDetail {
     covered_gaps: number;
     progress: number;
   };
+}
+
+// ── PBL Types ──────────────────────────────────────────────────────────────
+
+export type ProjectPhase =
+  | "scoping" | "planning" | "building" | "documenting"
+  | "submitting" | "verifying" | "case_study" | "completed";
+
+export type GateStatus = "pending" | "passed" | "needs_revision" | "mentor_pending";
+
+export type ProjectDomainType =
+  | "software" | "data" | "design" | "business"
+  | "marketing" | "finance" | "research" | "other";
+
+export interface ProjectSuggestion {
+  title: string;
+  description: string;
+  why_good_fit: string;
+  concepts_covered: string[];
+  estimated_effort: string;
+  deliverable: string;
+  domain_type: ProjectDomainType;
+  difficulty: string;
+}
+
+export interface ProjectMilestone {
+  id: string;
+  title: string;
+  description: string;
+  expected_output: string;
+  evidence_format?: string;
+  due_date?: string;
+  status?: "pending" | "submitted" | "approved";
+}
+
+export interface MilestoneSubmission {
+  milestone_id: string;
+  content: string;
+  submitted_at: string;
+  status: "submitted" | "approved" | "needs_revision";
+  feedback?: string;
+}
+
+export interface SubmissionArtifact {
+  type: "github_repo" | "document" | "design_file" | "presentation" | "notebook" | "demo_url" | "other";
+  url: string;
+  label: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ProjectPhaseShape {
+  task_id: string;
+  phase_id: string;
+  label: string;
+  deliverable_type: "document" | "schema" | "code" | "presentation" | "general";
+  gate_status: GateStatus;
+  submission: Record<string, string> | null;
+  feedback: string | null;
+  order: number;
+  form_fields: string[];
+}
+
+export interface LearningProjectShape {
+  id: string;
+  task_id: string | null;
+  milestone_id?: string | null;
+  phases?: ProjectPhaseShape[];
+  current_phase_task_id?: string;
+  active_phase_task_id?: string;
+  title: string;
+  description: string;
+  domain_type: ProjectDomainType;
+  difficulty: string;
+  current_phase: ProjectPhase;
+  phase_history: Array<{ phase: ProjectPhase; entered_at: string; completed_at: string | null; gate_method: "auto" | "mentor" | null }>;
+  origin: "system_suggested" | "learner_proposed" | "mentor_assigned";
+  suggestion_context: {
+    options_shown?: ProjectSuggestion[];
+    chosen_index?: number | null;
+    custom_proposal?: { title: string; description: string } | null;
+    concept_coverage_pct?: number;
+  };
+  requires_mentor_review: boolean;
+  similarity_checked: boolean;
+  similar_projects: Array<{ project_id: string; title: string; similarity_score: number; user_display_name: string }>;
+  uniqueness_score: number | null;
+  scope_document: Record<string, unknown>;
+  scope_gate_status: GateStatus;
+  scope_gate_feedback: Record<string, unknown>;
+  milestones: ProjectMilestone[];
+  plan_gate_status: GateStatus;
+  milestone_submissions: MilestoneSubmission[];
+  build_gate_status: GateStatus;
+  methodology_doc: string;
+  methodology_gate_status: GateStatus;
+  methodology_gate_feedback: Record<string, unknown>;
+  submission_artifacts: SubmissionArtifact[];
+  submission_gate_status: GateStatus;
+  verification_verdict: "pending" | "verified" | "suspicious" | "failed";
+  case_study: Record<string, unknown>;
+  case_study_gate_status: GateStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MentorReviewShape {
+  id: string;
+  project: string;
+  project_title: string;
+  learner_phase: ProjectPhase;
+  phase: ProjectPhase;
+  ai_summary: string;
+  ai_strengths: string[];
+  ai_weaknesses: string[];
+  ai_questions: string[];
+  ai_red_flags: string[];
+  similarity_alert: { triggered: boolean; matches: unknown[] };
+  decision: "pending" | "approved" | "needs_revision";
+  feedback: string;
+  reviewed_at: string | null;
+  created_at: string;
 }

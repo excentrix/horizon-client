@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,9 +19,11 @@ import {
   Award,
   Briefcase,
   ShieldCheck,
+  Sparkles,
+  X,
 } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
 import { ProjectShowcaseGrid } from "@/components/portfolio/project-showcase";
 import { CompetencyChart } from "@/components/portfolio/competency-chart";
@@ -33,8 +36,45 @@ import { cn } from "@/lib/utils";
 
 export default function PublicPortfolioPage() {
   const params = useParams<{ username?: string }>();
+  const searchParams = useSearchParams();
   const username = params?.username ?? "";
   const { data, isLoading, error } = usePublicPortfolio(username);
+  const [showJoinCta, setShowJoinCta] = useState(false);
+  const [ctaDismissed, setCtaDismissed] = useState(false);
+
+  const shareSource = useMemo(() => {
+    const source = (searchParams.get("utm_source") || "").toLowerCase();
+    if (source === "whatsapp" || source === "linkedin") return source;
+    return null;
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!shareSource || ctaDismissed) return;
+    const key = `horizon-share-cta-dismissed:${username}:${shareSource}`;
+    const alreadyDismissed = window.sessionStorage.getItem(key) === "1";
+    if (alreadyDismissed) {
+      setCtaDismissed(true);
+      return;
+    }
+    const onScroll = () => {
+      const bodyHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (bodyHeight <= 0) return;
+      const progress = window.scrollY / bodyHeight;
+      if (progress >= 0.2) setShowJoinCta(true);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [ctaDismissed, shareSource, username]);
+
+  const dismissJoinCta = () => {
+    if (shareSource) {
+      const key = `horizon-share-cta-dismissed:${username}:${shareSource}`;
+      window.sessionStorage.setItem(key, "1");
+    }
+    setCtaDismissed(true);
+    setShowJoinCta(false);
+  };
 
   if (isLoading) {
     return (
@@ -539,6 +579,35 @@ export default function PublicPortfolioPage() {
           </div>
         </div>
       </div>
+
+      {shareSource && showJoinCta && !ctaDismissed ? (
+        <div className="fixed bottom-6 right-6 z-50 w-[min(420px,calc(100vw-2rem))] rounded-3xl border border-[color:var(--brand-indigo)]/35 bg-card/95 p-4 shadow-[var(--shadow-2)] backdrop-blur">
+          <button
+            type="button"
+            onClick={dismissJoinCta}
+            className="absolute right-3 top-3 rounded-full border border-border bg-background p-1 text-muted-foreground transition hover:text-foreground"
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[color:var(--brand-indigo)]/35 bg-[color:var(--brand-indigo)]/10 px-2.5 py-1 text-[10px] font-mono-ui uppercase tracking-[0.12em] text-[color:var(--brand-indigo)]">
+            <Sparkles className="h-3.5 w-3.5" />
+            Build your own verified portfolio
+          </div>
+          <h3 className="font-display text-xl">Turn your learning into proof on Horizon</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Join free, build a public learning graph, and share your progress with one link.
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Button asChild>
+              <Link href="/register">Create profile</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/">Explore Horizon</Link>
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

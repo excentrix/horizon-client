@@ -333,6 +333,9 @@ export function VeloProfileTab() {
   const [reanalysing, setReanalysing] = useState(false);
   const [verifyingProjectIndex, setVerifyingProjectIndex] = useState<number | null>(null);
   const [resettingVerificationId, setResettingVerificationId] = useState<string | null>(null);
+  const [reanalysisBlocked, setReanalysisBlocked] = useState<{
+    next_reset: string | null; limit: number;
+  } | null>(null);
   const github = useGithubRepos();
 
   useEffect(() => {
@@ -346,7 +349,15 @@ export function VeloProfileTab() {
       await authApi.reanalyseResume();
       await queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
       toast.success("Re-analysis queued — VELO will update in a moment.");
-    } catch {
+    } catch (err: unknown) {
+      const data = (err as { response?: { data?: Record<string, unknown> } })?.response?.data;
+      if (data?.quota_status === "exceeded") {
+        setReanalysisBlocked({
+          next_reset: (data.next_reset as string | null) ?? null,
+          limit: (data.limit as number) ?? 1,
+        });
+        return;
+      }
       toast.error("Couldn't queue re-analysis.", {
         description:
           "Upload your resume in Settings first, then come back here.",
@@ -1556,6 +1567,40 @@ export function VeloProfileTab() {
             `Project ${verifyingProjectIndex + 1}`
           }
         />
+      )}
+
+      {/* Resume reanalysis quota exceeded modal */}
+      {reanalysisBlocked && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+          onClick={() => setReanalysisBlocked(null)}>
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="rounded-t-2xl bg-amber-50 px-6 pt-6 pb-5">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                <RefreshCw className="h-5 w-5" />
+              </div>
+              <h2 className="text-base font-semibold text-slate-900">Re-analysis limit reached</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Your free plan includes {reanalysisBlocked.limit} resume re-analysis per month.
+                {reanalysisBlocked.next_reset
+                  ? ` Your allowance resets on ${new Date(reanalysisBlocked.next_reset).toLocaleDateString(undefined, { month: "long", day: "numeric" })}.`
+                  : ""}
+              </p>
+            </div>
+            <div className="px-6 py-4">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Upgrade your plan to run resume re-analyses whenever you need.
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-slate-100 px-6 py-4">
+              <Button size="sm" variant="ghost" className="text-slate-500"
+                onClick={() => setReanalysisBlocked(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

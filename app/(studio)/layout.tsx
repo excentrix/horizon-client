@@ -24,14 +24,16 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
   return (
     <GamificationProvider>
       <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-background">
-        <header className="sticky top-0 z-30 border-b border-border/80 bg-background/92 backdrop-blur">
-          <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center justify-between px-4 lg:px-6">
-            <Link href="/dashboard" className="font-display text-sm uppercase tracking-[0.18em] text-foreground">
-              Horizon Studio
-            </Link>
-            <ProfileMenu variant="compact" />
-          </div>
-        </header>
+        {isPlaygroundRoute ? null : (
+          <header className="sticky top-0 z-30 border-b border-border/80 bg-background/92 backdrop-blur">
+            <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center justify-between px-4 lg:px-6">
+              <Link href="/dashboard" className="font-display text-sm uppercase tracking-[0.18em] text-foreground">
+                Horizon
+              </Link>
+              <ProfileMenu variant="compact" />
+            </div>
+          </header>
+        )}
 
         <div className="flex min-h-0 flex-1 flex-col">
           <main
@@ -44,7 +46,7 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
                   // ? "pb-[calc(2.5rem+env(safe-area-inset-bottom))]"
                 : hideDock
                   ? "pb-0"
-                  : "pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-[calc(7rem+env(safe-area-inset-bottom))]",
+                  : "",
             )}
           >
             <div
@@ -59,7 +61,7 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
         </div>
 
         {hideDock ? null : <StudioDockNav />}
-        <SupportFeedbackWidget />
+        {/* <SupportFeedbackWidget /> */}
       </div>
     </GamificationProvider>
   );

@@ -17,20 +17,22 @@ import {
   useTransform,
 } from "motion/react";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export const FloatingDock = ({
   items,
   desktopClassName,
   mobileClassName,
+  autohide = false,
 }: {
   items: { title: string; icon: React.ReactNode; href: string; isActive?: boolean }[];
   desktopClassName?: string;
   mobileClassName?: string;
+  autohide?: boolean;
 }) => {
   return (
     <>
-      <FloatingDockDesktop items={items} className={desktopClassName} />
+      <FloatingDockDesktop items={items} className={desktopClassName} autohide={autohide} />
       <FloatingDockMobile items={items} className={mobileClassName} />
     </>
   );
@@ -97,24 +99,70 @@ const FloatingDockMobile = ({
 const FloatingDockDesktop = ({
   items,
   className,
+  autohide = false,
 }: {
   items: { title: string; icon: React.ReactNode; href: string; isActive?: boolean }[];
   className?: string;
+  autohide?: boolean;
 }) => {
   const mouseX = useMotionValue(Infinity);
+  const [isVisible, setIsVisible] = useState(!autohide);
+
+  useEffect(() => {
+    if (!autohide) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Threshold to show the dock (e.g., bottom 80px of the screen)
+      const threshold = 80;
+      if (window.innerHeight - e.clientY < threshold) {
+        setIsVisible(true);
+      } else {
+        setIsVisible(false);
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
+  }, [autohide]);
+
   return (
-    <motion.div
-      onMouseMove={(e) => mouseX.set(e.pageX)}
-      onMouseLeave={() => mouseX.set(Infinity)}
-      className={cn(
-        "mx-auto hidden h-16 items-end gap-3 rounded-2xl border border-[color:var(--dock-border)] bg-[color:var(--dock-bg)] px-4 pb-3 shadow-[var(--shadow-1)] backdrop-blur md:flex",
-        className,
+    <>
+      {autohide && (
+        <motion.div
+          initial={false}
+          animate={{
+            opacity: isVisible ? 0 : 1,
+            y: isVisible ? 20 : 0,
+          }}
+          className="fixed bottom-2 left-1/2 z-30 h-1.5 w-12 -translate-x-1/2 rounded-full bg-foreground/20 backdrop-blur-md md:block hidden"
+        />
       )}
-    >
+      <motion.div
+        onMouseMove={(e) => mouseX.set(e.pageX)}
+        onMouseLeave={() => mouseX.set(Infinity)}
+        animate={
+          autohide
+            ? {
+                y: isVisible ? 0 : 100,
+                opacity: isVisible ? 1 : 0,
+              }
+            : {}
+        }
+        transition={{
+          type: "spring",
+          stiffness: 260,
+          damping: 20,
+        }}
+        className={cn(
+          "mx-auto hidden h-16 items-end gap-3 rounded-2xl border border-[color:var(--dock-border)] bg-[color:var(--dock-bg)] px-4 pb-3 shadow-[var(--shadow-1)] backdrop-blur md:flex",
+          className,
+        )}
+      >
       {items.map((item) => (
         <IconContainer mouseX={mouseX} key={item.title} {...item} />
       ))}
-    </motion.div>
+      </motion.div>
+    </>
   );
 };
 

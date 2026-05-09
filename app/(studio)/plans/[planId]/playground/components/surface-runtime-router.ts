@@ -44,6 +44,8 @@ export function computeSurfaceSteps(
   const hasLesson = (task?.lesson_blocks?.length || 0) > 0;
 
   switch (surfaceType) {
+    case "scene_player":
+      return ["ingest", "verify"];
     case "simulation_scenario":
       return hasLesson ? ["ingest", "scenario", "verify"] : ["scenario", "verify"];
     case "flashcard_session":
@@ -58,6 +60,10 @@ export function computeSurfaceSteps(
     default:
       return computeLegacyHeuristicSteps(task);
   }
+}
+
+export function hasExtendedScenes(task: RuntimeTaskShape | undefined): boolean {
+  return (task?.lesson_blocks?.length ?? 0) > 0;
 }
 
 export function recommendedEnvForSurface(

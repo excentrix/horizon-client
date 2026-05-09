@@ -58,6 +58,8 @@ import {
   CanvasSuggestion,
   CanvasPresence,
   CanvasSnapshot,
+  LearningProjectShape,
+  MentorReviewShape,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -140,6 +142,37 @@ export const authApi = {
   reanalyseResume: () =>
     extract<{ status: string; job_id: string }>(
       http.post("/auth/profile/resume/reanalyse/")
+    ),
+
+  getFeatureQuotas: () =>
+    extract<{
+      lesson_regeneration: { used: number; limit: number | null; exempt: boolean };
+      resume_reanalysis: {
+        used: number; limit: number | null; exempt: boolean;
+        period_start: string | null; next_reset: string | null;
+      };
+    }>(http.get("/auth/feature-quotas/")),
+
+  getAdminUsers: () =>
+    extract<Array<{
+      id: string; username: string; email: string;
+      user_type: string; is_staff: boolean; is_superuser: boolean; exempt: boolean;
+      lesson_regen_used: number; lesson_regen_limit: number | null;
+      resume_reanalysis_used: number; resume_reanalysis_limit: number | null;
+      resume_reanalysis_period_start: string | null;
+    }>>(http.get("/auth/admin/users/")),
+
+  updateUserQuotas: (
+    userId: string,
+    payload: { lesson_regen_limit?: number | null; resume_reanalysis_limit?: number | null }
+  ) =>
+    extract<Record<string, unknown>>(
+      http.patch(`/auth/admin/users/${userId}/quotas/`, payload)
+    ),
+
+  resetUserQuotas: (userId: string) =>
+    extract<Record<string, unknown>>(
+      http.post(`/auth/admin/users/${userId}/quotas/reset/`, {})
     ),
 
   getPreferences: () =>
@@ -676,14 +709,160 @@ export const planningApi = {
     }>(http.post("/planning/simulation-lab/run-usecase/", payload)),
   generateTaskLesson: (
     taskId: string,
-    payload?: { scope?: "task" | "milestone"; force?: boolean }
+    payload?: {
+      scope?: "task" | "milestone";
+      force?: boolean;
+      scene_types?: "basic" | "extended";
+      reason?: string;
+    }
   ) =>
     extract<{
+      status?: string;
       message: string;
       milestone_id?: string;
       task?: DailyTask;
       tasks?: DailyTask[];
+      quota_status?: "exceeded" | "reason_required";
+      used?: number;
+      limit?: number;
     }>(http.post(`/planning/tasks/${taskId}/generate-lesson/`, payload ?? {})),
+
+  lessonPreflight: (
+    taskId: string,
+    payload?: { scene_types?: "basic" | "extended" }
+  ) =>
+    extract<{
+      questions: Array<{
+        id: string;
+        text: string;
+        choices: string[];
+        allow_custom: boolean;
+        save_to: string;
+        value_map: Record<string, string>;
+      }>;
+      ready: boolean;
+    }>(http.post(`/planning/tasks/${taskId}/lesson-preflight/`, payload ?? {})),
+
+  saveLessonPreflightAnswer: (
+    taskId: string,
+    payload: { question_id: string; value: string; message_id?: string }
+  ) =>
+    extract<{ status: string; question_id: string; value: string }>(
+      http.post(`/planning/tasks/${taskId}/save-preflight-answer/`, payload)
+    ),
+
+  startVeloVerification: (taskId: string) =>
+    extract<{
+      verification_id: string;
+      audit_id: string | null;
+      snapshot_id: string;
+      project_title: string;
+      status: string;
+      velo_audit_template: string;
+    }>(http.post(`/planning/tasks/${taskId}/start-velo/`)),
+
+  getVeloStatus: (taskId: string) =>
+    extract<
+      | { started: false }
+      | {
+          started: true;
+          verification_id: string;
+          audit_id: string | null;
+          snapshot_id: string;
+          status: string;
+          github_check_status: string;
+          audit_doc_status: string;
+          verification_score: number | null;
+          verdict_summary: string;
+          verified_at: string | null;
+        }
+    >(http.get(`/planning/tasks/${taskId}/velo-status/`)),
+
+  getVeloAuditTemplate: (taskId: string) =>
+    extract<{ template: string }>(
+      http.get(`/planning/tasks/${taskId}/velo-template/`)
+    ),
+
+  completeVeloVerification: (
+    taskId: string,
+    verdict: {
+      status: string;
+      verification_score: number | null;
+      verdict_summary: string;
+      badge?: boolean;
+    }
+  ) =>
+    extract<{ ok: boolean }>(
+      http.post(`/planning/tasks/${taskId}/velo-complete/`, { verdict })
+    ),
+
+  // ── PBL project lifecycle ──────────────────────────────────────────────────
+
+  initProject: (taskId: string) =>
+    extract<LearningProjectShape>(http.post("/planning/projects/init/", { task_id: taskId })),
+
+  getProject: (projectId: string) =>
+    extract<LearningProjectShape>(http.get(`/planning/projects/${projectId}/`)),
+
+  chooseSuggestion: (
+    projectId: string,
+    payload: { chosen_index?: number; custom_proposal?: { title: string; description: string } }
+  ) => extract<LearningProjectShape | { accepted: false; feedback: string; missing_concepts: string[]; coverage_pct: number }>(
+    http.post(`/planning/projects/${projectId}/choose-suggestion/`, payload)
+  ),
+
+  updateProjectScope: (projectId: string, scope_document: Record<string, unknown>) =>
+    extract<LearningProjectShape>(http.patch(`/planning/projects/${projectId}/scope/`, { scope_document })),
+
+  updateProjectMilestones: (projectId: string, milestones: unknown[]) =>
+    extract<LearningProjectShape>(http.patch(`/planning/projects/${projectId}/milestones/`, { milestones })),
+
+  submitMilestone: (projectId: string, milestone_id: string, content: string) =>
+    extract<LearningProjectShape>(
+      http.post(`/planning/projects/${projectId}/submit-milestone/`, { milestone_id, content })
+    ),
+
+  updateMethodologyDoc: (projectId: string, methodology_doc: string) =>
+    extract<LearningProjectShape>(
+      http.patch(`/planning/projects/${projectId}/methodology-doc/`, { methodology_doc })
+    ),
+
+  getMethodologyTemplate: (projectId: string) =>
+    extract<{ template: string }>(http.get(`/planning/projects/${projectId}/methodology-template/`)),
+
+  updateArtifacts: (projectId: string, artifacts: unknown[]) =>
+    extract<LearningProjectShape>(http.patch(`/planning/projects/${projectId}/artifacts/`, { artifacts })),
+
+  updateCaseStudy: (projectId: string, case_study: Record<string, unknown>) =>
+    extract<LearningProjectShape>(http.patch(`/planning/projects/${projectId}/case-study/`, { case_study })),
+
+  getCaseStudyDraft: (projectId: string) =>
+    extract<{ draft: Record<string, unknown> }>(http.get(`/planning/projects/${projectId}/case-study-draft/`)),
+
+  attemptPhaseGate: (projectId: string, taskId?: string) =>
+    extract<{ passed: boolean; advanced: boolean; gate_status: string; issues: string[]; suggestions: string[]; project: LearningProjectShape }>(
+      http.post(`/planning/projects/${projectId}/attempt-gate/`, taskId ? { task_id: taskId } : {})
+    ),
+
+  updatePhaseSubmission: (projectId: string, taskId: string, submission: Record<string, string>) =>
+    extract<LearningProjectShape>(
+      http.patch(`/planning/projects/${projectId}/phase/${taskId}/`, { submission })
+    ),
+
+  // ── Institutional mentor reviews ──────────────────────────────────────────
+
+  getPendingMentorReviews: () =>
+    extract<{ results: MentorReviewShape[] }>(http.get("/planning/mentor-reviews/?decision=pending")),
+
+  approveMentorReview: (reviewId: string, feedback?: string) =>
+    extract<{ ok: boolean; advanced_to: string }>(
+      http.post(`/planning/mentor-reviews/${reviewId}/approve/`, { feedback: feedback ?? "" })
+    ),
+
+  requestRevision: (reviewId: string, feedback: string) =>
+    extract<{ ok: boolean }>(
+      http.post(`/planning/mentor-reviews/${reviewId}/request-revision/`, { feedback })
+    ),
 
   generateMicroPractice: (
     taskId: string,
