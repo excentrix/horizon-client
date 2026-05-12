@@ -42,6 +42,10 @@ import {
   ShieldCheck,
   ShieldAlert,
   Github,
+  Layers3,
+  Radar,
+  ListChecks,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -280,10 +284,10 @@ function SectionLabel({
     <p
       className={cn(
         "mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground",
-        className,
-      )}
-    >
-      {children}
+      className,
+    )}
+  >
+    {children}
     </p>
   );
 }
@@ -500,7 +504,58 @@ export function VeloProfileTab() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-8">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-8">
+      <Card className="border-[color:var(--brand-indigo)]/25 bg-[linear-gradient(180deg,rgba(88,88,204,0.06),rgba(88,88,204,0.02))]">
+        <CardContent className="space-y-4 pb-4 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-mono-ui text-[11px] uppercase tracking-[0.14em] text-[color:var(--brand-indigo)]">
+                VELO Profile Intelligence
+              </p>
+              <p className="text-sm text-muted-foreground">
+                High-signal breakdown of readiness, gaps, and next execution moves.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              onClick={() => router.push("/chat?context=mirror_review")}
+            >
+              <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
+              Ask mentor
+            </Button>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border bg-card px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">ATS</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">{atsScore ?? "--"}</p>
+            </div>
+            <div className="rounded-xl border bg-card px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Role Matches</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">{roleMatches.length}</p>
+            </div>
+            <div className="rounded-xl border bg-card px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Skill Gaps</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">{gaps.length}</p>
+            </div>
+            <div className="rounded-xl border bg-card px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Priority Actions</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">{actions.length}</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <a href="#velo-overview" className="inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-[11px]"><Radar className="h-3.5 w-3.5" />Overview</a>
+            <a href="#velo-employer" className="inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-[11px]"><Eye className="h-3.5 w-3.5" />Employer View</a>
+            <a href="#velo-career-fit" className="inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-[11px]"><Layers3 className="h-3.5 w-3.5" />Career Fit</a>
+            <a href="#velo-actions" className="inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-[11px]"><ListChecks className="h-3.5 w-3.5" />Actions</a>
+            <a href="#velo-skills" className="inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-[11px]"><Sparkles className="h-3.5 w-3.5" />Skills</a>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex items-center gap-2 rounded-lg border border-dashed border-amber-300 bg-amber-50/60 px-3 py-2 dark:border-amber-700/40 dark:bg-amber-950/20">
         <FlaskConical className="h-3.5 w-3.5 shrink-0 text-amber-600" />
         <span className="flex-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
@@ -518,10 +573,12 @@ export function VeloProfileTab() {
         </Button>
       </div>
 
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.86fr)]">
       {/* ── Overview: ATS ring + Narrative ────────────────────────────────── */}
       <div
+        id="velo-overview"
         className={cn(
-          "grid gap-4",
+          "grid gap-4 lg:col-start-1",
           atsScore !== undefined ? "sm:grid-cols-[160px_1fr]" : "",
         )}
       >
@@ -555,7 +612,7 @@ export function VeloProfileTab() {
 
       {/* ── Employer's View ───────────────────────────────────────────────── */}
       {employerPerspective && (
-        <div>
+        <div id="velo-employer" className="lg:col-start-1">
           <SectionLabel>Employer&apos;s View</SectionLabel>
           <Card className="overflow-hidden">
             {/* Verdict banner */}
@@ -696,8 +753,10 @@ export function VeloProfileTab() {
         </div>
       )}
 
+      <aside className="space-y-4 lg:col-start-2 lg:row-start-1 lg:row-span-[999] lg:sticky lg:top-24 lg:self-start">
       {/* ── ATS Breakdown ─────────────────────────────────────────────────── */}
       {atsBreakdown && (
+        <div>
         <Card>
           <CardContent className="pb-2 pt-4">
             <Accordion type="single" collapsible>
@@ -746,11 +805,12 @@ export function VeloProfileTab() {
             </Accordion>
           </CardContent>
         </Card>
+        </div>
       )}
 
       {/* ── Career Fit ────────────────────────────────────────────────────── */}
       {roleMatches.length > 0 && (
-        <div>
+        <div id="velo-career-fit" className="lg:col-start-1">
           <SectionLabel>Career Fit</SectionLabel>
           <Card>
             <CardContent className="p-0">
@@ -849,7 +909,7 @@ export function VeloProfileTab() {
 
       {/* ── Priority Actions ──────────────────────────────────────────────── */}
       {actions.length > 0 && (
-        <div>
+        <div id="velo-actions">
           <SectionLabel>Priority Actions</SectionLabel>
           <div className="grid gap-3 sm:grid-cols-3">
             {actions.slice(0, 3).map((action, i) => {
@@ -908,6 +968,7 @@ export function VeloProfileTab() {
 
       {/* ── Mentor Readiness View ───────────────────────────────────────── */}
       {mentorSummary ? (
+        <div>
         <Card>
           <CardContent className="pb-4 pt-4">
             <SectionLabel className="mb-2">Mentor Readiness View</SectionLabel>
@@ -967,11 +1028,13 @@ export function VeloProfileTab() {
             </div>
           </CardContent>
         </Card>
+        </div>
       ) : null}
+      </aside>
 
       {/* ── Skill Mastery ─────────────────────────────────────────────────── */}
       {skillMastery.length > 0 && (
-        <div>
+        <div id="velo-skills" className="lg:col-start-1">
           <SectionLabel>Skill Mastery</SectionLabel>
           <Card>
             <CardContent className="pb-4 pt-4">
@@ -1066,7 +1129,7 @@ export function VeloProfileTab() {
 
       {/* ── Skill Gaps ────────────────────────────────────────────────────── */}
       {(gapDetails.length > 0 || gaps.length > 0) && (
-        <div>
+        <div className="lg:col-start-1">
           <SectionLabel>Skill Gaps</SectionLabel>
           {gapDetails.length > 0 ? (
             <div className="space-y-2.5">
@@ -1129,7 +1192,7 @@ export function VeloProfileTab() {
 
       {/* ── Experience ────────────────────────────────────────────────────── */}
       {experience.length > 0 && (
-        <div>
+        <div className="lg:col-start-1">
           <SectionLabel>Experience</SectionLabel>
           <div className="space-y-3">
             {experience.map((exp, i) => {
@@ -1268,7 +1331,7 @@ export function VeloProfileTab() {
 
       {/* ── Projects ──────────────────────────────────────────────────────── */}
       {projects.length > 0 && (
-        <div>
+        <div className="lg:col-start-1">
           <SectionLabel>Projects</SectionLabel>
           <div className="grid gap-3 sm:grid-cols-2">
             {projects.map((proj, i) => {
@@ -1445,7 +1508,7 @@ export function VeloProfileTab() {
 
       {/* ── GitHub — repos not on resume ──────────────────────────────────── */}
       {github.connected && unlinkedRepos.length > 0 && (
-        <div>
+        <div className="lg:col-start-1">
           <SectionLabel className="flex items-center gap-1.5">
             <Github className="h-3.5 w-3.5" />
             From GitHub — not on your resume
@@ -1490,7 +1553,7 @@ export function VeloProfileTab() {
       {(education.length > 0 ||
         certifications.length > 0 ||
         skills.length > 0) && (
-        <Card>
+        <Card className="lg:col-start-1">
           <CardContent className="pb-4 pt-4">
             <div className="grid gap-4 sm:grid-cols-2">
               {education.length > 0 && (
@@ -1549,6 +1612,7 @@ export function VeloProfileTab() {
           </CardContent>
         </Card>
       )}
+      </div>
 
       {/* ── Project Verification Sheet ─────────────────────────────────────── */}
       {mirror?.id && verifyingProjectIndex !== null && (

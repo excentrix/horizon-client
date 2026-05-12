@@ -185,7 +185,7 @@ export function TaskOrientationBanner({
           onClick={dismiss}
           className="h-8 gap-1.5 bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold"
         >
-          Let's go <ArrowRight className="h-3.5 w-3.5" />
+          Let&apos;s go <ArrowRight className="h-3.5 w-3.5" />
         </Button>
       </div>
     </div>

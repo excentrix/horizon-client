@@ -30,7 +30,7 @@ function extractCards(session: DomainScenarioPayload | null): FlashcardItem[] {
   const cards = payload.cards;
   if (!Array.isArray(cards)) return [];
   return cards
-    .map((card, i) => {
+    .map((card, i): FlashcardItem | null => {
       if (!card || typeof card !== "object") return null;
       const c = card as Record<string, unknown>;
       return {

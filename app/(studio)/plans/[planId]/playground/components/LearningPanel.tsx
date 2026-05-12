@@ -412,7 +412,7 @@ export function LearningPanel({
             </div>
             <div className="flex-1">
               <h4 className="font-semibold text-slate-800">{primaryResourceTitle}</h4>
-              <p className="text-sm text-slate-500 mt-0.5">The embedded player couldn't load. Watch it directly instead.</p>
+              <p className="text-sm text-slate-500 mt-0.5">The embedded player couldn&apos;t load. Watch it directly instead.</p>
               <a
                 href={String(primaryResourceHref)}
                 target="_blank"

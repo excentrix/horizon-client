@@ -269,7 +269,7 @@ function GateAttemptButton({
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
         <p className="font-semibold">Awaiting mentor review</p>
-        <p className="mt-1 text-xs text-amber-600">Your submission is with your mentor. You'll be notified when they respond.</p>
+        <p className="mt-1 text-xs text-amber-600">Your submission is with your mentor. You&apos;ll be notified when they respond.</p>
       </div>
     );
   }

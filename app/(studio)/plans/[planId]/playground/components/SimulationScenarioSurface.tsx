@@ -367,7 +367,7 @@ export function SimulationScenarioSurface({
     evidenceCards: ["what you observed", "what changed", "what you verified"],
     constraints: ["Keep it concrete", "Link to rubric", "State next action"],
   };
-  const maxRounds = Number((executionDescriptor?.runtime_state as Record<string, unknown> | undefined)?.max_rounds || 3);
+  const maxRounds = Number(((executionDescriptor as Record<string, unknown> | undefined)?.runtime_state as Record<string, unknown> | undefined)?.max_rounds || 3);
   const latestRound = rounds[rounds.length - 1];
   const reachedStop = rounds.length >= maxRounds || resultEnvelope?.scenario.verification_status === "verified";
 

@@ -91,7 +91,7 @@ export function FeynmanCheck({ task, feynmanConversationId, onComplete }: Feynma
   const showStreaming =
     Boolean(streamingMessage) &&
     !feynmanResult &&
-    (!lastPersistedAI || !streamingMessage.startsWith(lastPersistedAI));
+    (!lastPersistedAI || !streamingMessage?.startsWith(lastPersistedAI));
 
   // Detect feynman_complete from saved messages (reliable path)
   useEffect(() => {
@@ -280,7 +280,7 @@ export function FeynmanCheck({ task, feynmanConversationId, onComplete }: Feynma
             <div className="flex gap-3">
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-700">Jr</div>
               <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-4 py-3 text-sm leading-relaxed text-slate-800 shadow-sm">
-                <MathMarkdown>{streamingMessage}</MathMarkdown>
+                <MathMarkdown>{streamingMessage ?? ""}</MathMarkdown>
               </div>
             </div>
           )}
