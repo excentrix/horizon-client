@@ -7,8 +7,8 @@ import axios, {
 } from "axios";
 import Cookies from "js-cookie";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
+  ?? (process.env.NODE_ENV === "development" ? "http://127.0.0.1:8000/api" : undefined);
 const REFRESH_ENDPOINT = process.env.NEXT_PUBLIC_AUTH_REFRESH_ENDPOINT;
 
 type RefreshResponse = {
@@ -59,6 +59,10 @@ const processQueue = (
 
   failedQueue = [];
 };
+
+if (!API_BASE_URL) {
+  throw new Error("NEXT_PUBLIC_API_URL must be configured in non-development environments");
+}
 
 const http: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,

@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Link, FileText, Upload, ShieldCheck, CheckCircle2, Loader2, Trophy, AlertTriangle, ExternalLink, ArrowRight, ListChecks, ClipboardList, Info } from "lucide-react";
+import { Link, FileText, Upload, ShieldCheck, CheckCircle2, Loader2, Trophy, AlertTriangle, ExternalLink, ArrowRight, ListChecks, ClipboardList, Info, Code2, PenLine } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { ExecutionDiagnostics } from "@/types";
 
 export interface ArtifactVerifiedEvent {
   type: string;
@@ -22,10 +23,13 @@ export interface ArtifactVerifiedEvent {
 
 interface VerificationEngineProps {
   taskId: string;
+  taskTitle?: string;
+  taskType?: string;
   verificationMethod: string;
   verificationCriteria: string;
   taskDescription: string;
   verificationDetailedInstructions?: string;
+  onStepChange?: (stepId: string) => void;
   // Richer AI-generated challenge fields
   problemStatement?: string;
   acceptanceCriteria?: string[];
@@ -50,11 +54,21 @@ interface VerificationEngineProps {
   prefilledFile?: File | null;
   isVerifying?: boolean;
   verificationResult?: ArtifactVerifiedEvent | null;
+  executionDiagnostics?: ExecutionDiagnostics | null;
+  efficacyMetrics?: {
+    attempt_count: number;
+    time_to_verify_seconds: number | null;
+    error_pattern_count: number;
+    nudge_count: number;
+    self_check_pass_rate: number;
+  } | null;
   onNextTask?: () => void;
 }
 
 export function VerificationEngine({
   taskId,
+  taskTitle,
+  taskType,
   verificationMethod,
   verificationCriteria,
   taskDescription,
@@ -72,7 +86,10 @@ export function VerificationEngine({
   prefilledFile,
   isVerifying,
   verificationResult,
+  executionDiagnostics,
+  efficacyMetrics,
   onNextTask,
+  onStepChange,
 }: VerificationEngineProps) {
   void taskId;
   const router = useRouter();
@@ -102,8 +119,8 @@ export function VerificationEngine({
   // Dynamic Rule Parsing
   const rules = useMemo(() => {
     if (!verificationCriteria) return ["Complete the primary objective."];
-    // Split criteria by periods or newlines into manageable rules
-    return verificationCriteria.split(/[.\\n]/).map(s => s.trim()).filter(s => s.length > 5);
+    // Split criteria by sentence boundaries (period + whitespace or newline)
+    return verificationCriteria.split(/\.\s+|\n/).map(s => s.trim()).filter(s => s.length > 5);
   }, [verificationCriteria]);
 
   const readableMethod = useMemo(() => {
@@ -163,14 +180,45 @@ export function VerificationEngine({
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* Loading state while challenge is being generated */}
-        {challengeLoading && (
-          <div className="flex flex-col items-center gap-3 py-8 text-slate-500">
-            <Loader2 className="w-7 h-7 animate-spin text-slate-400" />
-            <p className="text-sm">Generating challenge details…</p>
+        {challengeLoading ? (
+          <div className="space-y-5">
+            {(taskTitle || taskDescription) && (
+              <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-5 space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-800 flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4" /> Mission Brief
+                </h4>
+                {taskTitle && <p className="text-base font-semibold text-slate-800">{taskTitle}</p>}
+                {taskDescription && (
+                  <p className="text-sm text-slate-700 leading-relaxed">{taskDescription}</p>
+                )}
+              </div>
+            )}
+            {verificationCriteria && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                  <ListChecks className="w-4 h-4" /> What you need to demonstrate
+                </h4>
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="divide-y divide-slate-100">
+                    {verificationCriteria.split(/\.\s+|\n/).map(s => s.trim()).filter(s => s.length > 5).map((rule, idx) => (
+                      <div key={idx} className="flex gap-3 px-5 py-3 text-sm text-slate-700">
+                        <span className="text-blue-500 font-bold shrink-0 mt-0.5">{idx + 1}.</span>
+                        <p className="leading-relaxed">{rule}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-500">
+              <Loader2 className="w-4 h-4 animate-spin shrink-0 text-slate-400" />
+              <p>Your personalised challenge is being prepared. Review what you need to demonstrate while we get it ready.</p>
+            </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Problem Statement */}
+        {/* Problem Statement — only after challenge is loaded */}
+        {!challengeLoading && <>
         <div className="space-y-2 bg-amber-50/60 p-5 rounded-xl border border-amber-100">
           <h4 className="text-xs font-bold uppercase tracking-wider text-amber-800 flex items-center gap-2">
             <ClipboardList className="w-4 h-4" /> Mission Brief
@@ -305,6 +353,40 @@ export function VerificationEngine({
           </div>
         )}
 
+        {(executionDiagnostics || efficacyMetrics) && (
+          <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Execution Diagnostics
+            </p>
+            {executionDiagnostics && (
+              <div className="grid grid-cols-2 gap-2 text-xs text-slate-700 md:grid-cols-3">
+                <p>Syntax: {executionDiagnostics.failure_clusters.syntax}</p>
+                <p>Runtime: {executionDiagnostics.failure_clusters.runtime}</p>
+                <p>Assertion: {executionDiagnostics.failure_clusters.assertion}</p>
+                <p>Timeout: {executionDiagnostics.failure_clusters.timeout}</p>
+                <p>Wrong Output: {executionDiagnostics.failure_clusters.wrong_output}</p>
+                <p>Dominant: {executionDiagnostics.dominant_failure || "none"}</p>
+              </div>
+            )}
+            {efficacyMetrics && (
+              <div className="grid grid-cols-2 gap-2 text-xs text-slate-700 md:grid-cols-3">
+                <p>Attempts: {efficacyMetrics.attempt_count}</p>
+                <p>Error Patterns: {efficacyMetrics.error_pattern_count}</p>
+                <p>Nudges: {efficacyMetrics.nudge_count}</p>
+                <p>
+                  Self-check Pass: {Math.round((efficacyMetrics.self_check_pass_rate || 0) * 100)}%
+                </p>
+                <p>
+                  Time to Verify:{" "}
+                  {typeof efficacyMetrics.time_to_verify_seconds === "number"
+                    ? `${Math.round(efficacyMetrics.time_to_verify_seconds)}s`
+                    : "N/A"}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Submission instructions */}
         <div className="space-y-3">
           <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
@@ -337,6 +419,42 @@ export function VerificationEngine({
             </pre>
           </div>
         )}
+        </>}
+
+        {/* Sandbox guidance callout — Issue 10 */}
+        {(() => {
+          const t = (taskType || "").toLowerCase();
+          const isCoding = t.includes("cod") || t.includes("implement") || t.includes("build") || t.includes("project") || t.includes("practice");
+          if (isCoding && onStepChange) {
+            return (
+              <div className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-5 py-4">
+                <Code2 className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                <div className="flex-1 space-y-2">
+                  <p className="text-sm text-blue-900">Write your solution in the <strong>Build</strong> tab, then paste or submit it here.</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs border-blue-200 text-blue-700 hover:bg-blue-100"
+                    onClick={() => onStepChange("omni")}
+                  >
+                    Go to Build tab <ArrowRight className="w-3 h-3 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            );
+          }
+          const isConceptual = t.includes("read") || t.includes("concept") || t.includes("overview") || t.includes("teach") || t.includes("explain") || t.includes("feynman");
+          if (isConceptual) {
+            return (
+              <div className="flex items-start gap-3 rounded-xl border border-violet-100 bg-violet-50/60 px-5 py-4">
+                <PenLine className="w-4 h-4 text-violet-500 shrink-0 mt-0.5" />
+                <p className="text-sm text-violet-900">Write a clear explanation of your solution or approach in the text box below.</p>
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {/* Rubric acknowledgment */}
         <div className="bg-amber-50 border border-amber-100 rounded-xl px-5 py-4">

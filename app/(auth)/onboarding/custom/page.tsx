@@ -9,7 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Sparkles, Target, Clock, BrainCircuit } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+function getApiUrl() {
+  if (!API_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured");
+  }
+  return API_URL;
+}
 
 export default function OnboardingCustomPathPage() {
   const router = useRouter();
@@ -52,7 +59,7 @@ export default function OnboardingCustomPathPage() {
     };
 
     try {
-      const res = await fetch(`${API_URL}/onboarding/submit-form/`, {
+      const res = await fetch(`${getApiUrl()}/onboarding/submit-form/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

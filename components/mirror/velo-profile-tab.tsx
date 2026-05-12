@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { LiveAnalysisPanel } from "@/components/mirror/live-analysis-panel";
+import { ProjectVerificationSheet } from "@/components/mirror/ProjectVerificationSheet";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMirrorSnapshot } from "@/hooks/use-mirror-snapshot";
-import { authApi } from "@/lib/api";
+import { useGithubRepos } from "@/hooks/use-github-repos";
+import { authApi, auditApi } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,6 +38,14 @@ import {
   ThumbsUp,
   AlertTriangle,
   Wrench,
+  Shield,
+  ShieldCheck,
+  ShieldAlert,
+  Github,
+  Layers3,
+  Radar,
+  ListChecks,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -274,10 +284,10 @@ function SectionLabel({
     <p
       className={cn(
         "mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground",
-        className,
-      )}
-    >
-      {children}
+      className,
+    )}
+  >
+    {children}
     </p>
   );
 }
@@ -318,10 +328,6 @@ function VeloSkeleton() {
   );
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const IS_DEV = process.env.NODE_ENV !== "production";
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function VeloProfileTab() {
@@ -329,6 +335,17 @@ export function VeloProfileTab() {
   const queryClient = useQueryClient();
   const { data, isLoading } = useMirrorSnapshot();
   const [reanalysing, setReanalysing] = useState(false);
+  const [verifyingProjectIndex, setVerifyingProjectIndex] = useState<number | null>(null);
+  const [resettingVerificationId, setResettingVerificationId] = useState<string | null>(null);
+  const [reanalysisBlocked, setReanalysisBlocked] = useState<{
+    next_reset: string | null; limit: number;
+  } | null>(null);
+  const github = useGithubRepos();
+
+  useEffect(() => {
+    github.fetchRepos();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleReanalyse = async () => {
     setReanalysing(true);
@@ -336,7 +353,15 @@ export function VeloProfileTab() {
       await authApi.reanalyseResume();
       await queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
       toast.success("Re-analysis queued — VELO will update in a moment.");
-    } catch {
+    } catch (err: unknown) {
+      const data = (err as { response?: { data?: Record<string, unknown> } })?.response?.data;
+      if (data?.quota_status === "exceeded") {
+        setReanalysisBlocked({
+          next_reset: (data.next_reset as string | null) ?? null,
+          limit: (data.limit as number) ?? 1,
+        });
+        return;
+      }
       toast.error("Couldn't queue re-analysis.", {
         description:
           "Upload your resume in Settings first, then come back here.",
@@ -346,6 +371,25 @@ export function VeloProfileTab() {
       setReanalysing(false);
     }
   };
+
+  const handleReVerify = async (verificationId: string, projectIndex: number) => {
+    setResettingVerificationId(verificationId);
+    try {
+      await auditApi.resetProjectVerification(verificationId);
+      await queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
+      setVerifyingProjectIndex(projectIndex);
+    } catch {
+      toast.error("Couldn't reset verification. Please try again.");
+    } finally {
+      setResettingVerificationId(null);
+    }
+  };
+
+  // Fetch GitHub repos once on mount (cheap — returns {connected:false} if no token)
+  useEffect(() => {
+    github.fetchRepos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const mirror = data?.mirror;
   const normalized = (mirror?.normalized_profile ?? {}) as Record<
@@ -362,6 +406,18 @@ export function VeloProfileTab() {
     (normalized.education as EducationEntry[] | undefined) ?? [];
   const gaps = mirror?.skill_gaps ?? [];
   const deep = mirror?.deep_analysis ?? {};
+  const projectVerifications = mirror?.project_verifications ?? [];
+
+  // Compute GitHub repos not referenced in resume
+  const resumeUrls = new Set(
+    projects
+      .flatMap((p) => [p.repo_url, p.demo_url])
+      .filter(Boolean)
+      .map((u) => u!.toLowerCase()),
+  );
+  const unlinkedRepos = github.repos.filter(
+    (r) => !resumeUrls.has(r.url.toLowerCase()),
+  );
 
   const isRunning = data?.status === "running" || data?.status === "empty";
   const isFailed = data?.status === "failed";
@@ -448,33 +504,81 @@ export function VeloProfileTab() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-8">
-      {/* ── Dev toolbar ───────────────────────────────────────────────────── */}
-      {IS_DEV && (
-        <div className="flex items-center gap-2 rounded-lg border border-dashed border-amber-300 bg-amber-50/60 px-3 py-2 dark:border-amber-700/40 dark:bg-amber-950/20">
-          <FlaskConical className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-          <span className="flex-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
-            Dev
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 gap-1.5 border-amber-300 text-xs text-amber-700 hover:bg-amber-50"
-            disabled={reanalysing}
-            onClick={handleReanalyse}
-          >
-            <RefreshCw
-              className={cn("h-3 w-3", reanalysing && "animate-spin")}
-            />
-            {reanalysing ? "Queuing…" : "Re-analyse"}
-          </Button>
-        </div>
-      )}
+    <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-8">
+      <Card className="border-[color:var(--brand-indigo)]/25 bg-[linear-gradient(180deg,rgba(88,88,204,0.06),rgba(88,88,204,0.02))]">
+        <CardContent className="space-y-4 pb-4 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-mono-ui text-[11px] uppercase tracking-[0.14em] text-[color:var(--brand-indigo)]">
+                VELO Profile Intelligence
+              </p>
+              <p className="text-sm text-muted-foreground">
+                High-signal breakdown of readiness, gaps, and next execution moves.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              onClick={() => router.push("/chat?context=mirror_review")}
+            >
+              <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
+              Ask mentor
+            </Button>
+          </div>
 
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border bg-card px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">ATS</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">{atsScore ?? "--"}</p>
+            </div>
+            <div className="rounded-xl border bg-card px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Role Matches</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">{roleMatches.length}</p>
+            </div>
+            <div className="rounded-xl border bg-card px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Skill Gaps</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">{gaps.length}</p>
+            </div>
+            <div className="rounded-xl border bg-card px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Priority Actions</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">{actions.length}</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <a href="#velo-overview" className="inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-[11px]"><Radar className="h-3.5 w-3.5" />Overview</a>
+            <a href="#velo-employer" className="inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-[11px]"><Eye className="h-3.5 w-3.5" />Employer View</a>
+            <a href="#velo-career-fit" className="inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-[11px]"><Layers3 className="h-3.5 w-3.5" />Career Fit</a>
+            <a href="#velo-actions" className="inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-[11px]"><ListChecks className="h-3.5 w-3.5" />Actions</a>
+            <a href="#velo-skills" className="inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-[11px]"><Sparkles className="h-3.5 w-3.5" />Skills</a>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center gap-2 rounded-lg border border-dashed border-amber-300 bg-amber-50/60 px-3 py-2 dark:border-amber-700/40 dark:bg-amber-950/20">
+        <FlaskConical className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+        <span className="flex-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+          Resume Analysis
+        </span>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1.5 border-amber-300 text-xs text-amber-700 hover:bg-amber-50"
+          disabled={reanalysing}
+          onClick={handleReanalyse}
+        >
+          <RefreshCw className={cn("h-3 w-3", reanalysing && "animate-spin")} />
+          {reanalysing ? "Queuing…" : "Re-analyse"}
+        </Button>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.86fr)]">
       {/* ── Overview: ATS ring + Narrative ────────────────────────────────── */}
       <div
+        id="velo-overview"
         className={cn(
-          "grid gap-4",
+          "grid gap-4 lg:col-start-1",
           atsScore !== undefined ? "sm:grid-cols-[160px_1fr]" : "",
         )}
       >
@@ -508,7 +612,7 @@ export function VeloProfileTab() {
 
       {/* ── Employer's View ───────────────────────────────────────────────── */}
       {employerPerspective && (
-        <div>
+        <div id="velo-employer" className="lg:col-start-1">
           <SectionLabel>Employer&apos;s View</SectionLabel>
           <Card className="overflow-hidden">
             {/* Verdict banner */}
@@ -649,8 +753,10 @@ export function VeloProfileTab() {
         </div>
       )}
 
+      <aside className="space-y-4 lg:col-start-2 lg:row-start-1 lg:row-span-[999] lg:sticky lg:top-24 lg:self-start">
       {/* ── ATS Breakdown ─────────────────────────────────────────────────── */}
       {atsBreakdown && (
+        <div>
         <Card>
           <CardContent className="pb-2 pt-4">
             <Accordion type="single" collapsible>
@@ -699,11 +805,12 @@ export function VeloProfileTab() {
             </Accordion>
           </CardContent>
         </Card>
+        </div>
       )}
 
       {/* ── Career Fit ────────────────────────────────────────────────────── */}
       {roleMatches.length > 0 && (
-        <div>
+        <div id="velo-career-fit" className="lg:col-start-1">
           <SectionLabel>Career Fit</SectionLabel>
           <Card>
             <CardContent className="p-0">
@@ -802,7 +909,7 @@ export function VeloProfileTab() {
 
       {/* ── Priority Actions ──────────────────────────────────────────────── */}
       {actions.length > 0 && (
-        <div>
+        <div id="velo-actions">
           <SectionLabel>Priority Actions</SectionLabel>
           <div className="grid gap-3 sm:grid-cols-3">
             {actions.slice(0, 3).map((action, i) => {
@@ -861,6 +968,7 @@ export function VeloProfileTab() {
 
       {/* ── Mentor Readiness View ───────────────────────────────────────── */}
       {mentorSummary ? (
+        <div>
         <Card>
           <CardContent className="pb-4 pt-4">
             <SectionLabel className="mb-2">Mentor Readiness View</SectionLabel>
@@ -920,11 +1028,13 @@ export function VeloProfileTab() {
             </div>
           </CardContent>
         </Card>
+        </div>
       ) : null}
+      </aside>
 
       {/* ── Skill Mastery ─────────────────────────────────────────────────── */}
       {skillMastery.length > 0 && (
-        <div>
+        <div id="velo-skills" className="lg:col-start-1">
           <SectionLabel>Skill Mastery</SectionLabel>
           <Card>
             <CardContent className="pb-4 pt-4">
@@ -1019,7 +1129,7 @@ export function VeloProfileTab() {
 
       {/* ── Skill Gaps ────────────────────────────────────────────────────── */}
       {(gapDetails.length > 0 || gaps.length > 0) && (
-        <div>
+        <div className="lg:col-start-1">
           <SectionLabel>Skill Gaps</SectionLabel>
           {gapDetails.length > 0 ? (
             <div className="space-y-2.5">
@@ -1082,7 +1192,7 @@ export function VeloProfileTab() {
 
       {/* ── Experience ────────────────────────────────────────────────────── */}
       {experience.length > 0 && (
-        <div>
+        <div className="lg:col-start-1">
           <SectionLabel>Experience</SectionLabel>
           <div className="space-y-3">
             {experience.map((exp, i) => {
@@ -1221,11 +1331,12 @@ export function VeloProfileTab() {
 
       {/* ── Projects ──────────────────────────────────────────────────────── */}
       {projects.length > 0 && (
-        <div>
+        <div className="lg:col-start-1">
           <SectionLabel>Projects</SectionLabel>
           <div className="grid gap-3 sm:grid-cols-2">
             {projects.map((proj, i) => {
               const analysis = findAnalysis(proj, projAnalysis, i);
+              const pv = projectVerifications.find((v) => v.project_index === i);
               return (
                 <Card key={i}>
                   <CardContent className="pb-3 pt-4">
@@ -1233,16 +1344,71 @@ export function VeloProfileTab() {
                       <p className="text-sm font-semibold leading-snug">
                         {proj.title || "Project"}
                       </p>
-                      {(proj.repo_url || proj.demo_url) && (
-                        <a
-                          href={proj.repo_url || proj.demo_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="shrink-0 text-muted-foreground hover:text-foreground"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      )}
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {(proj.repo_url || proj.demo_url) && (
+                          <a
+                            href={proj.repo_url || proj.demo_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                        {(!pv || pv.status === "unverified") && (
+                          <button
+                            onClick={() => setVerifyingProjectIndex(i)}
+                            className="flex items-center gap-1 rounded-md border border-dashed border-muted-foreground/40 px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary"
+                          >
+                            <Shield className="h-2.5 w-2.5" />
+                            Verify
+                          </button>
+                        )}
+                        {pv?.status === "verified" && (
+                          <span className="flex items-center gap-1 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                            <ShieldCheck className="h-2.5 w-2.5" />
+                            Verified
+                          </span>
+                        )}
+                        {(pv?.status === "evidence_submitted" || pv?.status === "interrogating") && (
+                          <span className="flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                            <Shield className="h-2.5 w-2.5" />
+                            In Progress
+                          </span>
+                        )}
+                        {pv?.status === "suspicious" && (
+                          <>
+                            <span className="flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                              <ShieldAlert className="h-2.5 w-2.5" />
+                              Review Needed
+                            </span>
+                            <button
+                              disabled={resettingVerificationId === pv.verification_id}
+                              onClick={() => handleReVerify(pv.verification_id, i)}
+                              className="flex items-center gap-1 rounded-md border border-dashed border-amber-400/60 px-1.5 py-0.5 text-[10px] text-amber-600 transition-colors hover:border-amber-500 hover:text-amber-700 disabled:opacity-50"
+                            >
+                              <RefreshCw className="h-2.5 w-2.5" />
+                              Re-verify
+                            </button>
+                          </>
+                        )}
+                        {pv?.status === "failed" && (
+                          <>
+                            <span className="flex items-center gap-1 rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">
+                              <XCircle className="h-2.5 w-2.5" />
+                              Not Verified
+                            </span>
+                            <button
+                              disabled={resettingVerificationId === pv.verification_id}
+                              onClick={() => handleReVerify(pv.verification_id, i)}
+                              className="flex items-center gap-1 rounded-md border border-dashed border-rose-400/60 px-1.5 py-0.5 text-[10px] text-rose-600 transition-colors hover:border-rose-500 hover:text-rose-700 disabled:opacity-50"
+                            >
+                              <RefreshCw className="h-2.5 w-2.5" />
+                              Re-verify
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     {analysis && (
@@ -1340,11 +1506,54 @@ export function VeloProfileTab() {
         </div>
       )}
 
+      {/* ── GitHub — repos not on resume ──────────────────────────────────── */}
+      {github.connected && unlinkedRepos.length > 0 && (
+        <div className="lg:col-start-1">
+          <SectionLabel className="flex items-center gap-1.5">
+            <Github className="h-3.5 w-3.5" />
+            From GitHub — not on your resume
+          </SectionLabel>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {unlinkedRepos.map((repo) => (
+              <Card key={repo.id} className="border-dashed">
+                <CardContent className="pb-3 pt-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <a
+                        href={repo.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium hover:underline"
+                      >
+                        {repo.name}
+                      </a>
+                      {repo.description && (
+                        <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                          {repo.description}
+                        </p>
+                      )}
+                    </div>
+                    {repo.language && (
+                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                        {repo.language}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-[10px] italic text-muted-foreground">
+                    Add this project to your resume to verify it with VELO
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Education + Certifications + All Skills ───────────────────────── */}
       {(education.length > 0 ||
         certifications.length > 0 ||
         skills.length > 0) && (
-        <Card>
+        <Card className="lg:col-start-1">
           <CardContent className="pb-4 pt-4">
             <div className="grid gap-4 sm:grid-cols-2">
               {education.length > 0 && (
@@ -1402,6 +1611,60 @@ export function VeloProfileTab() {
             )}
           </CardContent>
         </Card>
+      )}
+      </div>
+
+      {/* ── Project Verification Sheet ─────────────────────────────────────── */}
+      {mirror?.id && verifyingProjectIndex !== null && (
+        <ProjectVerificationSheet
+          open={verifyingProjectIndex !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setVerifyingProjectIndex(null);
+              queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
+            }
+          }}
+          snapshotId={mirror.id}
+          projectIndex={verifyingProjectIndex}
+          projectTitle={
+            (projects[verifyingProjectIndex]?.title as string | undefined) ??
+            `Project ${verifyingProjectIndex + 1}`
+          }
+        />
+      )}
+
+      {/* Resume reanalysis quota exceeded modal */}
+      {reanalysisBlocked && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+          onClick={() => setReanalysisBlocked(null)}>
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="rounded-t-2xl bg-amber-50 px-6 pt-6 pb-5">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                <RefreshCw className="h-5 w-5" />
+              </div>
+              <h2 className="text-base font-semibold text-slate-900">Re-analysis limit reached</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Your free plan includes {reanalysisBlocked.limit} resume re-analysis per month.
+                {reanalysisBlocked.next_reset
+                  ? ` Your allowance resets on ${new Date(reanalysisBlocked.next_reset).toLocaleDateString(undefined, { month: "long", day: "numeric" })}.`
+                  : ""}
+              </p>
+            </div>
+            <div className="px-6 py-4">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Upgrade your plan to run resume re-analyses whenever you need.
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-slate-100 px-6 py-4">
+              <Button size="sm" variant="ghost" className="text-slate-500"
+                onClick={() => setReanalysisBlocked(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

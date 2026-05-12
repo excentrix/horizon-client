@@ -5,8 +5,6 @@ import {
   ReactFlow,
   useNodesState,
   useEdgesState,
-  MiniMap,
-  Controls,
   Background,
   Handle,
   Position,
@@ -15,7 +13,6 @@ import {
   Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import dagre from "dagre";
 import { http } from "@/lib/http-client";
 import { Loader2 } from "lucide-react";
 
@@ -36,32 +33,27 @@ interface BrainMapEdge {
   };
 }
 
-interface BrainMapEdge {
-  data: {
-    id: string;
-    source: string;
-    target: string;
-  };
-}
-
-// Custom Node for Competencies
+// Custom Node for Competencies - rounded pill to look more like nodes
 const CompetencyNode = ({ data }: NodeProps) => {
   return (
     <div
-      className="rounded-xl border-2 px-5 py-3 shadow-sm transition-all hover:scale-105 bg-white"
+      className="rounded-full border-2 px-4 py-2 shadow-sm transition-all hover:scale-105 bg-background hover:shadow-md hover:ring-4 ring-[color:var(--brand-indigo)]/20 cursor-pointer"
       style={{ borderColor: data.color as string }}
     >
-      <Handle type="target" position={Position.Top} className="w-2 h-2 opacity-0" />
-      <div className="flex flex-col items-center justify-center gap-1">
-        <span className="text-sm font-bold text-slate-800">{data.label as string}</span>
-        <span 
-          className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full text-white"
-          style={{ backgroundColor: data.color as string }}
-        >
-          {data.proficiency as string}
-        </span>
+      <Handle type="target" position={Position.Top} className="opacity-0" />
+      <div className="flex flex-col items-center justify-center gap-0.5">
+        <span className="text-sm font-semibold text-foreground tracking-tight">{data.label as string}</span>
+        <div className="flex gap-1 items-center">
+            <span 
+              className="w-2 h-2 rounded-full"
+              style={{ backgroundColor: data.color as string }}
+            />
+            <span className="text-[9px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+              {data.proficiency as string}
+            </span>
+        </div>
       </div>
-      <Handle type="source" position={Position.Bottom} className="w-2 h-2 opacity-0" />
+      <Handle type="source" position={Position.Bottom} className="opacity-0" />
     </div>
   );
 };
@@ -70,40 +62,99 @@ const nodeTypes = {
   competency: CompetencyNode,
 };
 
-const dagreGraph = new dagre.graphlib.Graph();
-dagreGraph.setDefaultEdgeLabel(() => ({}));
-
-const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
-  const isHorizontal = direction === 'LR';
-  dagreGraph.setGraph({ rankdir: direction });
-
-  nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: 150, height: 60 });
-  });
-
-  edges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
-  });
-
-  dagre.layout(dagreGraph);
-
-  const newNodes = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
+// Physics Simulation for Force-Directed Layout
+const runForceLayout = (nodes: Node[], edges: Edge[]) => {
+  const radius = 200;
+  
+  // Custom type to include velocity
+  type PhysicsNode = Node & { vx: number; vy: number };
+  
+  const physicsNodes: PhysicsNode[] = nodes.map((node, i) => {
+    const angle = (i / nodes.length) * 2 * Math.PI;
     return {
       ...node,
-      targetPosition: isHorizontal ? Position.Left : Position.Top,
-      sourcePosition: isHorizontal ? Position.Right : Position.Bottom,
+      targetPosition: Position.Top,
+      sourcePosition: Position.Bottom,
       position: {
-        x: nodeWithPosition.x - 75,
-        y: nodeWithPosition.y - 30,
+        x: Math.cos(angle) * (radius + Math.random() * 50),
+        y: Math.sin(angle) * (radius + Math.random() * 50),
       },
+      vx: 0,
+      vy: 0,
     };
   });
 
-  return { nodes: newNodes, edges };
+  const ITERATIONS = 300;
+  const REPULSION = 12000; 
+  const SPRING_LENGTH = 150;
+  const SPRING_K = 0.08;
+  const DAMPING = 0.75;
+  const GRAVITY = 0.015;
+
+  for (let step = 0; step < ITERATIONS; step++) {
+    // 1. Repulsion between all nodes
+    for (let i = 0; i < physicsNodes.length; i++) {
+        for (let j = i + 1; j < physicsNodes.length; j++) {
+            const dx = physicsNodes[i].position.x - physicsNodes[j].position.x;
+            const dy = physicsNodes[i].position.y - physicsNodes[j].position.y;
+            let dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 1) dist = 1;
+            
+            const force = REPULSION / (dist * dist);
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            
+            physicsNodes[i].vx += fx;
+            physicsNodes[i].vy += fy;
+            physicsNodes[j].vx -= fx;
+            physicsNodes[j].vy -= fy;
+        }
+    }
+    
+    // 2. Spring forces along edges
+    edges.forEach(edge => {
+        const source = physicsNodes.find(n => n.id === edge.source);
+        const target = physicsNodes.find(n => n.id === edge.target);
+        if (source && target) {
+            const dx = target.position.x - source.position.x;
+            const dy = target.position.y - source.position.y;
+            let dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 1) dist = 1;
+            
+            const force = (dist - SPRING_LENGTH) * SPRING_K;
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            
+            source.vx += fx;
+            source.vy += fy;
+            target.vx -= fx;
+            target.vy -= fy;
+        }
+    });
+
+    // 3. Gravity pulling to center & Apply Velocity
+    physicsNodes.forEach(node => {
+        node.vx += (0 - node.position.x) * GRAVITY;
+        node.vy += (0 - node.position.y) * GRAVITY;
+
+        node.position.x += node.vx;
+        node.position.y += node.vy;
+        
+        node.vx *= DAMPING;
+        node.vy *= DAMPING;
+    });
+  }
+
+  // Strip vx/vy for React Flow
+  const finalNodes = physicsNodes.map(node => {
+     const { vx: _vx, vy: _vy, ...cleanNode } = node;
+     return cleanNode as Node;
+  });
+
+  return { nodes: finalNodes, edges };
 };
 
-export function CompetencyBrainMap() {
+export function CompetencyBrainMap({ className }: { className?: string }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -119,7 +170,6 @@ export function CompetencyBrainMap() {
         
         if (!mounted) return;
         
-        // Map backend data to React Flow props
         const mappedNodes: Node[] = data.nodes.map((n: BrainMapNode) => ({
           id: n.data.id,
           type: "competency",
@@ -128,7 +178,7 @@ export function CompetencyBrainMap() {
             proficiency: n.data.proficiency,
             color: n.data.color,
           },
-          position: { x: 0, y: 0 } // Gets overwritten by dagre
+          position: { x: 0, y: 0 } 
         }));
 
         const mappedEdges: Edge[] = data.edges.map((e: BrainMapEdge) => ({
@@ -136,10 +186,11 @@ export function CompetencyBrainMap() {
           source: e.data.source,
           target: e.data.target,
           animated: true,
-          style: { stroke: "#cbd5e1", strokeWidth: 2 }
+          style: { stroke: "var(--border)", strokeWidth: 1.5, opacity: 0.6 },
         }));
 
-        const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+        // Execute physics simulation synchronously on mount
+        const { nodes: layoutedNodes, edges: layoutedEdges } = runForceLayout(
           mappedNodes,
           mappedEdges
         );
@@ -162,23 +213,26 @@ export function CompetencyBrainMap() {
 
   if (isLoading) {
     return (
-      <div className="flex h-[600px] w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-50">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      <div className={`flex items-center justify-center bg-background ${className || "h-[600px] w-full"}`}>
+        <div className="flex flex-col items-center gap-3">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <p className="text-xs text-muted-foreground font-mono-ui">Simulating graph physics...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex h-[600px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-600">
-        <p className="font-semibold">Oops!</p>
+      <div className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-destructive/20 bg-destructive/10 text-destructive ${className || "h-[600px] w-full"}`}>
+        <p className="font-semibold">Neural Link Failed</p>
         <p className="text-sm">{error}</p>
       </div>
     );
   }
 
   return (
-    <div className="h-[600px] w-full rounded-xl border border-slate-200 bg-slate-50 shadow-sm overflow-hidden">
+    <div className={`overflow-hidden bg-background ${className || "h-[600px] w-full"}`}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -187,10 +241,9 @@ export function CompetencyBrainMap() {
         nodeTypes={nodeTypes}
         fitView
         attributionPosition="bottom-right"
+        className="[&_.react-flow__pane]:cursor-grab"
       >
-        <Background gap={16} />
-        <Controls />
-        <MiniMap nodeStrokeColor="#ccc" nodeColor={(n) => n.data?.color as string || "#ccc"} />
+        <Background gap={24} color="var(--border)" size={1.5} />
       </ReactFlow>
     </div>
   );

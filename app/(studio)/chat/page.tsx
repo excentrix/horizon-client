@@ -334,29 +334,14 @@ function ChatContent() {
       typeof window !== "undefined"
         ? window.localStorage.getItem("onboarding_session_key")
         : null;
-    if (!sessionKey) {
-      setIntakeError("Onboarding session not found. Please restart onboarding.");
-      return;
-    }
     setIntakeSubmitting(true);
     setIntakeError(null);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/onboarding/mentor-intake/extract/`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session_key: sessionKey,
-            conversation_id: activeConversation.id,
-            complete: true,
-          }),
-        },
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to finalize mentor intake");
-      }
+      await authApi.extractMentorIntake({
+        session_key: sessionKey || undefined,
+        conversation_id: activeConversation.id,
+        complete: true,
+      });
       setIntakeSubmitted(true);
       setIntakeModalOpen(false);
     } catch (err: unknown) {
@@ -374,30 +359,15 @@ function ChatContent() {
       typeof window !== "undefined"
         ? window.localStorage.getItem("onboarding_session_key")
         : null;
-    if (!sessionKey) {
-      setIntakeError("Onboarding session not found. Please restart onboarding.");
-      return;
-    }
     setIntakePreviewLoading(true);
     setIntakeError(null);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api"}/onboarding/mentor-intake/extract/`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session_key: sessionKey,
-            conversation_id: activeConversation.id,
-            complete: false,
-          }),
-        },
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to extract mentor intake");
-      }
-      setIntakePreview(data.intake_data || {});
+      const data = await authApi.extractMentorIntake({
+        session_key: sessionKey || undefined,
+        conversation_id: activeConversation.id,
+        complete: false,
+      });
+      setIntakePreview((data.intake_data as Record<string, unknown>) || {});
       setIntakeModalOpen(true);
     } catch (err: unknown) {
       setIntakeError(err instanceof Error ? err.message : "Something went wrong");
@@ -494,20 +464,8 @@ function ChatContent() {
       if (!user) return;
       
       try {
-        const Cookies = (await import('js-cookie')).default;
-        const token = Cookies.get('accessToken');
-        if (!token) return;
-        
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/intelligence/my-analyses/`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          setAnalysisHistory(data);
-        }
+        const data = await intelligenceApi.getMyAnalyses();
+        setAnalysisHistory(data);
       } catch (error) {
         console.error('Failed to fetch analysis history:', error);
       }
@@ -592,9 +550,29 @@ useEffect(() => {
   useEffect(() => {
     if (planBuildStatus === "completed") {
       void queryClient.invalidateQueries({ queryKey: ["learning-plans"] });
+      void queryClient.invalidateQueries({ queryKey: ["roadmap"] });
+      if (selectedConversationId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["conversations", selectedConversationId, "messages"],
+        });
+      }
       // If there are other "workbench" queries, invalidate them here too.
     }
-  }, [planBuildStatus, queryClient]);
+  }, [planBuildStatus, queryClient, selectedConversationId]);
+
+  useEffect(() => {
+    const onStageComplete = () => {
+      void queryClient.invalidateQueries({ queryKey: ["learning-plans"] });
+      void queryClient.invalidateQueries({ queryKey: ["roadmap"] });
+      if (selectedConversationId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["conversations", selectedConversationId, "messages"],
+        });
+      }
+    };
+    window.addEventListener("mentor_stage_complete", onStageComplete);
+    return () => window.removeEventListener("mentor_stage_complete", onStageComplete);
+  }, [queryClient, selectedConversationId]);
 
   // Refresh messages when a proactive mentor message arrives via WS
   useEffect(() => {
@@ -1151,20 +1129,18 @@ useEffect(() => {
                           <div className="mt-1">
                             <PersonalitySelector 
                                 currentPersonalityId={activeConversation.ai_personality?.id}
-                                onSelect={() => {
-                                    // We need a mutation to update the conversation's personality
-                                    // For now, let's just log it or we need to add that endpoint/mutation
-                                    // actually, usually you don't change personality of an existing chat, 
-                                    // you start a new one. But the user asked to "change the personality in a dropdown".
-                                    // So we probably need an update endpoint.
-                                    // Let's assume we can't update it easily yet without backend changes.
-                                    // Wait, the user said "The user should be able to change the personality in a dropdown".
-                                    // I'll implement the UI but maybe disable it or show a toast if backend doesn't support it.
-                                    // Actually, let's just show the name for now if we can't update it, 
-                                    // OR we can trigger a "New Conversation" with that personality?
-                                    // No, "change the personality". 
-                                    // I will add a TODO and just show the selector.
-                                    telemetry.toastError("Changing personality mid-conversation is coming soon.");
+                                onSelect={async (personalityId) => {
+                                    if (!activeConversation?.id) return;
+                                    try {
+                                      await chatApi.updateConversation(activeConversation.id, {
+                                        ai_personality_id: personalityId,
+                                      });
+                                      await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+                                      telemetry.toastSuccess("Mentor personality updated.");
+                                    } catch (error) {
+                                      telemetry.toastError("Couldn't update mentor personality.");
+                                      telemetry.error("Failed to update conversation personality", { error });
+                                    }
                                 }}
                                 disabled={false} 
                             />
@@ -1361,7 +1337,7 @@ useEffect(() => {
                                 Mentor Intake
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                This intake is required before your roadmap is generated.
+                                This debrief sharpens mentor context and improves personalization across your roadmap and plans.
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -1400,9 +1376,9 @@ useEffect(() => {
                           </div>
                           {intakeSubmitted || planUpdates.length ? (
                             <div className="rounded-lg border border-emerald-200/60 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-900">
-                              <div className="font-semibold">Roadmap generation in progress</div>
+                              <div className="font-semibold">Personalization update in progress</div>
                               <div className="text-[11px] text-emerald-700/80">
-                                We&apos;re building your roadmap now. Updates will appear here.
+                                We&apos;re syncing the mentor context you confirmed. Updates will appear here.
                               </div>
                             </div>
                           ) : null}
@@ -1436,9 +1412,9 @@ useEffect(() => {
                       <Dialog open={intakeModalOpen} onOpenChange={setIntakeModalOpen}>
                         <DialogContent className="max-w-xl">
                           <DialogHeader>
-                            <DialogTitle>Mentor Intake Summary</DialogTitle>
+                            <DialogTitle>Mentor Debrief Summary</DialogTitle>
                             <DialogDescription>
-                              Review what the mentor captured. If it looks good, generate your roadmap.
+                              Review what the mentor captured. If it looks right, save it to improve roadmap and plan personalization.
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-3 text-sm">
@@ -1483,7 +1459,7 @@ useEffect(() => {
                               }}
                               disabled={intakeSubmitting}
                             >
-                              {intakeSubmitting ? "Saving..." : "Confirm & generate"}
+                              {intakeSubmitting ? "Saving..." : "Confirm & save"}
                             </Button>
                           </DialogFooter>
                         </DialogContent>
@@ -1538,7 +1514,7 @@ useEffect(() => {
                           actions={visibleMentorActions}
                           onSendQuickReply={(message) => handleSendMessage(message)}
                           debriefProgress={
-                            mentorStateV2
+                            mentorStateV2 && planRecord?.status !== "active"
                               ? {
                                   completed: debriefCompleted,
                                   total: debriefTotal,

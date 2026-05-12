@@ -40,19 +40,55 @@ const DEFAULT_SNIPPETS: Record<string, string> = {
   php: "<?php\necho \"Hello, Horizon!\";",
 };
 
+const PYODIDE_INDEX_URL = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
+
+declare global {
+  interface Window {
+    loadPyodide?: (config: { indexURL: string }) => Promise<{
+      runPythonAsync: (code: string) => Promise<unknown>;
+      runPython: (code: string) => string;
+    }>;
+  }
+}
+
 interface CodeRunnerProps {
   defaultLanguage?: string;
   initialCode?: string;
   onRequestMentorReview?: (content: string) => void;
+  onExecutionEvent?: (payload: {
+    event_type:
+      | "run_started"
+      | "run_completed"
+      | "runtime_error"
+      | "compile_error"
+      | "test_passed"
+      | "test_failed";
+    language?: string;
+    run_id?: string;
+    status?: string;
+    error_type?: string;
+    meta?: Record<string, unknown>;
+  }) => void;
 }
 
-export function CodeRunner({ defaultLanguage = "python", initialCode, onRequestMentorReview }: CodeRunnerProps) {
+export function CodeRunner({
+  defaultLanguage = "python",
+  initialCode,
+  onRequestMentorReview,
+  onExecutionEvent,
+}: CodeRunnerProps) {
   const language = defaultLanguage in DEFAULT_SNIPPETS ? defaultLanguage : "python";
   const [selectedLanguage, setSelectedLanguage] = useState(language);
   const [code, setCode] = useState(initialCode || DEFAULT_SNIPPETS[language]);
   const [stdin, setStdin] = useState("");
   const [output, setOutput] = useState<{ stdout?: string; stderr?: string; compile_output?: string; message?: string } | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [pyodideLoading, setPyodideLoading] = useState(false);
+  const [pyodideError, setPyodideError] = useState<string | null>(null);
+  const [pyodideRuntime, setPyodideRuntime] = useState<{
+    runPythonAsync: (code: string) => Promise<unknown>;
+    runPython: (code: string) => string;
+  } | null>(null);
 
   const extension = useMemo(() => {
     const langKey = LANGUAGE_MAP[selectedLanguage];
@@ -68,10 +104,106 @@ export function CodeRunner({ defaultLanguage = "python", initialCode, onRequestM
     }
   }, [defaultLanguage, initialCode]);
 
+  useEffect(() => {
+    if (selectedLanguage !== "python") return;
+    if (pyodideRuntime || pyodideLoading) return;
+
+    let cancelled = false;
+    const load = async () => {
+      setPyodideLoading(true);
+      setPyodideError(null);
+      try {
+        if (!window.loadPyodide) {
+          await new Promise<void>((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = `${PYODIDE_INDEX_URL}pyodide.js`;
+            script.async = true;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error("Failed to load Pyodide script."));
+            document.head.appendChild(script);
+          });
+        }
+        if (!window.loadPyodide) {
+          throw new Error("Pyodide loader unavailable.");
+        }
+        const runtime = await window.loadPyodide({ indexURL: PYODIDE_INDEX_URL });
+        if (!cancelled) {
+          setPyodideRuntime(runtime);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPyodideError(error instanceof Error ? error.message : "Failed to load Python runtime.");
+        }
+      } finally {
+        if (!cancelled) setPyodideLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLanguage, pyodideRuntime, pyodideLoading]);
+
   const handleRun = async () => {
     setIsRunning(true);
     setOutput(null);
+    const runId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    onExecutionEvent?.({
+      event_type: "run_started",
+      language: selectedLanguage,
+      run_id: runId,
+    });
     try {
+      if (selectedLanguage === "python") {
+        if (!pyodideRuntime) {
+          throw new Error(pyodideError || "Python runtime is still loading.");
+        }
+        const escapedStdin = JSON.stringify(stdin ?? "");
+        const bootstrap = [
+          "import sys",
+          "import io",
+          "import builtins",
+          `__horizon_stdin = io.StringIO(${escapedStdin})`,
+          "sys.stdin = __horizon_stdin",
+          "builtins.input = lambda prompt='': __horizon_stdin.readline().rstrip('\\n')",
+          "sys.stdout = io.StringIO()",
+          "sys.stderr = io.StringIO()",
+        ].join("\n");
+        await pyodideRuntime.runPythonAsync(bootstrap);
+        await pyodideRuntime.runPythonAsync(code);
+        const stdout = pyodideRuntime.runPython("sys.stdout.getvalue()");
+        const stderr = pyodideRuntime.runPython("sys.stderr.getvalue()");
+        setOutput({
+          stdout: stdout ?? "",
+          stderr: stderr ?? "",
+        });
+
+        const runtimeError = Boolean(stderr);
+        onExecutionEvent?.({
+          event_type: runtimeError ? "runtime_error" : "run_completed",
+          language: selectedLanguage,
+          run_id: runId,
+          status: runtimeError ? "runtime_error" : "success",
+          error_type: runtimeError ? "runtime" : undefined,
+          meta: {
+            has_stdout: Boolean(stdout),
+            has_stderr: Boolean(stderr),
+          },
+        });
+        onExecutionEvent?.({
+          event_type: runtimeError ? "test_failed" : "test_passed",
+          language: selectedLanguage,
+          run_id: runId,
+          status: runtimeError ? "runtime_error" : "success",
+          error_type: runtimeError ? "runtime" : undefined,
+          meta: { scope: "visible", source: "code_runner_pyodide" },
+        });
+        return;
+      }
+
       const result = await playgroundApi.executeCode({
         language: selectedLanguage,
         source_code: code,
@@ -83,8 +215,56 @@ export function CodeRunner({ defaultLanguage = "python", initialCode, onRequestM
         compile_output: result.compile_output ?? "",
         message: result.message,
       });
+      const statusDescription = (result.status_description || "").toLowerCase();
+      const stderrText = `${result.stderr ?? ""} ${result.compile_output ?? ""} ${result.message ?? ""}`.toLowerCase();
+      const compileError =
+        statusDescription.includes("compilation error") || stderrText.includes("syntax");
+      const runtimeError = statusDescription.includes("runtime error");
+      let errorType: string | undefined;
+      if (compileError) errorType = "syntax";
+      else if (runtimeError) errorType = "runtime";
+      else if (statusDescription.includes("time limit")) errorType = "timeout";
+
+      onExecutionEvent?.({
+        event_type: compileError ? "compile_error" : runtimeError ? "runtime_error" : "run_completed",
+        language: selectedLanguage,
+        run_id: runId,
+        status: result.status_description ?? result.status,
+        error_type: errorType,
+        meta: {
+          has_stdout: Boolean(result.stdout),
+          has_stderr: Boolean(result.stderr || result.compile_output || result.message),
+          exit_code: result.exit_code,
+        },
+      });
+      onExecutionEvent?.({
+        event_type: compileError || runtimeError ? "test_failed" : "test_passed",
+        language: selectedLanguage,
+        run_id: runId,
+        status: result.status_description ?? result.status,
+        error_type: errorType ?? (compileError || runtimeError ? "runtime" : undefined),
+        meta: { scope: "visible", source: "code_runner" },
+      });
     } catch {
-      setOutput({ message: "Execution failed. Please try again." });
+      const message = selectedLanguage === "python"
+        ? `Execution failed${pyodideError ? `: ${pyodideError}` : "."}`
+        : "Execution failed. Please try again.";
+      setOutput({ message });
+      onExecutionEvent?.({
+        event_type: "runtime_error",
+        language: selectedLanguage,
+        run_id: runId,
+        status: "request_failed",
+        error_type: "runtime",
+      });
+      onExecutionEvent?.({
+        event_type: "test_failed",
+        language: selectedLanguage,
+        run_id: runId,
+        status: "request_failed",
+        error_type: "runtime",
+        meta: { scope: "visible", source: "code_runner" },
+      });
     } finally {
       setIsRunning(false);
     }
@@ -115,6 +295,15 @@ export function CodeRunner({ defaultLanguage = "python", initialCode, onRequestM
           </select>
         </div>
         <div className="flex items-center gap-2">
+          {selectedLanguage === "python" && (
+            <span className="text-[11px] text-slate-500">
+              {pyodideLoading
+                ? "Loading Pyodide runtime..."
+                : pyodideError
+                  ? "Pyodide unavailable"
+                  : "Running in-browser via Pyodide"}
+            </span>
+          )}
           {onRequestMentorReview && (
             <Button
               onClick={() => onRequestMentorReview(code)}
@@ -129,7 +318,7 @@ export function CodeRunner({ defaultLanguage = "python", initialCode, onRequestM
           <Button
             onClick={handleRun}
             size="sm"
-            disabled={isRunning}
+            disabled={isRunning || (selectedLanguage === "python" && (pyodideLoading || !pyodideRuntime))}
             className="h-8 bg-slate-900 text-white hover:bg-slate-800"
           >
             {isRunning ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Play className="mr-2 h-3.5 w-3.5" />}

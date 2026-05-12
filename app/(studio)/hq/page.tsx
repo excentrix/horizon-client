@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import {
   hqApi,
+  authApi,
   type HQPlatformStats,
   type HQOrgPerformance,
   type HQRiskRetention,
@@ -33,6 +34,8 @@ import {
   Users,
   XCircle,
   Lock,
+  RotateCcw,
+  Gauge,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -403,6 +406,8 @@ function OverviewTab({
 // USERS TAB
 // ══════════════════════════════════════════════════════════════════
 
+type AdminUserRow = Awaited<ReturnType<typeof authApi.getAdminUsers>>[number];
+
 function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<GlobalUser[]>([]);
@@ -431,6 +436,11 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
     portfolio_allow_downloads: false,
   });
 
+  // Quota state
+  const [quotaMap, setQuotaMap] = useState<Record<string, AdminUserRow>>({});
+  const [quotaForm, setQuotaForm] = useState<{ lesson_regen_limit: string; resume_reanalysis_limit: string }>({ lesson_regen_limit: "", resume_reanalysis_limit: "" });
+  const [quotaSaving, setQuotaSaving] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -447,7 +457,15 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
     finally { setLoading(false); }
   }, [search, typeFilter, activeFilter, selectedOrgId, page]);
 
+  const loadQuotas = useCallback(async () => {
+    try {
+      const rows = await authApi.getAdminUsers();
+      setQuotaMap(Object.fromEntries(rows.map((r) => [r.id, r])));
+    } catch { /* noop */ }
+  }, []);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadQuotas(); }, [loadQuotas]);
   useEffect(() => { setPage(1); }, [selectedOrgId]);
 
   useEffect(() => {
@@ -497,6 +515,11 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
     setSelectedGovernanceUser(u);
     setGovernance(null);
     setGovernanceLoading(true);
+    const quota = quotaMap[u.id];
+    setQuotaForm({
+      lesson_regen_limit: quota?.lesson_regen_limit != null ? String(quota.lesson_regen_limit) : "",
+      resume_reanalysis_limit: quota?.resume_reanalysis_limit != null ? String(quota.resume_reanalysis_limit) : "",
+    });
     try {
       const detail = await hqApi.getUserGovernance(u.id);
       setGovernance(detail);
@@ -504,6 +527,41 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
       toast.error("Failed to load user governance");
     } finally {
       setGovernanceLoading(false);
+    }
+  };
+
+  const saveQuotas = async () => {
+    if (!selectedGovernanceUser) return;
+    setQuotaSaving(true);
+    try {
+      const lesson = quotaForm.lesson_regen_limit === "" ? null : parseInt(quotaForm.lesson_regen_limit, 10);
+      const analysis = quotaForm.resume_reanalysis_limit === "" ? null : parseInt(quotaForm.resume_reanalysis_limit, 10);
+      await authApi.updateUserQuotas(selectedGovernanceUser.id, {
+        lesson_regen_limit: isNaN(lesson as number) ? null : lesson,
+        resume_reanalysis_limit: isNaN(analysis as number) ? null : analysis,
+      });
+      await loadQuotas();
+      toast.success("Quotas updated");
+    } catch {
+      toast.error("Failed to update quotas");
+    } finally {
+      setQuotaSaving(false);
+    }
+  };
+
+  const resetQuotas = async () => {
+    if (!selectedGovernanceUser) return;
+    setQuotaSaving(true);
+    try {
+      await authApi.resetUserQuotas(selectedGovernanceUser.id);
+      await loadQuotas();
+      const quota = quotaMap[selectedGovernanceUser.id];
+      setQuotaForm({ lesson_regen_limit: "", resume_reanalysis_limit: "" });
+      toast.success("Quotas reset to defaults");
+    } catch {
+      toast.error("Failed to reset quotas");
+    } finally {
+      setQuotaSaving(false);
     }
   };
 
@@ -574,6 +632,7 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
                 <th className="text-left px-4 py-3 hidden md:table-cell">Joined</th>
                 <th className="text-left px-4 py-3">Access</th>
                 <th className="text-left px-4 py-3 hidden lg:table-cell">Wishlist</th>
+                <th className="text-left px-4 py-3 hidden xl:table-cell">Quotas</th>
                 <th className="text-right px-4 py-3">Actions</th>
               </tr>
             </thead>
@@ -607,6 +666,25 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
                           {u.waitlist_tokens ?? 0} waitlist tokens
                         </Badge>
                       </div>
+                    </td>
+                    <td className="px-4 py-3 hidden xl:table-cell">
+                      {(() => {
+                        const q = quotaMap[u.id];
+                        if (!q) return <span className="text-xs text-muted-foreground">—</span>;
+                        if (q.exempt) return <span className="text-xs text-muted-foreground">∞ exempt</span>;
+                        return (
+                          <div className="space-y-0.5">
+                            <p className="text-[11px] text-muted-foreground">
+                              Regen: <span className={cn("font-mono", q.lesson_regen_used > 0 ? "text-amber-500" : "text-foreground")}>{q.lesson_regen_used}</span>
+                              <span className="text-muted-foreground">/{q.lesson_regen_limit ?? "1 (default)"}</span>
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              Analysis: <span className={cn("font-mono", q.resume_reanalysis_used > 0 ? "text-amber-500" : "text-foreground")}>{q.resume_reanalysis_used}</span>
+                              <span className="text-muted-foreground">/{q.resume_reanalysis_limit ?? "1 (default)"}</span>
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {isSelf ? (
@@ -734,6 +812,67 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
                   <Button size="sm" variant={govForm.portfolio_allow_downloads ? "default" : "outline"} onClick={() => setGovForm((s) => ({ ...s, portfolio_allow_downloads: !s.portfolio_allow_downloads }))}>Allow Downloads</Button>
                 </div>
               </div>
+
+              {(() => {
+                const q = selectedGovernanceUser ? quotaMap[selectedGovernanceUser.id] : undefined;
+                return (
+                  <div className="rounded-lg border p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Feature Quotas</p>
+                      {q?.exempt && <Badge className="bg-primary/10 text-primary text-[10px] py-0">Exempt — no restrictions</Badge>}
+                    </div>
+                    {q?.exempt ? (
+                      <p className="text-xs text-muted-foreground">Admin / staff / dev accounts have unlimited access to all features.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground">Lesson Regen Limit <span className="text-muted-foreground/60">(lifetime · default 1)</span></label>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                placeholder="default (1)"
+                                className="h-8 text-sm font-mono"
+                                value={quotaForm.lesson_regen_limit}
+                                onChange={(e) => setQuotaForm((s) => ({ ...s, lesson_regen_limit: e.target.value }))}
+                              />
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">used: <span className={cn("font-mono", (q?.lesson_regen_used ?? 0) > 0 ? "text-amber-500" : "")}>{q?.lesson_regen_used ?? 0}</span></span>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground">Analysis Limit <span className="text-muted-foreground/60">(monthly · default 1)</span></label>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                placeholder="default (1)"
+                                className="h-8 text-sm font-mono"
+                                value={quotaForm.resume_reanalysis_limit}
+                                onChange={(e) => setQuotaForm((s) => ({ ...s, resume_reanalysis_limit: e.target.value }))}
+                              />
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">used: <span className={cn("font-mono", (q?.resume_reanalysis_used ?? 0) > 0 ? "text-amber-500" : "")}>{q?.resume_reanalysis_used ?? 0}</span></span>
+                            </div>
+                          </div>
+                        </div>
+                        {q?.resume_reanalysis_period_start && (
+                          <p className="text-[11px] text-muted-foreground">Analysis period started: {new Date(q.resume_reanalysis_period_start).toLocaleDateString()}</p>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" onClick={saveQuotas} disabled={quotaSaving} className="gap-1.5">
+                            {quotaSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Gauge className="h-3.5 w-3.5" />}
+                            Save Limits
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={resetQuotas} disabled={quotaSaving} className="gap-1.5 text-muted-foreground">
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Reset to Defaults
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
           <DialogFooter>

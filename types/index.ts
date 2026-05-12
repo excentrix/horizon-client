@@ -129,7 +129,7 @@ export type ConversationPriority = "low" | "normal" | "high" | "urgent";
 export interface AIPersonality {
   id: UUID;
   name: string;
-  type: "general" | "supportive" | "analytical" | "creative" | "practical" | "socratic" | "motivational" | "specialized";
+  type: "general" | "supportive" | "analytical" | "creative" | "practical" | "socratic" | "motivational" | "specialized" | "plan_generated";
   description: string;
   system_prompt?: string;
   avatar_url?: string;
@@ -138,6 +138,29 @@ export interface AIPersonality {
   is_active: boolean;
   usage_count: number;
   created_at: string;
+  archetype?: string;
+  is_generated?: boolean;
+  persona_preview?: string;
+  mentor_profile?: {
+    age?: number | null;
+    current_role?: string | null;
+    years_in_domain?: number | null;
+    domain?: string | null;
+    career_entry_story?: string | null;
+    how_i_got_in?: string | null;
+    biggest_time_wasters?: string[];
+    what_actually_worked?: string[];
+    current_honest_gaps?: string[];
+    communication_texture?: string | null;
+    teaching_philosophy?: string | null;
+    adaptation_overlay?: {
+      bridging_paragraph?: string;
+      tone_adjustment?: string;
+      priority_gap_framing?: string;
+      relevant_waster_indices?: number[];
+      relevant_worked_indices?: number[];
+    } | null;
+  } | null;
 }
 
 export interface ConversationSummary {
@@ -351,6 +374,7 @@ export interface DailyTask {
   title: string;
   description: string;
   task_type: TaskType;
+  sequence_order: number;
   scheduled_date: string;
   scheduled_time?: string | null;
   estimated_duration_minutes: number;
@@ -389,6 +413,7 @@ export interface DailyTask {
     hidden_test_cases?: Array<Record<string, unknown>>;
     integrity_notice?: string;
   };
+  execution_descriptor?: ExecutionDescriptor | Record<string, unknown> | null;
   assessment_config?: {
     id: string;
     verification_type: "auto_quiz" | "code_execution" | "github_repo" | "file_upload" | "text_analysis" | "manual_rubric";
@@ -431,16 +456,44 @@ export interface DailyTask {
   lesson_blocks?: Array<{
     id?: string;
     title?: string;
-    type?: "objective" | "concept" | "example" | "recap" | "exercise";
+    type?:
+      | "objective"
+      | "concept"
+      | "example"
+      | "recap"
+      | "exercise"
+      | "interactive_sim"
+      | "agent_dialogue"
+      | "code_challenge"
+      | "whiteboard_sketch"
+      | "project_brief"
+      | "project_checkpoint";
     content?: string;
     resource_id?: string;
     verified?: boolean;
     source_url?: string | null;
+    html_content?: string;
+    description?: string;
+    turns?: Array<{
+      speaker?: string;
+      persona_type?: string;
+      text?: string;
+      voice_hint?: string;
+    }>;
+    starter_code?: string;
+    language?: string;
+    test_cases?: Array<{ input?: string; expected_output?: string }>;
+    hints?: string[];
+    estimated_seconds?: number;
   }>;
   lesson_generated_at?: string | null;
   playground_conversation_id?: string | null;
+  feynman_conversation_id?: string | null;
+  surface_rationale?: string | null;
   adaptive_difficulty: boolean;
   is_skippable: boolean;
+  is_locked: boolean;
+  locked_by_task_title?: string | null;
   status: TaskStatus;
   started_at?: string | null;
   completed_at?: string | null;
@@ -561,6 +614,12 @@ export interface PublicPortfolioResponse {
     featured_count: number;
     profile_views: number;
   };
+  velo_verified_projects?: Array<{
+    project_title: string;
+    verification_score: number | null;
+    verified_at: string | null;
+    submitted_repos: Array<{ url: string; label: string }>;
+  }>;
 }
 
 export interface SpacedRepetitionCard {
@@ -765,6 +824,18 @@ export interface LearningPlan {
   }[];
   specialized_mentor?: AIPersonality | null;
   specialized_mentor_data?: (AIPersonality & { created_at?: string }) | null;
+  specialized_mentor_status?: {
+    status: string;
+    mode?: string | null;
+    error?: string | null;
+    has_persona: boolean;
+    mentor_name?: string | null;
+    archetype?: string | null;
+    allow_regenerate?: boolean;
+    mentor_origin?: string | null;
+    mentor_origin_detail?: string | null;
+    is_dev_environment?: boolean;
+  } | null;
   specialized_conversation_id?: string | null;
   conversation_id?: string | null;
   primary_domain_name?: string | null;
@@ -1047,6 +1118,33 @@ export interface WeeklyStats {
   days_to_milestone: number | null;
 }
 
+export interface LearningEfficacySnapshot {
+  window_days: number;
+  median_time_to_first_pass: number | null;
+  stuck_session_rate: number;
+  verified_submission_rate: number;
+  nudge_recovery_rate: number;
+  domain_family_breakdown?: Record<
+    string,
+    {
+      sessions: number;
+      verified_rate: number;
+      median_time_to_verify_seconds: number | null;
+      average_rubric_score: number | null;
+    }
+  >;
+  outcome_gate?: {
+    status: "pass" | "fail";
+    runtime_envelope_coverage: number;
+    false_verified_risk_rate: number;
+    thresholds?: {
+      runtime_envelope_coverage_min: number;
+      false_verified_risk_rate_max: number;
+    };
+  };
+  updated_at: string;
+}
+
 export interface ActivityItem {
   type: "task_completed" | "badge_earned" | "artifact_created";
   title: string;
@@ -1062,8 +1160,268 @@ export interface HomeDashboard {
   additional_tasks: TodayTask[];
   streak: DashboardStreak;
   weekly_stats: WeeklyStats;
+  learning_efficacy: LearningEfficacySnapshot;
   recent_activity: ActivityItem[];
   generated_at: string;
+}
+
+export interface ExecutionDiagnostics {
+  ran: boolean;
+  passed: boolean;
+  score?: number | null;
+  summary?: string;
+  failure_clusters: {
+    syntax: number;
+    runtime: number;
+    assertion: number;
+    timeout: number;
+    wrong_output: number;
+    unknown: number;
+  };
+  dominant_failure?: string | null;
+  visible_passed: number;
+  visible_total: number;
+  hidden_passed: number;
+  hidden_total: number;
+  aggregate_error_families?: Record<string, number>;
+}
+
+export interface PlaygroundEventPayload {
+  event_type:
+    | "run_started"
+    | "run_completed"
+    | "runtime_error"
+    | "compile_error"
+    | "test_passed"
+    | "test_failed"
+    | "hint_requested"
+    | "idle_detected"
+    | "scenario_started"
+    | "submission_drafted"
+    | "submission_submitted"
+    | "rubric_scored"
+    | "nudge_sent";
+  timestamp?: string;
+  language?: string;
+  run_id?: string;
+  status?: string;
+  error_type?: string;
+  surface_type?: string;
+  surface_event_type?: string;
+  intervention_action?: string;
+  evaluation_checkpoint?: string;
+  evidence_checkpoint?: string;
+  meta?: Record<string, unknown>;
+}
+
+export interface ExecutionDescriptor {
+  surface_type:
+    | "simulation_scenario"
+    | "code_playground"
+    | "diagram_workspace"
+    | "canvas_workspace"
+    | "flashcard_session"
+    | "teachback_session";
+  simulation_type_or_pack_ref?: string | null;
+  pack_ref?: string | null;
+  evaluation_mode?: string;
+  evidence_target?: string;
+  adapter?: string;
+  source?: string;
+}
+
+export interface CompletionContract {
+  status: "complete" | "incomplete";
+  verified: boolean;
+  verification_status: "verified" | "failed" | "not_verifiable";
+  completion_contract?: Record<string, unknown>;
+}
+
+export interface InterventionEnvelope {
+  tier: "observe" | "nudge" | "guided_debug" | "explain_after_action";
+  intervention_action: string;
+  reason: string;
+  surface_type: string;
+  event_type?: string | null;
+  cooldown_blocked?: boolean;
+  cap_blocked?: boolean;
+  max_interventions_per_surface?: number;
+  observed_metrics?: Record<string, unknown>;
+  should_dispatch?: boolean;
+}
+
+export interface UniversalSurfaceSession {
+  surface_type: string;
+  pack_ref?: string | null;
+  runtime_state?: Record<string, unknown>;
+  completion_state?: CompletionContract | Record<string, unknown>;
+  intervention_state?: InterventionEnvelope | Record<string, unknown>;
+  execution_descriptor?: ExecutionDescriptor | Record<string, unknown>;
+}
+
+export interface SurfaceRuntimeState {
+  phase: "initializing" | "ready" | "interacting" | "evaluating" | "intervening" | "evidence" | "completed" | "error";
+  readiness: "not_ready" | "ready" | "degraded";
+  recoverable_error?: {
+    code?: string;
+    message: string;
+    retryable?: boolean;
+  } | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CanvasSceneData {
+  version?: string;
+  elements?: Array<Record<string, unknown>>;
+  app_state?: Record<string, unknown>;
+  files?: Record<string, unknown>;
+  updated_at?: string;
+}
+
+export interface CanvasAnnotation {
+  id: string;
+  title?: string;
+  body?: string;
+  status?: "open" | "resolved" | "dismissed";
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: unknown;
+}
+
+export interface CanvasSuggestion {
+  id: string;
+  title: string;
+  body: string;
+  status?: "draft" | "accepted" | "rejected" | "converted_to_task";
+  source?: "llm" | "deterministic" | "cache";
+  priority?: "low" | "normal" | "high" | string;
+  intent?: string;
+  selection_hash?: string;
+  updated_at?: string;
+  [key: string]: unknown;
+}
+
+export interface CanvasPresence {
+  mentor_online?: boolean;
+  learner_active_at?: string;
+  mentor_active_at?: string;
+  session_id?: string;
+  [key: string]: unknown;
+}
+
+export interface CanvasSnapshot {
+  id?: string;
+  created_at?: string;
+  image_url?: string;
+  [key: string]: unknown;
+}
+
+export interface DomainScenarioPayload {
+  id: UUID;
+  task: UUID;
+  user: UUID;
+  scenario_type: string;
+  simulation_type?: string;
+  surface_type?: string | null;
+  pack_ref?: string | null;
+  domain_family: "business" | "marketing" | "design" | "finance" | "tech" | "other";
+  scenario_payload: Record<string, unknown>;
+  learner_submission: Record<string, unknown>;
+  rubric_scores: {
+    aggregate?: number;
+    criterion_scores?: Record<string, number>;
+  };
+  rubric_breakdown: DomainRubricBreakdown;
+  verification_status: "verified" | "failed" | "not_verifiable";
+  evaluator_rationale: {
+    summary?: string;
+    strengths?: string[];
+    gaps?: string[];
+    next_actions?: string[];
+    verification_confidence?: number;
+  };
+  execution_descriptor?: ExecutionDescriptor | Record<string, unknown>;
+  runtime_state?: Record<string, unknown>;
+  completion_state?: CompletionContract | Record<string, unknown>;
+  intervention_state?: InterventionEnvelope | Record<string, unknown>;
+  pack_version?: string | null;
+  scoring_components?: ScoringComponents;
+  verification_confidence?: number | null;
+  portfolio_evidence_draft: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  started_at: string;
+  submitted_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DomainRubricBreakdown = Record<
+  string,
+  {
+    label: string;
+    score: number;
+    rationale: string;
+  }
+>;
+
+export interface SimulationResultEnvelope {
+  scenario: DomainScenarioPayload;
+  surface_type?: string;
+  pack_ref?: string | null;
+  simulation_type?: string;
+  pack_version?: string | null;
+  scoring_components?: ScoringComponents;
+  verification_confidence?: number | null;
+  runtime_state?: Record<string, unknown>;
+  round_index?: number;
+  round_context?: Record<string, unknown>;
+  round_outcome?: Record<string, unknown>;
+  session_timeline?: Array<Record<string, unknown>>;
+  completion_state?: CompletionContract | Record<string, unknown>;
+  intervention_state?: InterventionEnvelope | Record<string, unknown>;
+  execution_descriptor?: ExecutionDescriptor | Record<string, unknown>;
+  execution_diagnostics: {
+    scenario_type: string;
+    surface_type?: string;
+    domain_family: string;
+    rubric_breakdown: DomainRubricBreakdown;
+    verification_status: "verified" | "failed" | "not_verifiable";
+    evaluator_rationale?: Record<string, unknown>;
+  };
+  efficacy_metrics: {
+    attempt_count: number;
+    time_to_verify_seconds: number | null;
+    error_pattern_count: number;
+    nudge_count: number;
+    self_check_pass_rate: number;
+  };
+}
+
+export interface ScoringComponents {
+  deterministic_weight: number;
+  llm_weight: number;
+  deterministic_aggregate: number;
+  llm_aggregate: number;
+  final_aggregate: number;
+  llm_available: boolean;
+}
+
+export interface SimulationDefinitionRef {
+  simulation_type: string;
+  surface_type?: string;
+  domain_family: string;
+  sdl_version: string;
+  pack_version: string;
+  criterion_count: number;
+  execution_mode?: string;
+  input_contract?: Record<string, unknown>;
+  submission_contract?: Record<string, unknown>;
+  rubric?: Record<string, unknown>;
+  scoring_policy?: Record<string, unknown>;
+  nudge_triggers?: Record<string, unknown>;
+  evidence_mapping?: Record<string, unknown>;
+  fallback_policy?: Record<string, unknown>;
+  scenario_template?: Record<string, unknown>;
 }
 
 export type AuditStatus =
@@ -1305,4 +1663,125 @@ export interface AuditInstitutionStudentDetail {
     covered_gaps: number;
     progress: number;
   };
+}
+
+// ── PBL Types ──────────────────────────────────────────────────────────────
+
+export type ProjectPhase =
+  | "scoping" | "planning" | "building" | "documenting"
+  | "submitting" | "verifying" | "case_study" | "completed";
+
+export type GateStatus = "pending" | "passed" | "needs_revision" | "mentor_pending";
+
+export type ProjectDomainType =
+  | "software" | "data" | "design" | "business"
+  | "marketing" | "finance" | "research" | "other";
+
+export interface ProjectSuggestion {
+  title: string;
+  description: string;
+  why_good_fit: string;
+  concepts_covered: string[];
+  estimated_effort: string;
+  deliverable: string;
+  domain_type: ProjectDomainType;
+  difficulty: string;
+}
+
+export interface ProjectMilestone {
+  id: string;
+  title: string;
+  description: string;
+  expected_output: string;
+  evidence_format?: string;
+  due_date?: string;
+  status?: "pending" | "submitted" | "approved";
+}
+
+export interface MilestoneSubmission {
+  milestone_id: string;
+  content: string;
+  submitted_at: string;
+  status: "submitted" | "approved" | "needs_revision";
+  feedback?: string;
+}
+
+export interface SubmissionArtifact {
+  type: "github_repo" | "document" | "design_file" | "presentation" | "notebook" | "demo_url" | "other";
+  url: string;
+  label: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ProjectPhaseShape {
+  task_id: string;
+  phase_id: string;
+  label: string;
+  deliverable_type: "document" | "schema" | "code" | "presentation" | "general";
+  gate_status: GateStatus;
+  submission: Record<string, string> | null;
+  feedback: string | null;
+  order: number;
+  form_fields: string[];
+}
+
+export interface LearningProjectShape {
+  id: string;
+  task_id: string | null;
+  milestone_id?: string | null;
+  phases?: ProjectPhaseShape[];
+  current_phase_task_id?: string;
+  active_phase_task_id?: string;
+  title: string;
+  description: string;
+  domain_type: ProjectDomainType;
+  difficulty: string;
+  current_phase: ProjectPhase;
+  phase_history: Array<{ phase: ProjectPhase; entered_at: string; completed_at: string | null; gate_method: "auto" | "mentor" | null }>;
+  origin: "system_suggested" | "learner_proposed" | "mentor_assigned";
+  suggestion_context: {
+    options_shown?: ProjectSuggestion[];
+    chosen_index?: number | null;
+    custom_proposal?: { title: string; description: string } | null;
+    concept_coverage_pct?: number;
+  };
+  requires_mentor_review: boolean;
+  similarity_checked: boolean;
+  similar_projects: Array<{ project_id: string; title: string; similarity_score: number; user_display_name: string }>;
+  uniqueness_score: number | null;
+  scope_document: Record<string, unknown>;
+  scope_gate_status: GateStatus;
+  scope_gate_feedback: Record<string, unknown>;
+  milestones: ProjectMilestone[];
+  plan_gate_status: GateStatus;
+  milestone_submissions: MilestoneSubmission[];
+  build_gate_status: GateStatus;
+  methodology_doc: string;
+  methodology_gate_status: GateStatus;
+  methodology_gate_feedback: Record<string, unknown>;
+  submission_artifacts: SubmissionArtifact[];
+  submission_gate_status: GateStatus;
+  verification_verdict: "pending" | "verified" | "suspicious" | "failed";
+  case_study: Record<string, unknown>;
+  case_study_gate_status: GateStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MentorReviewShape {
+  id: string;
+  project: string;
+  project_title: string;
+  learner_phase: ProjectPhase;
+  phase: ProjectPhase;
+  ai_summary: string;
+  ai_strengths: string[];
+  ai_weaknesses: string[];
+  ai_questions: string[];
+  ai_red_flags: string[];
+  similarity_alert: { triggered: boolean; matches: unknown[] };
+  decision: "pending" | "approved" | "needs_revision";
+  feedback: string;
+  reviewed_at: string | null;
+  created_at: string;
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,9 +18,12 @@ import {
   Calendar,
   Award,
   Briefcase,
+  ShieldCheck,
+  Sparkles,
+  X,
 } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
 import { ProjectShowcaseGrid } from "@/components/portfolio/project-showcase";
 import { CompetencyChart } from "@/components/portfolio/competency-chart";
@@ -32,8 +36,45 @@ import { cn } from "@/lib/utils";
 
 export default function PublicPortfolioPage() {
   const params = useParams<{ username?: string }>();
+  const searchParams = useSearchParams();
   const username = params?.username ?? "";
   const { data, isLoading, error } = usePublicPortfolio(username);
+  const [showJoinCta, setShowJoinCta] = useState(false);
+  const [ctaDismissed, setCtaDismissed] = useState(false);
+
+  const shareSource = useMemo(() => {
+    const source = (searchParams.get("utm_source") || "").toLowerCase();
+    if (source === "whatsapp" || source === "linkedin") return source;
+    return null;
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!shareSource || ctaDismissed) return;
+    const key = `horizon-share-cta-dismissed:${username}:${shareSource}`;
+    const alreadyDismissed = window.sessionStorage.getItem(key) === "1";
+    if (alreadyDismissed) {
+      setCtaDismissed(true);
+      return;
+    }
+    const onScroll = () => {
+      const bodyHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (bodyHeight <= 0) return;
+      const progress = window.scrollY / bodyHeight;
+      if (progress >= 0.2) setShowJoinCta(true);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [ctaDismissed, shareSource, username]);
+
+  const dismissJoinCta = () => {
+    if (shareSource) {
+      const key = `horizon-share-cta-dismissed:${username}:${shareSource}`;
+      window.sessionStorage.setItem(key, "1");
+    }
+    setCtaDismissed(true);
+    setShowJoinCta(false);
+  };
 
   if (isLoading) {
     return (
@@ -98,6 +139,7 @@ export default function PublicPortfolioPage() {
     growth_timeline,
     endorsements,
     stats,
+    velo_verified_projects,
   } = data;
 
   type CompetencyData = {
@@ -184,6 +226,8 @@ export default function PublicPortfolioPage() {
       }))
     : [];
   const hasCourseBadges = courseBadges.length > 0;
+  const veloProjects = velo_verified_projects ?? [];
+  const hasVeloProjects = veloProjects.length > 0;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(1200px_700px_at_10%_-10%,rgba(99,102,241,0.15),transparent),radial-gradient(900px_500px_at_90%_-5%,rgba(14,165,233,0.12),transparent),linear-gradient(180deg,rgba(248,250,252,0.9),rgba(255,255,255,1))]">
@@ -392,6 +436,65 @@ export default function PublicPortfolioPage() {
             </section>
           )}
 
+          {/* VELO Verified Projects */}
+          {hasVeloProjects && (
+            <section>
+              <div className="flex items-center gap-3 mb-6">
+                <ShieldCheck className="h-6 w-6 text-emerald-600" />
+                <div>
+                  <h2 className="text-2xl font-bold">VELO Verified Projects</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Projects independently verified by VELO — the Verification Engine for Learning Outcomes
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {veloProjects.map((project, i) => (
+                  <Card key={i} className="border border-emerald-200/60 bg-emerald-50/30 dark:border-emerald-900/40 dark:bg-emerald-950/10">
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm leading-snug">{project.project_title}</p>
+                          {project.verified_at && (
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                              Verified {new Date(project.verified_at).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                        <div className="shrink-0 flex flex-col items-end gap-1">
+                          <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                            <ShieldCheck className="h-3.5 w-3.5" />
+                            VELO Verified
+                          </span>
+                          {project.verification_score != null && (
+                            <span className="text-[11px] text-muted-foreground">
+                              Score: {Math.round(project.verification_score * 100)}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {project.submitted_repos?.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {project.submitted_repos.map((repo, j) => (
+                            <a
+                              key={j}
+                              href={repo.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                            >
+                              {repo.label || "Repo"}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )}
+
           {(hasFeatured && (hasCompetencies || hasEndorsements || hasTimeline)) ? <Separator /> : null}
 
           {/* Skills & Competencies */}
@@ -418,6 +521,51 @@ export default function PublicPortfolioPage() {
             </section>
           )}
 
+          {/* VELO Verified Projects */}
+          {hasVeloProjects && (
+            <section id="velo">
+              <div className="flex items-center gap-2 mb-6">
+                <h2 className="text-2xl font-bold">VELO Verified Projects</h2>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  AI-Verified
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                These projects were verified by Horizon&apos;s VELO engine — GitHub repo checked and technical ownership confirmed via AI interrogation.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {veloProjects.map((vp, i) => (
+                  <Card key={i} className="border-emerald-200 bg-emerald-50/30">
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                            <span className="font-semibold text-sm">{vp.project_title}</span>
+                          </div>
+                          {vp.verified_at && (
+                            <p className="text-xs text-muted-foreground">
+                              Verified {new Date(vp.verified_at).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                        {vp.verification_score != null && (
+                          <div className="shrink-0 text-right">
+                            <span className="text-lg font-bold text-emerald-700">
+                              {Math.round(vp.verification_score * 100)}
+                            </span>
+                            <span className="text-xs text-muted-foreground">/100</span>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Footer */}
           <div className="text-center text-sm text-muted-foreground pt-8 border-t">
             <p>
@@ -431,6 +579,35 @@ export default function PublicPortfolioPage() {
           </div>
         </div>
       </div>
+
+      {shareSource && showJoinCta && !ctaDismissed ? (
+        <div className="fixed bottom-6 right-6 z-50 w-[min(420px,calc(100vw-2rem))] rounded-3xl border border-[color:var(--brand-indigo)]/35 bg-card/95 p-4 shadow-[var(--shadow-2)] backdrop-blur">
+          <button
+            type="button"
+            onClick={dismissJoinCta}
+            className="absolute right-3 top-3 rounded-full border border-border bg-background p-1 text-muted-foreground transition hover:text-foreground"
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[color:var(--brand-indigo)]/35 bg-[color:var(--brand-indigo)]/10 px-2.5 py-1 text-[10px] font-mono-ui uppercase tracking-[0.12em] text-[color:var(--brand-indigo)]">
+            <Sparkles className="h-3.5 w-3.5" />
+            Build your own verified portfolio
+          </div>
+          <h3 className="font-display text-xl">Turn your learning into proof on Horizon</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Join free, build a public learning graph, and share your progress with one link.
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Button asChild>
+              <Link href="/register">Create profile</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/">Explore Horizon</Link>
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

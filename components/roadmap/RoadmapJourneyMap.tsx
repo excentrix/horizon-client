@@ -191,7 +191,7 @@ const RoadmapJourneyMap = ({ roadmap }: RoadmapJourneyMapProps) => {
   }, [roadmap]);
 
   return (
-    <div className="relative flex h-[62vh] w-full flex-col overflow-hidden rounded-2xl border bg-gradient-to-b from-sky-50 via-white to-indigo-50">
+    <div className="relative flex h-[68vh] min-h-[540px] w-full flex-col overflow-hidden rounded-2xl border bg-gradient-to-b from-sky-50 via-white to-indigo-50 lg:min-h-[620px]">
       <div
         className="pointer-events-none absolute inset-0 opacity-30"
         style={{
@@ -249,6 +249,7 @@ const RoadmapJourneyMap = ({ roadmap }: RoadmapJourneyMapProps) => {
         </div>
       </div>
 
+      <div className="relative z-10 min-h-0 flex-1">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -278,6 +279,7 @@ const RoadmapJourneyMap = ({ roadmap }: RoadmapJourneyMapProps) => {
         />
         <Controls className="!bottom-25 !left-2 !shadow-xl !rounded !border !border-slate-400 !bg-white/95" />
       </ReactFlow>
+      </div>
 
       <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
         <div className="flex rounded-lg items-center gap-3 border-slate-200 bg-white/95 px-4 py-2 text-xs text-slate-600 shadow-md">

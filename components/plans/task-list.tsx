@@ -77,11 +77,18 @@ export function TaskList({ tasks, onUpdateTask, isUpdating, planId }: TaskListPr
       }
     });
 
+    // Always sort by sequence_order so the intended curriculum order is preserved
+    // even when multiple tasks share the same date.
+    const bySeq = (a: DailyTask, b: DailyTask) =>
+      (a.sequence_order ?? 0) - (b.sequence_order ?? 0);
+
     return {
-      today: [...overdue, ...todayTasks],
+      // Overdue tasks still show first (they're blocked work) but within each
+      // group the curriculum order is maintained — not arbitrary date+time ordering.
+      today: [...overdue.sort(bySeq), ...todayTasks.sort(bySeq)],
       overdueIds: new Set(overdue.map((task) => task.id)),
-      upcoming,
-      later,
+      upcoming: upcoming.sort(bySeq),
+      later: later.sort(bySeq),
     };
   }, [tasks]);
 

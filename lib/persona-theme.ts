@@ -103,6 +103,16 @@ const THEMES: Record<AIPersonality["type"] | "specialized", PersonaTheme> = {
     statusBadgeBg: "bg-slate-100",
     statusBadgeText: "text-slate-600",
   },
+  plan_generated: {
+    containerBorder: "border-slate-300",
+    accentBadgeBg: "bg-slate-100",
+    accentBadgeText: "text-slate-700",
+    bubbleBg: "bg-slate-50",
+    bubbleText: "text-slate-800",
+    conversationActive: "border-slate-300 bg-slate-50",
+    statusBadgeBg: "bg-slate-100",
+    statusBadgeText: "text-slate-600",
+  },
 };
 
 export function getPersonaTheme(persona?: AIPersonality | null): PersonaTheme {
@@ -130,6 +140,7 @@ export function getPersonaTagline(persona?: AIPersonality | null) {
     socratic: "Curious prompts that sharpen your thinking",
     motivational: "Energy boosts to keep your streak alive",
     specialized: "Deep domain expertise for this journey",
+    plan_generated: "Deep domain expertise for this journey",
   };
 
   return taglines[persona.type as keyof typeof taglines] ?? "Adaptive mentorship at your pace";

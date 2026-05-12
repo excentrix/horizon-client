@@ -20,7 +20,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
-  User, Lock, Bell, FileText, ChevronRight, Save, Loader2,
+  User, Lock, Bell, FileText, Save, Loader2,
   GraduationCap, Globe, Github, Linkedin,
 } from "lucide-react";
 
@@ -464,46 +464,41 @@ function SettingsInner() {
   return (
     <div className="container max-w-5xl py-8 px-4">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-muted-foreground text-sm mt-1">Manage your profile, account, and preferences</p>
       </div>
 
-      <div className="flex flex-col gap-8 md:flex-row">
-        {/* Sidebar nav */}
-        <nav className="md:w-52 shrink-0">
-          <div className="space-y-1">
+      <div className="space-y-6">
+        <nav className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-[color:var(--dock-bg)] p-2 shadow-[var(--shadow-1)]">
+          <div className="flex flex-1 flex-wrap items-center gap-2">
             {TABS.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => setTab(id)}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  "font-mono-ui flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
                   tab === id
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "bg-[color:var(--dock-item-hover-bg)] text-[color:var(--dock-item-active)]"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 {label}
-                {tab === id && <ChevronRight className="ml-auto h-3.5 w-3.5" />}
               </button>
             ))}
-
-            <Separator className="my-2" />
-
-            <a
-              href="/settings/portfolio"
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            >
-              <Globe className="h-4 w-4 shrink-0" />
-              Public Portfolio
-              <ChevronRight className="ml-auto h-3.5 w-3.5" />
-            </a>
           </div>
+          <a
+            href="/settings/portfolio"
+            className="font-mono-ui flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Globe className="h-4 w-4 shrink-0" />
+            Public Portfolio
+          </a>
         </nav>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
+        <Separator />
+
+        <div className="min-w-0">
           {tab === "profile"       && <ProfileTab />}
           {tab === "account"       && <AccountTab />}
           {tab === "resume"        && <ResumeTab />}

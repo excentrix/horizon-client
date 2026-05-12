@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   BrainCircuit,
@@ -8,6 +9,7 @@ import {
   Compass,
   MessageCircle,
   Radar,
+  FlaskConical,
   Trophy,
   QrCode,
   Copy,
@@ -29,6 +31,7 @@ import { useAuth } from "@/context/AuthContext";
 import { type ComponentType, useMemo, useState } from "react";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 import { VeloAnalysisStatusPill } from "@/components/layout/velo-analysis-status-pill";
+import { useLocalQrCode } from "@/hooks/use-local-qr";
 
 const STUDENT_NAV_ITEMS = [
   {
@@ -48,6 +51,12 @@ const STUDENT_NAV_ITEMS = [
     label: "Plan Workbench",
     icon: BrainCircuit,
     description: "Active learning campaigns",
+  },
+  {
+    href: "/simulations",
+    label: "Simulation Lab",
+    icon: FlaskConical,
+    description: "Validate simulators and mentor triggers",
   },
   {
     href: "/roadmap",
@@ -198,6 +207,7 @@ export function Sidebar() {
     if (!profile?.slug || typeof window === "undefined") return "";
     return `${window.location.origin}/p/${profile.slug}`;
   }, [profile?.slug]);
+  const { qrDataUrl, qrError } = useLocalQrCode(publicUrl);
 
   return (
     <aside className="hidden border-r bg-muted/40 md:block">
@@ -224,20 +234,20 @@ export function Sidebar() {
               </DialogHeader>
               <div className="space-y-4">
                 <div className="mx-auto flex w-full max-w-[240px] items-center justify-center rounded-2xl border border-border bg-muted/40 p-4">
-                  {publicUrl ? (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        alt="Portfolio QR"
-                        className="h-48 w-48"
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
-                          publicUrl
-                        )}`}
-                      />
-                    </>
+                  {qrDataUrl ? (
+                    <Image
+                      src={qrDataUrl}
+                      alt="Portfolio share QR code"
+                      width={192}
+                      height={192}
+                      unoptimized
+                      className="h-48 w-48 rounded-lg"
+                    />
                   ) : (
                     <div className="text-center text-xs text-muted-foreground">
-                      Enable your public portfolio to generate a QR code.
+                      {qrError
+                        ? "Could not generate QR code locally. Use copy link instead."
+                        : "Enable your public portfolio to generate a QR code."}
                     </div>
                   )}
                 </div>

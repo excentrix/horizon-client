@@ -75,6 +75,7 @@ interface MessageFeedProps {
   showHeader?: boolean;
   hasMore?: boolean;
   onLoadMore?: () => Promise<void> | void;
+  suppressFlowSuggestions?: boolean;
   isLoadingMore?: boolean;
   mentorTyping?: boolean;
   streamingMessage?: string | null;
@@ -106,6 +107,7 @@ export function MessageFeed({
   streamingMessageId,
   theme,
   variant = "card",
+  suppressFlowSuggestions = false,
 }: MessageFeedProps) {
   const setMentorActions = useMentorLoungeStore((state) => state.setMentorActions);
   const streamingTimestampRef = useRef<string>(new Date().toISOString());
@@ -240,6 +242,7 @@ export function MessageFeed({
             onLoadMore={onLoadMore}
             streamingMessage={activeStreamingMessage}
             theme={theme}
+            suppressFlowSuggestions={suppressFlowSuggestions}
           />
         </ConversationContent>
         <ConversationScrollButton className="bottom-6" />
@@ -259,6 +262,7 @@ function MessageFeedContent({
   onLoadMore,
   streamingMessage,
   theme,
+  suppressFlowSuggestions = false,
 }: {
   hasMore?: boolean;
   isLoading?: boolean;
@@ -268,11 +272,12 @@ function MessageFeedContent({
   onLoadMore?: () => Promise<void> | void;
   streamingMessage?: ChatMessage | null;
   theme?: PersonaTheme;
+  suppressFlowSuggestions?: boolean;
 }) {
   const toolThinking = useMentorLoungeStore((state) => state.toolThinking);
 
-  // Fetch chat-context flow suggestion (only when not streaming)
-  const { data: flowData } = useFlowSuggestion('chat');
+  // Fetch chat-context flow suggestion (only when not in playground/feynman)
+  const { data: flowData } = useFlowSuggestion('chat', { enabled: !suppressFlowSuggestions });
   const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   const [suggestionShownAt] = useState(() => new Date());
   
@@ -481,6 +486,103 @@ function MessageFeedContent({
   );
 }
 
+// ── Preflight question chip component ────────────────────────────────────────
+
+interface PreflightQuestionProps {
+  messageId: string;
+  questionId: string;
+  choices: string[];
+  allowCustom: boolean;
+  taskId: string;
+  answered: boolean;
+  chosenValue?: string;
+}
+
+function PreflightQuestion({
+  messageId,
+  questionId,
+  choices,
+  allowCustom,
+  taskId,
+  answered,
+  chosenValue,
+}: PreflightQuestionProps) {
+  const [selected, setSelected] = useState<string | null>(chosenValue ?? null);
+  const [custom, setCustom] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(answered);
+
+  const submit = async (value: string) => {
+    if (done || submitting || !value.trim()) return;
+    setSubmitting(true);
+    try {
+      await planningApi.saveLessonPreflightAnswer(taskId, {
+        question_id: questionId,
+        value: value.trim(),
+        message_id: messageId,
+      });
+      setSelected(value.trim());
+      setDone(true);
+    } catch {
+      // silent — answer saves on retry if needed
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {choices.map((choice) => (
+          <button
+            key={choice}
+            disabled={done || submitting}
+            onClick={() => submit(choice)}
+            className={cn(
+              "rounded-full border px-3 py-1 text-xs font-medium transition-all",
+              done && selected === choice
+                ? "border-violet-500 bg-violet-500/20 text-violet-300"
+                : done
+                  ? "border-muted/40 bg-transparent text-muted-foreground/50"
+                  : "border-muted/60 bg-background/50 text-foreground/80 hover:border-violet-400 hover:bg-violet-500/10 hover:text-violet-200 cursor-pointer",
+            )}
+          >
+            {choice}
+          </button>
+        ))}
+      </div>
+      {allowCustom && !done ? (
+        <div className="flex items-center gap-2">
+          <Input
+            value={custom}
+            onChange={(e) => setCustom(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") void submit(custom); }}
+            placeholder="Type a custom answer…"
+            className="h-7 text-xs"
+            disabled={submitting}
+          />
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2"
+            disabled={!custom.trim() || submitting}
+            onClick={() => void submit(custom)}
+          >
+            <Send className="h-3 w-3" />
+          </Button>
+        </div>
+      ) : null}
+      {done ? (
+        <p className="text-[10px] text-muted-foreground">
+          ✓ Saved — I&apos;ll use this for future lessons.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface MessageRowProps {
   message: ChatMessage;
   previousSender?: ChatMessage["sender_type"];
@@ -512,12 +614,21 @@ const MessageRow = memo(function MessageRow({
         proactive?: boolean;
         trigger_type?: string;
         missing_info_unblocks?: string;
+        // preflight fields
+        type?: string;
+        question_id?: string;
+        choices?: string[];
+        allow_custom?: boolean;
+        task_id?: string;
+        answered?: boolean;
+        chosen_value?: string;
       }
     | undefined;
   const missingInfoId = metadata?.missing_info_id;
   const missingInfoField = metadata?.missing_info_field;
   const missingInfoContext = metadata?.missing_info_context;
   const isProactive = !isUser && metadata?.proactive === true;
+  const isPreflight = !isUser && metadata?.type === "preflight_question";
 
   return (
     <motion.div
@@ -544,13 +655,15 @@ const MessageRow = memo(function MessageRow({
       <Message from={isUser ? "user" : "assistant"}>
         <MessageContent
           className={cn(
-            "max-w-[72%] rounded-2xl px-4 py-3 text-sm shadow-[var(--shadow-1)]",
+            "min-w-0 max-w-[72%] rounded-2xl px-4 py-3 text-sm shadow-[var(--shadow-1)]",
             "group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground",
             !isUser &&
               `${theme?.bubbleBg ?? "bg-white/80"} ${theme?.bubbleText ?? "text-foreground"} border border-white/70`,
           )}
         >
-          <MessageResponse>{normalizeMessageContent(message.content)}</MessageResponse>
+          <MessageResponse className="min-w-0 max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {normalizeMessageContent(message.content)}
+          </MessageResponse>
 
           {message.metadata?.graph_learning_snapshot ? (
             <LearningGraphPill snapshot={message.metadata.graph_learning_snapshot} />
@@ -583,6 +696,18 @@ const MessageRow = memo(function MessageRow({
                 {message.cortex.agent}
               </div>
             </div>
+          ) : null}
+
+          {isPreflight && metadata?.question_id && metadata.choices && metadata.task_id ? (
+            <PreflightQuestion
+              messageId={String(message.id)}
+              questionId={metadata.question_id}
+              choices={metadata.choices}
+              allowCustom={metadata.allow_custom ?? true}
+              taskId={metadata.task_id}
+              answered={metadata.answered ?? false}
+              chosenValue={metadata.chosen_value}
+            />
           ) : null}
 
           {!isUser && missingInfoId && missingInfoField ? (
@@ -667,7 +792,7 @@ const StreamingMessageRow = memo(function StreamingMessageRow({
       <Message from="assistant">
         <MessageContent
           className={cn(
-            "max-w-[72%] rounded-2xl border border-white/70 px-4 py-3 text-sm shadow-[var(--shadow-1)]",
+            "min-w-0 max-w-[72%] rounded-2xl border border-white/70 px-4 py-3 text-sm shadow-[var(--shadow-1)]",
             theme?.bubbleBg ?? "bg-white/80",
             theme?.bubbleText ?? "text-foreground",
           )}

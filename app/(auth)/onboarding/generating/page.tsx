@@ -4,7 +4,14 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Sparkles, CheckCircle, XCircle } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+function getApiUrl() {
+  if (!API_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured");
+  }
+  return API_URL;
+}
 
 type Status = "generating" | "completed" | "failed";
 
@@ -37,7 +44,7 @@ function GeneratingPageContent() {
     // Poll for session status
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetch(`${API_URL}/onboarding/session/${sessionKey}/`);
+        const res = await fetch(`${getApiUrl()}/onboarding/session/${sessionKey}/`);
         const data = await res.json();
 
         if (data.current_step === "complete" && data.draft_plan) {

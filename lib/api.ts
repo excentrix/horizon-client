@@ -50,6 +50,16 @@ import {
   VeloOnboardingTrack,
   VeloAuditMode,
   VeloRoadmapEligibility,
+  DomainScenarioPayload,
+  SimulationResultEnvelope,
+  SimulationDefinitionRef,
+  CanvasSceneData,
+  CanvasAnnotation,
+  CanvasSuggestion,
+  CanvasPresence,
+  CanvasSnapshot,
+  LearningProjectShape,
+  MentorReviewShape,
 } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
@@ -134,6 +144,37 @@ export const authApi = {
       http.post("/auth/profile/resume/reanalyse/")
     ),
 
+  getFeatureQuotas: () =>
+    extract<{
+      lesson_regeneration: { used: number; limit: number | null; exempt: boolean };
+      resume_reanalysis: {
+        used: number; limit: number | null; exempt: boolean;
+        period_start: string | null; next_reset: string | null;
+      };
+    }>(http.get("/auth/feature-quotas/")),
+
+  getAdminUsers: () =>
+    extract<Array<{
+      id: string; username: string; email: string;
+      user_type: string; is_staff: boolean; is_superuser: boolean; exempt: boolean;
+      lesson_regen_used: number; lesson_regen_limit: number | null;
+      resume_reanalysis_used: number; resume_reanalysis_limit: number | null;
+      resume_reanalysis_period_start: string | null;
+    }>>(http.get("/auth/admin/users/")),
+
+  updateUserQuotas: (
+    userId: string,
+    payload: { lesson_regen_limit?: number | null; resume_reanalysis_limit?: number | null }
+  ) =>
+    extract<Record<string, unknown>>(
+      http.patch(`/auth/admin/users/${userId}/quotas/`, payload)
+    ),
+
+  resetUserQuotas: (userId: string) =>
+    extract<Record<string, unknown>>(
+      http.post(`/auth/admin/users/${userId}/quotas/reset/`, {})
+    ),
+
   getPreferences: () =>
     extract<UserPreferences>(http.get("/auth/preferences/")),
 
@@ -142,6 +183,14 @@ export const authApi = {
 
   completeOnboarding: () =>
     extract<{ message: string }>(http.post("/auth/onboarding/complete/")),
+  extractMentorIntake: (payload: {
+    session_key?: string;
+    conversation_id: string;
+    complete: boolean;
+  }) =>
+    extract<Record<string, unknown>>(
+      http.post("/onboarding/mentor-intake/extract/", payload)
+    ),
 
   requestPasswordReset: (email: string) =>
     extract<{ message: string }>(
@@ -155,6 +204,34 @@ export const authApi = {
   }) =>
     extract<{ message: string }>(
       http.post("/auth/password/change/", payload)
+    ),
+
+  getGithubOAuthUrl: () =>
+    extract<{ auth_url: string }>(http.get("/auth/github/oauth/initiate/")),
+
+  getGithubRepos: (includeForks = false) =>
+    extract<{
+      connected: boolean;
+      username?: string;
+      repos: Array<{
+        id: number;
+        name: string;
+        full_name: string;
+        url: string;
+        description: string;
+        language: string;
+        stars: number;
+        pushed_at: string;
+        private: boolean;
+        fork: boolean;
+        topics: string[];
+      }>;
+      error?: string;
+    }>(http.get(`/auth/github/repos/?forks=${includeForks}`)),
+
+  disconnectGithub: () =>
+    extract<{ disconnected: boolean }>(
+      http.delete("/auth/github/disconnect/")
     ),
 };
 
@@ -174,6 +251,19 @@ export const chatApi = {
   pinConversation: (conversationId: string) =>
     extract<{ message: string; is_pinned: boolean }>(
       http.post(`/chat/conversations/${conversationId}/pin/`)
+    ),
+  updateConversation: (
+    conversationId: string,
+    payload: {
+      title?: string;
+      topic?: string;
+      status?: Conversation["status"];
+      priority?: Conversation["priority"];
+      ai_personality_id?: string;
+    }
+  ) =>
+    extract<Conversation>(
+      http.patch(`/chat/conversations/${conversationId}/`, payload)
     ),
 
   fetchMessagesPage: (
@@ -201,6 +291,21 @@ export const chatApi = {
   ) =>
     extract<ChatMessage>(
       http.post(`/chat/conversations/${conversationId}/messages/`, payload)
+    ),
+  reviewDraft: (content: string, conversationId?: string) =>
+    extract<{ warning: string | null }>(
+      http.post("/chat/draft-review/", {
+        content,
+        conversation_id: conversationId,
+      })
+    ),
+  extractConceptMap: (text: string, conversationId?: string) =>
+    extract<{
+      nodes: Array<{ id: string; label: string; description: string }>;
+      edges: Array<{ source: string; target: string; relationship?: string }>;
+      mastery: Record<string, "mastered" | "in_progress" | "gap">;
+    }>(
+      http.post("/chat/concept-map/", { text, conversation_id: conversationId })
     ),
   recordPlaygroundEvent: (payload: {
     conversation_id: string;
@@ -234,6 +339,7 @@ export const chatApi = {
     extract<{ memories: MemoryItem[]; count: number }>(
       http.get("/chat/memories/")
     ),
+
 };
 
 // PLANNING -------------------------------------------------------------------
@@ -307,6 +413,16 @@ export const planningApi = {
     extract<{ message: string; mentor_id: string }>(
       http.post(`/planning/plans/${planId}/switch_mentor/`, payload)
     ),
+  regenerateMentor: (planId: string) =>
+    extract<LearningPlan & {
+      mentor_regeneration?: {
+        success: boolean;
+        status: string;
+        message: string;
+        mentor_id?: string;
+        conversation_id?: string | null;
+      };
+    }>(http.post(`/planning/plans/${planId}/regenerate-mentor/`)),
   activateExamMode: (
     planId: string,
     payload: { exam_date: string; exam_topic: string }
@@ -356,21 +472,397 @@ export const planningApi = {
       proof: Record<string, unknown>;
       artifact_id?: string;
       execution_report?: Record<string, unknown> | null;
+      execution_diagnostics?: Record<string, unknown>;
+      efficacy_metrics?: {
+        attempt_count: number;
+        time_to_verify_seconds: number | null;
+        error_pattern_count: number;
+        nudge_count: number;
+        self_check_pass_rate: number;
+      };
     }>(
       http.post(`/planning/tasks/${taskId}/submit-proof/`, payload, {
         headers: payload instanceof FormData ? { "Content-Type": "multipart/form-data" } : undefined,
       })
     ),
-  generateTaskLesson: (
+  emitPlaygroundEvent: (
     taskId: string,
-    payload?: { scope?: "task" | "milestone"; force?: boolean }
+    payload: {
+      event_type:
+        | "run_started"
+        | "run_completed"
+        | "runtime_error"
+        | "compile_error"
+        | "test_passed"
+        | "test_failed"
+        | "hint_requested"
+        | "idle_detected"
+        | "scenario_started"
+        | "submission_drafted"
+        | "submission_submitted"
+        | "rubric_scored"
+        | "nudge_sent";
+      timestamp?: string;
+      language?: string;
+      run_id?: string;
+      status?: string;
+      error_type?: string;
+      surface_type?: string;
+      surface_event_type?: string;
+      intervention_action?: string;
+      evaluation_checkpoint?: string;
+      evidence_checkpoint?: string;
+      meta?: Record<string, unknown>;
+    }
   ) =>
     extract<{
+      event_id: string;
+      event_type: string;
+      aggregate: Record<string, unknown>;
+      surface_type?: string;
+      intervention_state?: Record<string, unknown>;
+      nudge?: {
+        trigger: string;
+        message: string;
+        conversation_id: string;
+        message_id: string;
+      } | null;
+    }>(http.post(`/planning/tasks/${taskId}/playground-events/`, payload)),
+  startSimulationScenario: (
+    taskId: string,
+    payload?: {
+      scenario_type?: string;
+      domain_family?: string;
+      surface_type?: string;
+      scenario_payload?: Record<string, unknown>;
+    }
+  ) =>
+    extract<{
+      message: string;
+      scenario: DomainScenarioPayload;
+      execution_descriptor?: Record<string, unknown>;
+      surface_type?: string;
+      pack_ref?: string | null;
+    }>(
+      http.post(`/planning/tasks/${taskId}/simulation-scenarios/start/`, payload ?? {})
+    ),
+  submitSimulationScenario: (
+    taskId: string,
+    scenarioId: string,
+    payload: { learner_submission: Record<string, unknown> | string | string[] }
+  ) =>
+    extract<SimulationResultEnvelope & { message: string }>(
+      http.post(`/planning/tasks/${taskId}/simulation-scenarios/${scenarioId}/submit/`, payload)
+    ),
+  getSimulationScenarioResult: (taskId: string, scenarioId: string) =>
+    extract<SimulationResultEnvelope>(
+      http.get(`/planning/tasks/${taskId}/simulation-scenarios/${scenarioId}/result/`)
+    ),
+  startSurfaceSession: (
+    taskId: string,
+    payload: {
+      surface_type:
+        | "simulation_scenario"
+        | "code_playground"
+        | "diagram_workspace"
+        | "canvas_workspace"
+        | "flashcard_session"
+        | "teachback_session";
+      pack_ref?: string;
+      session_payload?: Record<string, unknown>;
+    }
+  ) =>
+    extract<{
+      message: string;
+      session: DomainScenarioPayload;
+      surface_type?: string;
+      pack_ref?: string | null;
+      runtime_state?: Record<string, unknown>;
+      completion_state?: Record<string, unknown>;
+      intervention_state?: Record<string, unknown>;
+      execution_descriptor?: Record<string, unknown>;
+      session_state?: Record<string, unknown>;
+      scene_data?: CanvasSceneData;
+      annotations?: CanvasAnnotation[];
+      suggestions?: CanvasSuggestion[];
+      presence_state?: CanvasPresence;
+      snapshot_ref?: CanvasSnapshot;
+      budget_status?: Record<string, unknown>;
+    }>(http.post(`/planning/tasks/${taskId}/surface-sessions/start/`, payload)),
+  interactSurfaceSession: (
+    taskId: string,
+    sessionId: string,
+    payload: {
+      interaction_payload?: {
+        action_type?:
+          | "save_scene"
+          | "update_presence"
+          | "resolve_thread"
+          | "convert_to_task"
+          | "snapshot"
+          | "request_suggestion"
+          | "review_selection"
+          | "explain_tradeoff"
+          | string;
+        scene_data?: CanvasSceneData;
+        annotations?: CanvasAnnotation[];
+        presence_state?: CanvasPresence;
+        snapshot_ref?: CanvasSnapshot;
+        selection?: Record<string, unknown>;
+        thread_id?: string;
+        suggestion_id?: string;
+        status?: string;
+        [key: string]: unknown;
+      };
+    }
+  ) =>
+    extract<{
+      message: string;
+      session: DomainScenarioPayload;
+      surface_type?: string;
+      pack_ref?: string | null;
+      runtime_state?: Record<string, unknown>;
+      completion_state?: Record<string, unknown>;
+      intervention_state?: Record<string, unknown>;
+      execution_descriptor?: Record<string, unknown>;
+      session_state?: Record<string, unknown>;
+      verification_status?: string;
+      rubric_scores?: Record<string, unknown>;
+      scene_data?: CanvasSceneData;
+      annotations?: CanvasAnnotation[];
+      suggestions?: CanvasSuggestion[];
+      presence_state?: CanvasPresence;
+      snapshot_ref?: CanvasSnapshot;
+      budget_status?: Record<string, unknown>;
+    }>(
+      http.post(
+        `/planning/tasks/${taskId}/surface-sessions/${sessionId}/interact/`,
+        payload
+      )
+    ),
+  getSurfaceSessionState: (taskId: string, sessionId: string) =>
+    extract<{
+      session: DomainScenarioPayload;
+      surface_type?: string;
+      pack_ref?: string | null;
+      runtime_state?: Record<string, unknown>;
+      completion_state?: Record<string, unknown>;
+      intervention_state?: Record<string, unknown>;
+      execution_descriptor?: Record<string, unknown>;
+      session_state?: Record<string, unknown>;
+      verification_status?: string;
+      rubric_scores?: Record<string, unknown>;
+      rubric_breakdown?: Record<string, unknown>;
+      evaluator_rationale?: Record<string, unknown>;
+      scene_data?: CanvasSceneData;
+      annotations?: CanvasAnnotation[];
+      suggestions?: CanvasSuggestion[];
+      presence_state?: CanvasPresence;
+      snapshot_ref?: CanvasSnapshot;
+      budget_status?: Record<string, unknown>;
+    }>(http.get(`/planning/tasks/${taskId}/surface-sessions/${sessionId}/state/`)),
+  getSimulationDefinitions: (simulationType?: string, includeFull?: boolean) =>
+    extract<{
+      sdl_version: string;
+      surface_adapters?: Record<string, string>;
+      count: number;
+      packs: SimulationDefinitionRef[];
+    }>(
+      http.get("/planning/simulation-definitions/", {
+        params:
+          simulationType || includeFull
+            ? {
+                ...(simulationType ? { simulation_type: simulationType } : {}),
+                ...(includeFull ? { include_full: true } : {}),
+              }
+            : undefined,
+      })
+    ),
+  qualifySimulationDefinition: (payload: Record<string, unknown>) =>
+    extract<{
+      qualified: boolean;
+      reasons: string[];
+      errors?: unknown[];
+      simulation_type?: string;
+      pack_version?: string;
+      sdl_version?: string;
+      criterion_count?: number;
+    }>(http.post("/planning/simulation-definitions/", payload)),
+  runSimulationLabUseCase: (payload: {
+    simulation_type: string;
+    surface_type?: string;
+    scenario_payload?: Record<string, unknown>;
+    learner_submission: Record<string, unknown> | string | string[];
+    persist_records?: boolean;
+  }) =>
+    extract<{
+      qualified: boolean;
+      simulation_type: string;
+      task_id?: string;
+      scenario_id?: string;
+      report?: Record<string, unknown>;
+      scenario?: import("@/types").DomainScenarioPayload;
+      pack_version?: string | null;
+      scoring_components?: Record<string, unknown>;
+      verification_confidence?: number | null;
+      error?: string;
+    }>(http.post("/planning/simulation-lab/run-usecase/", payload)),
+  generateTaskLesson: (
+    taskId: string,
+    payload?: {
+      scope?: "task" | "milestone";
+      force?: boolean;
+      scene_types?: "basic" | "extended";
+      reason?: string;
+    }
+  ) =>
+    extract<{
+      status?: string;
       message: string;
       milestone_id?: string;
       task?: DailyTask;
       tasks?: DailyTask[];
+      quota_status?: "exceeded" | "reason_required";
+      used?: number;
+      limit?: number;
     }>(http.post(`/planning/tasks/${taskId}/generate-lesson/`, payload ?? {})),
+
+  lessonPreflight: (
+    taskId: string,
+    payload?: { scene_types?: "basic" | "extended" }
+  ) =>
+    extract<{
+      questions: Array<{
+        id: string;
+        text: string;
+        choices: string[];
+        allow_custom: boolean;
+        save_to: string;
+        value_map: Record<string, string>;
+      }>;
+      ready: boolean;
+    }>(http.post(`/planning/tasks/${taskId}/lesson-preflight/`, payload ?? {})),
+
+  saveLessonPreflightAnswer: (
+    taskId: string,
+    payload: { question_id: string; value: string; message_id?: string }
+  ) =>
+    extract<{ status: string; question_id: string; value: string }>(
+      http.post(`/planning/tasks/${taskId}/save-preflight-answer/`, payload)
+    ),
+
+  startVeloVerification: (taskId: string) =>
+    extract<{
+      verification_id: string;
+      audit_id: string | null;
+      snapshot_id: string;
+      project_title: string;
+      status: string;
+      velo_audit_template: string;
+    }>(http.post(`/planning/tasks/${taskId}/start-velo/`)),
+
+  getVeloStatus: (taskId: string) =>
+    extract<
+      | { started: false }
+      | {
+          started: true;
+          verification_id: string;
+          audit_id: string | null;
+          snapshot_id: string;
+          status: string;
+          github_check_status: string;
+          audit_doc_status: string;
+          verification_score: number | null;
+          verdict_summary: string;
+          verified_at: string | null;
+        }
+    >(http.get(`/planning/tasks/${taskId}/velo-status/`)),
+
+  getVeloAuditTemplate: (taskId: string) =>
+    extract<{ template: string }>(
+      http.get(`/planning/tasks/${taskId}/velo-template/`)
+    ),
+
+  completeVeloVerification: (
+    taskId: string,
+    verdict: {
+      status: string;
+      verification_score: number | null;
+      verdict_summary: string;
+      badge?: boolean;
+    }
+  ) =>
+    extract<{ ok: boolean }>(
+      http.post(`/planning/tasks/${taskId}/velo-complete/`, { verdict })
+    ),
+
+  // ── PBL project lifecycle ──────────────────────────────────────────────────
+
+  initProject: (taskId: string) =>
+    extract<LearningProjectShape>(http.post("/planning/projects/init/", { task_id: taskId })),
+
+  getProject: (projectId: string) =>
+    extract<LearningProjectShape>(http.get(`/planning/projects/${projectId}/`)),
+
+  chooseSuggestion: (
+    projectId: string,
+    payload: { chosen_index?: number; custom_proposal?: { title: string; description: string } }
+  ) => extract<LearningProjectShape | { accepted: false; feedback: string; missing_concepts: string[]; coverage_pct: number }>(
+    http.post(`/planning/projects/${projectId}/choose-suggestion/`, payload)
+  ),
+
+  updateProjectScope: (projectId: string, scope_document: Record<string, unknown>) =>
+    extract<LearningProjectShape>(http.patch(`/planning/projects/${projectId}/scope/`, { scope_document })),
+
+  updateProjectMilestones: (projectId: string, milestones: unknown[]) =>
+    extract<LearningProjectShape>(http.patch(`/planning/projects/${projectId}/milestones/`, { milestones })),
+
+  submitMilestone: (projectId: string, milestone_id: string, content: string) =>
+    extract<LearningProjectShape>(
+      http.post(`/planning/projects/${projectId}/submit-milestone/`, { milestone_id, content })
+    ),
+
+  updateMethodologyDoc: (projectId: string, methodology_doc: string) =>
+    extract<LearningProjectShape>(
+      http.patch(`/planning/projects/${projectId}/methodology-doc/`, { methodology_doc })
+    ),
+
+  getMethodologyTemplate: (projectId: string) =>
+    extract<{ template: string }>(http.get(`/planning/projects/${projectId}/methodology-template/`)),
+
+  updateArtifacts: (projectId: string, artifacts: unknown[]) =>
+    extract<LearningProjectShape>(http.patch(`/planning/projects/${projectId}/artifacts/`, { artifacts })),
+
+  updateCaseStudy: (projectId: string, case_study: Record<string, unknown>) =>
+    extract<LearningProjectShape>(http.patch(`/planning/projects/${projectId}/case-study/`, { case_study })),
+
+  getCaseStudyDraft: (projectId: string) =>
+    extract<{ draft: Record<string, unknown> }>(http.get(`/planning/projects/${projectId}/case-study-draft/`)),
+
+  attemptPhaseGate: (projectId: string, taskId?: string) =>
+    extract<{ passed: boolean; advanced: boolean; gate_status: string; issues: string[]; suggestions: string[]; project: LearningProjectShape }>(
+      http.post(`/planning/projects/${projectId}/attempt-gate/`, taskId ? { task_id: taskId } : {})
+    ),
+
+  updatePhaseSubmission: (projectId: string, taskId: string, submission: Record<string, string>) =>
+    extract<LearningProjectShape>(
+      http.patch(`/planning/projects/${projectId}/phase/${taskId}/`, { submission })
+    ),
+
+  // ── Institutional mentor reviews ──────────────────────────────────────────
+
+  getPendingMentorReviews: () =>
+    extract<{ results: MentorReviewShape[] }>(http.get("/planning/mentor-reviews/?decision=pending")),
+
+  approveMentorReview: (reviewId: string, feedback?: string) =>
+    extract<{ ok: boolean; advanced_to: string }>(
+      http.post(`/planning/mentor-reviews/${reviewId}/approve/`, { feedback: feedback ?? "" })
+    ),
+
+  requestRevision: (reviewId: string, feedback: string) =>
+    extract<{ ok: boolean }>(
+      http.post(`/planning/mentor-reviews/${reviewId}/request-revision/`, { feedback })
+    ),
 
   generateMicroPractice: (
     taskId: string,
@@ -421,9 +913,16 @@ export const planningApi = {
       http.post(`/planning/tasks/${taskId}/playground-conversation/`, {})
     ),
 
-  generateStarterCode: (taskId: string) =>
-    extract<{ task_id: string; starter_code: string; language: string; cached: boolean }>(
-      http.post(`/planning/tasks/${taskId}/generate-starter-code/`, {})
+  getOrCreateFeynmanConversation: (taskId: string) =>
+    extract<{ conversation_id: string }>(
+      http.post(`/planning/tasks/${taskId}/feynman-conversation/`, {})
+    ),
+
+  generateStarterCode: (taskId: string, scaffoldingLevel?: number) =>
+    extract<{ task_id: string; starter_code: string; language: string; cached: boolean; scaffolding_level: number }>(
+      http.post(`/planning/tasks/${taskId}/generate-starter-code/`, {
+        ...(scaffoldingLevel !== undefined && { scaffolding_level: scaffoldingLevel }),
+      })
     ),
 
   generateChallenge: (taskId: string) =>
@@ -447,10 +946,32 @@ export const planningApi = {
       count: data.count ?? data.summary?.total ?? (data.tasks?.length ?? 0),
     };
   },
+  getCalendarTasks: (params: {
+    view?: "day" | "week" | "month";
+    anchor_date?: string;
+    start_date?: string;
+    end_date?: string;
+  }) =>
+    extract<{
+      view: "day" | "week" | "month";
+      anchor_date: string;
+      range: { start_date: string; end_date: string };
+      summary: {
+        total: number;
+        completed: number;
+        in_progress: number;
+        scheduled: number;
+        overdue: number;
+      };
+      tasks: DailyTask[];
+      tasks_by_date: Record<string, DailyTask[]>;
+    }>(http.get("/planning/tasks/calendar/", { params })),
 
   getPreAssessment: (planId: string) =>
     extract<{
       generated_at: string;
+      context_summary?: string[];
+      unresolved_areas?: string[];
       questions: Array<{
         id: string;
         question: string;
@@ -459,6 +980,9 @@ export const planningApi = {
         explanation: string;
         competency_name: string;
         question_type?: string | null;
+        why_asked?: string | null;
+        signal_source?: string | null;
+        impact_area?: string | null;
       }>;
     }>(http.get(`/planning/plans/${planId}/pre-assessment/`)),
 
@@ -471,8 +995,16 @@ export const planningApi = {
         total: number;
         proficiency_level: string;
         self_rating?: boolean;
+        impact_areas?: string[];
+        signal_sources?: string[];
       }>;
       tasks_marked_skippable: number;
+      reinforcement_tasks_created?: Array<{
+        task_id: string;
+        title: string;
+        competency_name: string;
+        existing?: boolean;
+      }>;
       pre_assessed: boolean;
     }>(http.post(`/planning/plans/${planId}/pre-assessment/`, { answers })),
 
@@ -538,6 +1070,7 @@ export const playgroundApi = {
       memory?: number;
       exit_code?: number;
       message?: string;
+      status_description?: string;
     }>(http.post("/playground/execute/", payload)),
 };
 
@@ -669,6 +1202,21 @@ export const intelligenceApi = {
         params: { conversation_id: conversationId },
       })
     ),
+  getMyAnalyses: () =>
+    extract<
+      Array<{
+        id: string;
+        conversation_id: string;
+        conversation_title: string;
+        status: "running" | "completed" | "failed";
+        started_at: string;
+        completed_at?: string;
+        progress?: number;
+        current_stage?: string;
+        stage_messages?: Array<{ stage: string; message: string; timestamp: string }>;
+        results?: Record<string, unknown>;
+      }>
+    >(http.get("/intelligence/my-analyses/")),
 
   previewCortexRouting: (conversationId: string, message: string) =>
     extract<{
@@ -1242,7 +1790,8 @@ export const auditApi = {
       session_id: string;
       question: string | null;
       question_index: number;
-      total_questions: number;
+      total_questions: number | null;  // null for adaptive project verification
+      adaptive?: boolean;
       question_generation?: { source: "ai" | "template" | "static"; fallback_reason: string };
     }>(
       http.post("/interrogations/start/", { audit_id: auditId })
@@ -1376,10 +1925,95 @@ export const auditApi = {
             core5_slots?: Record<string, unknown>;
           };
         };
+        project_verifications?: Array<{
+          verification_id: string;
+          project_index: number;
+          project_title: string;
+          status: "unverified" | "evidence_submitted" | "interrogating" | "verified" | "failed" | "suspicious";
+          verification_score: number | null;
+          github_check_status: "pending" | "passed" | "failed" | "skipped";
+          audit_doc_status: "pending" | "accepted" | "rejected" | "missing";
+          submitted_repos: Array<{ url: string; label: string; check_status: string; language?: string }>;
+          audit_id: string | null;
+        }>;
         created_at: string;
         updated_at: string;
       };
     }>(http.get("/mirror/latest/")),
+
+  startProjectVerification: (snapshotId: string, projectIndex: number) =>
+    extract<{
+      verification_id: string;
+      audit_id: string | null;
+      project: { index: number; title: string; technologies: string[]; description: string };
+      status: string;
+      github_check_status: string;
+    }>(
+      http.post("/project-verifications/", { snapshot_id: snapshotId, project_index: projectIndex })
+    ),
+
+  checkRepos: (
+    verificationId: string,
+    repos: Array<{ url: string; label: string }>,
+    demoUrl?: string,
+  ) =>
+    extract<{
+      repos: Array<{
+        url: string;
+        label: string;
+        check_status: "passed" | "failed" | "skipped";
+        language?: string;
+        stars?: number;
+        pushed_at?: string;
+        description?: string;
+        readme_snippet?: string;
+        reason?: string;
+      }>;
+      overall_github_status: "passed" | "failed" | "skipped";
+      audit_doc: {
+        status: "accepted" | "rejected" | "missing";
+        sections: Array<{
+          name: string;
+          found: boolean;
+          word_count: number;
+          passed: boolean;
+          required_words: number;
+        }>;
+        feedback: string;
+        template?: string;
+      };
+    }>(
+      http.post(`/project-verifications/${verificationId}/check-repos/`, {
+        repos,
+        demo_url: demoUrl || "",
+      })
+    ),
+
+  recheckAuditDoc: (verificationId: string) =>
+    extract<{
+      status: "accepted" | "rejected" | "missing";
+      sections: Array<{ name: string; found: boolean; word_count: number; passed: boolean; required_words: number }>;
+      feedback: string;
+      template?: string;
+    }>(http.post(`/project-verifications/${verificationId}/recheck-audit-doc/`)),
+
+  finalizeProjectVerification: (verificationId: string) =>
+    extract<{
+      status: string;
+      verification_score: number | null;
+      verdict_summary: string;
+      badge: boolean;
+      verified_at: string | null;
+    }>(
+      http.post(`/project-verifications/${verificationId}/finalize/`)
+    ),
+
+  resetProjectVerification: (verificationId: string) =>
+    extract<{
+      verification_id: string;
+      status: string;
+      audit_id: string;
+    }>(http.post(`/project-verifications/${verificationId}/reset/`)),
 
   reviewVeloMentorIntake: (auditId: string) =>
     extract<VeloMentorReviewResponse>(http.post(`/audits/${auditId}/mentor-intake/review/`)),
