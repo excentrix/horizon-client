@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import posthog from "posthog-js";
-import { Eye, EyeOff, Send, X } from "lucide-react";
+import { Send, X } from "lucide-react";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
 import { telemetry } from "@/lib/telemetry";
 import { Button } from "@/components/ui/button";
@@ -28,10 +28,7 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
   const typingStopTimerRef = useRef<number | null>(null);
   const lastTypingStateRef = useRef(false);
 
-  const [draftReviewEnabled, setDraftReviewEnabled] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem("draft_review_enabled") === "true";
-  });
+  const draftReviewEnabled = false;
   const [draftWarning, setDraftWarning] = useState<string | null>(null);
   const [dismissedDraft, setDismissedDraft] = useState<string>("");
   const draftReviewTimerRef = useRef<number | null>(null);
@@ -82,13 +79,6 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
     },
     [clearTypingTimers, emitTypingState],
   );
-
-  const toggleDraftReview = () => {
-    const next = !draftReviewEnabled;
-    setDraftReviewEnabled(next);
-    localStorage.setItem("draft_review_enabled", String(next));
-    if (!next) setDraftWarning(null);
-  };
 
   useEffect(() => {
     if (!draftReviewEnabled || composerDraft.trim().length < 30) {
@@ -214,23 +204,10 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
           void handleSubmit();
         }}
         className={cn(
-          "min-h-[58px] max-h-48 resize-none border-0 bg-transparent pl-10 pr-16 py-3 text-base leading-6 shadow-none",
+          "min-h-[58px] max-h-48 resize-none border-0 bg-transparent pl-4 pr-16 py-3 text-base leading-6 shadow-none",
           "focus-visible:border-0 focus-visible:ring-0",
         )}
       />
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        title={draftReviewEnabled ? "Disable draft review" : "Enable draft review (ARIA checks your message before you send)"}
-        onClick={toggleDraftReview}
-        className={cn(
-          "absolute left-2 bottom-2 h-7 w-7 rounded-md",
-          draftReviewEnabled ? "text-primary" : "text-muted-foreground opacity-50"
-        )}
-      >
-        {draftReviewEnabled ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-      </Button>
       <Button
         type="submit"
         size="icon"

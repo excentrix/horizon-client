@@ -917,7 +917,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div> */}
-            <TheCircleTeaser />
+            {/* <TheCircleTeaser /> */}
             <SkillRadarChart className="" />
             {/* <XPQuests /> */}
             <BackgroundTaskMonitor analysisEvents={analysisEvents} />
