@@ -902,22 +902,6 @@ function RuntimeConsole({ envelope }: { envelope: SimulationResultEnvelope }) {
 
 export default function SimulationLabPage() {
   const isDev = process.env.NODE_ENV === "development";
-  if (!isDev) {
-    return (
-      <main className="mx-auto w-full max-w-4xl p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Simulation Lab is available in development only</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              This workspace is disabled outside local development environments.
-            </p>
-          </CardContent>
-        </Card>
-      </main>
-    );
-  }
 
   const [packs, setPacks] = useState<SimulationDefinitionRef[]>([]);
   const [tasks, setTasks] = useState<DailyTask[]>([]);
@@ -1801,6 +1785,23 @@ export default function SimulationLabPage() {
       }
     });
   };
+
+  if (!isDev) {
+    return (
+      <main className="mx-auto w-full max-w-4xl p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Simulation Lab is available in development only</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              This workspace is disabled outside local development environments.
+            </p>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
 
   if (loading) {
     return (
