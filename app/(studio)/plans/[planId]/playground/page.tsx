@@ -1191,6 +1191,7 @@ function PlaygroundFlow() {
       <SceneStudioLayout
         key={`${activeTask.id}:${activeTask.lesson_generated_at ?? "none"}:${activeTask.lesson_blocks?.length ?? 0}`}
         task={activeTask}
+        mentorName={plan?.specialized_mentor?.name ?? null}
         isRegenerating={lessonLoading}
         regenerationLabel={regenerationLabel}
         onBackToPlan={() => router.push(`/plans?plan=${planId}`)}

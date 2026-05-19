@@ -44,7 +44,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Brain, User, PanelRightOpen, WifiOff } from "lucide-react";
+import { Brain, User, PanelRightOpen, WifiOff, ArrowLeft } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlanSessionPoller } from "@/hooks/use-plan-poller";
 
@@ -99,6 +99,7 @@ function ChatContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
+  const conversationFromQuery = searchParams.get("conversation");
   const contextFromQuery = searchParams.get("context");
   const queryClient = useQueryClient();
   
@@ -214,6 +215,7 @@ function ChatContent() {
     missing_fields?: string[];
     handoff_url?: string;
   } | null>(null);
+  const [forceConversationList, setForceConversationList] = useState(false);
 
   const createPlan = useCreatePlanFromConversation();
   const { analysisEvents } = useNotifications();
@@ -253,6 +255,9 @@ function ChatContent() {
     typeof mentorStateV2?.stage === "string" ? (mentorStateV2.stage as string) : "exploring";
 
   useEffect(() => {
+    if (forceConversationList) {
+      return;
+    }
     if (selectedConversationId) {
       return;
     }
@@ -264,7 +269,17 @@ function ChatContent() {
     if (exists) {
       setSelectedConversationId(queryConversation);
     }
-  }, [conversations, searchParams, selectedConversationId, setSelectedConversationId]);
+  }, [conversations, forceConversationList, searchParams, selectedConversationId, setSelectedConversationId]);
+
+  useEffect(() => {
+    if (!forceConversationList) {
+      return;
+    }
+    const queryConversation = searchParams.get("conversation");
+    if (!queryConversation) {
+      setForceConversationList(false);
+    }
+  }, [forceConversationList, searchParams]);
 
   useEffect(() => {
     const shouldSeedKickoff = analysisJobRunning || contextFromQuery === "mirror_review";
@@ -1073,83 +1088,133 @@ useEffect(() => {
     if (raw.toLowerCase() === "new conversation") return "Mentor Session";
     return raw;
   }, [activeConversation?.title]);
+  const isMobileThreadView = Boolean(conversationFromQuery);
+
+  const handleBackToConversations = useCallback(() => {
+    setForceConversationList(true);
+    setSelectedConversationId(null);
+    router.replace("/chat", { scroll: false });
+  }, [router, setSelectedConversationId]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[radial-gradient(1200px_600px_at_0%_0%,rgba(56,189,248,0.06),transparent),radial-gradient(900px_500px_at_100%_10%,rgba(249,115,22,0.06),transparent)]">
-    <CreateConversationModal
+    <div className="flex h-full min-h-0 flex-col overflow-hidden overscroll-none">
+      <CreateConversationModal
         isOpen={isCreateModalOpen}
         onOpenChange={setCreateModalOpen}
       />
       <SafetyAlert />
-      <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-hidden px-4 pb-4 pt-4 lg:flex-row lg:gap-6">
-        <aside className="flex h-full w-full flex-col lg:w-80">
-          <div className="flex h-full flex-col rounded-[28px] border border-white/80 bg-white/80 shadow-[var(--shadow-2)] backdrop-blur">
-            <div className="flex items-center justify-between gap-4 px-4 py-3 lg:px-5 lg:py-4">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0 overflow-hidden px-0 pb-0 pt-0 lg:flex-row lg:gap-6 lg:px-4 lg:pb-4 lg:pt-4">
+        <aside
+          className={cn(
+            "flex min-h-0 w-full flex-col px-0 pb-0 pt-0 lg:h-full lg:w-80 lg:px-0 lg:pb-0 lg:pt-0",
+            isMobileThreadView ? "hidden lg:flex" : "flex",
+          )}
+        >
+          <div className="flex h-full flex-col bg-background lg:rounded-[28px] lg:border lg:border-white/80 lg:bg-white/80 lg:shadow-[var(--shadow-2)] lg:backdrop-blur">
+            <div className="flex items-center justify-between gap-4 px-3 py-3 lg:px-5 lg:py-4">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
                   Mentor lounge
                 </p>
-                <h2 className="text-lg font-semibold leading-tight">Conversations</h2>
+                <h2 className="text-lg font-semibold leading-tight">
+                  Conversations
+                </h2>
                 <p className="text-xs text-muted-foreground">
                   Your general mentor adapts as you explore plans and goals.
                 </p>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setCreateModalOpen(true)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setCreateModalOpen(true)}
+              >
                 <PlusCircle className="h-6 w-6" />
               </Button>
             </div>
             <Separator />
-            <div className="flex-1 overflow-y-auto px-3 py-3">
+            <div className="flex-1 overflow-y-auto px-2 py-2 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:px-3 lg:py-3 lg:pb-3">
               <ConversationList
                 conversations={conversations}
                 selectedConversationId={selectedConversationId}
                 isLoading={conversationsLoading}
                 activeClass={activeListClass}
+                autoSelectFirst={false}
               />
             </div>
           </div>
         </aside>
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-transparent">
+        <section
+          className={cn(
+            "min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background lg:bg-transparent lg:rounded-[28px] lg:shadow-[var(--shadow-2)]",
+            isMobileThreadView ? "flex" : "hidden lg:flex",
+          )}
+        >
           {activeConversation ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[28px] border border-white/80 bg-white/80 shadow-[var(--shadow-2)] backdrop-blur">
-              <header className="border-b border-white/80 bg-transparent">
-                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
+            <div className="flex min-h-0 flex-1 flex-col bg-background lg:rounded-[28px] lg:border lg:border-white/80 lg:bg-white/80 lg:backdrop-blur lg:overflow-hidden">
+              <header className="border-b border-white/80 bg-background px-2 py-2 lg:bg-transparent lg:px-0 lg:py-0">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 lg:gap-3 lg:px-4 lg:py-4">
                   <div className="min-w-0 flex-1">
-                      <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                        Active mentor
-                      </p>
-                      <h3 className="truncate text-lg font-semibold">{conversationTitle}</h3>
-                      {/* Show selector if plan is active (mocked logic for now as 'specialized' check) 
+                      <div className="mb-2 lg:hidden">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 rounded-full px-3 text-xs"
+                          onClick={handleBackToConversations}
+                        >
+                          <ArrowLeft className="mr-1 h-3.5 w-3.5" />
+                          Conversations
+                        </Button>
+                      </div>
+                    <h3 className="truncate text-lg font-semibold leading-tight">
+                      {conversationTitle}
+                    </h3>
+                    {/* Show selector if plan is active (mocked logic for now as 'specialized' check) 
                           In a real scenario, we'd check if user has an active plan that unlocks this.
                           For now, we allow switching if the current personality is NOT general, 
                           OR if we want to enable it for everyone with a plan. 
                           Let's assume if they have a 'latestPlan', they can switch.
                       */}
-                      {latestPlan || activeConversation.ai_personality?.type === 'specialized' ? (
-                          <div className="mt-1">
-                            <PersonalitySelector 
-                                currentPersonalityId={activeConversation.ai_personality?.id}
-                                onSelect={async (personalityId) => {
-                                    if (!activeConversation?.id) return;
-                                    try {
-                                      await chatApi.updateConversation(activeConversation.id, {
-                                        ai_personality_id: personalityId,
-                                      });
-                                      await queryClient.invalidateQueries({ queryKey: ["conversations"] });
-                                      telemetry.toastSuccess("Mentor personality updated.");
-                                    } catch (error) {
-                                      telemetry.toastError("Couldn't update mentor personality.");
-                                      telemetry.error("Failed to update conversation personality", { error });
-                                    }
-                                }}
-                                disabled={false} 
-                            />
-                          </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          {activeConversation.ai_personality?.name}
-                        </p>
-                      )}
+                    {latestPlan ||
+                    activeConversation.ai_personality?.type ===
+                      "specialized" ? (
+                      <div className="mt-1 hidden lg:block">
+                        <PersonalitySelector
+                          currentPersonalityId={
+                            activeConversation.ai_personality?.id
+                          }
+                          onSelect={async (personalityId) => {
+                            if (!activeConversation?.id) return;
+                            try {
+                              await chatApi.updateConversation(
+                                activeConversation.id,
+                                {
+                                  ai_personality_id: personalityId,
+                                },
+                              );
+                              await queryClient.invalidateQueries({
+                                queryKey: ["conversations"],
+                              });
+                              telemetry.toastSuccess(
+                                "Mentor personality updated.",
+                              );
+                            } catch (error) {
+                              telemetry.toastError(
+                                "Couldn't update mentor personality.",
+                              );
+                              telemetry.error(
+                                "Failed to update conversation personality",
+                                { error },
+                              );
+                            }
+                          }}
+                          disabled={false}
+                        />
+                      </div>
+                    ) : (
+                      <p className="hidden text-xs text-muted-foreground lg:block">
+                        {activeConversation.ai_personality?.name}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-xs">
                     <span
@@ -1161,7 +1226,7 @@ useEffect(() => {
                             ? "bg-amber-100 text-amber-700"
                             : socketStatus === "error"
                               ? "bg-rose-100 text-rose-700"
-                              : "bg-muted text-muted-foreground"
+                              : "bg-muted text-muted-foreground",
                       )}
                     >
                       {socketStatus === "open"
@@ -1172,78 +1237,157 @@ useEffect(() => {
                             ? "Offline"
                             : "Idle"}
                     </span>
-                    <PlanBuildHeaderBadge />
+                    <div className="hidden lg:block">
+                      <PlanBuildHeaderBadge />
+                    </div>
                     <Sheet open={isInsightsOpen} onOpenChange={setInsightsOpen}>
                       <SheetTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-7 gap-2 text-xs rounded-full">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="hidden h-7 gap-2 text-xs rounded-full lg:inline-flex"
+                        >
                           <PanelRightOpen className="h-3.5 w-3.5" />
                           Insights
                         </Button>
                       </SheetTrigger>
-                      <SheetContent side="right" className="flex w-[360px] flex-col bg-white/90 p-0 shadow-[var(--shadow-2)] sm:w-[440px]">
+                      <SheetContent
+                        side="right"
+                        className="flex w-[92vw] max-w-[440px] flex-col bg-white/90 p-0 shadow-[var(--shadow-2)]"
+                      >
                         <SheetHeader className="border-b bg-white/85 px-5 py-4">
-                          <SheetTitle className="text-lg">Mentor insights</SheetTitle>
+                          <SheetTitle className="text-lg">
+                            Mentor insights
+                          </SheetTitle>
                           <SheetDescription className="text-xs">
                             Runtime updates and learner profile, in one place.
                           </SheetDescription>
                         </SheetHeader>
                         <div className="flex min-h-0 flex-1 flex-col">
-                          <Tabs defaultValue="runtime" className="flex min-h-0 flex-1 flex-col">
+                          <Tabs
+                            defaultValue="runtime"
+                            className="flex min-h-0 flex-1 flex-col"
+                          >
                             <div className="border-b px-5 py-3">
                               <TabsList className="grid w-full grid-cols-2 rounded-full bg-muted/30 p-1">
-                                <TabsTrigger value="runtime" className="text-xs gap-2 rounded-full">
+                                <TabsTrigger
+                                  value="runtime"
+                                  className="text-xs gap-2 rounded-full"
+                                >
                                   <Brain className="w-3.5 h-3.5" /> Runtime
                                 </TabsTrigger>
-                                <TabsTrigger value="profile" className="text-xs gap-2 rounded-full">
+                                <TabsTrigger
+                                  value="profile"
+                                  className="text-xs gap-2 rounded-full"
+                                >
                                   <User className="w-3.5 h-3.5" /> Profile
                                 </TabsTrigger>
                               </TabsList>
                             </div>
-                            <TabsContent value="runtime" className="flex-1 min-h-0 m-0 overflow-y-auto">
+                            <TabsContent
+                              value="runtime"
+                              className="flex-1 min-h-0 m-0 overflow-y-auto"
+                            >
                               {missingInformation.length > 0 && (
                                 <div className="px-5 pt-4">
-                                  {missingInformation.filter(i => i.status === 'pending').map(item => (
-                                    <MissingInfoForm key={item.id} item={item} />
-                                  ))}
+                                  {missingInformation
+                                    .filter((i) => i.status === "pending")
+                                    .map((item) => (
+                                      <MissingInfoForm
+                                        key={item.id}
+                                        item={item}
+                                      />
+                                    ))}
                                 </div>
                               )}
-                              <AnalysisHistory analyses={analysisHistory} className="flex-1 px-1" />
+                              <AnalysisHistory
+                                analyses={analysisHistory}
+                                className="flex-1 px-1"
+                              />
                             </TabsContent>
-                            <TabsContent value="profile" className="flex-1 min-h-0 m-0 px-1">
+                            <TabsContent
+                              value="profile"
+                              className="flex-1 min-h-0 m-0 px-1"
+                            >
                               {(() => {
                                 const latestCompletedAnalysis = analysisHistory
-                                  .filter(a => a.conversation_id === selectedConversationId && a.status === 'completed')
-                                  .sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime())
-                                  [0];
-                                
-                                const record = analysisSummary?.analysis_record as Record<string, unknown> | undefined;
-                                
-                                const academicData = record ? {
-                                  domain: record.primary_domain_name,
-                                  topic: record.primary_topic_name,
-                                  difficulty: record.academic_difficulty_level,
-                                  comprehension: record.comprehension_level,
-                                  engagement: record.engagement_score,
-                                  ...analysisSummary?.analysis_results as Record<string, unknown>
-                                } : analysisSummary?.analysis_results as Record<string, unknown>;
+                                  .filter(
+                                    (a) =>
+                                      a.conversation_id ===
+                                        selectedConversationId &&
+                                      a.status === "completed",
+                                  )
+                                  .sort(
+                                    (a, b) =>
+                                      new Date(b.completed_at || 0).getTime() -
+                                      new Date(a.completed_at || 0).getTime(),
+                                  )[0];
 
-                                const careerData = record?.career_stage_indicators ? {
-                                  ...(record.career_stage_indicators as Record<string, unknown>),
-                                  interests: (record.career_interests as string[] | undefined)?.join(", ")
-                                } : undefined;
+                                const record =
+                                  analysisSummary?.analysis_record as
+                                    | Record<string, unknown>
+                                    | undefined;
 
-                                const wellnessData = record?.wellness_indicators ? {
-                                  ...(record.wellness_indicators as Record<string, unknown>),
-                                  stress_indicators: (record.stress_indicators as string[] | undefined)?.join(", "),
-                                  support_needs: (record.support_needs as string[] | undefined)?.join(", ")
-                                } : undefined;
+                                const academicData = record
+                                  ? {
+                                      domain: record.primary_domain_name,
+                                      topic: record.primary_topic_name,
+                                      difficulty:
+                                        record.academic_difficulty_level,
+                                      comprehension: record.comprehension_level,
+                                      engagement: record.engagement_score,
+                                      ...(analysisSummary?.analysis_results as Record<
+                                        string,
+                                        unknown
+                                      >),
+                                    }
+                                  : (analysisSummary?.analysis_results as Record<
+                                      string,
+                                      unknown
+                                    >);
+
+                                const careerData =
+                                  record?.career_stage_indicators
+                                    ? {
+                                        ...(record.career_stage_indicators as Record<
+                                          string,
+                                          unknown
+                                        >),
+                                        interests: (
+                                          record.career_interests as
+                                            | string[]
+                                            | undefined
+                                        )?.join(", "),
+                                      }
+                                    : undefined;
+
+                                const wellnessData = record?.wellness_indicators
+                                  ? {
+                                      ...(record.wellness_indicators as Record<
+                                        string,
+                                        unknown
+                                      >),
+                                      stress_indicators: (
+                                        record.stress_indicators as
+                                          | string[]
+                                          | undefined
+                                      )?.join(", "),
+                                      support_needs: (
+                                        record.support_needs as
+                                          | string[]
+                                          | undefined
+                                      )?.join(", "),
+                                    }
+                                  : undefined;
 
                                 return (
                                   <LearnerProfilePanel
                                     academicSnapshot={academicData}
                                     careerSnapshot={careerData}
                                     wellnessSnapshot={wellnessData}
-                                    latestAnalysis={latestCompletedAnalysis?.results}
+                                    latestAnalysis={
+                                      latestCompletedAnalysis?.results
+                                    }
                                   />
                                 );
                               })()}
@@ -1254,24 +1398,15 @@ useEffect(() => {
                     </Sheet>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-2 px-4 pb-4">
+                <div className="hidden flex-wrap items-center justify-between gap-2 px-4 pb-4 lg:flex">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => {
-                        void handleCreatePlan();
-                      }}
-                      disabled={disableRoadmapButton}
-                    >
-                      {createPlan.isPending ? "Generating roadmap..." : "Generate Roadmap"}
-                    </Button>
                     {dismissedPlanShortcutAction ? (
                       <Button
                         size="sm"
                         className="h-8 text-xs"
-                        onClick={() => handleOpenMentorAction(dismissedPlanShortcutAction)}
+                        onClick={() =>
+                          handleOpenMentorAction(dismissedPlanShortcutAction)
+                        }
                       >
                         Open current plan
                       </Button>
@@ -1282,7 +1417,10 @@ useEffect(() => {
                   <div className="px-4 pb-3">
                     <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[12px] text-blue-800">
                       <span className="inline-block h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-blue-400" />
-                      <span>Your profile analysis is running — your mentor will have full context shortly.</span>
+                      <span>
+                        Your profile analysis is running — your mentor will have
+                        full context shortly.
+                      </span>
                     </div>
                   </div>
                 ) : null}
@@ -1300,13 +1438,13 @@ useEffect(() => {
                   />
                 </div> */}
               </header>
-              <IntelligenceReportModal 
+              <IntelligenceReportModal
                 isOpen={isReportModalOpen}
                 onOpenChange={setReportModalOpen}
                 analysisSummary={analysisSummary}
               />
               <div className="min-h-0 flex-1 overflow-hidden">
-                <div className="flex h-full min-h-0 flex-col gap-4 px-4 pb-4 pt-3">
+                <div className="flex h-full min-h-0 flex-col gap-2 px-0 pb-0 pt-0 lg:gap-4 lg:px-4 lg:pb-4 lg:pt-3">
                   {planWorkbenchData && showPlanWorkbench ? (
                     <PlanWorkbench
                       planData={planWorkbenchData}
@@ -1324,7 +1462,9 @@ useEffect(() => {
                   {/* IntelligenceStatus moved to header */}
                   {showPlanWorkbench && planUpdates.length ? (
                     <div className="mb-2 text-[11px] text-muted-foreground">
-                      Plan status: {latestPlanUpdate?.data.message ?? "Working on your plan..."}
+                      Plan status:{" "}
+                      {latestPlanUpdate?.data.message ??
+                        "Working on your plan..."}
                     </div>
                   ) : null}
                   <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -1337,7 +1477,9 @@ useEffect(() => {
                                 Mentor Intake
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                This debrief sharpens mentor context and improves personalization across your roadmap and plans.
+                                This debrief sharpens mentor context and
+                                improves personalization across your roadmap and
+                                plans.
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -1361,7 +1503,9 @@ useEffect(() => {
                                     onClick={handlePreviewMentorIntake}
                                     disabled={intakePreviewLoading}
                                   >
-                                    {intakePreviewLoading ? "Reviewing..." : "Review intake"}
+                                    {intakePreviewLoading
+                                      ? "Reviewing..."
+                                      : "Review intake"}
                                   </Button>
                                 </>
                               )}
@@ -1372,13 +1516,19 @@ useEffect(() => {
                               <span>{intakeProgressLabel}</span>
                               <span>{Math.round(intakeReadiness * 100)}%</span>
                             </div>
-                            <Progress value={Math.round(intakeReadiness * 100)} className="mt-2 h-2" />
+                            <Progress
+                              value={Math.round(intakeReadiness * 100)}
+                              className="mt-2 h-2"
+                            />
                           </div>
                           {intakeSubmitted || planUpdates.length ? (
                             <div className="rounded-lg border border-emerald-200/60 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-900">
-                              <div className="font-semibold">Personalization update in progress</div>
+                              <div className="font-semibold">
+                                Personalization update in progress
+                              </div>
                               <div className="text-[11px] text-emerald-700/80">
-                                We&apos;re syncing the mentor context you confirmed. Updates will appear here.
+                                We&apos;re syncing the mentor context you
+                                confirmed. Updates will appear here.
                               </div>
                             </div>
                           ) : null}
@@ -1408,32 +1558,43 @@ useEffect(() => {
                         streamingMessageId={streamingMessageId}
                         theme={personaTheme}
                         variant="plain"
+                        suppressFlowSuggestions
                       />
-                      <Dialog open={intakeModalOpen} onOpenChange={setIntakeModalOpen}>
+                      <Dialog
+                        open={intakeModalOpen}
+                        onOpenChange={setIntakeModalOpen}
+                      >
                         <DialogContent className="max-w-xl">
                           <DialogHeader>
                             <DialogTitle>Mentor Debrief Summary</DialogTitle>
                             <DialogDescription>
-                              Review what the mentor captured. If it looks right, save it to improve roadmap and plan personalization.
+                              Review what the mentor captured. If it looks
+                              right, save it to improve roadmap and plan
+                              personalization.
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-3 text-sm">
                             {intakePreview ? (
                               <div className="grid gap-3 rounded-lg border bg-muted/40 p-4">
-                                {Object.entries(intakePreview).map(([key, value]) => (
-                                  <div key={key} className="flex flex-col gap-1">
-                                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                      {key.replace(/_/g, " ")}
+                                {Object.entries(intakePreview).map(
+                                  ([key, value]) => (
+                                    <div
+                                      key={key}
+                                      className="flex flex-col gap-1"
+                                    >
+                                      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        {key.replace(/_/g, " ")}
+                                      </div>
+                                      <div className="text-sm text-foreground">
+                                        {Array.isArray(value)
+                                          ? value.join(", ") || "—"
+                                          : value === null || value === ""
+                                            ? "—"
+                                            : String(value)}
+                                      </div>
                                     </div>
-                                    <div className="text-sm text-foreground">
-                                      {Array.isArray(value)
-                                        ? value.join(", ") || "—"
-                                        : value === null || value === ""
-                                          ? "—"
-                                          : String(value)}
-                                    </div>
-                                  </div>
-                                ))}
+                                  ),
+                                )}
                               </div>
                             ) : (
                               <div className="rounded-lg border bg-muted/30 p-4 text-muted-foreground">
@@ -1459,15 +1620,22 @@ useEffect(() => {
                               }}
                               disabled={intakeSubmitting}
                             >
-                              {intakeSubmitting ? "Saving..." : "Confirm & save"}
+                              {intakeSubmitting
+                                ? "Saving..."
+                                : "Confirm & save"}
                             </Button>
                           </DialogFooter>
                         </DialogContent>
                       </Dialog>
-                      <Dialog open={softGateDialogOpen} onOpenChange={setSoftGateDialogOpen}>
+                      <Dialog
+                        open={softGateDialogOpen}
+                        onOpenChange={setSoftGateDialogOpen}
+                      >
                         <DialogContent className="max-w-xl">
                           <DialogHeader>
-                            <DialogTitle>Complete mentor debrief first</DialogTitle>
+                            <DialogTitle>
+                              Complete mentor debrief first
+                            </DialogTitle>
                             <DialogDescription>
                               {softGatePayload?.message ||
                                 "You can generate now, but completing debrief gives better roadmap personalization."}
@@ -1486,8 +1654,12 @@ useEffect(() => {
                               variant="outline"
                               onClick={() => {
                                 setSoftGateDialogOpen(false);
-                                if (softGatePayload?.handoff_url && typeof window !== "undefined") {
-                                  window.location.href = softGatePayload.handoff_url;
+                                if (
+                                  softGatePayload?.handoff_url &&
+                                  typeof window !== "undefined"
+                                ) {
+                                  window.location.href =
+                                    softGatePayload.handoff_url;
                                 }
                               }}
                             >
@@ -1499,8 +1671,9 @@ useEffect(() => {
                           </DialogFooter>
                         </DialogContent>
                       </Dialog>
-                      <div className="space-y-3 border-t border-white/80 bg-white/65 px-4 pb-4 pt-3">
-                        {(socketStatus === "closed" || socketStatus === "error") && (
+                      <div className="space-y-2 border-t border-white/80 bg-background px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 lg:space-y-3 lg:bg-white/65 lg:px-4 lg:pb-4 lg:pt-3">
+                        {(socketStatus === "closed" ||
+                          socketStatus === "error") && (
                           <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                             <WifiOff className="h-4 w-4 shrink-0" />
                             <span>
@@ -1512,7 +1685,9 @@ useEffect(() => {
                         )}
                         <MentorActionShelf
                           actions={visibleMentorActions}
-                          onSendQuickReply={(message) => handleSendMessage(message)}
+                          onSendQuickReply={(message) =>
+                            handleSendMessage(message)
+                          }
                           debriefProgress={
                             mentorStateV2 && planRecord?.status !== "active"
                               ? {
@@ -1526,7 +1701,9 @@ useEffect(() => {
                           onDismissAction={(action) => {
                             const key = mentorActionKey(action);
                             setDismissedMentorActionKeys((previous) =>
-                              previous.includes(key) ? previous : [...previous, key],
+                              previous.includes(key)
+                                ? previous
+                                : [...previous, key],
                             );
                           }}
                           disabled={
@@ -1556,16 +1733,27 @@ useEffect(() => {
                 {analysisJobRunning ? (
                   <Card className="border-blue-200 bg-blue-50/80">
                     <CardHeader>
-                      <CardTitle className="text-base">Your analysis is running</CardTitle>
+                      <CardTitle className="text-base">
+                        Your analysis is running
+                      </CardTitle>
                       <CardDescription>
-                        Resume and skill-gap analysis is processing in background. Start mentor chat now; context will sync automatically when ready.
+                        Resume and skill-gap analysis is processing in
+                        background. Start mentor chat now; context will sync
+                        automatically when ready.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-wrap gap-2">
-                      <Button variant="outline" onClick={() => setCreateModalOpen(true)}>
-                        <PlusCircle className="mr-2 h-4 w-4" /> Start Mentor Conversation
+                      <Button
+                        variant="outline"
+                        onClick={() => setCreateModalOpen(true)}
+                      >
+                        <PlusCircle className="mr-2 h-4 w-4" /> Start Mentor
+                        Conversation
                       </Button>
-                      <Button variant="outline" onClick={() => router.push("/onboarding")}>
+                      <Button
+                        variant="outline"
+                        onClick={() => router.push("/onboarding")}
+                      >
                         Open Onboarding
                       </Button>
                     </CardContent>
@@ -1575,12 +1763,14 @@ useEffect(() => {
                   <CardHeader>
                     <CardTitle>Welcome to the Mentor Lounge</CardTitle>
                     <CardDescription>
-                      Select a conversation from the list on the left, or start a new one to begin.
+                      Select a conversation from the list on the left, or start
+                      a new one to begin.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Button onClick={() => setCreateModalOpen(true)}>
-                      <PlusCircle className="mr-2 h-4 w-4" /> Start New Conversation
+                      <PlusCircle className="mr-2 h-4 w-4" /> Start New
+                      Conversation
                     </Button>
                   </CardContent>
                 </Card>

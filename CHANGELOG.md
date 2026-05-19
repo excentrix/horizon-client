@@ -11,7 +11,18 @@ Versioning policy:
 
 ## Unreleased
 
-- No changes yet.
+### Added
+- Director playback engine hooks and scene-studio interaction components (speech bubbles, whiteboard, inline quiz, playback scene).
+- Extended simulation and scene surfaces with richer dock/rail choreography and interaction controls.
+- New Horizon logo assets for updated studio branding surfaces.
+
+### Changed
+- API/types/contracts expanded for scene-action generation and mirror PDF export fetch handling.
+- Studio navigation, settings, dashboard, and profile surfaces updated to support playback-first runtime UX.
+- Mermaid rendering and HTTP client behavior refined for safer runtime handling.
+
+### Commits
+- `5a6cb58` feat(studio): add director playback engine and scene-interaction surfaces
 
 ## v0.2.5 (2026-05-09)
 

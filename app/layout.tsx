@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import {
   IBM_Plex_Mono,
   Inter,
@@ -7,6 +7,7 @@ import {
   Space_Grotesk,
 } from "next/font/google";
 import "./globals.css";
+import "katex/dist/katex.min.css";
 import { AppProviders } from "@/providers/app-providers";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +43,7 @@ export const metadata: Metadata = {
   title: "Horizon",
   description: "The GPS for your career",
   manifest: "/manifest.json",
+  applicationName: "Horizon",
   icons: {
     icon: [
       { url: "/icon.png", type: "image/png" },
@@ -52,9 +54,16 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     title: "Horizon",
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     capable: true,
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#5858cc",
 };
 
 export default function RootLayout({

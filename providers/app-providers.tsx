@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   QueryClient,
   QueryClientProvider,
@@ -32,6 +32,15 @@ const createQueryClient = () =>
 
 export function AppProviders({ children }: AppProvidersProps) {
   const [queryClient] = useState(createQueryClient);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator)) return;
+    // SW registration is required for installable PWA / standalone behavior.
+    navigator.serviceWorker.register("/service-worker.js", { scope: "/" }).catch(() => {
+      // Non-fatal in unsupported/insecure local environments.
+    });
+  }, []);
 
   return (
     <ThemeProvider>

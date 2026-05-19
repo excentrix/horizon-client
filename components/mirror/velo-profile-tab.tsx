@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { LiveAnalysisPanel } from "@/components/mirror/live-analysis-panel";
 import { ProjectVerificationSheet } from "@/components/mirror/ProjectVerificationSheet";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { useMirrorSnapshot } from "@/hooks/use-mirror-snapshot";
 import { useGithubRepos } from "@/hooks/use-github-repos";
 import { authApi, auditApi } from "@/lib/api";
@@ -46,6 +48,7 @@ import {
   Radar,
   ListChecks,
   Sparkles,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -334,12 +337,26 @@ export function VeloProfileTab() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data, isLoading } = useMirrorSnapshot();
+  const resumeInputRef = useRef<HTMLInputElement | null>(null);
   const [reanalysing, setReanalysing] = useState(false);
+  const [uploadingResume, setUploadingResume] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [verifyingProjectIndex, setVerifyingProjectIndex] = useState<number | null>(null);
   const [resettingVerificationId, setResettingVerificationId] = useState<string | null>(null);
   const [reanalysisBlocked, setReanalysisBlocked] = useState<{
     next_reset: string | null; limit: number;
   } | null>(null);
+  const [jdSheetOpen, setJdSheetOpen] = useState(false);
+  const [jdText, setJdText] = useState("");
+  const [jdReanalysing, setJdReanalysing] = useState(false);
+  const [jdReanalysisBlocked, setJdReanalysisBlocked] = useState<{
+    next_reset: string | null; limit: number; used: number;
+  } | null>(null);
+  const { data: quotaData } = useQuery({
+    queryKey: ["feature-quotas"],
+    queryFn: authApi.getFeatureQuotas,
+    staleTime: 60_000,
+  });
   const github = useGithubRepos();
 
   useEffect(() => {
@@ -369,6 +386,105 @@ export function VeloProfileTab() {
       });
     } finally {
       setReanalysing(false);
+    }
+  };
+
+  const handleJdReanalyse = async () => {
+    if (!jdText.trim()) {
+      toast.error("Please paste a job description first.");
+      return;
+    }
+    setJdReanalysing(true);
+    try {
+      await authApi.reanalyseWithJD(jdText.trim());
+      await queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
+      await queryClient.invalidateQueries({ queryKey: ["feature-quotas"] });
+      setJdSheetOpen(false);
+      setJdText("");
+      toast.success("JD-targeted analysis queued — VELO will update in a moment.");
+    } catch (err: unknown) {
+      const data = (err as { response?: { data?: Record<string, unknown> } })?.response?.data;
+      if (data?.quota_status === "exceeded") {
+        setJdSheetOpen(false);
+        setJdReanalysisBlocked({
+          next_reset: (data.next_reset as string | null) ?? null,
+          limit: (data.limit as number) ?? 2,
+          used: (data.used as number) ?? 2,
+        });
+        return;
+      }
+      toast.error("Couldn't queue JD analysis.", {
+        description: "Upload a resume first, then try again.",
+      });
+    } finally {
+      setJdReanalysing(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      const response = await auditApi.exportMirrorLatestPdf();
+      const blob = response.data as Blob;
+      const disposition = response.headers?.["content-disposition"] ?? "";
+      const match = disposition.match(/filename=\"?([^\";]+)\"?/i);
+      const filename = match?.[1] ?? "resume-analysis-report.pdf";
+
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success("PDF exported", {
+        description: "Your resume analysis report has been downloaded.",
+      });
+    } catch {
+      toast.error("Export failed", {
+        description: "Could not generate the PDF report right now.",
+      });
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  const handleResumeUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (
+      ![
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+      ].includes(file.type)
+    ) {
+      toast.error("Please upload a PDF, JPG, or PNG resume.");
+      event.target.value = "";
+      return;
+    }
+
+    setUploadingResume(true);
+    try {
+      const formData = new FormData();
+      formData.append("resume", file);
+      const response = await authApi.uploadResume(formData);
+      if (response.job_id && typeof window !== "undefined") {
+        window.localStorage.setItem("resumeAnalysisJobId", response.job_id);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
+      toast.success("Resume uploaded. VELO analysis is running.");
+    } catch {
+      toast.error("Failed to upload resume. Please try again.");
+    } finally {
+      event.target.value = "";
+      setUploadingResume(false);
     }
   };
 
@@ -425,14 +541,51 @@ export function VeloProfileTab() {
 
   if (isLoading) return <VeloSkeleton />;
 
+  const resumeUploadInput = (
+    <input
+      ref={resumeInputRef}
+      type="file"
+      accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+      className="hidden"
+      onChange={handleResumeUpload}
+    />
+  );
+
   if (isRunning) {
-    return <LiveAnalysisPanel progress={data?.analysis_job?.progress} />;
+    return (
+      <div className="mx-auto max-w-3xl p-4 md:p-8">
+        {resumeUploadInput}
+        <LiveAnalysisPanel progress={data?.analysis_job?.progress} />
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleReanalyse}
+            disabled={reanalysing}
+          >
+            <RefreshCw
+              className={cn("mr-1.5 h-3.5 w-3.5", reanalysing && "animate-spin")}
+            />
+            {reanalysing ? "Re-queuing…" : "Re-queue analysis"}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => resumeInputRef.current?.click()}
+            disabled={uploadingResume}
+          >
+            <Upload className="mr-1.5 h-3.5 w-3.5" />
+            {uploadingResume ? "Uploading…" : "Upload new resume"}
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   if (isFailed) {
     return (
       <div className="mx-auto max-w-3xl p-4 md:p-8">
         <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-6 dark:border-rose-900/30 dark:bg-rose-950/20">
+          {resumeUploadInput}
           <div className="mb-2 flex items-center gap-2 text-rose-700 dark:text-rose-400">
             <AlertCircle className="h-4 w-4" />
             <span className="text-sm font-semibold">Analysis failed</span>
@@ -441,13 +594,23 @@ export function VeloProfileTab() {
             {data?.analysis_job?.error ??
               "Something went wrong. Try re-uploading your resume."}
           </p>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => router.push("/settings")}
-          >
-            <Upload className="mr-1.5 h-3.5 w-3.5" /> Go to Settings
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              onClick={() => resumeInputRef.current?.click()}
+              disabled={uploadingResume}
+            >
+              <Upload className="mr-1.5 h-3.5 w-3.5" />
+              {uploadingResume ? "Uploading…" : "Upload new resume"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => router.push("/settings?tab=resume")}
+            >
+              Open Resume Settings
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -565,11 +728,35 @@ export function VeloProfileTab() {
           size="sm"
           variant="outline"
           className="h-7 gap-1.5 border-amber-300 text-xs text-amber-700 hover:bg-amber-50"
+          disabled={exportingPdf || !isReady}
+          onClick={handleExportPdf}
+        >
+          <Download className={cn("h-3 w-3", exportingPdf && "animate-pulse")} />
+          {exportingPdf ? "Exporting…" : "Export PDF"}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1.5 border-amber-300 text-xs text-amber-700 hover:bg-amber-50"
           disabled={reanalysing}
           onClick={handleReanalyse}
         >
           <RefreshCw className={cn("h-3 w-3", reanalysing && "animate-spin")} />
           {reanalysing ? "Queuing…" : "Re-analyse"}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1.5 border-amber-300 text-xs text-amber-700 hover:bg-amber-50"
+          onClick={() => setJdSheetOpen(true)}
+        >
+          <Sparkles className="h-3 w-3" />
+          Re-analyse with JD
+          {quotaData?.jd_reanalysis && !quotaData.jd_reanalysis.exempt && (
+            <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0 text-[10px] font-semibold text-amber-700">
+              {(quotaData.jd_reanalysis.limit ?? 2) - quotaData.jd_reanalysis.used} left
+            </span>
+          )}
         </Button>
       </div>
 
@@ -1631,6 +1818,87 @@ export function VeloProfileTab() {
             `Project ${verifyingProjectIndex + 1}`
           }
         />
+      )}
+
+      {/* JD re-analysis sheet */}
+      <Sheet open={jdSheetOpen} onOpenChange={setJdSheetOpen}>
+        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+          <SheetHeader className="border-b px-6 py-5">
+            <SheetTitle className="text-base">Re-analyse with Job Description</SheetTitle>
+            <p className="text-sm text-muted-foreground">
+              Paste the full job description below. VELO will re-run the analysis targeted to this specific role — scoring your alignment, identifying JD-specific gaps, and updating keyword recommendations.
+            </p>
+            {quotaData?.jd_reanalysis && !quotaData.jd_reanalysis.exempt && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700 font-medium">
+                  {quotaData.jd_reanalysis.used} / {quotaData.jd_reanalysis.limit ?? 2} used this month
+                </span>
+                {quotaData.jd_reanalysis.next_reset && (
+                  <span>· resets {new Date(quotaData.jd_reanalysis.next_reset).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                )}
+              </div>
+            )}
+          </SheetHeader>
+          <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
+            <Textarea
+              placeholder="Paste the full job description here…"
+              className="min-h-[320px] resize-none text-sm"
+              value={jdText}
+              onChange={(e) => setJdText(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              You can paste the raw job posting — requirements, responsibilities, and all. VELO will parse it automatically.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2 border-t px-6 py-4">
+            <Button variant="ghost" size="sm" onClick={() => setJdSheetOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={jdReanalysing || !jdText.trim()}
+              onClick={handleJdReanalyse}
+              className="gap-1.5"
+            >
+              <Sparkles className={cn("h-3.5 w-3.5", jdReanalysing && "animate-pulse")} />
+              {jdReanalysing ? "Queuing…" : "Run JD Analysis"}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* JD reanalysis quota exceeded modal */}
+      {jdReanalysisBlocked && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+          onClick={() => setJdReanalysisBlocked(null)}>
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="rounded-t-2xl bg-amber-50 px-6 pt-6 pb-5">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <h2 className="text-base font-semibold text-slate-900">JD re-analysis limit reached</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Your plan includes {jdReanalysisBlocked.limit} JD-targeted re-analyses per month ({jdReanalysisBlocked.used}/{jdReanalysisBlocked.limit} used).
+                {jdReanalysisBlocked.next_reset
+                  ? ` Your allowance resets on ${new Date(jdReanalysisBlocked.next_reset).toLocaleDateString(undefined, { month: "long", day: "numeric" })}.`
+                  : ""}
+              </p>
+            </div>
+            <div className="px-6 py-4">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Upgrade your plan to run unlimited JD-targeted analyses.
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-slate-100 px-6 py-4">
+              <Button size="sm" variant="ghost" className="text-slate-500"
+                onClick={() => setJdReanalysisBlocked(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Resume reanalysis quota exceeded modal */}

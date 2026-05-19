@@ -1,6 +1,12 @@
 {
   "name": "Horizon",
   "short_name": "Horizon",
+  "id": "/",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "portrait",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
@@ -16,6 +22,5 @@
     }
   ],
   "theme_color": "#5858cc",
-  "background_color": "#5858cc",
-  "display": "standalone"
+  "background_color": "#FAEDCD"
 }

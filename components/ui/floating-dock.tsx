@@ -6,7 +6,6 @@
  **/
 
 import { cn } from "@/lib/utils";
-import { IconLayoutNavbarCollapse } from "@tabler/icons-react";
 import Link from "next/link";
 import {
   AnimatePresence,
@@ -64,73 +63,47 @@ const FloatingDockMobile = ({
   }[];
   className?: string;
 }) => {
-  const [open, setOpen] = useState(false);
   return (
-    <div className={cn("relative block md:hidden", className)}>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            layoutId="nav"
-            className="absolute inset-x-0 bottom-full mb-2 flex flex-col gap-2"
-          >
-            {items.map((item, idx) => (
-              <motion.div
-                key={item.title}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{
-                  opacity: 1,
-                  y: 0,
-                }}
-                exit={{
-                  opacity: 0,
-                  y: 10,
-                  transition: {
-                    delay: idx * 0.05,
-                  },
-                }}
-                transition={{ delay: (items.length - 1 - idx) * 0.05 }}
-              >
-                {item.href ? (
-                  <Link
-                    href={item.href}
-                    key={item.title}
-                    data-dock-item="true"
-                    data-dock-title={item.title}
-                    className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-md border border-[color:var(--dock-border)] bg-[color:var(--dock-bg)] text-[color:var(--dock-item)] shadow-[var(--shadow-1)] backdrop-blur transition-colors hover:bg-[color:var(--dock-item-hover-bg)]",
-                      item.isActive && "bg-[color:var(--dock-item-hover-bg)] text-[color:var(--dock-item-active)]",
-                    )}
-                  >
-                    <div className="h-4 w-4">{item.icon}</div>
-                  </Link>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      item.onClick?.();
-                      setOpen(false);
-                    }}
-                    data-dock-item="true"
-                    data-dock-title={item.title}
-                    className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-md border border-[color:var(--dock-border)] bg-[color:var(--dock-bg)] text-[color:var(--dock-item)] shadow-[var(--shadow-1)] backdrop-blur transition-colors hover:bg-[color:var(--dock-item-hover-bg)]",
-                      item.isActive && "bg-[color:var(--dock-item-hover-bg)] text-[color:var(--dock-item-active)]",
-                    )}
-                  >
-                    <div className="h-4 w-4">{item.icon}</div>
-                  </button>
-                )}
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex h-10 w-10 items-center justify-center rounded-md border border-[color:var(--dock-border)] bg-[color:var(--dock-bg)] text-[color:var(--dock-item)] shadow-[var(--shadow-1)]"
+    <div className={cn("block md:hidden", className)}>
+      <nav
+        aria-label="Bottom navigation"
+        className="w-full border-t border-[color:var(--dock-border)] bg-[color:var(--dock-bg)] px-2 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur"
       >
-        <IconLayoutNavbarCollapse className="h-5 w-5" />
-      </button>
+        <div className="grid grid-cols-7 items-center gap-1">
+          {items.map((item) =>
+            item.href ? (
+              <Link
+                href={item.href}
+                key={item.title}
+                data-dock-item="true"
+                data-dock-title={item.title}
+                className={cn(
+                  "flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[10px] font-medium leading-none text-[color:var(--dock-item)] transition-colors",
+                  item.isActive && "bg-[color:var(--dock-item-hover-bg)] text-[color:var(--dock-item-active)]",
+                )}
+              >
+                <div className="h-4 w-4">{item.icon}</div>
+                <span className="max-w-full truncate">{item.title}</span>
+              </Link>
+            ) : (
+              <button
+                key={item.title}
+                type="button"
+                onClick={() => item.onClick?.()}
+                data-dock-item="true"
+                data-dock-title={item.title}
+                className={cn(
+                  "flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[10px] font-medium leading-none text-[color:var(--dock-item)] transition-colors",
+                  item.isActive && "bg-[color:var(--dock-item-hover-bg)] text-[color:var(--dock-item-active)]",
+                )}
+              >
+                <div className="h-4 w-4">{item.icon}</div>
+                <span className="max-w-full truncate">{item.title}</span>
+              </button>
+            ),
+          )}
+        </div>
+      </nav>
     </div>
   );
 };

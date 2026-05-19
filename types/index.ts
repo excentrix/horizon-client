@@ -1,6 +1,203 @@
 
 export type UUID = string;
 
+// ─── Scene Action Model ────────────────────────────────────────────────────
+// The playback engine executes a sequence of actions per lesson block.
+// Backend generates these; frontend plays them back in order.
+
+export type AgentRole = "teacher" | "peer_curious" | "peer_skeptic" | "narrator";
+
+export interface AgentConfig {
+  role: AgentRole;
+  name: string;
+  avatar: string;         // emoji or URL
+  voice?: SpeechSynthesisVoice | null;
+  accent_color: string;   // tailwind bg class e.g. "bg-violet-500"
+}
+
+// Whiteboard element primitives
+export type WbElement =
+  | { kind: "circle";   id: string; x: number; y: number; r: number; label?: string; color?: string; fill?: string }
+  | { kind: "rect";     id: string; x: number; y: number; w: number; h: number; label?: string; color?: string; fill?: string }
+  | { kind: "arrow";    id: string; x1: number; y1: number; x2: number; y2: number; label?: string; color?: string; dashed?: boolean }
+  | { kind: "text";     id: string; x: number; y: number; text: string; size?: number; bold?: boolean; color?: string }
+  | { kind: "formula";  id: string; x: number; y: number; latex: string; color?: string }
+  | { kind: "line";     id: string; x1: number; y1: number; x2: number; y2: number; color?: string; dashed?: boolean }
+  | { kind: "callout";  id: string; x: number; y: number; w: number; h: number; text: string; color?: string };
+
+// Individual action types
+export type SceneAction =
+  | {
+      type: "speech";
+      agent: AgentRole;
+      text: string;
+      tts?: boolean;
+      highlight_ids?: string[];   // wb element IDs to spotlight while speaking
+    }
+  | {
+      type: "wb_draw";
+      elements: WbElement[];
+      animate?: boolean;
+      stagger_ms?: number;        // delay between each element appearing
+    }
+  | {
+      type: "wb_highlight";
+      ids: string[];
+      color?: string;
+      duration_ms?: number;
+    }
+  | {
+      type: "wb_clear";
+      fade?: boolean;
+    }
+  | {
+      type: "pause";
+      duration_ms: number;        // 0 = wait for explicit user "Continue"
+      prompt?: string;
+    }
+  | {
+      type: "quiz";
+      question: string;
+      options: string[];
+      correct: number;            // index into options
+      explanation?: string;
+      blocking?: boolean;         // must answer correctly to advance
+    }
+  | {
+      type: "peer_challenge";
+      agent: AgentRole;
+      text: string;
+      tts?: boolean;
+    }
+  | {
+      type: "discussion";
+      prompt: string;             // pre-seeds the mentor dock
+    }
+  | {
+      type: "widget";
+      widget_type: "simulation" | "code_walkthrough" | "timeline" | "comparison" | "code_lab" | "game" | "explorer";
+      config: {
+        html_content?: string;
+        title?: string;
+        description?: string;
+        estimated_seconds?: number;
+        [key: string]: unknown;
+      };
+    }
+  | {
+      type: "spotlight";
+      x: number;
+      y: number;
+      r?: number;
+      duration_ms: number;
+      color?: string;
+    }
+  | {
+      type: "laser";
+      x: number;
+      y: number;
+      duration_ms?: number;
+      color?: string;
+    }
+  | {
+      type: "widget_set_state";
+      payload: Record<string, unknown>;
+      wait_ms?: number;
+    }
+  | {
+      type: "widget_highlight";
+      selector?: string;
+      label?: string;
+      payload?: Record<string, unknown>;
+      wait_ms?: number;
+    }
+  | {
+      type: "widget_annotation";
+      text: string;
+      x?: number;
+      y?: number;
+      payload?: Record<string, unknown>;
+      wait_ms?: number;
+    }
+  | {
+      type: "widget_reveal";
+      target?: string;
+      payload?: Record<string, unknown>;
+      wait_ms?: number;
+    };
+
+export interface LessonBlock {
+  id?: string;
+  title?: string;
+  type?:
+    | "objective"
+    | "concept"
+    | "example"
+    | "recap"
+    | "exercise"
+    | "interactive_sim"
+    | "agent_dialogue"
+    | "code_challenge"
+    | "whiteboard_sketch"
+    | "project_brief"
+    | "project_checkpoint"
+    | "feynman_probe"
+    | "quiz";
+  content?: string;
+  resource_id?: string;
+  verified?: boolean;
+  source_url?: string | null;
+  html_content?: string;
+  description?: string;
+  // Legacy agent_dialogue support
+  turns?: Array<{
+    speaker?: string;
+    persona_type?: string;
+    text?: string;
+    voice_hint?: string;
+  }>;
+  // Legacy code_challenge support
+  starter_code?: string;
+  language?: string;
+  test_cases?: Array<{ input?: string; expected_output?: string }>;
+  hints?: string[];
+  estimated_seconds?: number;
+  // feynman_probe fields
+  instructions?: string;
+  probes?: Array<{
+    id?: string;
+    type?: "explain" | "predict" | "contrast" | "apply";
+    prompt?: string;
+    target_concept?: string;
+    reveal_hint?: string;
+    depth_question?: string;
+  }>;
+  // quiz block fields (from _generate_quiz_scene)
+  questions?: Array<{
+    id?: string;
+    type?: "multiple_choice" | "true_false" | "short_answer";
+    difficulty?: string;
+    points?: number;
+    question?: string;
+    statement?: string;
+    options?: Array<{ id: string; text: string }>;
+    correct_option?: string;
+    correct_answer?: boolean;
+    expected_answer?: string;
+    key_concepts?: string[];
+    rubric?: { full_marks?: string; partial_marks?: string; no_marks?: string };
+    concept_tested?: string;
+    commentPrompt?: string;
+    explanation?: string;
+  }>;
+  analysis?: string;
+  // NEW: action model — populated by generate_scene_actions endpoint
+  actions?: SceneAction[];
+  actions_generated?: boolean;
+  actions_generating?: boolean;  // frontend-only optimistic flag
+}
+// ──────────────────────────────────────────────────────────────────────────────
+
 export interface ApiMetadata {
   message?: string;
 }
@@ -453,39 +650,8 @@ export interface DailyTask {
     confidence?: number | null;
     reflection?: string | null;
   };
-  lesson_blocks?: Array<{
-    id?: string;
-    title?: string;
-    type?:
-      | "objective"
-      | "concept"
-      | "example"
-      | "recap"
-      | "exercise"
-      | "interactive_sim"
-      | "agent_dialogue"
-      | "code_challenge"
-      | "whiteboard_sketch"
-      | "project_brief"
-      | "project_checkpoint";
-    content?: string;
-    resource_id?: string;
-    verified?: boolean;
-    source_url?: string | null;
-    html_content?: string;
-    description?: string;
-    turns?: Array<{
-      speaker?: string;
-      persona_type?: string;
-      text?: string;
-      voice_hint?: string;
-    }>;
-    starter_code?: string;
-    language?: string;
-    test_cases?: Array<{ input?: string; expected_output?: string }>;
-    hints?: string[];
-    estimated_seconds?: number;
-  }>;
+  lesson_blocks?: LessonBlock[];
+  subject_category?: "stem" | "business" | "humanities" | "health" | "cs" | "general" | null;
   lesson_generated_at?: string | null;
   playground_conversation_id?: string | null;
   feynman_conversation_id?: string | null;

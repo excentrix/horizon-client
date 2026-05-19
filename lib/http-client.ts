@@ -7,8 +7,25 @@ import axios, {
 } from "axios";
 import Cookies from "js-cookie";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
-  ?? (process.env.NODE_ENV === "development" ? "http://127.0.0.1:8000/api" : undefined);
+const resolveDevApiBaseUrl = () => {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+
+  if (process.env.NODE_ENV !== "development") {
+    return undefined;
+  }
+
+  if (typeof window !== "undefined") {
+    const protocol = window.location.protocol;
+    const host = window.location.hostname;
+    return `${protocol}//${host}:8000/api`;
+  }
+
+  return "http://127.0.0.1:8000/api";
+};
+
+const API_BASE_URL = resolveDevApiBaseUrl();
 const REFRESH_ENDPOINT = process.env.NEXT_PUBLIC_AUTH_REFRESH_ENDPOINT;
 
 type RefreshResponse = {

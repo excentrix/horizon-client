@@ -12,6 +12,7 @@ interface ConversationListProps {
   selectedConversationId?: string | null;
   onSelectConversation?: (conversationId: string) => void;
   activeClass?: string;
+  autoSelectFirst?: boolean;
 }
 
 export function ConversationList({
@@ -20,6 +21,7 @@ export function ConversationList({
   selectedConversationId,
   onSelectConversation,
   activeClass,
+  autoSelectFirst = true,
 }: ConversationListProps) {
   const storeSelectedConversationId = useMentorLoungeStore(
     (state) => state.selectedConversationId,
@@ -31,10 +33,10 @@ export function ConversationList({
   const selectConversation = onSelectConversation ?? setSelectedConversationId;
 
   useEffect(() => {
-    if (!storeSelectedConversationId && conversations.length > 0) {
+    if (autoSelectFirst && !storeSelectedConversationId && conversations.length > 0) {
       setSelectedConversationId(conversations[0].id);
     }
-  }, [conversations, storeSelectedConversationId, setSelectedConversationId]);
+  }, [autoSelectFirst, conversations, storeSelectedConversationId, setSelectedConversationId]);
 
   if (isLoading && conversations.length === 0) {
     return (

@@ -53,12 +53,6 @@ const STUDENT_NAV_ITEMS = [
     description: "Active learning campaigns",
   },
   {
-    href: "/simulations",
-    label: "Simulation Lab",
-    icon: FlaskConical,
-    description: "Validate simulators and mentor triggers",
-  },
-  {
     href: "/roadmap",
     label: "Roadmap",
     icon: Compass,
@@ -166,6 +160,18 @@ export function Sidebar() {
     isStudent && user && !user.onboarding_completed
   );
 
+  const studentNavItems = isDev
+    ? [
+        ...STUDENT_NAV_ITEMS,
+        {
+          href: "/simulations",
+          label: "Simulation Lab",
+          icon: FlaskConical,
+          description: "Validate simulators and mentor triggers",
+        },
+      ]
+    : STUDENT_NAV_ITEMS;
+
   const baseNavItems = isSuperUser
     ? [
         {
@@ -185,7 +191,7 @@ export function Sidebar() {
       ? ADMIN_NAV_ITEMS
       : isEducator
         ? EDUCATOR_NAV_ITEMS
-        : STUDENT_NAV_ITEMS;
+      : studentNavItems;
   const activeNavItems = (
     baseNavItems as Array<{
       href: string;
@@ -328,3 +334,4 @@ export function Sidebar() {
     </aside>
   );
 }
+  const isDev = process.env.NODE_ENV === "development";

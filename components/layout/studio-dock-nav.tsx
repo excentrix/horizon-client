@@ -14,7 +14,9 @@ import {
   X,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
+import { cn } from "@/lib/utils";
 
 import { useAuth } from "@/context/AuthContext";
 import { usePortfolioProfile } from "@/hooks/use-portfolio";
@@ -34,7 +36,6 @@ const STUDENT_ITEMS: DockItem[] = [
   { href: "/dashboard", title: "Dashboard", icon: <Compass className="h-full w-full" /> },
   { href: "/chat", title: "Mentor", icon: <MessageCircle className="h-full w-full" /> },
   { href: "/plans", title: "Plans", icon: <BrainCircuit className="h-full w-full" /> },
-  { href: "/simulations", title: "Sim Lab", icon: <FlaskConical className="h-full w-full" /> },
   { href: "/roadmap", title: "Roadmap", icon: <Compass className="h-full w-full" /> },
   { href: "/progress", title: "Mirror", icon: <Trophy className="h-full w-full" /> },
 ];
@@ -55,6 +56,7 @@ const ADMIN_ITEMS: DockItem[] = [
 
 export function StudioDockNav() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const { data: profileData } = usePortfolioProfile();
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -64,7 +66,20 @@ export function StudioDockNav() {
   const isAdmin = profileData?.profile?.user_type === "admin";
   const isEducator = profileData?.profile?.user_type === "educator";
 
-  const baseItems = isSuperUser ? ADMIN_ITEMS : isAdmin ? ADMIN_ITEMS : isEducator ? EDU_ITEMS : STUDENT_ITEMS;
+  const studentItems = isDev
+    ? [
+        ...STUDENT_ITEMS,
+        { href: "/simulations", title: "Sim Lab", icon: <FlaskConical className="h-full w-full" /> },
+      ]
+    : STUDENT_ITEMS;
+
+  const baseItems = isSuperUser
+    ? ADMIN_ITEMS
+    : isAdmin
+      ? ADMIN_ITEMS
+      : isEducator
+        ? EDU_ITEMS
+        : studentItems;
   const items =
     !isSuperUser && !isAdmin && !isEducator
       ? [
@@ -86,6 +101,8 @@ export function StudioDockNav() {
   }));
 
   const autoHide= !pathname.includes("dashboard")
+  const isChatThreadOpen =
+    pathname === "/chat" && Boolean(searchParams.get("conversation"));
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -178,9 +195,13 @@ export function StudioDockNav() {
       <FloatingDock
         items={activeItems}
         desktopClassName="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-40 -translate-x-1/2"
-        mobileClassName="fixed left-5 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50"
+        mobileClassName={cn(
+          "fixed inset-x-0 bottom-0 z-50",
+          isChatThreadOpen && "hidden",
+        )}
         autohide={autoHide}
       />
     </>
   );
 }
+  const isDev = process.env.NODE_ENV === "development";

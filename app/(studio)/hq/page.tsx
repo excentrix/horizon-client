@@ -438,7 +438,7 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
 
   // Quota state
   const [quotaMap, setQuotaMap] = useState<Record<string, AdminUserRow>>({});
-  const [quotaForm, setQuotaForm] = useState<{ lesson_regen_limit: string; resume_reanalysis_limit: string }>({ lesson_regen_limit: "", resume_reanalysis_limit: "" });
+  const [quotaForm, setQuotaForm] = useState<{ lesson_regen_limit: string; resume_reanalysis_limit: string; jd_reanalysis_limit: string }>({ lesson_regen_limit: "", resume_reanalysis_limit: "", jd_reanalysis_limit: "" });
   const [quotaSaving, setQuotaSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -519,6 +519,7 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
     setQuotaForm({
       lesson_regen_limit: quota?.lesson_regen_limit != null ? String(quota.lesson_regen_limit) : "",
       resume_reanalysis_limit: quota?.resume_reanalysis_limit != null ? String(quota.resume_reanalysis_limit) : "",
+      jd_reanalysis_limit: quota?.jd_reanalysis_limit != null ? String(quota.jd_reanalysis_limit) : "",
     });
     try {
       const detail = await hqApi.getUserGovernance(u.id);
@@ -536,9 +537,11 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
     try {
       const lesson = quotaForm.lesson_regen_limit === "" ? null : parseInt(quotaForm.lesson_regen_limit, 10);
       const analysis = quotaForm.resume_reanalysis_limit === "" ? null : parseInt(quotaForm.resume_reanalysis_limit, 10);
+      const jdAnalysis = quotaForm.jd_reanalysis_limit === "" ? null : parseInt(quotaForm.jd_reanalysis_limit, 10);
       await authApi.updateUserQuotas(selectedGovernanceUser.id, {
         lesson_regen_limit: isNaN(lesson as number) ? null : lesson,
         resume_reanalysis_limit: isNaN(analysis as number) ? null : analysis,
+        jd_reanalysis_limit: isNaN(jdAnalysis as number) ? null : jdAnalysis,
       });
       await loadQuotas();
       toast.success("Quotas updated");
@@ -556,7 +559,7 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
       await authApi.resetUserQuotas(selectedGovernanceUser.id);
       await loadQuotas();
       const quota = quotaMap[selectedGovernanceUser.id];
-      setQuotaForm({ lesson_regen_limit: "", resume_reanalysis_limit: "" });
+      setQuotaForm({ lesson_regen_limit: "", resume_reanalysis_limit: "", jd_reanalysis_limit: "" });
       toast.success("Quotas reset to defaults");
     } catch {
       toast.error("Failed to reset quotas");
@@ -681,6 +684,10 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
                             <p className="text-[11px] text-muted-foreground">
                               Analysis: <span className={cn("font-mono", q.resume_reanalysis_used > 0 ? "text-amber-500" : "text-foreground")}>{q.resume_reanalysis_used}</span>
                               <span className="text-muted-foreground">/{q.resume_reanalysis_limit ?? "1 (default)"}</span>
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              JD: <span className={cn("font-mono", (q.jd_reanalysis_used ?? 0) > 0 ? "text-amber-500" : "text-foreground")}>{q.jd_reanalysis_used ?? 0}</span>
+                              <span className="text-muted-foreground">/{q.jd_reanalysis_limit ?? "2 (default)"}</span>
                             </p>
                           </div>
                         );
@@ -825,7 +832,7 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
                       <p className="text-xs text-muted-foreground">Admin / staff / dev accounts have unlimited access to all features.</p>
                     ) : (
                       <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-3 gap-3">
                           <div className="space-y-1">
                             <label className="text-xs text-muted-foreground">Lesson Regen Limit <span className="text-muted-foreground/60">(lifetime · default 1)</span></label>
                             <div className="flex items-center gap-2">
@@ -852,6 +859,20 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
                                 onChange={(e) => setQuotaForm((s) => ({ ...s, resume_reanalysis_limit: e.target.value }))}
                               />
                               <span className="text-xs text-muted-foreground whitespace-nowrap">used: <span className={cn("font-mono", (q?.resume_reanalysis_used ?? 0) > 0 ? "text-amber-500" : "")}>{q?.resume_reanalysis_used ?? 0}</span></span>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground">JD Analysis Limit <span className="text-muted-foreground/60">(monthly · default 2)</span></label>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                placeholder="default (2)"
+                                className="h-8 text-sm font-mono"
+                                value={quotaForm.jd_reanalysis_limit}
+                                onChange={(e) => setQuotaForm((s) => ({ ...s, jd_reanalysis_limit: e.target.value }))}
+                              />
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">used: <span className={cn("font-mono", (q?.jd_reanalysis_used ?? 0) > 0 ? "text-amber-500" : "")}>{q?.jd_reanalysis_used ?? 0}</span></span>
                             </div>
                           </div>
                         </div>
