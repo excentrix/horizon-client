@@ -8,7 +8,7 @@ function SignupRedirect() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams((searchParams?.toString() ?? ""));
     router.replace(`/register${params.toString() ? `?${params.toString()}` : ""}`);
   }, [router, searchParams]);
 

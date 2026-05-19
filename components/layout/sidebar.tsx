@@ -146,7 +146,7 @@ const ADMIN_NAV_ITEMS = [
 ];
 
 export function Sidebar() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const { data: profileData } = usePortfolioProfile();
   const { user } = useAuth();
   const [qrOpen, setQrOpen] = useState(false);

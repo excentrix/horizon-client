@@ -602,7 +602,7 @@ function SkeletonCard({ lines }: { lines: number }) {
 function SettingsInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const tab = (searchParams.get("tab") as TabId) ?? "profile";
+  const tab = (searchParams?.get("tab") as TabId) ?? "profile";
 
   const setTab = (id: TabId) => router.replace(`/settings?tab=${id}`);
 

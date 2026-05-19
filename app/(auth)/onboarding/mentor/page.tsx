@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, MessageSquare } from "lucide-react";
+import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -26,8 +27,8 @@ function MentorIntakeContent() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const queryKey = searchParams.get("session");
-    const queryConversation = searchParams.get("conversation");
+    const queryKey = searchParams?.get("session");
+    const queryConversation = searchParams?.get("conversation");
     const localKey = typeof window !== "undefined" ? localStorage.getItem("onboarding_session_key") : null;
     const resolved = queryKey || localKey;
     if (!resolved) {
@@ -72,9 +73,12 @@ function MentorIntakeContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f6f4ff] dark:bg-[#0b0b0f] px-4 py-12">
-      <div className="container mx-auto max-w-2xl">
-        <Card className="border-2 border-black bg-white shadow-[10px_10px_0_0_#000] dark:border-white dark:bg-zinc-900 dark:shadow-[10px_10px_0_0_#fff]">
+    <OnboardingShell
+      title="Mentor intake"
+      subtitle="Give your mentor extra context before roadmap generation."
+      className="mx-auto max-w-2xl"
+    >
+        <Card className="border border-border bg-card shadow-none">
           <CardHeader>
             <CardTitle className="text-2xl font-bold">Mentor Intake</CardTitle>
             <CardDescription>
@@ -136,15 +140,14 @@ function MentorIntakeContent() {
             </Button>
           </CardContent>
         </Card>
-      </div>
-    </div>
+    </OnboardingShell>
   );
 }
 
 export default function MentorIntakePage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#f6f4ff] dark:bg-[#0b0b0f] flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-[color:var(--color-primary-surface)]">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     }>

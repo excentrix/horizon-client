@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Rocket, Mail, Lock, User, Globe } from "lucide-react";
 import { authApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -138,14 +139,18 @@ export default function FinalizePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f6f4ff] dark:bg-[#0b0b0f] flex items-center justify-center px-4 py-12">
-      <Card className="w-full max-w-md border-2 border-black bg-white shadow-[10px_10px_0_0_#000]">
+    <OnboardingShell
+      title="Finalize your account"
+      subtitle="Create your account to save your VELO setup and start learning."
+      className="mx-auto max-w-md"
+    >
+      <Card className="w-full border border-border bg-card shadow-none">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border-2 border-black bg-[#fcd34d]">
-            <Rocket className="h-7 w-7 text-black" />
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-border bg-[color:var(--color-primary-surface)]">
+            <Rocket className="h-7 w-7 text-[color:var(--dock-item-active)]" />
           </div>
-          <CardTitle className="text-2xl font-extrabold">Almost There!</CardTitle>
-          <CardDescription className="text-gray-700">
+          <CardTitle className="text-2xl font-semibold">Almost There</CardTitle>
+          <CardDescription className="text-muted-foreground">
             Create your account to save your personalized learning plan and start your journey.
           </CardDescription>
         </CardHeader>
@@ -163,7 +168,7 @@ export default function FinalizePage() {
                 placeholder="What should we call you?"
                 value={formData.displayName}
                 onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
-                className="border-2 border-black shadow-[3px_3px_0_0_#000]"
+                className=""
               />
             </div>
             
@@ -180,7 +185,7 @@ export default function FinalizePage() {
                 required
                 value={formData.email}
                 onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                className="border-2 border-black shadow-[3px_3px_0_0_#000]"
+                className=""
               />
             </div>
             
@@ -197,7 +202,7 @@ export default function FinalizePage() {
                 required
                 value={formData.password}
                 onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                className="border-2 border-black shadow-[3px_3px_0_0_#000]"
+                className=""
               />
             </div>
             
@@ -211,7 +216,7 @@ export default function FinalizePage() {
                 required
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                className="border-2 border-black shadow-[3px_3px_0_0_#000]"
+                className=""
               />
             </div>
             
@@ -225,20 +230,20 @@ export default function FinalizePage() {
                 id="timezone"
                 value={formData.timezone}
                 onChange={(e) => setFormData(prev => ({ ...prev, timezone: e.target.value }))}
-                className="border-2 border-black shadow-[3px_3px_0_0_#000]"
+                className=""
               />
               <p className="text-xs text-gray-500">Auto-detected. We use this to schedule your daily tasks.</p>
             </div>
             
             {/* Error message */}
             {error && (
-              <div className="rounded-md border-2 border-black bg-red-100 p-3 text-sm font-semibold text-red-700 shadow-[3px_3px_0_0_#000]">
+              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
                 {error}
               </div>
             )}
             
             {/* Submit */}
-            <Button type="submit" className="w-full h-11 text-base bg-black text-white shadow-[4px_4px_0_0_#000] hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition" disabled={loading}>
+            <Button type="submit" className="h-11 w-full text-base" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -266,7 +271,7 @@ export default function FinalizePage() {
             <Button
               variant="outline"
               type="button"
-              className="w-full border-2 border-black shadow-[4px_4px_0_0_#000] hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition"
+              className="w-full"
               onClick={() => loginWithGoogle()}
               disabled={loading || isAuthLoading}
             >
@@ -282,6 +287,6 @@ export default function FinalizePage() {
           </p>
         </CardContent>
       </Card>
-    </div>
+    </OnboardingShell>
   );
 }

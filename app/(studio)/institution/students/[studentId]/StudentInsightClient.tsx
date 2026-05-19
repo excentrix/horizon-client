@@ -47,6 +47,7 @@ type StudentInsight = {
 
 export default function StudentInsightClient() {
   const params = useParams<{ studentId: string }>();
+  const studentId = params?.studentId ?? "";
   const router = useRouter();
   const { selectedOrgId } = useInstitutionScope();
   const [student, setStudent] = useState<StudentInsight | null>(null);
@@ -72,25 +73,25 @@ export default function StudentInsightClient() {
   }, [student?.completion_series, student?.engagement_series]);
 
   useEffect(() => {
-    if (!params.studentId) return;
+    if (!studentId) return;
     setLoading(true);
-    institutionsApi.studentInsight(params.studentId, { org: selectedOrgId || undefined })
+    institutionsApi.studentInsight(studentId, { org: selectedOrgId || undefined })
       .then((data) => setStudent(data))
       .catch((err) => telemetry.error("Failed to load student insight", { err }))
       .finally(() => setLoading(false));
-  }, [params.studentId, selectedOrgId]);
+  }, [studentId, selectedOrgId]);
 
   useEffect(() => {
-    if (!params.studentId) return;
-    institutionsApi.listStudentInterventions(params.studentId, { org: selectedOrgId || undefined })
+    if (!studentId) return;
+    institutionsApi.listStudentInterventions(studentId, { org: selectedOrgId || undefined })
       .then((data) => setInterventions(data))
       .catch((err) => telemetry.error("Failed to load interventions", { err }));
-  }, [params.studentId, selectedOrgId]);
+  }, [studentId, selectedOrgId]);
 
   const handleIntervention = async (action: "check_in" | "schedule_1on1" | "assign_remediation") => {
-    if (!params.studentId) return;
+    if (!studentId) return;
     try {
-      const created = await institutionsApi.createStudentIntervention(params.studentId, {
+      const created = await institutionsApi.createStudentIntervention(studentId, {
         action_type: action,
         notes,
         org: selectedOrgId || undefined,

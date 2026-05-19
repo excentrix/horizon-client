@@ -96,11 +96,11 @@ export default function ChatPage() {
 function ChatContent() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
-  const searchParamsString = searchParams.toString();
-  const conversationFromQuery = searchParams.get("conversation");
-  const contextFromQuery = searchParams.get("context");
+  const searchParamsString = (searchParams?.toString() ?? "");
+  const conversationFromQuery = searchParams?.get("conversation");
+  const contextFromQuery = searchParams?.get("context");
   const queryClient = useQueryClient();
   
   const selectedConversationId = useMentorLoungeStore(
@@ -137,7 +137,7 @@ function ChatContent() {
   );
 
   const isMentorIntake =
-    searchParams.get("context") === "mentor_intake" ||
+    searchParams?.get("context") === "mentor_intake" ||
     Boolean(activeConversation?.is_intake);
 
   const {
@@ -261,7 +261,7 @@ function ChatContent() {
     if (selectedConversationId) {
       return;
     }
-    const queryConversation = searchParams.get("conversation");
+    const queryConversation = searchParams?.get("conversation");
     if (!queryConversation) {
       return;
     }
@@ -275,7 +275,7 @@ function ChatContent() {
     if (!forceConversationList) {
       return;
     }
-    const queryConversation = searchParams.get("conversation");
+    const queryConversation = searchParams?.get("conversation");
     if (!queryConversation) {
       setForceConversationList(false);
     }
@@ -514,7 +514,7 @@ useEffect(() => {
   const planBuildId = useMentorLoungeStore(state => state.planBuildId);
   const planBuildTitle = useMentorLoungeStore(state => state.planBuildTitle);
   const mirrorAnalysisReady = useMentorLoungeStore(state => state.mirrorAnalysisReady);
-  const planIdFromQuery = searchParams.get("plan");
+  const planIdFromQuery = searchParams?.get("plan");
   const effectivePlanId =
     planBuildId ?? planIdFromQuery ?? latestPlan?.learning_plan_id ?? undefined;
   const { data: planRecord } = usePlan(effectivePlanId ?? undefined);

@@ -53,7 +53,7 @@ function getVideoEmbedUrl(url: string) {
       return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
     }
     if (host.includes("youtube.com")) {
-      const videoId = parsed.searchParams.get("v");
+      const videoId = parsed.searchParams?.get("v");
       return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
     }
     if (host.includes("vimeo.com")) {

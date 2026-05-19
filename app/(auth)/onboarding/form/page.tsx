@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, ArrowRight, Target, Trophy } from "lucide-react";
+import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -111,34 +112,31 @@ export default function OnboardingFormPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
+      <div className="flex min-h-screen items-center justify-center bg-[color:var(--color-primary-surface)]">
         <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f4ff] dark:bg-[#0b0b0f] px-4 py-12">
-      <div className="container mx-auto max-w-2xl">
-        
-        {/* Progress */}
-        <div className="mb-8 flex justify-center">
+    <OnboardingShell title="Confirm your goal" subtitle="We prefill what we can from your resume. Adjust it once and continue.">
+        <div className="mb-2 flex justify-center">
             <div className="flex items-center space-x-2 text-sm font-semibold text-gray-900 dark:text-gray-300">
-                <span className="h-2 w-2 rounded-full bg-black dark:bg-white"></span>
+                <span className="h-2 w-2 rounded-full bg-[color:var(--dock-item-active)]"></span>
                 <span>Goals</span>
-                <span className="h-px w-8 bg-black/30 dark:bg-white/30"></span>
-                <span className="h-2 w-2 rounded-full bg-black/20 dark:bg-white/20"></span>
-                <span className="text-gray-600 dark:text-gray-500">Mentor Intake</span>
+                <span className="h-px w-8 bg-border"></span>
+                <span className="h-2 w-2 rounded-full bg-border"></span>
+                <span className="text-muted-foreground">Mentor Intake</span>
             </div>
         </div>
 
-        <Card className="border-2 border-black bg-white shadow-[10px_10px_0_0_#000] dark:border-white dark:bg-zinc-900 dark:shadow-[10px_10px_0_0_#fff]">
+        <Card className="border border-border bg-card shadow-none">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border-2 border-black bg-[#fcd34d] dark:border-white">
-                <Target className="h-6 w-6 text-black" />
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-[color:var(--color-primary-surface)]">
+                <Target className="h-6 w-6 text-[color:var(--dock-item-active)]" />
             </div>
-            <CardTitle className="text-2xl font-extrabold dark:text-white">Design Your Journey</CardTitle>
-            <CardDescription className="text-gray-700 dark:text-gray-400">
+            <CardTitle className="text-2xl font-semibold">Design Your Journey</CardTitle>
+            <CardDescription className="text-muted-foreground">
                   If you uploaded a resume, we pre-filled some details. Otherwise, just answer a few quick questions.
                 </CardDescription>
               </CardHeader>
@@ -146,11 +144,11 @@ export default function OnboardingFormPage() {
                 <form onSubmit={handleSubmit} className="space-y-8">
 
               {!hasResumePrefill && (
-                <div className="rounded-xl border-2 border-black bg-[#e0f2fe] p-4 text-sm text-gray-900 shadow-[6px_6px_0_0_#000] dark:border-gray-500 dark:bg-blue-900/20 dark:text-gray-100 dark:shadow-none">
-                  <div className="mb-2 font-semibold text-black dark:text-blue-200">
+                <div className="rounded-xl border border-border bg-[color:var(--color-primary-surface)] p-4 text-sm text-foreground">
+                  <div className="mb-2 font-semibold">
                     Quick picks to get you started
                   </div>
-                  <div className="mb-3 text-xs text-gray-700 dark:text-blue-300">
+                  <div className="mb-3 text-xs text-muted-foreground">
                     Tap a role to autofill. You can edit anytime.
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -159,7 +157,7 @@ export default function OnboardingFormPage() {
                         key={role}
                         type="button"
                         onClick={() => setFormData((prev) => ({ ...prev, target_role: role }))}
-                        className="rounded-full border-2 border-black bg-white px-3 py-1 text-xs font-semibold text-black shadow-[3px_3px_0_0_#000] transition hover:translate-y-0.5 hover:shadow-[1px_1px_0_0_#000] dark:border-blue-400 dark:bg-blue-950 dark:text-blue-100 dark:shadow-none dark:hover:bg-blue-900"
+                        className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-foreground transition hover:bg-[color:var(--dock-item-hover-bg)]"
                       >
                         {role}
                       </button>
@@ -170,23 +168,23 @@ export default function OnboardingFormPage() {
                   
                   {/* Target Role */}
                   <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
-                    <Target className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                <Label className="flex items-center gap-2 text-base font-semibold">
+                    <Target className="h-4 w-4 text-[color:var(--dock-item-active)]" />
                     What is your target role?
                 </Label>
                 <Input
                   placeholder="e.g. Senior Backend Engineer, Data Scientist"
                   value={formData.target_role}
                   onChange={(e) => setFormData({ ...formData, target_role: e.target.value })}
-                  className="h-12 text-lg border-2 border-black shadow-[4px_4px_0_0_#000] dark:border-gray-500 dark:bg-zinc-800 dark:text-white dark:shadow-none dark:placeholder:text-gray-500"
+                  className="h-12 text-lg"
                   required
                 />
                   </div>
     
                   {/* Experience Level */}
                   <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
-                    <Trophy className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                <Label className="flex items-center gap-2 text-base font-semibold">
+                    <Trophy className="h-4 w-4 text-[color:var(--dock-item-active)]" />
                     Current Experience Level
                 </Label>
                 <div className="grid grid-cols-3 gap-3">
@@ -204,8 +202,8 @@ export default function OnboardingFormPage() {
                         }
                         className={`flex flex-col items-center justify-center rounded-lg border-2 border-black p-3 text-sm font-semibold transition-all dark:border-gray-500 ${
                           isSelected
-                            ? "bg-[#dcfce7] text-black shadow-[4px_4px_0_0_#000] dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-500 dark:shadow-none"
-                            : "bg-white text-black shadow-[3px_3px_0_0_#000] hover:translate-y-0.5 hover:shadow-[1px_1px_0_0_#000] dark:bg-zinc-800 dark:text-gray-300 dark:shadow-none dark:hover:bg-zinc-700"
+                            ? "bg-[color:var(--dock-item-hover-bg)] text-[color:var(--dock-item-active)]"
+                            : "bg-card text-foreground hover:bg-[color:var(--dock-item-hover-bg)]"
                         }`}
                       >
                         <span className="capitalize">{level}</span>
@@ -218,7 +216,7 @@ export default function OnboardingFormPage() {
                   {/* Mentor Tone (Coming Soon) */}
               <Button 
                 type="submit" 
-                className="w-full text-lg h-12 bg-black text-white shadow-[4px_4px_0_0_#000] hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition dark:bg-emerald-600 dark:shadow-[4px_4px_0_0_#000] dark:border-2 dark:border-emerald-400"
+                className="h-12 w-full text-lg"
                 disabled={submitting}
               >
                 {submitting ? (
@@ -237,7 +235,6 @@ export default function OnboardingFormPage() {
             </form>
           </CardContent>
         </Card>
-      </div>
-    </div>
+    </OnboardingShell>
   );
 }

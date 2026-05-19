@@ -59,8 +59,8 @@ export function useVeloOnboardingFlow() {
   } | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
 
-  const queryAudit = searchParams.get("audit");
-  const queryStep = searchParams.get("step") as VeloStep | null;
+  const queryAudit = searchParams?.get("audit");
+  const queryStep = searchParams?.get("step") as VeloStep | null;
 
   const loadSession = useCallback(async () => {
     setIsLoadingSession(true);

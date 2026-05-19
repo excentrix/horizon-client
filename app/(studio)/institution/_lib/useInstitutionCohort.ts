@@ -60,7 +60,7 @@ export function useInstitutionCohort(options: UseInstitutionCohortOptions = {}) 
   const { withDashboard = true } = options;
   const { user } = useAuth();
   const searchParams = useSearchParams();
-  const scopedOrgId = searchParams.get("org") ?? undefined;
+  const scopedOrgId = searchParams?.get("org") ?? undefined;
   const isSuperuser = Boolean(user?.is_superuser);
   const [cohorts, setCohorts] = useState<Cohort[]>([]);
   const [selectedCohort, setSelectedCohort] = useState<string | null>(null);

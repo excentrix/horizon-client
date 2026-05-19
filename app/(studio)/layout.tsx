@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { GamificationProvider } from "@/components/gamification";
 import { cn } from "@/lib/utils";
@@ -10,7 +10,7 @@ import { ProfileMenu } from "@/components/layout/profile-menu";
 import Link from "next/link";
 
 export default function StudioLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const isDashboard = pathname.startsWith("/dashboard");
   const isPlansV2 = pathname === "/plans/v2";
   const isPlaygroundRoute =
@@ -70,7 +70,11 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
           </main>
         </div>
 
-        {hideDock ? null : <StudioDockNav />}
+        {hideDock ? null : (
+          <Suspense fallback={null}>
+            <StudioDockNav />
+          </Suspense>
+        )}
         {/* <SupportFeedbackWidget /> */}
       </div>
     </GamificationProvider>

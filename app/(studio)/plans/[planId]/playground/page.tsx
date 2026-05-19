@@ -264,14 +264,14 @@ function PlaygroundFlow() {
   const router = useRouter();
   const params = useParams<{ planId: string }>();
   const searchParams = useSearchParams();
-  const planId = params.planId;
+  const planId = params?.planId ?? "";
 
   const { data: plan, refetch: refetchPlan } = usePlan(planId);
   const { updateTaskStatus } = usePlanMutations(planId);
   const queryClient = useQueryClient();
   const { lessonProgress } = useNotifications();
 
-  const selectedTaskId = searchParams.get("task");
+  const selectedTaskId = searchParams?.get("task");
   const planRefetchInFlightRef = useRef(false);
   const tasks = useMemo(() => plan?.daily_tasks ?? [], [plan?.daily_tasks]);
 
