@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookOpen,
-  BrainCircuit,
   ChevronLeft,
   ChevronRight,
   Play,
-  Sparkles,
+  MessageSquare,
+  CalendarDays,
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { SkillRadarChart } from "@/components/intelligence/SkillRadarChart";
-import { MentorInbox } from "@/components/intelligence/MentorInbox";
 import {
   VeloTracker,
   XPQuests,
@@ -691,6 +690,15 @@ export default function DashboardPage() {
         scheduledTime: task.scheduled_time,
       }));
   }, [allTasks, homeData?.additional_tasks, homeData?.today_task]);
+  const skillDiagnosticsData = useMemo(
+    () =>
+      domainBreakdownRows.map((row) => ({
+        subject: toTitleCase(row.domain.replaceAll("_", " ")),
+        score: row.verifiedRatePct,
+        fullMark: 100,
+      })),
+    [domainBreakdownRows],
+  );
 
   const isLoading = authLoading || tasksLoading;
   const isCalendarExpanded = calendarView !== "day";
@@ -918,14 +926,13 @@ export default function DashboardPage() {
               </div>
             </div> */}
             {/* <TheCircleTeaser /> */}
-            <SkillRadarChart className="" />
+            <SkillRadarChart className="" data={skillDiagnosticsData} />
             {/* <XPQuests /> */}
             <BackgroundTaskMonitor analysisEvents={analysisEvents} />
           </section>
 
           {/* ── Column 2: Horizon Inbox + Mood ─────────────────────────── */}
           <section className="grid min-h-0 content-start gap-4 overflow-y-auto pr-1 xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:overflow-hidden">
-            <MentorInbox />
             <MoodSensor />
           </section>
 
@@ -951,21 +958,32 @@ export default function DashboardPage() {
                         Live
                       </Badge>
                     </div>
-                    <p className="mt-1 text-sm font-medium">
-                      What should we work on next?
+                    <p className="mt-1 text-sm font-medium">What should we work on next?</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {focusTasks[0]
+                        ? `Active focus: ${focusTasks[0].title}`
+                        : "No active task selected. Start with your next roadmap step."}
                     </p>
                     <div className="mt-2 flex items-center gap-2">
                       <Button
                         variant="outline"
                         size="icon"
                         className="h-8 w-8 bg-background/70"
+                        onClick={() => router.push("/chat?context=dashboard")}
                       >
-                        <Sparkles className="h-4 w-4" />
+                        <MessageSquare className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="default"
                         size="icon"
                         className="h-9 w-9 rounded-full bg-foreground text-background"
+                        onClick={() => {
+                          if (focusTasks[0]) {
+                            openTask(focusTasks[0]);
+                            return;
+                          }
+                          router.push("/plans");
+                        }}
                       >
                         <Play className="h-4 w-4" />
                       </Button>
@@ -973,8 +991,9 @@ export default function DashboardPage() {
                         variant="outline"
                         size="icon"
                         className="h-8 w-8 bg-background/70"
+                        onClick={() => router.push("/plans")}
                       >
-                        <BrainCircuit className="h-4 w-4" />
+                        <CalendarDays className="h-4 w-4" />
                       </Button>
                       <div className="ml-2 min-w-0 flex-1">
                         <Input
@@ -1021,18 +1040,31 @@ export default function DashboardPage() {
                     <p className="mt-2 text-center text-sm font-medium">
                       What should we work on next?
                     </p>
+                    <p className="mt-1 text-center text-xs text-muted-foreground">
+                      {focusTasks[0]
+                        ? `Next focus: ${focusTasks[0].title}`
+                        : "Open your plans to pick the next mission."}
+                    </p>
                     <div className="mt-2 flex items-center justify-center gap-2">
                       <Button
                         variant="outline"
                         size="icon"
                         className="h-8 w-8 bg-background/70"
+                        onClick={() => router.push("/chat?context=dashboard")}
                       >
-                        <Sparkles className="h-4 w-4" />
+                        <MessageSquare className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="default"
                         size="icon"
                         className="h-9 w-9 rounded-full bg-foreground text-background"
+                        onClick={() => {
+                          if (focusTasks[0]) {
+                            openTask(focusTasks[0]);
+                            return;
+                          }
+                          router.push("/plans");
+                        }}
                       >
                         <Play className="h-4 w-4" />
                       </Button>
@@ -1040,8 +1072,9 @@ export default function DashboardPage() {
                         variant="outline"
                         size="icon"
                         className="h-8 w-8 bg-background/70"
+                        onClick={() => router.push("/plans")}
                       >
-                        <BrainCircuit className="h-4 w-4" />
+                        <CalendarDays className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>

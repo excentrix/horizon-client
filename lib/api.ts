@@ -727,6 +727,17 @@ export const planningApi = {
       limit?: number;
     }>(http.post(`/planning/tasks/${taskId}/generate-lesson/`, payload ?? {})),
 
+  generateSceneActions: (
+    taskId: string,
+    payload: { block_index: number; force?: boolean }
+  ) =>
+    extract<{
+      status: "generated" | "cached" | "queued" | "pending" | "error";
+      block_index: number;
+      actions?: import("@/types").SceneAction[];
+      error?: string;
+    }>(http.post(`/planning/tasks/${taskId}/generate-scene-actions/`, payload)),
+
   lessonPreflight: (
     taskId: string,
     payload?: { scene_types?: "basic" | "extended" }
@@ -1940,6 +1951,9 @@ export const auditApi = {
         updated_at: string;
       };
     }>(http.get("/mirror/latest/")),
+
+  exportMirrorLatestPdf: () =>
+    http.get("/mirror/latest/export/pdf/", { responseType: "blob" }),
 
   startProjectVerification: (snapshotId: string, projectIndex: number) =>
     extract<{

@@ -20,10 +20,19 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertCircle } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_AUTH_REFRESH_ENDPOINT?.replace(
-  "/token/refresh/",
-  ""
-) ?? "http://localhost:8000/api";
+const resolveApiUrl = () => {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+
+  if (typeof window !== "undefined") {
+    return `${window.location.protocol}//${window.location.hostname}:8000/api`;
+  }
+
+  return "http://127.0.0.1:8000/api";
+};
+
+const API_URL = resolveApiUrl();
 
 const registerSchema = z
   .object({

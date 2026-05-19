@@ -7,6 +7,7 @@ import {
   Space_Grotesk,
 } from "next/font/google";
 import "./globals.css";
+import "katex/dist/katex.min.css";
 import { AppProviders } from "@/providers/app-providers";
 import { cn } from "@/lib/utils";
 

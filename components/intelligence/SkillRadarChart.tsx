@@ -22,11 +22,23 @@ const DUMMY_SKILLS = [
 
 interface SkillRadarChartProps {
   className?: string;
+  data?: { subject: string; score: number; fullMark?: number }[];
 }
 
-export function SkillRadarChart({ className = "" }: SkillRadarChartProps) {
+export function SkillRadarChart({ className = "", data }: SkillRadarChartProps) {
   // Use a stable ID for gradient to avoid hydration issues if multiple instances
   const gradientId = useMemo(() => "radar-gradient", []);
+  const chartData = useMemo(() => {
+    if (Array.isArray(data) && data.length > 0) {
+      return data.map((item) => ({
+        subject: item.subject,
+        A: Math.max(0, Math.min(100, Math.round(item.score))),
+        fullMark: item.fullMark ?? 100,
+      }));
+    }
+    return DUMMY_SKILLS;
+  }, [data]);
+  const isFallback = !data || data.length === 0;
 
   return (
     <div
@@ -35,13 +47,15 @@ export function SkillRadarChart({ className = "" }: SkillRadarChartProps) {
       <div className="mb-2 shrink-0">
         <p className="font-display text-base">Skill Diagnostics</p>
         <p className="text-[11px] text-muted-foreground mt-0.5">
-          Baseline capability distribution
+          {isFallback
+            ? "Baseline capability distribution"
+            : "Live capability profile from your current learning data"}
         </p>
       </div>
 
       <div className="min-h-[240px] flex-1 -mx-4 -mb-2 relative">
         <ResponsiveContainer width="100%" height="100%">
-          <RadarChart cx="50%" cy="50%" outerRadius="75%" data={DUMMY_SKILLS}>
+          <RadarChart cx="50%" cy="50%" outerRadius="75%" data={chartData}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop

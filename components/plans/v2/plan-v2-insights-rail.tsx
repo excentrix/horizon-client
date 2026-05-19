@@ -54,7 +54,7 @@ function InsightsRailBody({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-black/10 bg-white/90 p-3">
+      {/* <section className="rounded-2xl border border-black/10 bg-white/90 p-3">
         <div className="mb-2 flex items-center gap-2">
           <WandSparkles className="h-4 w-4 text-[#5858CC]" />
           <p className="text-sm font-semibold text-[#414141]">Mentor recommendation</p>
@@ -96,7 +96,7 @@ function InsightsRailBody({
           <p className="text-sm font-semibold text-[#414141]">Session helper</p>
         </div>
         <p className="text-xs text-[#414141]/75">Keep sessions under 45 minutes. Complete one task, then review what changed.</p>
-      </section>
+      </section> */}
     </div>
   );
 }

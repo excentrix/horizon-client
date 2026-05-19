@@ -129,6 +129,38 @@ function SceneThumb({ sceneType, active }: { sceneType: string; active: boolean 
   );
 }
 
+function ScenePreviewMeta({ scene }: { scene: SceneRailItem }) {
+  const t = String(scene.type ?? "concept");
+  const text = compactPreview(scene);
+
+  if (t === "interactive_sim") {
+    return (
+      <p className="mt-0.5 line-clamp-1 text-[10px] text-indigo-700/80">
+        Interactive explorer with guided steps
+      </p>
+    );
+  }
+  if (t === "code_challenge") {
+    return (
+      <p className="mt-0.5 line-clamp-1 text-[10px] text-emerald-700/80">
+        Sandbox challenge with tests
+      </p>
+    );
+  }
+  if (t === "exercise") {
+    return (
+      <p className="mt-0.5 line-clamp-1 text-[10px] text-amber-700/80">
+        Practice task with expected output
+      </p>
+    );
+  }
+  return (
+    <p className="mt-0.5 line-clamp-1 text-[10px] text-slate-600">
+      {text || "Guided explanation scene"}
+    </p>
+  );
+}
+
 export function SceneRail({
   scenes,
   activeIndex,
@@ -161,7 +193,6 @@ export function SceneRail({
           {scenes.map((scene, i) => {
             const sceneType = String(scene.type ?? "concept");
             const title = String(scene.title ?? SCENE_LABELS[sceneType] ?? `Scene ${i + 1}`);
-            const preview = compactPreview(scene);
             const activeRow = i === activeIndex;
             return (
               <button
@@ -192,9 +223,7 @@ export function SceneRail({
                       <SceneThumb sceneType={sceneType} active={activeRow} />
                     </div>
                     <p className="mt-1.5 line-clamp-2 text-[13px] font-semibold leading-4 text-slate-900">{title}</p>
-                    <p className="mt-0.5 line-clamp-1 text-[10px] text-slate-600">
-                      {preview || "Scene content preview"}
-                    </p>
+                    <ScenePreviewMeta scene={scene} />
                   </>
                 )}
               </button>

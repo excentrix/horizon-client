@@ -12,16 +12,23 @@ import {
   PanelLeft,
   Minimize2,
   Play,
+  Pause,
+  SkipForward,
   Volume2,
+  VolumeX,
   PencilLine,
   Expand,
   RefreshCw,
+  Loader2,
+  RotateCcw,
 } from "lucide-react";
+import { usePlaybackEngine } from "@/hooks/use-playback-engine";
 import { InteractiveSimScene } from "../InteractiveSimScene";
 import { AgentDialogueScene } from "../AgentDialogueScene";
 import { CodeChallengeScene } from "../CodeChallengeScene";
 import { ProjectBriefScene } from "../ProjectBriefScene";
 import { ProjectCheckpointScene } from "../ProjectCheckpointScene";
+import { VegaChartScene } from "../VegaChartScene";
 import { MathMarkdown } from "@/components/markdown/MathMarkdown";
 import { MermaidBlock } from "@/components/markdown/MermaidBlock";
 import { CodeRunner } from "../CodeRunner";
@@ -29,9 +36,11 @@ import { SceneRail } from "./SceneRail";
 import { SceneStage } from "./SceneStage";
 import { RoundtableDock } from "./RoundtableDock";
 import { MentorAssistant } from "../MentorAssistant";
+import { PlaybackScene } from "./PlaybackScene";
 
 interface SceneStudioLayoutProps {
   task: DailyTask;
+  mentorName?: string | null;
   isRegenerating?: boolean;
   regenerationLabel?: string | null;
   onBackToPlan: () => void;
@@ -74,6 +83,7 @@ interface SceneStudioLayoutProps {
 
 export function SceneStudioLayout({
   task,
+  mentorName,
   isRegenerating,
   regenerationLabel,
   onBackToPlan,
@@ -90,9 +100,25 @@ export function SceneStudioLayout({
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [showFullChat, setShowFullChat] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [projectDrafts, setProjectDrafts] = useState<
-    Record<string, Record<string, string>>
-  >({});
+  const [projectDrafts, setProjectDrafts] = useState<Record<string, Record<string, string>>>({});
+  const [speed, setSpeed] = useState(1);
+  const [muted, setMuted] = useState(false);
+  const [directorMode, setDirectorMode] = useState(false);
+
+  const SPEEDS = [0.5, 1, 1.5, 2];
+  const cycleSpeed = () => setSpeed((s) => SPEEDS[(SPEEDS.indexOf(s) + 1) % SPEEDS.length]);
+  const speedLabel = speed === 1 ? "1x" : `${speed}x`;
+
+  const engine = usePlaybackEngine({
+    wordIntervalMs: Math.round(65 / speed),
+  });
+
+  // Reset engine and director mode when switching scenes
+  useEffect(() => {
+    engine.reset();
+    setDirectorMode(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIndex, task.id]);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -248,6 +274,100 @@ export function SceneStudioLayout({
             onExecutionEvent={onExecutionEvent}
           />
         </div>
+      );
+    }
+
+    if (activeType === "vega_chart") {
+      return (
+        <VegaChartScene
+          scene={
+            activeScene as {
+              title?: string;
+              description?: string;
+              vega_spec?: Record<string, unknown>;
+            }
+          }
+        />
+      );
+    }
+
+    if (activeType === "mermaid_diagram") {
+      const mermaidSyntax = (activeScene as { mermaid_syntax?: string }).mermaid_syntax;
+      return (
+        <div className="space-y-3 p-4">
+          {activeScene.title ? (
+            <p className="text-sm font-semibold text-slate-700">{String(activeScene.title)}</p>
+          ) : null}
+          {mermaidSyntax ? (
+            <MermaidBlock chart={mermaidSyntax} />
+          ) : (
+            <p className="text-sm text-slate-500">No diagram data available.</p>
+          )}
+          {activeScene.description ? (
+            <p className="text-sm text-slate-600">{String(activeScene.description)}</p>
+          ) : null}
+        </div>
+      );
+    }
+
+    // Feynman probe: inline teach-back assessment renderer
+    if (activeType === "feynman_probe") {
+      const fp = activeScene as import("@/types").LessonBlock;
+      return (
+        <div className="space-y-4 p-4">
+          {fp.title && <p className="text-sm font-semibold text-slate-800">{fp.title}</p>}
+          {fp.instructions && (
+            <p className="text-sm text-slate-600 italic">{fp.instructions}</p>
+          )}
+          {(fp.probes ?? []).map((probe, i) => (
+            <div key={probe.id ?? i} className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+                  {probe.type ?? "explain"}
+                </span>
+                <span className="text-xs text-slate-400">{probe.target_concept}</span>
+              </div>
+              <p className="text-sm text-slate-700 font-medium">{probe.prompt}</p>
+              {probe.reveal_hint && (
+                <details className="group">
+                  <summary className="cursor-pointer text-xs text-violet-600 hover:text-violet-800 select-none">
+                    Show key insight
+                  </summary>
+                  <p className="mt-1 text-xs text-slate-600 bg-violet-50 rounded-lg px-3 py-2">{probe.reveal_hint}</p>
+                </details>
+              )}
+              {probe.depth_question && (
+                <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                  💬 {probe.depth_question}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // PlaybackScene for learnable blocks (concept, example, recap, objective, exercise, etc.)
+    const PLAYBACK_TYPES = new Set([
+      "concept", "example", "recap", "objective", "theory", "explanation",
+      "case_study", "discussion", "review", "summary", "introduction",
+    ]);
+    const activeBlock = scenes[activeIndex] as import("@/types").LessonBlock | undefined;
+    if (
+      activeBlock &&
+      (PLAYBACK_TYPES.has(activeType) || activeBlock.actions || activeBlock.actions_generated)
+    ) {
+      return (
+        <PlaybackScene
+          key={`${task.id}-${activeIndex}`}
+          block={activeBlock}
+          blockIndex={activeIndex}
+          taskId={String(task.id)}
+          engine={engine}
+          directorMode={directorMode}
+          muted={muted}
+          className="p-4"
+        />
       );
     }
 
@@ -508,43 +628,128 @@ export function SceneStudioLayout({
               <span className="h-3 w-px bg-slate-200" />
             </div>
             <div className="flex items-center gap-1 rounded-lg bg-slate-100/80 px-1 py-0.5">
-              <span className="px-1 text-[11px] text-slate-500">1x</span>
+              {/* Live director toggle */}
+              <button
+                onClick={() => setDirectorMode((d) => !d)}
+                title={directorMode ? "Disable live director mode" : "Enable live AI director (real-time)"}
+                className={`min-w-[30px] rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                  directorMode
+                    ? "bg-[#EC5B13] text-white"
+                    : "text-slate-400 hover:text-slate-700"
+                }`}
+              >
+                Live
+              </button>
+              {/* Speed cycle */}
+              <button
+                onClick={cycleSpeed}
+                className="min-w-[26px] px-1 text-[11px] font-semibold text-slate-500 hover:text-slate-800"
+                title="Cycle playback speed"
+              >
+                {speedLabel}
+              </button>
+
+              {/* Prev scene */}
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 rounded-md"
                 disabled={activeIndex === 0}
                 onClick={() => setActiveIndex((n) => Math.max(0, n - 1))}
+                title="Previous scene"
               >
                 <ChevronLeft className="h-3 w-3" />
               </Button>
+
+              {/* Play / Pause / Resume */}
+              {engine.frame.playbackState === "playing" ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 rounded-md"
+                  onClick={engine.pause}
+                  title="Pause"
+                >
+                  <Pause className="h-3 w-3" />
+                </Button>
+              ) : engine.frame.playbackState === "paused" ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 rounded-md"
+                  onClick={engine.resume}
+                  title="Resume"
+                >
+                  <Play className="h-3 w-3" />
+                </Button>
+              ) : engine.frame.playbackState === "completed" ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 rounded-md"
+                  onClick={() => { engine.reset(); setTimeout(engine.play, 60); }}
+                  title="Replay"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </Button>
+              ) : engine.frame.playbackState === "waiting_quiz" || engine.frame.playbackState === "waiting_pause" ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 rounded-md"
+                  disabled
+                  title="Waiting for response"
+                >
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 rounded-md"
+                  onClick={engine.play}
+                  title="Play"
+                  disabled={engine.frame.playbackState !== "idle"}
+                >
+                  <Play className="h-3 w-3" />
+                </Button>
+              )}
+
+              {/* Skip */}
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 rounded-md"
-                title="Play"
+                onClick={engine.skip}
+                title="Skip action"
+                disabled={engine.frame.playbackState === "idle" || engine.frame.playbackState === "completed"}
               >
-                <Play className="h-3 w-3" />
+                <SkipForward className="h-3 w-3" />
               </Button>
+
+              {/* Next scene */}
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 rounded-md"
                 disabled={activeIndex >= scenes.length - 1}
-                onClick={() =>
-                  setActiveIndex((n) => Math.min(scenes.length - 1, n + 1))
-                }
+                onClick={() => setActiveIndex((n) => Math.min(scenes.length - 1, n + 1))}
+                title="Next scene"
               >
                 <ChevronRight className="h-3 w-3" />
               </Button>
+
+              {/* Volume toggle */}
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 rounded-md"
-                title="Audio"
+                onClick={() => setMuted((m) => !m)}
+                title={muted ? "Unmute" : "Mute"}
               >
-                <Volume2 className="h-3 w-3" />
+                {muted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
               </Button>
+
               <Button
                 variant="ghost"
                 size="icon"
@@ -603,6 +808,8 @@ export function SceneStudioLayout({
               messages={mentor.messages}
               streamingMessage={mentor.streamingMessage}
               socketStatus={mentor.socketStatus}
+              playbackFrame={engine.frame}
+              mentorName={mentorName}
               onQuickSend={(text) => {
                 void mentor.onSendMessage(text);
               }}

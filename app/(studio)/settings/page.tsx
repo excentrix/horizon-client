@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, type ChangeEvent } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
 import { http } from "@/lib/http-client";
@@ -266,6 +266,8 @@ function resolveMediaUrl(url: string | null | undefined): string | null {
 
 function ResumeTab() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const resumeInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     http.get("/auth/profile/detail/").then((r) => setProfile(r.data)).catch(() => {});
@@ -274,6 +276,39 @@ function ResumeTab() {
   if (!profile) return <SkeletonCard lines={3} />;
 
   const resumeUrl = resolveMediaUrl(profile.resume_url);
+  const uploadResume = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type)) {
+      toast.error("Please upload a PDF, JPG, or PNG resume.");
+      event.target.value = "";
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("resume", file);
+      const response = await http.post("/auth/profile/resume/", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const jobId = response?.data?.job_id;
+      if (jobId && typeof window !== "undefined") {
+        window.localStorage.setItem("resumeAnalysisJobId", String(jobId));
+      }
+
+      const refreshed = await http.get("/auth/profile/detail/");
+      setProfile(refreshed.data);
+      toast.success("Resume uploaded. VELO analysis queued.");
+    } catch {
+      toast.error("Failed to upload resume.");
+    } finally {
+      event.target.value = "";
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -283,6 +318,13 @@ function ResumeTab() {
           <CardDescription>Used by your AI mentors to personalise your learning plan</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <input
+            ref={resumeInputRef}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+            className="hidden"
+            onChange={uploadResume}
+          />
           {resumeUrl ? (
             <div className="flex items-center justify-between rounded-lg border p-4">
               <div>
@@ -306,8 +348,12 @@ function ResumeTab() {
             <p className="text-sm text-muted-foreground">No resume uploaded yet.</p>
           )}
 
-          <Button variant="outline" asChild>
-            <a href="/onboarding">Re-run onboarding (upload new resume)</a>
+          <Button
+            variant="outline"
+            onClick={() => resumeInputRef.current?.click()}
+            disabled={uploading}
+          >
+            {uploading ? "Uploading…" : resumeUrl ? "Replace resume" : "Upload resume"}
           </Button>
         </CardContent>
       </Card>

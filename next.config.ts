@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
     return config;
   },
 
+  allowedDevOrigins: ["http://localhost:3000", "http://192.168.29.138:3000"],
+
   async rewrites() {
     return [
       {
@@ -34,8 +36,8 @@ const nextConfig: NextConfig = {
     resolveAlias: {
       react: "react",
       "react-dom": "react-dom",
-    }
-  }
+    },
+  },
 };
 
 // Wrap with Sentry configuration

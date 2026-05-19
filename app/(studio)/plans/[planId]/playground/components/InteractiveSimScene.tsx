@@ -53,11 +53,76 @@ export function InteractiveSimScene({ scene, onMountBridge }: InteractiveSimScen
       *, *::before, *::after { box-sizing: border-box; }
       img, canvas, svg, video { max-width: 100%; height: auto; }
     </style>`;
+    const bridgeScript = `
+    <script id="horizon-widget-bridge">
+      (() => {
+        const clear = (id) => {
+          const el = document.getElementById(id);
+          if (el) el.remove();
+        };
+        const pulseOn = (selector, color = '#EC5B13') => {
+          const target = selector ? document.querySelector(selector) : null;
+          if (!target) return;
+          target.animate(
+            [
+              { boxShadow: '0 0 0 0 rgba(236,91,19,0.0)' },
+              { boxShadow: '0 0 0 6px rgba(236,91,19,0.22)' },
+              { boxShadow: '0 0 0 0 rgba(236,91,19,0.0)' }
+            ],
+            { duration: 900, easing: 'ease-out' }
+          );
+          if (target instanceof HTMLElement) {
+            target.style.outline = '2px solid ' + color;
+            target.style.outlineOffset = '2px';
+            setTimeout(() => { target.style.outline = ''; target.style.outlineOffset = ''; }, 1100);
+          }
+        };
+        const showAnnotation = (text, x = 24, y = 24) => {
+          clear('__h_annotation');
+          const card = document.createElement('div');
+          card.id = '__h_annotation';
+          card.textContent = String(text || '');
+          card.style.position = 'fixed';
+          card.style.left = x + 'px';
+          card.style.top = y + 'px';
+          card.style.zIndex = '2147483647';
+          card.style.maxWidth = 'min(360px, 80vw)';
+          card.style.padding = '8px 10px';
+          card.style.borderRadius = '10px';
+          card.style.border = '1px solid rgba(236,91,19,0.45)';
+          card.style.background = 'rgba(15,23,42,0.92)';
+          card.style.color = '#fff';
+          card.style.font = '600 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+          card.style.boxShadow = '0 10px 30px rgba(2,6,23,0.35)';
+          document.body.appendChild(card);
+          setTimeout(() => clear('__h_annotation'), 2400);
+        };
+        window.addEventListener('message', (event) => {
+          const data = event.data || {};
+          if (!data || typeof data !== 'object') return;
+          const type = String(data.type || '');
+          try {
+            if (type === 'widget_setState' || type === 'widget_set_state') {
+              window.dispatchEvent(new CustomEvent('horizon:widget:setState', { detail: data }));
+            } else if (type === 'widget_highlight') {
+              window.dispatchEvent(new CustomEvent('horizon:widget:highlight', { detail: data }));
+              if (data.selector) pulseOn(String(data.selector), '#EC5B13');
+            } else if (type === 'widget_reveal') {
+              window.dispatchEvent(new CustomEvent('horizon:widget:reveal', { detail: data }));
+              if (data.target) pulseOn(String(data.target), '#22c55e');
+            } else if (type === 'widget_annotation') {
+              window.dispatchEvent(new CustomEvent('horizon:widget:annotation', { detail: data }));
+              showAnnotation(data.text, Number(data.x || 24), Number(data.y || 24));
+            }
+          } catch (_) {}
+        });
+      })();
+    </script>`;
     if (hasHtmlTag) {
       if (/<\/head>/i.test(html)) {
-        return html.replace(/<\/head>/i, `${normalizeHead}</head>`);
+        return html.replace(/<\/head>/i, `${normalizeHead}${bridgeScript}</head>`);
       }
-      return html.replace(/<html[^>]*>/i, (match) => `${match}<head>${normalizeHead}</head>`);
+      return html.replace(/<html[^>]*>/i, (match) => `${match}<head>${normalizeHead}${bridgeScript}</head>`);
     }
     return `<!doctype html>
 <html>
@@ -69,6 +134,7 @@ export function InteractiveSimScene({ scene, onMountBridge }: InteractiveSimScen
       *,*::before,*::after{box-sizing:border-box;}
       img,canvas,svg,video{max-width:100%;height:auto;}
     </style>
+    ${bridgeScript}
   </head>
   <body>${html}</body>
 </html>`;

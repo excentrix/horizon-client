@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { LiveAnalysisPanel } from "@/components/mirror/live-analysis-panel";
 import { ProjectVerificationSheet } from "@/components/mirror/ProjectVerificationSheet";
@@ -46,6 +46,7 @@ import {
   Radar,
   ListChecks,
   Sparkles,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -334,7 +335,10 @@ export function VeloProfileTab() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data, isLoading } = useMirrorSnapshot();
+  const resumeInputRef = useRef<HTMLInputElement | null>(null);
   const [reanalysing, setReanalysing] = useState(false);
+  const [uploadingResume, setUploadingResume] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [verifyingProjectIndex, setVerifyingProjectIndex] = useState<number | null>(null);
   const [resettingVerificationId, setResettingVerificationId] = useState<string | null>(null);
   const [reanalysisBlocked, setReanalysisBlocked] = useState<{
@@ -369,6 +373,73 @@ export function VeloProfileTab() {
       });
     } finally {
       setReanalysing(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      const response = await auditApi.exportMirrorLatestPdf();
+      const blob = response.data as Blob;
+      const disposition = response.headers?.["content-disposition"] ?? "";
+      const match = disposition.match(/filename=\"?([^\";]+)\"?/i);
+      const filename = match?.[1] ?? "resume-analysis-report.pdf";
+
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success("PDF exported", {
+        description: "Your resume analysis report has been downloaded.",
+      });
+    } catch {
+      toast.error("Export failed", {
+        description: "Could not generate the PDF report right now.",
+      });
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  const handleResumeUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (
+      ![
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+      ].includes(file.type)
+    ) {
+      toast.error("Please upload a PDF, JPG, or PNG resume.");
+      event.target.value = "";
+      return;
+    }
+
+    setUploadingResume(true);
+    try {
+      const formData = new FormData();
+      formData.append("resume", file);
+      const response = await authApi.uploadResume(formData);
+      if (response.job_id && typeof window !== "undefined") {
+        window.localStorage.setItem("resumeAnalysisJobId", response.job_id);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
+      toast.success("Resume uploaded. VELO analysis is running.");
+    } catch {
+      toast.error("Failed to upload resume. Please try again.");
+    } finally {
+      event.target.value = "";
+      setUploadingResume(false);
     }
   };
 
@@ -425,14 +496,51 @@ export function VeloProfileTab() {
 
   if (isLoading) return <VeloSkeleton />;
 
+  const resumeUploadInput = (
+    <input
+      ref={resumeInputRef}
+      type="file"
+      accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+      className="hidden"
+      onChange={handleResumeUpload}
+    />
+  );
+
   if (isRunning) {
-    return <LiveAnalysisPanel progress={data?.analysis_job?.progress} />;
+    return (
+      <div className="mx-auto max-w-3xl p-4 md:p-8">
+        {resumeUploadInput}
+        <LiveAnalysisPanel progress={data?.analysis_job?.progress} />
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleReanalyse}
+            disabled={reanalysing}
+          >
+            <RefreshCw
+              className={cn("mr-1.5 h-3.5 w-3.5", reanalysing && "animate-spin")}
+            />
+            {reanalysing ? "Re-queuing…" : "Re-queue analysis"}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => resumeInputRef.current?.click()}
+            disabled={uploadingResume}
+          >
+            <Upload className="mr-1.5 h-3.5 w-3.5" />
+            {uploadingResume ? "Uploading…" : "Upload new resume"}
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   if (isFailed) {
     return (
       <div className="mx-auto max-w-3xl p-4 md:p-8">
         <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-6 dark:border-rose-900/30 dark:bg-rose-950/20">
+          {resumeUploadInput}
           <div className="mb-2 flex items-center gap-2 text-rose-700 dark:text-rose-400">
             <AlertCircle className="h-4 w-4" />
             <span className="text-sm font-semibold">Analysis failed</span>
@@ -441,13 +549,23 @@ export function VeloProfileTab() {
             {data?.analysis_job?.error ??
               "Something went wrong. Try re-uploading your resume."}
           </p>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => router.push("/settings")}
-          >
-            <Upload className="mr-1.5 h-3.5 w-3.5" /> Go to Settings
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              onClick={() => resumeInputRef.current?.click()}
+              disabled={uploadingResume}
+            >
+              <Upload className="mr-1.5 h-3.5 w-3.5" />
+              {uploadingResume ? "Uploading…" : "Upload new resume"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => router.push("/settings?tab=resume")}
+            >
+              Open Resume Settings
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -561,6 +679,16 @@ export function VeloProfileTab() {
         <span className="flex-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
           Resume Analysis
         </span>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1.5 border-amber-300 text-xs text-amber-700 hover:bg-amber-50"
+          disabled={exportingPdf || !isReady}
+          onClick={handleExportPdf}
+        >
+          <Download className={cn("h-3 w-3", exportingPdf && "animate-pulse")} />
+          {exportingPdf ? "Exporting…" : "Export PDF"}
+        </Button>
         <Button
           size="sm"
           variant="outline"
