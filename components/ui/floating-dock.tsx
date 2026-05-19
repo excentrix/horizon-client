@@ -69,7 +69,10 @@ const FloatingDockMobile = ({
         aria-label="Bottom navigation"
         className="w-full border-t border-[color:var(--dock-border)] bg-[color:var(--dock-bg)] px-2 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur"
       >
-        <div className="grid grid-cols-7 items-center gap-1">
+        <div
+          className="grid items-center gap-1"
+          style={{ gridTemplateColumns: `repeat(${Math.max(items.length, 1)}, minmax(0, 1fr))` }}
+        >
           {items.map((item) =>
             item.href ? (
               <Link

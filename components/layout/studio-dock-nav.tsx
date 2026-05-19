@@ -55,33 +55,35 @@ const ADMIN_ITEMS: DockItem[] = [
 ];
 
 export function StudioDockNav() {
+  const isDev = process.env.NODE_ENV === "development";
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { data: profileData } = usePortfolioProfile();
   const [inboxOpen, setInboxOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const inboxPopupRef = useRef<HTMLDivElement | null>(null);
 
   const isSuperUser = user?.is_superuser;
   const isAdmin = profileData?.profile?.user_type === "admin";
   const isEducator = profileData?.profile?.user_type === "educator";
 
-  const studentItems = isDev
+  const studentItems: DockItem[] = isDev
     ? [
         ...STUDENT_ITEMS,
         { href: "/simulations", title: "Sim Lab", icon: <FlaskConical className="h-full w-full" /> },
       ]
     : STUDENT_ITEMS;
 
-  const baseItems = isSuperUser
+  const baseItems: DockItem[] = isSuperUser
     ? ADMIN_ITEMS
     : isAdmin
       ? ADMIN_ITEMS
       : isEducator
         ? EDU_ITEMS
         : studentItems;
-  const items =
-    !isSuperUser && !isAdmin && !isEducator
+  const items: DockItem[] =
+    !isSuperUser && !isAdmin && !isEducator && !isMobile
       ? [
           ...baseItems,
           {
@@ -93,7 +95,7 @@ export function StudioDockNav() {
         ]
       : baseItems;
 
-  const activeItems = items.map((item) => ({
+  const activeItems = items.map((item: DockItem) => ({
     ...item,
     isActive:
       item.isActive ??
@@ -103,6 +105,21 @@ export function StudioDockNav() {
   const autoHide= !pathname.includes("dashboard")
   const isChatThreadOpen =
     pathname === "/chat" && Boolean(searchParams.get("conversation"));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(max-width: 767px)");
+    const handleChange = () => setIsMobile(media.matches);
+    handleChange();
+    media.addEventListener("change", handleChange);
+    return () => media.removeEventListener("change", handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile && inboxOpen) {
+      setInboxOpen(false);
+    }
+  }, [isMobile, inboxOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -204,4 +221,3 @@ export function StudioDockNav() {
     </>
   );
 }
-  const isDev = process.env.NODE_ENV === "development";
