@@ -40,6 +40,7 @@ interface UserProfile {
   career_goals?: string;
   resume_url?: string;
   resume_parsed_at?: string;
+  resume_payload?: Record<string, unknown>;
   skills?: string[];
   linkedin_url?: string;
   github_url?: string;
@@ -264,18 +265,96 @@ function resolveMediaUrl(url: string | null | undefined): string | null {
   return `${API_ORIGIN}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
+function pickDetectedNameFromPayload(payload?: Record<string, unknown>): string {
+  if (!payload || typeof payload !== "object") return "";
+  const directCandidates = [
+    payload.full_name,
+    payload.name,
+    payload.candidate_name,
+  ];
+  for (const value of directCandidates) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+
+  const personal = payload.personal_info;
+  if (personal && typeof personal === "object") {
+    const p = personal as Record<string, unknown>;
+    const personalCandidates = [
+      p.full_name,
+      p.name,
+      p.candidate_name,
+      p.display_name,
+    ];
+    for (const value of personalCandidates) {
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+  }
+  return "";
+}
+
+function splitName(fullName: string): { first_name: string; last_name: string } {
+  const trimmed = fullName.trim().replace(/\s+/g, " ");
+  if (!trimmed) return { first_name: "", last_name: "" };
+  const parts = trimmed.split(" ");
+  if (parts.length === 1) return { first_name: parts[0], last_name: "" };
+  return {
+    first_name: parts[0],
+    last_name: parts.slice(1).join(" "),
+  };
+}
+
 function ResumeTab() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [accountProfile, setAccountProfile] = useState<UserProfile | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [resolvingName, setResolvingName] = useState(false);
+  const [dismissedNamePrompt, setDismissedNamePrompt] = useState(false);
   const resumeInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    http.get("/auth/profile/detail/").then((r) => setProfile(r.data)).catch(() => {});
+    Promise.all([http.get("/auth/profile/detail/"), http.get("/auth/profile/")])
+      .then(([detail, account]) => {
+        setProfile(detail.data);
+        setAccountProfile(account.data);
+      })
+      .catch(() => {});
   }, []);
 
   if (!profile) return <SkeletonCard lines={3} />;
 
   const resumeUrl = resolveMediaUrl(profile.resume_url);
+  const detectedResumeName = pickDetectedNameFromPayload(profile.resume_payload);
+  const currentName = (
+    accountProfile?.full_name
+    || `${accountProfile?.first_name ?? ""} ${accountProfile?.last_name ?? ""}`
+  ).trim();
+  const hasNameConflict =
+    Boolean(detectedResumeName)
+    && Boolean(currentName)
+    && detectedResumeName.toLowerCase() !== currentName.toLowerCase()
+    && !dismissedNamePrompt;
+
+  const keepDetectedName = async () => {
+    if (!detectedResumeName) return;
+    setResolvingName(true);
+    try {
+      const next = splitName(detectedResumeName);
+      await http.patch("/auth/profile/", {
+        full_name: detectedResumeName,
+        first_name: next.first_name,
+        last_name: next.last_name,
+      });
+      const refreshed = await http.get("/auth/profile/");
+      setAccountProfile(refreshed.data);
+      setDismissedNamePrompt(true);
+      toast.success("Profile name updated from resume.");
+    } catch {
+      toast.error("Failed to update profile name.");
+    } finally {
+      setResolvingName(false);
+    }
+  };
+
   const uploadResume = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -301,6 +380,7 @@ function ResumeTab() {
 
       const refreshed = await http.get("/auth/profile/detail/");
       setProfile(refreshed.data);
+      setDismissedNamePrompt(false);
       toast.success("Resume uploaded. VELO analysis queued.");
     } catch {
       toast.error("Failed to upload resume.");
@@ -355,6 +435,25 @@ function ResumeTab() {
           >
             {uploading ? "Uploading…" : resumeUrl ? "Replace resume" : "Upload resume"}
           </Button>
+
+          {hasNameConflict && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-50/60 p-3">
+              <p className="text-sm font-medium">Different name detected in resume</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Profile name: <span className="font-medium text-foreground">{currentName}</span>
+                {" · "}
+                Resume name: <span className="font-medium text-foreground">{detectedResumeName}</span>
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button size="sm" onClick={keepDetectedName} disabled={resolvingName}>
+                  {resolvingName ? "Updating…" : "Use resume name"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setDismissedNamePrompt(true)}>
+                  Keep current name
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

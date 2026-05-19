@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import {
   Tooltip,
   TooltipContent,
@@ -40,38 +40,25 @@ import {
   Linkedin,
   MessageCircle,
   Share2,
-  Scan,
   ShieldCheck,
   Sparkles,
   Trophy,
   Zap,
+  Activity,
+  TrendingUp,
+  Lock,
+  ArrowDown,
 } from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 type MirrorStatus = "empty" | "running" | "ready" | "failed";
 
-const statusConfig: Record<
-  MirrorStatus,
-  { label: string; tone: string; pulse?: boolean }
-> = {
-  ready: {
-    label: "Analysis Ready",
-    tone: "border-emerald-300 bg-emerald-50 text-emerald-700",
-  },
-  running: {
-    label: "Analyzing",
-    tone: "border-amber-300 bg-amber-50 text-amber-700",
-    pulse: true,
-  },
-  empty: {
-    label: "Pending",
-    tone: "border-slate-300 bg-slate-50 text-slate-700",
-    pulse: true,
-  },
-  failed: {
-    label: "Analysis Failed",
-    tone: "border-red-300 bg-red-50 text-red-700",
-  },
+const STATUS_DOT: Record<MirrorStatus, { color: string; label: string; pulse?: boolean }> = {
+  ready: { color: "bg-emerald-500", label: "Analysis Ready" },
+  running: { color: "bg-amber-500", label: "Analyzing", pulse: true },
+  empty: { color: "bg-slate-400", label: "Pending", pulse: true },
+  failed: { color: "bg-red-500", label: "Analysis Failed" },
 };
 
 export default function ProgressHubPage() {
@@ -94,8 +81,7 @@ export default function ProgressHubPage() {
   }, [authLoading, router, user]);
 
   const mirrorStatus = (mirrorData?.status ?? "empty") as MirrorStatus;
-  const status = statusConfig[mirrorStatus];
-
+  const statusDot = STATUS_DOT[mirrorStatus];
   const profile = profileData?.profile;
 
   const artifacts = useMemo(() => {
@@ -119,16 +105,12 @@ export default function ProgressHubPage() {
         best.set(key, artifact);
       }
     }
-    const withoutSourceTask = rawArtifacts.filter((a) => !a.source_task);
-    return [...best.values(), ...withoutSourceTask];
+    return [...best.values(), ...rawArtifacts.filter((a) => !a.source_task)];
   }, [rawArtifacts]);
 
   const verifiedCount = artifacts.filter(
-    (a) =>
-      a.verification_status === "verified" ||
-      a.verification_status === "human_verified",
+    (a) => a.verification_status === "verified" || a.verification_status === "human_verified",
   ).length;
-  const featuredCount = artifacts.filter((a) => a.featured).length;
 
   const publicUrl = useMemo(() => {
     if (!profile?.slug || typeof window === "undefined") return "";
@@ -140,9 +122,10 @@ export default function ProgressHubPage() {
     ? `${profile.full_name} • Horizon Portfolio`
     : "Horizon Portfolio";
   const shareMessage =
-    "I’m building verified skills on Horizon. Explore my public portfolio and create your own learning graph.";
+    "I'm building verified skills on Horizon. Explore my public portfolio and create your own learning graph.";
   const usernameLabel =
     profile?.username || profile?.slug || user?.full_name || "horizon-learner";
+
   const shareUrlFor = (source: "whatsapp" | "linkedin" | "share") => {
     if (!publicUrl) return "";
     const url = new URL(publicUrl);
@@ -155,16 +138,26 @@ export default function ProgressHubPage() {
   const handleCopy = async () => {
     const tracked = shareUrlFor("share") || publicUrl;
     if (!tracked) return;
-    await navigator.clipboard.writeText(tracked);
+    try {
+      await navigator.clipboard.writeText(tracked);
+    } catch {
+      // Fallback for mobile browsers that block clipboard API without HTTPS / user gesture
+      const el = document.createElement("textarea");
+      el.value = tracked;
+      el.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 1600);
   };
 
   const buildShareCardBlob = async () => {
     if (!qrDataUrl) return null;
-    const cardW = 760;
-    const cardH = 1000;
-    const qrSize = 560;
+    const cardW = 760, cardH = 1000, qrSize = 560;
     const canvas = document.createElement("canvas");
     canvas.width = cardW;
     canvas.height = cardH;
@@ -173,26 +166,18 @@ export default function ProgressHubPage() {
 
     ctx.fillStyle = "#FAEDCD";
     ctx.fillRect(0, 0, cardW, cardH);
-
-    // Main vertical card frame (fills full exported image)
-    const passX = 0;
-    const passY = 0;
-    const passW = cardW;
-    const passH = cardH;
-    ctx.fillStyle = "#FAEDCD";
     ctx.strokeStyle = "rgba(88,88,204,0.22)";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.roundRect(passX, passY, passW, passH, 34);
+    ctx.roundRect(0, 0, cardW, cardH, 34);
     ctx.fill();
     ctx.stroke();
 
-    // Header shell
     ctx.fillStyle = "rgba(255,255,255,0.72)";
     ctx.beginPath();
-    ctx.roundRect(passX + 22, passY + 22, passW - 44, 220, 24);
+    ctx.roundRect(22, 22, cardW - 44, 220, 24);
     ctx.fill();
-    // Logo
+
     const logo = new Image();
     await new Promise<void>((resolve, reject) => {
       logo.onload = () => resolve();
@@ -201,17 +186,14 @@ export default function ProgressHubPage() {
     });
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(passX + passW - 150, passY + 80, 96, 96, 26);
+    ctx.roundRect(cardW - 150, 80, 96, 96, 26);
     ctx.fillStyle = "rgba(255,255,255,0.9)";
     ctx.fill();
-    ctx.drawImage(logo, passX + passW - 134, passY + 98, 64, 64);
+    ctx.drawImage(logo, cardW - 134, 98, 64, 64);
     ctx.restore();
 
-    // Profile image
     const avatarUrl = profile?.avatar_url || "";
-    const avatarCx = passX + 106;
-    const avatarCy = passY + 126;
-    const avatarR = 54;
+    const avatarCx = 106, avatarCy = 126, avatarR = 54;
     ctx.save();
     ctx.beginPath();
     ctx.arc(avatarCx, avatarCy, avatarR, 0, Math.PI * 2);
@@ -232,57 +214,34 @@ export default function ProgressHubPage() {
         ctx.arc(avatarCx, avatarCy, avatarR - 4, 0, Math.PI * 2);
         ctx.closePath();
         ctx.clip();
-        ctx.drawImage(
-          avatar,
-          avatarCx - avatarR,
-          avatarCy - avatarR,
-          avatarR * 2,
-          avatarR * 2,
-        );
+        ctx.drawImage(avatar, avatarCx - avatarR, avatarCy - avatarR, avatarR * 2, avatarR * 2);
         ctx.restore();
-      } catch {
-        // fallback to initials below
-      }
+      } catch { /* fallback to initials */ }
     }
     if (!avatarUrl) {
       const initials = (profile?.full_name || usernameLabel)
-        .split(" ")
-        .map((part) => part[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase();
+        .split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
       ctx.fillStyle = "#5858CC";
       ctx.font = "700 34px Space Mono, monospace";
       ctx.fillText(initials || "H", avatarCx - 12, avatarCy + 11);
     }
     ctx.restore();
 
-    // Identity lockup
-    const titleColor = "#414141";
-    const subtitleColor = "#5858CC";
-    ctx.fillStyle = subtitleColor;
+    ctx.fillStyle = "#5858CC";
     ctx.font = "700 28px Space Mono, monospace";
-    ctx.fillText("VELO", passX + 190, passY + 88);
-    ctx.fillStyle = titleColor;
+    ctx.fillText("VELO", 190, 88);
+    ctx.fillStyle = "#414141";
     ctx.font = "600 40px Space Mono, monospace";
-    ctx.fillText(
-      profile?.full_name || "Horizon Learner",
-      passX + 190,
-      passY + 138,
-    );
-    ctx.fillStyle = subtitleColor;
+    ctx.fillText(profile?.full_name || "Horizon Learner", 190, 138);
+    ctx.fillStyle = "#5858CC";
     ctx.font = "600 26px Space Mono, monospace";
-    ctx.fillText(`@${usernameLabel}`, passX + 190, passY + 178);
+    ctx.fillText(`@${usernameLabel}`, 190, 178);
 
-    // QR area with no white background, only beige/purple treatment
-    const qrFrameX = passX + 72;
-    const qrFrameY = passY + 286;
-    const qrFrameSize = 616;
     ctx.fillStyle = "#efe0c9";
     ctx.strokeStyle = "rgba(88,88,204,0.22)";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.roundRect(qrFrameX, qrFrameY, qrFrameSize, qrFrameSize, 24);
+    ctx.roundRect(72, 286, 616, 616, 24);
     ctx.fill();
     ctx.stroke();
 
@@ -301,90 +260,84 @@ export default function ProgressHubPage() {
     qrCtx.drawImage(qr, 0, 0, qrSize, qrSize);
     const qrImageData = qrCtx.getImageData(0, 0, qrSize, qrSize);
     const pixels = qrImageData.data;
-    const purple = { r: 88, g: 88, b: 204 };
     for (let i = 0; i < pixels.length; i += 4) {
-      const r = pixels[i];
-      const g = pixels[i + 1];
-      const b = pixels[i + 2];
-      const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-      if (luma < 128) {
-        pixels[i] = purple.r;
-        pixels[i + 1] = purple.g;
-        pixels[i + 2] = purple.b;
-        pixels[i + 3] = 255;
-      } else {
-        pixels[i] = 239;
-        pixels[i + 1] = 224;
-        pixels[i + 2] = 201;
-        pixels[i + 3] = 255;
-      }
+      const luma = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+      if (luma < 128) { pixels[i] = 88; pixels[i + 1] = 88; pixels[i + 2] = 204; pixels[i + 3] = 255; }
+      else { pixels[i] = 239; pixels[i + 1] = 224; pixels[i + 2] = 201; pixels[i + 3] = 255; }
     }
     qrCtx.putImageData(qrImageData, 0, 0);
-    ctx.drawImage(qrCanvas, qrFrameX + 28, qrFrameY + 28, qrSize, qrSize);
+    ctx.drawImage(qrCanvas, 100, 314, qrSize, qrSize);
 
     ctx.fillStyle = "rgba(88,88,204,0.1)";
     ctx.strokeStyle = "rgba(88,88,204,0.2)";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(passX + 64, passY + passH - 84, passW - 128, 62, 16);
+    ctx.roundRect(64, cardH - 84, cardW - 128, 62, 16);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = "#5858CC";
     ctx.font = "700 22px Space Mono, monospace";
-    ctx.fillText("HORIZON // VELO PROFILE", passX + 88, passY + passH - 45);
+    ctx.fillText("HORIZON // VELO PROFILE", 88, cardH - 45);
 
-    return await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/png"),
-    );
+    return await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   };
 
   const handleNativeShare = async () => {
     const trackedUrl = shareUrlFor("share") || publicUrl;
     if (!trackedUrl) return;
-    if (typeof navigator === "undefined" || !navigator.share) {
-      await handleCopy();
-      return;
-    }
+    if (typeof navigator === "undefined" || !navigator.share) { await handleCopy(); return; }
+    // Build share data — try to attach the card image but never let it block the share
+    let shareData: ShareData = { title: shareTitle, text: shareMessage, url: trackedUrl };
     try {
       const cardBlob = await buildShareCardBlob();
-      const file =
-        cardBlob != null
-          ? new File([cardBlob], "horizon-portfolio-card.png", {
-              type: "image/png",
-            })
-          : null;
-      const canShareFile =
-        file != null &&
-        "canShare" in navigator &&
-        typeof navigator.canShare === "function" &&
-        navigator.canShare({ files: [file] });
-      await navigator.share({
-        title: shareTitle,
-        text: shareMessage,
-        url: trackedUrl,
-        ...(canShareFile ? { files: [file] } : {}),
-      });
-    } catch {
-      // User cancellation / platform rejection can be ignored silently.
+      if (cardBlob) {
+        const file = new File([cardBlob], "horizon-portfolio-card.png", { type: "image/png" });
+        if ("canShare" in navigator && typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
+          shareData = { ...shareData, files: [file] };
+        }
+      }
+    } catch { /* card generation failed — share without image */ }
+    try {
+      await navigator.share(shareData);
+    } catch (e) {
+      if (e instanceof Error && e.name !== "AbortError") await handleCopy();
     }
   };
 
-  const handleWhatsAppShare = () => {
-    const trackedUrl = shareUrlFor("whatsapp") || publicUrl;
-    if (!trackedUrl) return;
-    const text = encodeURIComponent(`${shareMessage}\n\n${trackedUrl}`);
-    window.open(`https://wa.me/?text=${text}`, "_blank", "noopener,noreferrer");
+  const handleWhatsAppShare = async () => {
+    const t = shareUrlFor("whatsapp") || publicUrl;
+    if (!t) return;
+    // On mobile: use native share with the card image (opens OS sheet → user picks WhatsApp)
+    if (typeof navigator !== "undefined" && navigator.share && "canShare" in navigator) {
+      try {
+        const cardBlob = await buildShareCardBlob();
+        if (cardBlob) {
+          const file = new File([cardBlob], "horizon-portfolio-card.png", { type: "image/png" });
+          if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
+            await navigator.share({ title: shareTitle, text: `${shareMessage}\n\n${t}`, files: [file] });
+            return;
+          }
+        }
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") return;
+        // blob failed — fall through to text link
+      }
+    }
+    // Desktop fallback: text-only WhatsApp link (images can't be sent via URL scheme)
+    window.open(`https://wa.me/?text=${encodeURIComponent(`${shareMessage}\n\n${t}`)}`, "_blank", "noopener,noreferrer");
   };
 
   const handleLinkedInShare = () => {
-    const trackedUrl = shareUrlFor("linkedin") || publicUrl;
-    if (!trackedUrl) return;
-    const shareUrl = encodeURIComponent(trackedUrl);
-    window.open(
-      `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`,
-      "_blank",
-      "noopener,noreferrer",
-    );
+    const t = shareUrlFor("linkedin") || publicUrl;
+    if (!t) return;
+    // shareArticle?mini=true pre-fills title + summary even when LinkedIn can't scrape the page
+    const params = new URLSearchParams({
+      mini: "true",
+      url: t,
+      title: shareTitle,
+      summary: shareMessage,
+    });
+    window.open(`https://www.linkedin.com/shareArticle?${params.toString()}`, "_blank", "noopener,noreferrer");
   };
 
   const handleDownloadCard = async () => {
@@ -392,9 +345,7 @@ export default function ProgressHubPage() {
     if (!blob) return;
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = "horizon-portfolio-card.png";
-    a.click();
+    a.href = url; a.download = "horizon-portfolio-card.png"; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -404,228 +355,192 @@ export default function ProgressHubPage() {
       if (!shareOpen || !qrDataUrl) return;
       setShareCardBusy(true);
       const blob = await buildShareCardBlob();
-      if (!blob) {
-        setShareCardBusy(false);
-        return;
-      }
+      if (!blob) { setShareCardBusy(false); return; }
       const objectUrl = URL.createObjectURL(blob);
       revokedUrl = objectUrl;
-      setShareCardPreviewUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return objectUrl;
-      });
+      setShareCardPreviewUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return objectUrl; });
       setShareCardBusy(false);
     };
     void makePreview();
-    return () => {
-      if (revokedUrl) URL.revokeObjectURL(revokedUrl);
-    };
+    return () => { if (revokedUrl) URL.revokeObjectURL(revokedUrl); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareOpen, qrDataUrl, usernameLabel]);
 
-  return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
-      <header className="sticky top-0 z-20 border-b border-border/80 bg-background/95 px-4 py-3 backdrop-blur lg:px-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--brand-indigo)]/35 bg-[color:var(--brand-indigo)]/10 px-2.5 py-1 text-[10px] font-mono-ui uppercase tracking-[0.14em] text-[color:var(--brand-indigo)]">
-              <Scan className="h-3.5 w-3.5" />
-              Mirror Workspace
-            </div>
-            <h1 className="font-display text-2xl leading-tight">
-              Progress Mirror
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              Resume intelligence, verified proof, and momentum in one
-              operational view.
-            </p>
-          </div>
+  const atsScore = (mirrorData?.mirror?.deep_analysis as Record<string, unknown> | undefined)
+    ?.ats_score as number | undefined;
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge
-              variant="outline"
-              className={`rounded-full text-[10px] ${status.tone}`}
-            >
-              {status.pulse ? (
-                <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
-              ) : null}
-              {status.label}
-            </Badge>
-            <StatPill
-              label="Readiness"
-              value={readiness ? `${Math.round(readiness.score)}%` : "--"}
-              icon={<ShieldCheck className="h-3.5 w-3.5" />}
-            />
-            <StatPill
-              label="Level"
-              value={`L${level}`}
-              icon={<Sparkles className="h-3.5 w-3.5" />}
-            />
-            <StatPill
-              label="XP"
-              value={totalPoints.toLocaleString()}
-              icon={<Trophy className="h-3.5 w-3.5" />}
-            />
-            <StatPill
-              label="Streak"
-              value={`${currentStreak}d`}
-              icon={<Flame className="h-3.5 w-3.5" />}
-            />
+  return (
+    <div className="h-full min-h-0 w-full overflow-x-hidden overflow-y-auto">
+      <div className="mx-auto mt-4 flex min-h-full max-w-[1720px] flex-col gap-0 ">
+
+        {/* ── Hero banner ──────────────────────────────────────────────────── */}
+        <div className="relative mb-4 overflow-hidden border-b border-border/60 bg-white rounded-2xl px-4 py-6 sm:px-6 xl:px-8">
+          {/* Decorative orb */}
+          <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full  blur-3xl" />
+
+          <div className="relative flex flex-col gap-5">
+            {/* Title row */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[color:var(--brand-indigo)] text-white">
+                  <Activity className="h-4.5 w-4.5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="font-display text-xl font-semibold leading-tight sm:text-2xl">
+                      Progress Mirror
+                    </h1>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={cn(
+                          "inline-block h-1.5 w-1.5 rounded-full",
+                          statusDot.color,
+                          statusDot.pulse && "animate-pulse",
+                        )}
+                      />
+                      <span className="text-[11px] text-muted-foreground">{statusDot.label}</span>
+                    </div>
+                  </div>
+                </div>
+                {/* Scroll-to-profile — mobile only */}
+                <button
+                  className="xl:hidden ml-1 flex items-center gap-1 rounded-lg border border-border/60 bg-background/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+                  onClick={() => document.getElementById("public-profile-card")?.scrollIntoView({ behavior: "smooth" })}
+                >
+                  <ArrowDown className="h-3 w-3" />
+                  My Profile
+                </button>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="hidden h-8 text-xs sm:flex"
+                onClick={() => router.push("/chat?context=mirror_review")}
+              >
+                <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
+                Ask mentor
+              </Button>
+            </div>
+
+            {/* Stats strip — horizontal scroll on mobile */}
+            <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 xl:-mx-8 xl:px-8">
+              <StatTile
+                icon={<TrendingUp className="h-4 w-4" />}
+                label="ATS Score"
+                value={atsScore !== undefined ? String(atsScore) : "--"}
+                accent="indigo"
+              />
+              <StatTile
+                icon={<ShieldCheck className="h-4 w-4" />}
+                label="Readiness"
+                value={readiness ? `${Math.round(readiness.score)}%` : "--"}
+                accent="emerald"
+              />
+              <StatTile
+                icon={<Sparkles className="h-4 w-4" />}
+                label="Level"
+                value={`L${level}`}
+                accent="violet"
+              />
+              <StatTile
+                icon={<Trophy className="h-4 w-4" />}
+                label="XP"
+                value={totalPoints.toLocaleString()}
+                accent="amber"
+              />
+              <StatTile
+                icon={<Flame className="h-4 w-4" />}
+                label="Streak"
+                value={`${currentStreak}d`}
+                accent="orange"
+              />
+              <StatTile
+                icon={<ShieldCheck className="h-4 w-4" />}
+                label="Verified"
+                value={String(verifiedCount)}
+                accent="teal"
+              />
+            </div>
           </div>
         </div>
-      </header>
 
-      <div className="grid min-h-0 flex-1 gap-4 px-4 py-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.9fr)] lg:px-6">
-        <main className="min-h-0 min-w-0 overflow-y-auto rounded-3xl border border-border bg-card/70 shadow-[var(--shadow-1)]">
-          <Tabs defaultValue="velo" className="flex h-full min-h-0 flex-col">
-            <div className="border-b border-border/80 px-4 pt-4">
-              <TabsList className="h-auto w-full justify-start rounded-none bg-transparent p-0">
-                <TabsTrigger
-                  value="velo"
-                  className="rounded-none border-b-2 border-transparent px-3 pb-3 pt-2 data-[state=active]:border-[color:var(--brand-indigo)] data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                >
-                  <Scan className="mr-1.5 h-3.5 w-3.5" /> VELO Profile
-                </TabsTrigger>
-                <TabsTrigger
-                  value="portfolio"
-                  className="rounded-none border-b-2 border-transparent px-3 pb-3 pt-2 data-[state=active]:border-[color:var(--brand-indigo)] data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                >
-                  <Briefcase className="mr-1.5 h-3.5 w-3.5" /> Portfolio &
-                  Evidence
-                </TabsTrigger>
-                <TabsTrigger
-                  value="momentum"
-                  className="rounded-none border-b-2 border-transparent px-3 pb-3 pt-2 data-[state=active]:border-[color:var(--brand-indigo)] data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                >
-                  <Zap className="mr-1.5 h-3.5 w-3.5" /> Momentum
-                </TabsTrigger>
-              </TabsList>
-            </div>
+        {/* ── Page body ────────────────────────────────────────────────────── */}
+        <div className="grid flex-1 grid-cols-1 gap-0 xl:grid-cols-[minmax(0,1fr)_280px]">
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <TabsContent
-                value="velo"
-                className="mt-0 min-h-0 outline-none focus-visible:ring-0"
-              >
+          {/* Main — tabs */}
+          <div className="min-w-0 border-r border-border/60">
+            <Tabs defaultValue="velo">
+              {/* Tab bar */}
+              <div className="border-b border-border/60 bg-muted/30">
+                <div className="overflow-x-auto px-4 sm:px-6">
+                  <TabsList className="h-auto w-max min-w-full justify-start rounded-none bg-transparent p-0">
+                    {[
+                      { value: "velo", label: "VELO Profile", mobileLabel: "VELO", icon: <Activity className="h-3.5 w-3.5" /> },
+                      { value: "portfolio", label: "Portfolio", mobileLabel: "Portfolio", icon: <Briefcase className="h-3.5 w-3.5" /> },
+                      { value: "momentum", label: "Momentum", mobileLabel: "Momentum", icon: <Zap className="h-3.5 w-3.5" /> },
+                    ].map((tab) => (
+                      <TabsTrigger
+                        key={tab.value}
+                        value={tab.value}
+                        className="group relative shrink-0 rounded-none border-b-2 border-transparent px-3 pb-3 pt-3.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:border-[color:var(--brand-indigo)] data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none sm:px-4"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          {tab.icon}
+                          <span className="sm:hidden">{tab.mobileLabel}</span>
+                          <span className="hidden sm:inline">{tab.label}</span>
+                        </span>
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </div>
+              </div>
+
+              <TabsContent value="velo" className="mt-0 outline-none focus-visible:ring-0">
                 <VeloProfileTab />
               </TabsContent>
-              <TabsContent
-                value="portfolio"
-                className="mt-0 min-h-0 outline-none focus-visible:ring-0"
-              >
+              <TabsContent value="portfolio" className="mt-0 outline-none focus-visible:ring-0">
                 <PortfolioVaultTab />
               </TabsContent>
-              <TabsContent
-                value="momentum"
-                className="mt-0 min-h-0 outline-none focus-visible:ring-0"
-              >
+              <TabsContent value="momentum" className="mt-0 outline-none focus-visible:ring-0">
                 <MomentumTab />
               </TabsContent>
-            </div>
-          </Tabs>
-        </main>
+            </Tabs>
+          </div>
 
-        <aside className="min-h-0 space-y-4 xl:sticky xl:top-24 xl:self-start">
-          <section className="rounded-3xl border border-border bg-card/70 p-4 shadow-[var(--shadow-1)]">
-            <h2 className="mb-3 font-display text-lg">Verification Snapshot</h2>
-            <div className="grid grid-cols-2 gap-2">
-              <SnapshotTile label="Verified" value={verifiedCount.toString()} />
-              <SnapshotTile label="Featured" value={featuredCount.toString()} />
-              <SnapshotTile
-                label="Portfolio Views"
-                value={`${profile?.view_count ?? 0}`}
+          {/* Aside — stacks below tabs on mobile, right column on xl */}
+          <aside id="public-profile-card" className="order-last border-t border-border/60 xl:order-none xl:border-t-0 xl:border-l xl:border-border/60">
+            <div className="xl:sticky xl:top-0 xl:max-h-screen xl:overflow-y-auto">
+              <PublicProfileCard
+                profile={profile}
+                user={user}
+                publicUrl={publicUrl}
+                usernameLabel={usernameLabel}
+                verifiedCount={verifiedCount}
+                artifactCount={artifacts.length}
+                copied={copied}
+                onCopy={handleCopy}
+                onShare={() => setShareOpen(true)}
               />
-              <SnapshotTile
-                label="Public"
-                value={profile?.is_public ? "On" : "Off"}
-              />
             </div>
-          </section>
-
-          <section className="rounded-3xl border border-border bg-card/70 p-4 shadow-[var(--shadow-1)]">
-            <div className="mb-3 flex items-start justify-between gap-2">
-              <div>
-                <h2 className="font-display text-lg">Public Portfolio</h2>
-                <p className="text-xs text-muted-foreground">
-                  Share your verified learning graph
-                </p>
-              </div>
-              <Badge variant="outline" className="rounded-full text-[10px]">
-                <Globe2 className="mr-1 h-3.5 w-3.5" />
-                {profile?.is_public ? "Live" : "Private"}
-              </Badge>
-            </div>
-
-            <div className="space-y-3">
-              <div className="rounded-2xl border border-border bg-background p-3">
-                <p className="mb-1 font-mono-ui text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                  Portfolio URL
-                </p>
-                <p className="truncate text-xs text-foreground/85">
-                  {publicUrl || "No public URL yet"}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <SnapshotTile
-                  label="Profile"
-                  value={`${Math.round(user?.profile_completion ?? 0)}%`}
-                  compact
-                />
-                <SnapshotTile
-                  label="Artifacts"
-                  value={`${artifacts.length}`}
-                  compact
-                />
-                <SnapshotTile
-                  label="Verified %"
-                  value={`${artifacts.length ? Math.round((verifiedCount / artifacts.length) * 100) : 0}%`}
-                  compact
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  asChild
-                  size="sm"
-                  variant="outline"
-                  className="h-9 text-xs"
-                  disabled={!publicUrl}
-                >
-                  <Link href={publicUrl || "#"} target="_blank">
-                    <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Open
-                  </Link>
-                </Button>
-                <Button
-                  size="sm"
-                  className="h-9 text-xs"
-                  onClick={() => setShareOpen(true)}
-                  disabled={!publicUrl}
-                >
-                  <Share2 className="mr-1.5 h-3.5 w-3.5" /> Share
-                </Button>
-              </div>
-            </div>
-          </section>
-        </aside>
+          </aside>
+        </div>
       </div>
 
+      {/* ── Share dialog ───────────────────────────────────────────────────── */}
       <Dialog open={shareOpen} onOpenChange={setShareOpen}>
-        <DialogContent className="flex flex-col max-h-[94vh] min-w-[min(98vw,600px)] max-w-none overflow-x-hidden overflow-y-auto p-0">
+        <DialogContent className="flex max-h-[94vh] min-w-[min(98vw,600px)] max-w-none flex-col overflow-x-hidden overflow-y-auto p-0">
           <DialogHeader>
             <DialogTitle className="px-6 pt-6">Share Portfolio</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col space-y-4 px-6 pb-6">
-            <div className="rounded-2xl border border-border bg-background p-3">
-              <p className="mb-1 font-mono-ui text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+            <div className="overflow-hidden rounded-xl border bg-muted/30 px-4 py-3">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Public URL
               </p>
-              <p className="truncate text-xs text-foreground/85">
-                {shareUrlFor("share") || "No public URL"}
-              </p>
+              <p className="truncate text-xs">{shareUrlFor("share") || "No public URL"}</p>
             </div>
 
-            <div className="relative overflow-hidden rounded-2xl  p-2">
+            <div className="relative overflow-hidden rounded-2xl p-2">
               {shareCardPreviewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -634,11 +549,8 @@ export default function ProgressHubPage() {
                   className="mx-auto h-auto max-h-[68vh] w-full rounded-xl object-contain"
                 />
               ) : (
-                <div className="grid h-56 place-items-center rounded-xl border border-border bg-card text-xs text-muted-foreground">
-                  {qrError ??
-                    (shareCardBusy
-                      ? "Rendering share card..."
-                      : "Preparing preview...")}
+                <div className="grid h-56 place-items-center rounded-xl border bg-card text-xs text-muted-foreground">
+                  {qrError ?? (shareCardBusy ? "Rendering share card..." : "Preparing preview...")}
                 </div>
               )}
             </div>
@@ -647,30 +559,15 @@ export default function ProgressHubPage() {
               <TooltipProvider delayDuration={150}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      onClick={handleCopy}
-                      disabled={!publicUrl}
-                    >
-                      {copied ? (
-                        <Check className="h-4 w-4" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
+                    <Button size="lg" variant="outline" onClick={handleCopy} disabled={!publicUrl}>
+                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>
-                    {copied ? "Copied" : "Copy URL"}
-                  </TooltipContent>
+                  <TooltipContent>{copied ? "Copied" : "Copy URL"}</TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      size="lg"
-                      onClick={handleNativeShare}
-                      disabled={!publicUrl}
-                    >
+                    <Button size="lg" onClick={handleNativeShare} disabled={!publicUrl}>
                       <Share2 className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -678,12 +575,7 @@ export default function ProgressHubPage() {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      onClick={handleWhatsAppShare}
-                      disabled={!publicUrl}
-                    >
+                    <Button size="lg" variant="outline" onClick={handleWhatsAppShare} disabled={!publicUrl}>
                       <MessageCircle className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -691,12 +583,7 @@ export default function ProgressHubPage() {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      onClick={handleLinkedInShare}
-                      disabled={!publicUrl}
-                    >
+                    <Button size="lg" variant="outline" onClick={handleLinkedInShare} disabled={!publicUrl}>
                       <Linkedin className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -704,12 +591,7 @@ export default function ProgressHubPage() {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      onClick={handleDownloadCard}
-                      disabled={!qrDataUrl}
-                    >
+                    <Button size="lg" variant="outline" onClick={handleDownloadCard} disabled={!qrDataUrl}>
                       <Download className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
@@ -724,47 +606,202 @@ export default function ProgressHubPage() {
   );
 }
 
-function StatPill({
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+const ACCENT_CLASSES: Record<string, { bg: string; text: string; border: string }> = {
+  indigo: {
+    bg: "bg-[color:var(--brand-indigo)]/10",
+    text: "text-[color:var(--brand-indigo)]",
+    border: "border-[color:var(--brand-indigo)]/25",
+  },
+  emerald: {
+    bg: "bg-emerald-50 dark:bg-emerald-950/25",
+    text: "text-emerald-700 dark:text-emerald-400",
+    border: "border-emerald-200 dark:border-emerald-900/40",
+  },
+  violet: {
+    bg: "bg-violet-50 dark:bg-violet-950/25",
+    text: "text-violet-700 dark:text-violet-400",
+    border: "border-violet-200 dark:border-violet-900/40",
+  },
+  amber: {
+    bg: "bg-amber-50 dark:bg-amber-950/25",
+    text: "text-amber-700 dark:text-amber-400",
+    border: "border-amber-200 dark:border-amber-900/40",
+  },
+  orange: {
+    bg: "bg-orange-50 dark:bg-orange-950/25",
+    text: "text-orange-700 dark:text-orange-400",
+    border: "border-orange-200 dark:border-orange-900/40",
+  },
+  teal: {
+    bg: "bg-teal-50 dark:bg-teal-950/25",
+    text: "text-teal-700 dark:text-teal-400",
+    border: "border-teal-200 dark:border-teal-900/40",
+  },
+};
+
+function StatTile({
+  icon,
   label,
   value,
-  icon,
+  accent = "indigo",
 }: {
+  icon: React.ReactNode;
   label: string;
   value: string;
-  icon: React.ReactNode;
+  accent?: string;
 }) {
+  const a = ACCENT_CLASSES[accent] ?? ACCENT_CLASSES.indigo;
   return (
-    <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1">
-      <span className="text-[color:var(--brand-indigo)]">{icon}</span>
-      <span className="font-mono-ui text-[10px] text-muted-foreground">
+    <div
+      className={cn(
+        "flex min-w-[100px] shrink-0 flex-col gap-2 rounded-2xl border px-4 py-3 sm:min-w-[120px]",
+        a.bg,
+        a.border,
+      )}
+    >
+      <span className={cn("flex items-center gap-1.5 text-[11px] font-medium", a.text)}>
+        {icon}
         {label}
       </span>
-      <span className="font-mono-ui text-[11px] font-semibold">{value}</span>
+      <span className="font-display text-2xl font-bold leading-none tabular-nums text-foreground sm:text-3xl">
+        {value}
+      </span>
     </div>
   );
 }
 
-function SnapshotTile({
-  label,
-  value,
-  compact = false,
+function PublicProfileCard({
+  profile,
+  user,
+  publicUrl,
+  usernameLabel,
+  verifiedCount,
+  artifactCount,
+  copied,
+  onCopy,
+  onShare,
 }: {
-  label: string;
-  value: string;
-  compact?: boolean;
+  profile: { full_name?: string; slug?: string; avatar_url?: string; is_public?: boolean; view_count?: number } | undefined;
+  user: { profile_completion?: number; full_name?: string } | null | undefined;
+  publicUrl: string;
+  usernameLabel: string;
+  verifiedCount: number;
+  artifactCount: number;
+  copied: boolean;
+  onCopy: () => void;
+  onShare: () => void;
 }) {
+  const completion = Math.round(user?.profile_completion ?? 0);
+  const initials = (profile?.full_name || user?.full_name || usernameLabel)
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  const stats = [
+    { label: "Verified", value: verifiedCount },
+    { label: "Items", value: artifactCount },
+    { label: "Views", value: profile?.view_count ?? 0 },
+  ];
+
   return (
-    <article
-      className={`rounded-xl border border-border bg-background ${compact ? "px-2.5 py-2" : "px-3 py-2"}`}
-    >
-      <p className="font-mono-ui text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-        {label}
-      </p>
-      <p
-        className={`mt-1 font-mono-ui font-semibold leading-none ${compact ? "text-base" : "text-lg"}`}
-      >
-        {value}
-      </p>
-    </article>
+    <div className="flex flex-col p-4 sm:p-5">
+      {/* Header row */}
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+          Public Profile
+        </p>
+        <span
+          className={cn(
+            "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+            profile?.is_public
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/25 dark:text-emerald-400"
+              : "border-border bg-muted text-muted-foreground",
+          )}
+        >
+          {profile?.is_public ? (
+            <><Globe2 className="h-2.5 w-2.5" /> Live</>
+          ) : (
+            <><Lock className="h-2.5 w-2.5" /> Private</>
+          )}
+        </span>
+      </div>
+
+      {/* Identity block */}
+      <div className="mb-4 flex items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[color:var(--brand-indigo)]/10 text-[13px] font-bold text-[color:var(--brand-indigo)]">
+          {initials || "H"}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold leading-tight">
+            {profile?.full_name || user?.full_name || usernameLabel}
+          </p>
+          {publicUrl ? (
+            <button
+              onClick={onCopy}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <span className="truncate">/p/{profile?.slug || usernameLabel}</span>
+              {copied
+                ? <Check className="h-3 w-3 shrink-0 text-emerald-500" />
+                : <Copy className="h-3 w-3 shrink-0" />
+              }
+            </button>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">No public URL yet</p>
+          )}
+        </div>
+      </div>
+
+      {/* Profile completion */}
+      <div className="mb-4">
+        <div className="mb-1.5 flex items-center justify-between">
+          <span className="text-[11px] text-muted-foreground">Profile completion</span>
+          <span className="text-[11px] font-semibold tabular-nums">{completion}%</span>
+        </div>
+        <Progress value={completion} className="h-1.5" />
+      </div>
+
+      {/* Stats row */}
+      <div className="mb-4 flex divide-x divide-border/60 overflow-hidden rounded-xl border bg-muted/30">
+        {stats.map((s) => (
+          <div key={s.label} className="flex flex-1 flex-col items-center py-3">
+            <span className="font-display text-lg font-bold tabular-nums leading-none text-foreground">
+              {s.value}
+            </span>
+            <span className="mt-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+              {s.label}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Actions */}
+      <div className="flex flex-col gap-2">
+        <Button
+          size="sm"
+          variant="cta"
+          className="h-9 w-full text-xs"
+          onClick={onShare}
+          disabled={!publicUrl}
+        >
+          <Share2 className="mr-1.5 h-3.5 w-3.5" /> Share Portfolio
+        </Button>
+        <Button
+          asChild
+          size="sm"
+          variant="outline"
+          className="h-9 w-full text-xs"
+          disabled={!publicUrl}
+        >
+          <Link href={publicUrl || "#"} target="_blank">
+            <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Open Public Page
+          </Link>
+        </Button>
+      </div>
+    </div>
   );
 }

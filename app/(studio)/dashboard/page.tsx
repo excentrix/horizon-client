@@ -813,16 +813,7 @@ export default function DashboardPage() {
             </p>
             <p className="mt-0.5 text-sm text-muted-foreground line-clamp-2">{nudge}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button variant="outline" size="sm" className="h-8 gap-1.5 px-3 text-xs" onClick={() => router.push("/chat")}>
-              <MessageSquare className="h-3.5 w-3.5" />
-              Ask mentor
-            </Button>
-            <Button variant="cta" size="sm" className="h-8 px-3 text-xs" onClick={() => { if (focusTask) openTask(focusTask); else router.push("/plans"); }}>
-              <Play className="mr-1 h-3.5 w-3.5" />
-              {focusTask ? "Continue" : "View plans"}
-            </Button>
-          </div>
+          
         </header>
 
         {/* ── Responsive 3-column grid ───────────────────────────────────── */}
