@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Activity, Github, Linkedin, 
-  CheckCircle2, Circle, Flame, 
+import {
+  Activity, Github, Linkedin,
+  CheckCircle2, Circle, Flame,
   Target, Zap, ChevronDown, ChevronUp,
   BrainCircuit, FileText, Loader2, AlertTriangle,
-  Sparkles, CheckCheck, Battery, Smile, Coffee
+  Sparkles, CheckCheck, Battery, Coffee
 } from "lucide-react";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
 import type { StageStreamEvent } from "@/lib/analysis-stage";
@@ -319,141 +319,121 @@ export function BackgroundTaskMonitor({ analysisEvents = [] }: BackgroundTaskMon
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MoodSensor — animated mood check-in strip for the dashboard bottom
+// MoodSensor — compact icon-only pill strip, no emoji
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MOODS = [
   {
-    id: 1, label: "Drained", emoji: "🪫",
-    color: "text-slate-400", glow: "shadow-slate-400/30",
-    bg: "bg-slate-400/10 border-slate-400/30",
-    activeBg: "bg-slate-400/20 border-slate-400/60",
-    icon: <Battery className="h-3.5 w-3.5" />,
+    id: 1,
+    label: "Drained",
+    icon: Battery,
+    activeColor: "text-slate-500 dark:text-slate-300",
+    activeBorder: "border-slate-400/60",
+    activeBg: "bg-slate-400/12",
+    idleColor: "text-muted-foreground",
   },
   {
-    id: 2, label: "Distracted", emoji: "😤",
-    color: "text-amber-400", glow: "shadow-amber-400/30",
-    bg: "bg-amber-400/10 border-amber-400/30",
-    activeBg: "bg-amber-400/20 border-amber-400/60",
-    icon: <Flame className="h-3.5 w-3.5" />,
+    id: 2,
+    label: "Distracted",
+    icon: Flame,
+    activeColor: "text-amber-500",
+    activeBorder: "border-amber-400/60",
+    activeBg: "bg-amber-400/12",
+    idleColor: "text-muted-foreground",
   },
   {
-    id: 3, label: "Neutral", emoji: "😐",
-    color: "text-blue-400", glow: "shadow-blue-400/30",
-    bg: "bg-blue-400/10 border-blue-400/30",
-    activeBg: "bg-blue-400/20 border-blue-400/60",
-    icon: <Coffee className="h-3.5 w-3.5" />,
+    id: 3,
+    label: "Steady",
+    icon: Coffee,
+    activeColor: "text-sky-500",
+    activeBorder: "border-sky-400/60",
+    activeBg: "bg-sky-400/12",
+    idleColor: "text-muted-foreground",
   },
   {
-    id: 4, label: "Focused", emoji: "🎯",
-    color: "text-green-400", glow: "shadow-green-400/30",
-    bg: "bg-green-400/10 border-green-400/30",
-    activeBg: "bg-green-400/20 border-green-400/60",
-    icon: <Target className="h-3.5 w-3.5" />,
+    id: 4,
+    label: "Focused",
+    icon: Target,
+    activeColor: "text-emerald-500",
+    activeBorder: "border-emerald-400/60",
+    activeBg: "bg-emerald-400/12",
+    idleColor: "text-muted-foreground",
   },
   {
-    id: 5, label: "Flow ⚡", emoji: "⚡",
-    color: "text-purple-400", glow: "shadow-purple-400/40",
-    bg: "bg-purple-400/10 border-purple-400/30",
-    activeBg: "bg-purple-400/25 border-purple-400/70",
-    icon: <Zap className="h-3.5 w-3.5" />,
+    id: 5,
+    label: "Flow",
+    icon: Zap,
+    activeColor: "text-violet-500",
+    activeBorder: "border-violet-400/60",
+    activeBg: "bg-violet-400/12",
+    idleColor: "text-muted-foreground",
   },
 ] as const;
 
 export function MoodSensor() {
   const [selected, setSelected] = useState<number | null>(null);
   const [confirmed, setConfirmed] = useState(false);
-  const [hovered, setHovered] = useState<number | null>(null);
 
   const pick = (id: number) => {
     if (confirmed) return;
     setSelected(id);
-    setTimeout(() => setConfirmed(true), 400);
+    setTimeout(() => setConfirmed(true), 300);
   };
 
+  const active = confirmed ? MOODS.find((m) => m.id === selected) : null;
+
   return (
-    <div className={`${SHELL} p-4`}>
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <p className="text-[11px] font-bold tracking-wider uppercase text-muted-foreground">
-            How are you feeling?
-          </p>
-          {confirmed ? (
-            <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
-              <Smile className="h-3 w-3 text-green-500" />
-              <span className="text-green-500 font-medium">Noted — Mentor will adapt to your state.</span>
-            </p>
-          ) : (
-            <p className="text-[11px] text-muted-foreground mt-0.5">Mentor adapts to your energy level</p>
-          )}
-        </div>
-        {confirmed && (
-          <button
-            onClick={() => { setSelected(null); setConfirmed(false); }}
-            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Change
-          </button>
+    <div className={`${SHELL} px-4 py-3`}>
+      <div className="mb-2.5 flex items-center justify-between">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          Energy check-in
+        </p>
+        {confirmed && active && (
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[10px] font-medium ${active.activeColor}`}>
+              {active.label} — mentor adapted
+            </span>
+            <button
+              onClick={() => { setSelected(null); setConfirmed(false); }}
+              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground transition-colors"
+            >
+              reset
+            </button>
+          </div>
+        )}
+        {!confirmed && (
+          <p className="text-[10px] text-muted-foreground">Mentor adjusts tone to your state</p>
         )}
       </div>
 
-      <div className="flex items-stretch gap-2">
+      <div className="flex gap-1.5">
         {MOODS.map((mood) => {
+          const Icon = mood.icon;
           const isSelected = selected === mood.id;
-          const isHovered = hovered === mood.id;
           const isDimmed = confirmed && !isSelected;
 
           return (
             <button
               key={mood.id}
               onClick={() => pick(mood.id)}
-              onMouseEnter={() => setHovered(mood.id)}
-              onMouseLeave={() => setHovered(null)}
               disabled={confirmed}
-              className={`
-                flex-1 flex flex-col items-center gap-1.5 rounded-xl border py-3 px-1
-                transition-all duration-200 group
-                ${isDimmed ? "opacity-30 scale-95 cursor-default" : "cursor-pointer"}
-                ${isSelected
-                  ? `${mood.activeBg} ${mood.color} shadow-lg ${mood.glow} scale-105`
-                  : `${mood.bg} ${mood.color} ${!confirmed ? "hover:scale-105 hover:shadow-md" : ""}`
-                }
-              `}
-              style={{
-                transform: isSelected && confirmed
-                  ? "scale(1.08)"
-                  : isSelected
-                    ? "scale(1.05)"
-                    : isHovered && !confirmed
-                      ? "scale(1.04)"
-                      : undefined,
-              }}
+              title={mood.label}
+              className={[
+                "flex flex-1 flex-col items-center gap-1 rounded-xl border py-2.5 transition-all duration-200",
+                isDimmed ? "opacity-20 cursor-default" : "cursor-pointer",
+                isSelected
+                  ? `${mood.activeBg} ${mood.activeBorder} scale-105`
+                  : `border-border/50 bg-background/60 hover:border-border hover:bg-muted/30`,
+              ].join(" ")}
             >
-              {/* Emoji */}
-              <span
-                className={`text-xl transition-transform duration-200 ${
-                  isSelected ? "animate-bounce" : isHovered && !confirmed ? "scale-110" : ""
-                }`}
-                style={{ display: "inline-block" }}
-              >
-                {mood.emoji}
-              </span>
-              {/* Label */}
-              <span className={`text-[9px] font-bold uppercase tracking-wider leading-none text-center ${mood.color}`}>
+              <Icon className={`h-4 w-4 transition-colors ${isSelected ? mood.activeColor : mood.idleColor}`} />
+              <span className={`text-[9px] font-semibold uppercase tracking-wide leading-none ${isSelected ? mood.activeColor : "text-muted-foreground"}`}>
                 {mood.label}
               </span>
             </button>
           );
         })}
       </div>
-
-      {/* Ambient glow line when confirmed */}
-      {confirmed && selected && (() => {
-        const m = MOODS.find(m => m.id === selected)!;
-        return (
-          <div className={`mt-3 h-0.5 rounded-full ${m.activeBg.split(" ")[0]} opacity-60 transition-all duration-500`} />
-        );
-      })()}
     </div>
   );
 }

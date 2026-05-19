@@ -25,12 +25,22 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
     <GamificationProvider>
       <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-background">
         {isPlaygroundRoute ? null : (
-          <header className="sticky top-0 z-30 border-b border-border/80 bg-background/92 backdrop-blur">
+          <header
+            className={cn(
+              "sticky top-0 z-30 border-b border-border/80 bg-background/92 backdrop-blur",
+              !isDashboard && "hidden md:block",
+            )}
+          >
             <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center justify-between px-4 lg:px-6">
               <Link href="/dashboard" className="font-display text-sm uppercase tracking-[0.18em] text-foreground">
                 Horizon
               </Link>
-              <ProfileMenu variant="compact" />
+              <div className="md:hidden">
+                <ProfileMenu variant="avatar" />
+              </div>
+              <div className="hidden md:block">
+                <ProfileMenu variant="compact" />
+              </div>
             </div>
           </header>
         )}

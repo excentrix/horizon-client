@@ -232,7 +232,7 @@ export function MessageFeed({
       ) : null}
 
       <ConversationContainer className="flex-1" key={conversation.id}>
-        <ConversationContent className="gap-4 px-5 pt-4 pb-2">
+        <ConversationContent className="gap-3 px-2 pt-2 pb-2 sm:px-3 lg:gap-4 lg:px-5 lg:pt-4">
           <MessageFeedContent
             hasMore={hasMore}
             isLoading={isLoading}
@@ -371,7 +371,7 @@ function MessageFeedContent({
       ) : null}
 
       <AnimatePresence initial={false}>
-        <div className="mx-auto flex w-full flex-col gap-4 px-4 lg:px-8">
+        <div className="mx-auto flex w-full flex-col gap-3 px-2 sm:px-3 lg:gap-4 lg:px-8">
           {messages.map((message, index) => (
             <MessageRow
               key={message.id}
@@ -655,7 +655,7 @@ const MessageRow = memo(function MessageRow({
       <Message from={isUser ? "user" : "assistant"}>
         <MessageContent
           className={cn(
-            "min-w-0 max-w-[72%] rounded-2xl px-4 py-3 text-sm shadow-[var(--shadow-1)]",
+            "min-w-0 max-w-[84%] rounded-2xl px-3 py-2.5 text-sm shadow-[var(--shadow-1)] sm:max-w-[80%] lg:max-w-[72%] lg:px-4 lg:py-3",
             "group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground",
             !isUser &&
               `${theme?.bubbleBg ?? "bg-white/80"} ${theme?.bubbleText ?? "text-foreground"} border border-white/70`,
@@ -792,7 +792,7 @@ const StreamingMessageRow = memo(function StreamingMessageRow({
       <Message from="assistant">
         <MessageContent
           className={cn(
-            "min-w-0 max-w-[72%] rounded-2xl border border-white/70 px-4 py-3 text-sm shadow-[var(--shadow-1)]",
+            "min-w-0 max-w-[84%] rounded-2xl border border-white/70 px-3 py-2.5 text-sm shadow-[var(--shadow-1)] sm:max-w-[80%] lg:max-w-[72%] lg:px-4 lg:py-3",
             theme?.bubbleBg ?? "bg-white/80",
             theme?.bubbleText ?? "text-foreground",
           )}

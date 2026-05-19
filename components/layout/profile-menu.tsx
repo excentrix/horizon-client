@@ -20,7 +20,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { telemetry } from "@/lib/telemetry";
 
-type ProfileMenuVariant = "default" | "compact";
+type ProfileMenuVariant = "default" | "compact" | "avatar";
 
 export function toTitleCase(name?: string | null) {
   if (!name) return "";
@@ -108,7 +108,19 @@ export function ProfileMenu({ variant = "default" }: { variant?: ProfileMenuVari
     <>
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
-          {variant === "compact" ? (
+          {variant === "avatar" ? (
+            <Button
+              variant="ghost"
+              className="h-10 w-10 rounded-full border border-border/80 bg-background p-0 shadow-[var(--shadow-1)]"
+            >
+              <Avatar className="h-8 w-8">
+                <AvatarImage src={user.avatar_url ?? undefined} alt={displayName} />
+                <AvatarFallback className="text-xs font-semibold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+            </Button>
+          ) : variant === "compact" ? (
             <Button
               variant="ghost"
               className="h-12 w-auto min-w-[300px] max-w-[390px] rounded-2xl border border-border/80 bg-background px-2.5 shadow-[var(--shadow-1)] transition-all duration-300 hover:border-[color:var(--brand-indigo)]/35"

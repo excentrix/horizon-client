@@ -4,7 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { LiveAnalysisPanel } from "@/components/mirror/live-analysis-panel";
 import { ProjectVerificationSheet } from "@/components/mirror/ProjectVerificationSheet";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { useMirrorSnapshot } from "@/hooks/use-mirror-snapshot";
 import { useGithubRepos } from "@/hooks/use-github-repos";
 import { authApi, auditApi } from "@/lib/api";
@@ -344,6 +346,17 @@ export function VeloProfileTab() {
   const [reanalysisBlocked, setReanalysisBlocked] = useState<{
     next_reset: string | null; limit: number;
   } | null>(null);
+  const [jdSheetOpen, setJdSheetOpen] = useState(false);
+  const [jdText, setJdText] = useState("");
+  const [jdReanalysing, setJdReanalysing] = useState(false);
+  const [jdReanalysisBlocked, setJdReanalysisBlocked] = useState<{
+    next_reset: string | null; limit: number; used: number;
+  } | null>(null);
+  const { data: quotaData } = useQuery({
+    queryKey: ["feature-quotas"],
+    queryFn: authApi.getFeatureQuotas,
+    staleTime: 60_000,
+  });
   const github = useGithubRepos();
 
   useEffect(() => {
@@ -373,6 +386,38 @@ export function VeloProfileTab() {
       });
     } finally {
       setReanalysing(false);
+    }
+  };
+
+  const handleJdReanalyse = async () => {
+    if (!jdText.trim()) {
+      toast.error("Please paste a job description first.");
+      return;
+    }
+    setJdReanalysing(true);
+    try {
+      await authApi.reanalyseWithJD(jdText.trim());
+      await queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
+      await queryClient.invalidateQueries({ queryKey: ["feature-quotas"] });
+      setJdSheetOpen(false);
+      setJdText("");
+      toast.success("JD-targeted analysis queued — VELO will update in a moment.");
+    } catch (err: unknown) {
+      const data = (err as { response?: { data?: Record<string, unknown> } })?.response?.data;
+      if (data?.quota_status === "exceeded") {
+        setJdSheetOpen(false);
+        setJdReanalysisBlocked({
+          next_reset: (data.next_reset as string | null) ?? null,
+          limit: (data.limit as number) ?? 2,
+          used: (data.used as number) ?? 2,
+        });
+        return;
+      }
+      toast.error("Couldn't queue JD analysis.", {
+        description: "Upload a resume first, then try again.",
+      });
+    } finally {
+      setJdReanalysing(false);
     }
   };
 
@@ -698,6 +743,20 @@ export function VeloProfileTab() {
         >
           <RefreshCw className={cn("h-3 w-3", reanalysing && "animate-spin")} />
           {reanalysing ? "Queuing…" : "Re-analyse"}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1.5 border-amber-300 text-xs text-amber-700 hover:bg-amber-50"
+          onClick={() => setJdSheetOpen(true)}
+        >
+          <Sparkles className="h-3 w-3" />
+          Re-analyse with JD
+          {quotaData?.jd_reanalysis && !quotaData.jd_reanalysis.exempt && (
+            <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0 text-[10px] font-semibold text-amber-700">
+              {(quotaData.jd_reanalysis.limit ?? 2) - quotaData.jd_reanalysis.used} left
+            </span>
+          )}
         </Button>
       </div>
 
@@ -1759,6 +1818,87 @@ export function VeloProfileTab() {
             `Project ${verifyingProjectIndex + 1}`
           }
         />
+      )}
+
+      {/* JD re-analysis sheet */}
+      <Sheet open={jdSheetOpen} onOpenChange={setJdSheetOpen}>
+        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+          <SheetHeader className="border-b px-6 py-5">
+            <SheetTitle className="text-base">Re-analyse with Job Description</SheetTitle>
+            <p className="text-sm text-muted-foreground">
+              Paste the full job description below. VELO will re-run the analysis targeted to this specific role — scoring your alignment, identifying JD-specific gaps, and updating keyword recommendations.
+            </p>
+            {quotaData?.jd_reanalysis && !quotaData.jd_reanalysis.exempt && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700 font-medium">
+                  {quotaData.jd_reanalysis.used} / {quotaData.jd_reanalysis.limit ?? 2} used this month
+                </span>
+                {quotaData.jd_reanalysis.next_reset && (
+                  <span>· resets {new Date(quotaData.jd_reanalysis.next_reset).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                )}
+              </div>
+            )}
+          </SheetHeader>
+          <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
+            <Textarea
+              placeholder="Paste the full job description here…"
+              className="min-h-[320px] resize-none text-sm"
+              value={jdText}
+              onChange={(e) => setJdText(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              You can paste the raw job posting — requirements, responsibilities, and all. VELO will parse it automatically.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2 border-t px-6 py-4">
+            <Button variant="ghost" size="sm" onClick={() => setJdSheetOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={jdReanalysing || !jdText.trim()}
+              onClick={handleJdReanalyse}
+              className="gap-1.5"
+            >
+              <Sparkles className={cn("h-3.5 w-3.5", jdReanalysing && "animate-pulse")} />
+              {jdReanalysing ? "Queuing…" : "Run JD Analysis"}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* JD reanalysis quota exceeded modal */}
+      {jdReanalysisBlocked && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+          onClick={() => setJdReanalysisBlocked(null)}>
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="rounded-t-2xl bg-amber-50 px-6 pt-6 pb-5">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <h2 className="text-base font-semibold text-slate-900">JD re-analysis limit reached</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Your plan includes {jdReanalysisBlocked.limit} JD-targeted re-analyses per month ({jdReanalysisBlocked.used}/{jdReanalysisBlocked.limit} used).
+                {jdReanalysisBlocked.next_reset
+                  ? ` Your allowance resets on ${new Date(jdReanalysisBlocked.next_reset).toLocaleDateString(undefined, { month: "long", day: "numeric" })}.`
+                  : ""}
+              </p>
+            </div>
+            <div className="px-6 py-4">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Upgrade your plan to run unlimited JD-targeted analyses.
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-slate-100 px-6 py-4">
+              <Button size="sm" variant="ghost" className="text-slate-500"
+                onClick={() => setJdReanalysisBlocked(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Resume reanalysis quota exceeded modal */}

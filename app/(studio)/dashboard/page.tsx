@@ -3,1132 +3,887 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  BookOpen,
-  ChevronLeft,
-  ChevronRight,
   Play,
   MessageSquare,
-  CalendarDays,
+  MapPin,
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  Flame,
+  Zap,
+  TrendingUp,
+  BookOpen,
+  ChevronRight,
+  LayoutDashboard,
+  ShieldCheck,
+  AlertCircle,
+  Sparkles,
+  CircleUser,
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
 import { useFlowSuggestion } from "@/hooks/use-flow-suggestion";
 import { useGamificationSummary } from "@/hooks/use-gamification";
 import { useHomeDashboard } from "@/hooks/use-home-dashboard";
+import { useMirrorSnapshot } from "@/hooks/use-mirror-snapshot";
 import { chatApi, planningApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { SkillRadarChart } from "@/components/intelligence/SkillRadarChart";
-import {
-  VeloTracker,
-  XPQuests,
-  TheCircleTeaser,
-  BackgroundTaskMonitor,
-  MoodSensor,
-} from "./DashboardWidgets";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { MoodSensor, BackgroundTaskMonitor } from "./DashboardWidgets";
 import { useNotificationsSocket } from "@/hooks/use-notifications";
-import { toTitleCase } from "@/components/layout/profile-menu";
+import { cn } from "@/lib/utils";
+import type { LearningPlan, TodayTask, ActivityItem } from "@/types";
 
-interface DashboardTask {
-  id: string;
-  title: string;
-  plan_title?: string;
-  estimated_duration?: number;
-  estimated_duration_minutes?: number;
-  learning_plan?: string;
-  status: string;
-  plan_id?: string;
-  learning_plan_title?: string;
-  description?: string;
-  scheduled_date?: string;
-  scheduled_time?: string | null;
+function timeOfDay() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
 }
 
-interface TodaysTasksData {
-  tasks: DashboardTask[];
-  count: number;
+function toTitleCase(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
-type FocusTask = {
-  id: string;
-  title: string;
-  planTitle?: string;
-  duration?: number | null;
-  tag: "Overdue" | "Today" | "Upcoming" | "Scheduled" | "In Progress";
-  planId?: string;
-  scheduledTime?: string | null;
-};
+// ─── Small helpers ────────────────────────────────────────────────────────────
 
-type CalendarView = "day" | "week" | "month";
+function pluralise(n: number, word: string) {
+  return `${n} ${word}${n !== 1 ? "s" : ""}`;
+}
 
-const SHELL =
-  "rounded-2xl border border-border bg-[color:var(--surface)] shadow-[var(--shadow-1)]";
+function relativeDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  if (diff === 0) return "today";
+  if (diff === 1) return "tomorrow";
+  if (diff === -1) return "yesterday";
+  if (diff < 0) return `${Math.abs(diff)}d overdue`;
+  return `in ${diff}d`;
+}
 
-function ProgressBar({ value }: { value: number }) {
-  const safeValue = Math.min(100, Math.max(0, value));
+// ─── Skeleton loading state ───────────────────────────────────────────────────
+
+function DashboardSkeleton() {
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-muted/70">
-      <div
-        className="h-full rounded-full bg-gradient-to-r from-[color:var(--brand-indigo)] to-[color:var(--cta)] transition-all duration-500"
-        style={{ width: `${safeValue}%` }}
-      />
-    </div>
-  );
-}
-
-function parseTimeToMinutes(raw?: string | null) {
-  if (!raw) return null;
-  const normalized = raw.trim();
-  const parts = normalized.split(":");
-  if (parts.length < 2) return null;
-  const hh = Number(parts[0]);
-  const mm = Number(parts[1]);
-  if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
-  return hh * 60 + mm;
-}
-
-function formatMinutes(mins: number) {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  const hh = h % 24;
-  const period = hh >= 12 ? "PM" : "AM";
-  const twelve = hh % 12 === 0 ? 12 : hh % 12;
-  return `${twelve.toString().padStart(2, "0")}:${m
-    .toString()
-    .padStart(2, "0")} ${period}`;
-}
-
-function StatTile({
-  label,
-  value,
-  caption,
-  className,
-}: {
-  label: string;
-  value: React.ReactNode;
-  caption: string;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`flex h-full min-h-0 flex-col rounded-xl border border-border/90 bg-background p-3.5 shadow-[var(--shadow-1)] ${className ?? ""}`}
-    >
-      <p className="text-[11px] text-muted-foreground">{label}</p>
-      <div className="font-mono-ui mt-1 text-xl font-semibold">{value}</div>
-      <p className="mt-1 text-[11px] text-muted-foreground">{caption}</p>
-    </div>
-  );
-}
-
-function MentorOrb({ active }: { active: boolean }) {
-  return (
-    <div className="relative mx-auto h-24 w-24">
-      <span
-        className={`absolute inset-0 rounded-full border border-white/40 ${
-          active ? "animate-ping" : ""
-        }`}
-      />
-      <span className="absolute inset-2 rounded-full border border-white/50 opacity-70" />
-      <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_30%_30%,#ffffff_0%,#cfd3ff_45%,#7b84ff_100%)] shadow-[0_0_30px_rgba(88,88,204,0.45)]" />
-      <div className="absolute inset-7 rounded-full bg-[color:var(--brand-indigo)]/24" />
-    </div>
-  );
-}
-
-function toIsoDate(date: Date) {
-  const y = date.getFullYear();
-  const m = `${date.getMonth() + 1}`.padStart(2, "0");
-  const d = `${date.getDate()}`.padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function addDays(date: Date, delta: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + delta);
-  return next;
-}
-
-function startOfWeek(date: Date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + mondayOffset);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function formatCalendarRange(view: CalendarView, anchor: Date) {
-  if (view === "day") {
-    return anchor.toLocaleDateString(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-  }
-  if (view === "week") {
-    const start = startOfWeek(anchor);
-    const end = addDays(start, 6);
-    return `${start.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-    })} - ${end.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
-  }
-  return anchor.toLocaleDateString(undefined, {
-    month: "long",
-    year: "numeric",
-  });
-}
-
-function buildMonthGrid(anchor: Date) {
-  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-  const start = startOfWeek(first);
-  return Array.from({ length: 42 }, (_, idx) => addDays(start, idx));
-}
-
-function parseTaskStartMinutes(task: DashboardTask, fallbackIndex = 0) {
-  const parsed = parseTimeToMinutes(task.scheduled_time);
-  if (parsed !== null) return parsed;
-  return 9 * 60 + fallbackIndex * 45;
-}
-
-function CalendarBoard({
-  tasks,
-  view,
-  anchorDate,
-  onViewChange,
-  onAnchorDateChange,
-  onOpenTask,
-}: {
-  tasks: DashboardTask[];
-  view: CalendarView;
-  anchorDate: Date;
-  onViewChange: (next: CalendarView) => void;
-  onAnchorDateChange: (next: Date) => void;
-  onOpenTask: (task: DashboardTask) => void;
-}) {
-  const dayStart = 7 * 60;
-  const dayEnd = 22 * 60;
-  const pxPerMinute = 0.62;
-  const bodyHeight = (dayEnd - dayStart) * pxPerMinute;
-
-  const days = useMemo(() => {
-    if (view === "day") return [new Date(anchorDate)];
-    return Array.from({ length: 7 }, (_, idx) =>
-      addDays(startOfWeek(anchorDate), idx),
-    );
-  }, [anchorDate, view]);
-
-  const tasksByDate = useMemo(() => {
-    const grouped = new Map<string, DashboardTask[]>();
-    tasks.forEach((task) => {
-      const key = task.scheduled_date || toIsoDate(anchorDate);
-      if (!grouped.has(key)) grouped.set(key, []);
-      grouped.get(key)!.push(task);
-    });
-    grouped.forEach((list) =>
-      list.sort((a, b) => parseTaskStartMinutes(a) - parseTaskStartMinutes(b)),
-    );
-    return grouped;
-  }, [anchorDate, tasks]);
-
-  const onPrev = () => {
-    if (view === "day") onAnchorDateChange(addDays(anchorDate, -1));
-    else if (view === "week") onAnchorDateChange(addDays(anchorDate, -7));
-    else
-      onAnchorDateChange(
-        new Date(anchorDate.getFullYear(), anchorDate.getMonth() - 1, 1),
-      );
-  };
-  const onNext = () => {
-    if (view === "day") onAnchorDateChange(addDays(anchorDate, 1));
-    else if (view === "week") onAnchorDateChange(addDays(anchorDate, 7));
-    else
-      onAnchorDateChange(
-        new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 1),
-      );
-  };
-
-  const dayKey = toIsoDate(anchorDate);
-  const dayTasks = tasksByDate.get(dayKey) ?? [];
-
-  return (
-    <div className="flex h-full min-h-0 flex-col rounded-2xl border border-border bg-background p-3.5 shadow-[var(--shadow-1)]">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-7 w-7"
-            onClick={onPrev}
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-[11px] font-mono-ui"
-            onClick={() => onAnchorDateChange(new Date())}
-          >
-            Today
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-7 w-7"
-            onClick={onNext}
-          >
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Button>
-          <span className="ml-2 font-mono-ui text-[11px] text-muted-foreground">
-            {formatCalendarRange(view, anchorDate)}
-          </span>
+    <div className="mx-auto flex w-full max-w-[1720px] flex-col gap-4 px-3 py-3 pb-24 xl:px-5">
+      <Skeleton className="h-14 w-full rounded-2xl" />
+      <div className="grid gap-4 xl:grid-cols-3">
+        <div className="space-y-4">
+          <Skeleton className="h-36 rounded-2xl" />
+          <Skeleton className="h-28 rounded-2xl" />
+          <Skeleton className="h-24 rounded-2xl" />
         </div>
-        <div className="inline-flex items-center rounded-lg border border-border bg-[color:var(--surface-2)] p-1">
-          {(["day", "week", "month"] as CalendarView[]).map((preset) => (
-            <Button
-              key={preset}
-              variant={view === preset ? "accent" : "ghost"}
-              size="sm"
-              className="h-7 px-2.5 font-mono-ui text-[10px] uppercase"
-              onClick={() => onViewChange(preset)}
-            >
-              {preset}
-            </Button>
-          ))}
+        <div className="space-y-4">
+          <Skeleton className="h-64 rounded-2xl" />
+          <Skeleton className="h-28 rounded-2xl" />
+        </div>
+        <div className="space-y-4">
+          <Skeleton className="h-32 rounded-2xl" />
+          <Skeleton className="h-48 rounded-2xl" />
         </div>
       </div>
+    </div>
+  );
+}
 
-      {view === "day" ? (
-        <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border/80 bg-[color:var(--surface-2)] p-2.5">
-          {dayTasks.length ? (
-            <div className="space-y-2">
-              {dayTasks.map((task, idx) => {
-                const startMin = parseTaskStartMinutes(task, idx);
-                const duration = Math.max(
-                  30,
-                  task.estimated_duration_minutes ||
-                    task.estimated_duration ||
-                    45,
-                );
-                const endMin = startMin + duration;
-                const tone =
-                  task.status === "overdue"
-                    ? "border-[color:var(--brand-indigo)]/30 bg-[color:var(--surface-2)]"
-                    : task.status === "in_progress"
-                      ? "border-[color:var(--brand-indigo)]/40 bg-[color:var(--brand-indigo)]/16"
-                      : "border-border bg-background";
-                return (
-                  <button
-                    key={task.id}
-                    onClick={() => onOpenTask(task)}
-                    className={`w-full rounded-lg border p-3 text-left ${tone}`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="line-clamp-1 text-sm font-semibold">
-                          {task.title}
-                        </p>
-                        <p className="font-mono-ui mt-0.5 text-[11px] text-muted-foreground">
-                          {formatMinutes(startMin)} - {formatMinutes(endMin)}
-                        </p>
-                        <p className="line-clamp-1 text-[11px] text-muted-foreground">
-                          {task.plan_title ||
-                            task.learning_plan_title ||
-                            "Horizon mission path"}
-                        </p>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className="font-mono-ui text-[10px]"
-                      >
-                        {task.status === "in_progress"
-                          ? "In Progress"
-                          : task.status === "overdue"
-                            ? "Backlog"
-                            : "Scheduled"}
-                      </Badge>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="flex h-full min-h-[12rem] items-center justify-center rounded-lg border border-dashed border-border bg-background text-sm text-muted-foreground">
-              No missions scheduled for today.
-            </div>
+// ─── Focus task card ──────────────────────────────────────────────────────────
+
+function FocusCard({
+  task,
+  onStart,
+}: {
+  task: TodayTask;
+  onStart: () => void;
+}) {
+  const isOverdue = task.is_overdue;
+  const durationLabel =
+    task.estimated_duration != null ? `${task.estimated_duration} min` : null;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-1)] sm:p-5">
+      <div className="mb-4 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            {isOverdue ? "Overdue · do this first" : "Up next"}
+          </p>
+          <h2 className="mt-1.5 text-lg font-semibold leading-snug line-clamp-2">
+            {task.title}
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
+            {task.plan_title}
+          </p>
+        </div>
+        <Badge
+          variant="outline"
+          className={cn(
+            "hidden shrink-0 text-[10px] font-mono sm:inline-flex",
+            isOverdue
+              ? "border-[color:var(--brand-indigo)]/40 bg-[color:var(--brand-indigo)]/10 text-[color:var(--brand-indigo)]"
+              : "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400",
           )}
-        </div>
-      ) : view === "month" ? (
-        <div className="grid min-h-0 flex-1 grid-cols-7 gap-1 overflow-auto rounded-lg border border-border/80 bg-[color:var(--surface-2)] p-1.5">
-          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-            <div
-              key={day}
-              className="px-2 py-1 text-[10px] font-mono-ui text-muted-foreground"
+        >
+          {isOverdue ? "Overdue" : task.time_tag}
+        </Badge>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Button
+          onClick={onStart}
+          className="flex-1 gap-2 h-10"
+          variant="cta"
+          size="sm"
+        >
+          <Play className="h-4 w-4" />
+          Start session
+        </Button>
+        {durationLabel && (
+          <span className="hidden items-center gap-1 text-sm text-muted-foreground sm:flex">
+            <Clock className="h-3.5 w-3.5" />
+            {durationLabel}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Empty / onboarding state ─────────────────────────────────────────────────
+
+function OnboardingNudge({ onCreatePlan }: { onCreatePlan: () => void }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-[color:var(--brand-indigo)]/40 bg-[color:var(--brand-indigo)]/5 p-6">
+      <div className="mb-2 flex items-center gap-2.5">
+        <LayoutDashboard className="h-5 w-5 text-[color:var(--brand-indigo)]" />
+        <p className="text-base font-semibold">No learning plan yet</p>
+      </div>
+      <p className="mb-5 text-sm text-muted-foreground leading-relaxed">
+        Your mentor can build a personalised plan from your goals and resume. It
+        takes about 2 minutes to get started.
+      </p>
+      <Button
+        size="default"
+        variant="cta"
+        onClick={onCreatePlan}
+        className="gap-2 w-full h-10"
+      >
+        <Sparkles className="h-4 w-4" />
+        Create my learning plan
+      </Button>
+    </div>
+  );
+}
+
+// ─── Plan progress panel ──────────────────────────────────────────────────────
+
+function PlanProgress({
+  plan,
+  upcomingTasks,
+  onOpenTask,
+}: {
+  plan: LearningPlan;
+  upcomingTasks: TodayTask[];
+  onOpenTask: (t: TodayTask) => void;
+}) {
+  const pct = Math.round(plan.progress_percentage ?? 0);
+  const weeksLeft = plan.estimated_duration_weeks
+    ? Math.max(
+        0,
+        plan.estimated_duration_weeks -
+          Math.floor((pct / 100) * plan.estimated_duration_weeks),
+      )
+    : null;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-1)] sm:p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          Plan progress
+        </p>
+        <span className="font-mono text-sm font-bold text-foreground">
+          {pct}%
+        </span>
+      </div>
+
+      <Progress value={pct} className="h-2 mb-3" />
+
+      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
+        <span className="min-w-0 flex-1 truncate font-medium text-foreground/80">
+          {plan.title}
+        </span>
+        {weeksLeft !== null && (
+          <span className="shrink-0 whitespace-nowrap">
+            {weeksLeft > 0
+              ? `~${pluralise(weeksLeft, "week")} left`
+              : "Final stretch"}
+          </span>
+        )}
+      </div>
+
+      {upcomingTasks.length > 0 && (
+        <div className="space-y-2">
+          {upcomingTasks.slice(0, 4).map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onOpenTask(t)}
+              className="flex w-full items-center gap-2.5 rounded-lg border border-border/60 bg-background px-3 py-2.5 text-left transition-colors hover:bg-muted/40"
             >
-              {day}
-            </div>
+              <div className="h-2 w-2 shrink-0 rounded-full bg-[color:var(--brand-indigo)]/50" />
+              <span className="min-w-0 flex-1 truncate text-sm">{t.title}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {relativeDate(t.scheduled_date)}
+              </span>
+            </button>
           ))}
-          {buildMonthGrid(anchorDate).map((cellDate) => {
-            const key = toIsoDate(cellDate);
-            const dayTasks = tasksByDate.get(key) ?? [];
-            const inMonth = cellDate.getMonth() === anchorDate.getMonth();
-            return (
-              <div
-                key={key}
-                className={`min-h-[6.2rem] rounded-md border p-1.5 ${inMonth ? "border-border bg-background" : "border-border/50 bg-muted/30"}`}
-              >
-                <div className="mb-1 flex items-center justify-between">
-                  <span
-                    className={`font-mono-ui text-[10px] ${inMonth ? "text-foreground" : "text-muted-foreground"}`}
-                  >
-                    {cellDate.getDate()}
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  {dayTasks.slice(0, 3).map((task) => (
-                    <button
-                      key={task.id}
-                      onClick={() => onOpenTask(task)}
-                      className="w-full truncate rounded-sm border border-[color:var(--brand-indigo)]/35 bg-[color:var(--brand-indigo)]/12 px-1.5 py-0.5 text-left text-[10px]"
-                    >
-                      {task.title}
-                    </button>
-                  ))}
-                  {dayTasks.length > 3 ? (
-                    <p className="text-[10px] text-muted-foreground">
-                      +{dayTasks.length - 3} more
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border/80 bg-[color:var(--surface-2)]">
-          <div
-            className="grid min-w-[620px]"
-            style={{
-              gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))`,
-            }}
-          >
-            <div className="sticky top-0 z-20 border-r border-border bg-[color:var(--surface-2)] py-2" />
-            {days.map((day) => (
-              <div
-                key={toIsoDate(day)}
-                className="sticky top-0 z-20 border-b border-l border-border bg-[color:var(--surface-2)] px-2 py-2"
-              >
-                <p className="text-[10px] font-mono-ui text-muted-foreground">
-                  {day.toLocaleDateString(undefined, { weekday: "short" })}
-                </p>
-                <p className="text-xs font-semibold">{day.getDate()}</p>
-              </div>
-            ))}
-
-            <div
-              className="relative border-r border-border"
-              style={{ height: `${bodyHeight}px` }}
-            >
-              {Array.from({ length: dayEnd - dayStart + 1 }, (_, i) => i)
-                .filter((m) => m % 60 === 0)
-                .map((m) => (
-                  <div
-                    key={m}
-                    className="absolute right-1 text-[10px] text-muted-foreground"
-                    style={{ top: `${m * pxPerMinute - 6}px` }}
-                  >
-                    {formatMinutes(dayStart + m)}
-                  </div>
-                ))}
-            </div>
-
-            {days.map((day) => {
-              const key = toIsoDate(day);
-              const dayTasks = tasksByDate.get(key) ?? [];
-              return (
-                <div
-                  key={key}
-                  className="relative border-l border-border"
-                  style={{ height: `${bodyHeight}px` }}
-                >
-                  {Array.from({ length: dayEnd - dayStart + 1 }, (_, i) => i)
-                    .filter((m) => m % 30 === 0)
-                    .map((m) => (
-                      <div
-                        key={m}
-                        className={`absolute inset-x-0 ${m % 60 === 0 ? "border-t border-border/70" : "border-t border-border/35"}`}
-                        style={{ top: `${m * pxPerMinute}px` }}
-                      />
-                    ))}
-                  {dayTasks.map((task, idx) => {
-                    const startMin = Math.max(
-                      dayStart,
-                      parseTaskStartMinutes(task, idx),
-                    );
-                    const duration = Math.max(
-                      30,
-                      task.estimated_duration_minutes ||
-                        task.estimated_duration ||
-                        45,
-                    );
-                    const endMin = Math.min(dayEnd, startMin + duration);
-                    const top = (startMin - dayStart) * pxPerMinute;
-                    const height = Math.max(
-                      26,
-                      (endMin - startMin) * pxPerMinute,
-                    );
-                    const tone =
-                      task.status === "overdue"
-                        ? "border-[color:var(--brand-indigo)]/30 bg-[color:var(--surface-2)]"
-                        : task.status === "in_progress"
-                          ? "border-[color:var(--brand-indigo)]/40 bg-[color:var(--brand-indigo)]/16"
-                          : "border-border bg-background";
-                    return (
-                      <button
-                        key={task.id}
-                        onClick={() => onOpenTask(task)}
-                        className={`absolute left-1 right-1 overflow-hidden rounded-md border px-2 py-1 text-left ${tone}`}
-                        style={{ top, height }}
-                      >
-                        <p className="truncate text-[11px] font-semibold">
-                          {task.title}
-                        </p>
-                        <p className="font-mono-ui truncate text-[10px] text-muted-foreground">
-                          {formatMinutes(startMin)} - {formatMinutes(endMin)}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
         </div>
       )}
     </div>
   );
 }
 
+// ─── Stat strip ───────────────────────────────────────────────────────────────
+
+function StatStrip({
+  tasksCompleted,
+  xpEarned,
+  streak,
+  dueCardCount,
+  onReview,
+}: {
+  tasksCompleted: number;
+  xpEarned: number;
+  streak: number;
+  dueCardCount: number;
+  onReview: () => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-5 shadow-[var(--shadow-1)]">
+        <CheckCircle2 className="mb-2 h-5 w-5 text-emerald-500" />
+        <span className="font-mono text-xl font-bold leading-none sm:text-2xl">
+          {tasksCompleted}
+        </span>
+        <span className="mt-1.5 text-xs text-muted-foreground">this week</span>
+      </div>
+      <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-5 shadow-[var(--shadow-1)]">
+        <Zap className="mb-2 h-5 w-5 text-amber-500" />
+        <span className="font-mono text-xl font-bold leading-none sm:text-2xl">
+          {xpEarned}
+        </span>
+        <span className="mt-1.5 text-xs text-muted-foreground">XP earned</span>
+      </div>
+      <button
+        onClick={streak > 0 ? undefined : onReview}
+        className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-5 shadow-[var(--shadow-1)] transition-colors hover:bg-muted/30"
+      >
+        <Flame
+          className={cn(
+            "mb-2 h-5 w-5",
+            streak > 0 ? "text-orange-500" : "text-muted-foreground",
+          )}
+        />
+        <span className="font-mono text-xl font-bold leading-none sm:text-2xl">
+          {streak}
+        </span>
+        <span className="mt-1.5 text-xs text-muted-foreground">day streak</span>
+      </button>
+      {dueCardCount > 0 && (
+        <button
+          onClick={onReview}
+          className="col-span-3 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-left transition-colors hover:bg-amber-100 dark:border-amber-800/40 dark:bg-amber-950/30"
+        >
+          <BookOpen className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+              {dueCardCount} card{dueCardCount !== 1 ? "s" : ""} due for review
+            </p>
+            <p className="text-[11px] text-amber-700 dark:text-amber-400">
+              ~{Math.max(1, Math.round(dueCardCount * 0.4))} min · spaced
+              repetition
+            </p>
+          </div>
+          <ArrowRight className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Mentor card ──────────────────────────────────────────────────────────────
+
+function MentorCard({
+  nudge,
+  focusTask,
+  mentorName,
+  onChat,
+  onStart,
+  onPlans,
+}: {
+  nudge: string;
+  focusTask: TodayTask | null;
+  mentorName: string;
+  onChat: (prompt: string) => void;
+  onStart: () => void;
+  onPlans: () => void;
+}) {
+  const [prompt, setPrompt] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const handleSend = async () => {
+    const text = prompt.trim();
+    if (!text || sending) return;
+    setSending(true);
+    try {
+      await onChat(text);
+    } finally {
+      setSending(false);
+      setPrompt("");
+    }
+  };
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[color:var(--brand-indigo)]/25 bg-gradient-to-b from-[color:var(--brand-indigo)]/10 to-card p-4 shadow-[var(--shadow-1)] sm:p-5">
+      {/* Header */}
+      <div className="mb-4 flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--brand-indigo)]/15 ring-1 ring-[color:var(--brand-indigo)]/20">
+          <CircleUser className="h-5 w-5 text-[color:var(--brand-indigo)]" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-base font-semibold leading-tight">{mentorName}</p>
+          <div className="flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className="text-xs text-muted-foreground">Live</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Nudge */}
+      <p className="mb-5 text-sm leading-relaxed text-foreground/80 border-l-2 border-[color:var(--brand-indigo)]/30 pl-3">
+        {nudge}
+      </p>
+
+      {/* Context line */}
+      {focusTask && (
+        <p className="mb-4 text-xs text-muted-foreground">
+          Active focus:{" "}
+          <span className="font-medium text-foreground/80 line-clamp-1">
+            {focusTask.title}
+          </span>
+        </p>
+      )}
+
+      {/* Quick-ask input */}
+      <div className="flex min-w-0 gap-2 mb-4">
+        <input
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void handleSend();
+            }
+          }}
+          placeholder="Ask your mentor anything…"
+          className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-[color:var(--brand-indigo)]/40"
+        />
+        <Button
+          size="sm"
+          variant="cta"
+          disabled={!prompt.trim() || sending}
+          onClick={() => void handleSend()}
+          className="shrink-0 px-3 h-10"
+        >
+          {sending ? (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-background/40 border-t-background" />
+          ) : (
+            <ArrowRight className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
+
+      {/* Action buttons */}
+      <div className="grid grid-cols-3 gap-2">
+        <button
+          onClick={() => onChat("")}
+          className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-background/70 py-3 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+        >
+          <MessageSquare className="h-4 w-4" />
+          Chat
+        </button>
+        <button
+          onClick={onStart}
+          className="flex flex-col items-center gap-1.5 rounded-xl border border-[color:var(--brand-indigo)]/30 bg-[color:var(--brand-indigo)]/10 py-3 text-xs text-[color:var(--brand-indigo)] transition-colors hover:bg-[color:var(--brand-indigo)]/20"
+        >
+          <Play className="h-4 w-4" />
+          Start task
+        </button>
+        <button
+          onClick={onPlans}
+          className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-background/70 py-3 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+        >
+          <MapPin className="h-4 w-4" />
+          My plans
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── VELO signal card ─────────────────────────────────────────────────────────
+
+function VeloSignalCard({
+  atsScore,
+  topGap,
+  onOpenVelo,
+}: {
+  atsScore: number | undefined;
+  topGap: string | undefined;
+  onOpenVelo: () => void;
+}) {
+  if (atsScore === undefined && !topGap) {
+    return (
+      <button
+        onClick={onOpenVelo}
+        className="flex w-full items-center gap-4 overflow-hidden rounded-2xl border border-dashed border-border bg-card px-4 py-4 text-left sm:px-5 sm:py-5 transition-colors hover:bg-muted/30 shadow-[var(--shadow-1)]"
+      >
+        <ShieldCheck className="h-6 w-6 shrink-0 text-muted-foreground/60" />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground/80">
+            VELO not yet run
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Upload your resume to see ATS score &amp; skill gaps
+          </p>
+        </div>
+        <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/50" />
+      </button>
+    );
+  }
+
+  const scoreColor =
+    atsScore === undefined
+      ? "text-muted-foreground"
+      : atsScore >= 75
+        ? "text-emerald-600 dark:text-emerald-400"
+        : atsScore >= 55
+          ? "text-amber-600 dark:text-amber-400"
+          : "text-rose-600 dark:text-rose-400";
+
+  const scoreLabel =
+    atsScore === undefined
+      ? "—"
+      : atsScore >= 75
+        ? "Strong"
+        : atsScore >= 55
+          ? "Fair"
+          : "Needs work";
+
+  return (
+    <button
+      onClick={onOpenVelo}
+      className="flex w-full items-center gap-4 overflow-hidden rounded-2xl border border-border bg-card px-4 py-4 text-left sm:px-5 sm:py-5 transition-colors hover:bg-muted/30 shadow-[var(--shadow-1)]"
+    >
+      <div className="flex shrink-0 flex-col items-center">
+        {atsScore !== undefined ? (
+          <>
+            <span
+              className={cn(
+                "font-mono text-3xl font-bold leading-none",
+                scoreColor,
+              )}
+            >
+              {atsScore}
+            </span>
+            <span className={cn("text-xs font-medium mt-1", scoreColor)}>
+              {scoreLabel}
+            </span>
+          </>
+        ) : (
+          <ShieldCheck className="h-6 w-6 text-muted-foreground" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold">ATS Hiring Signal</p>
+        {topGap && (
+          <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
+            Top gap: <span className="text-foreground/80">{topGap}</span>
+          </p>
+        )}
+      </div>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+    </button>
+  );
+}
+
+// ─── Activity feed ────────────────────────────────────────────────────────────
+
+const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
+  task_completed: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />,
+  badge_earned: <Zap className="h-3.5 w-3.5 text-amber-500" />,
+  artifact_created: (
+    <TrendingUp className="h-3.5 w-3.5 text-[color:var(--brand-indigo)]" />
+  ),
+};
+
+function ActivityFeed({ items }: { items: ActivityItem[] }) {
+  if (!items.length) {
+    return (
+      <div className="w-full min-w-0 overflow-hidden rounded-2xl border border-border bg-card px-4 py-4 shadow-[var(--shadow-1)] sm:px-5 sm:py-5">
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          Recent activity
+        </p>
+        <p className="text-sm text-muted-foreground">
+          No activity yet — complete a task to get started.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full min-w-0 overflow-hidden rounded-2xl border border-border bg-card px-4 py-4 shadow-[var(--shadow-1)] sm:px-5 sm:py-5">
+      <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        Recent activity
+      </p>
+      <div className="space-y-3.5">
+        {items.slice(0, 5).map((item, i) => (
+          <div key={i} className="flex items-start gap-3">
+            <div className="mt-0.5 shrink-0">
+              {ACTIVITY_ICONS[item.type] ?? (
+                <AlertCircle className="h-4 w-4 text-muted-foreground" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm leading-snug line-clamp-1">{item.title}</p>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                {new Date(item.timestamp).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Today's task list (calendar-lite) ───────────────────────────────────────
+
+function TodayList({
+  tasks,
+  onOpen,
+}: {
+  tasks: Array<{
+    id: string;
+    title: string;
+    status: string;
+    plan_id?: string;
+    scheduled_time?: string | null;
+    estimated_duration_minutes?: number;
+    estimated_duration?: number;
+    plan_title?: string;
+  }>;
+  onOpen: (id: string, planId?: string) => void;
+}) {
+  if (!tasks.length) {
+    return (
+      <div className="w-full min-w-0 overflow-hidden rounded-2xl border border-border bg-card px-4 py-4 shadow-[var(--shadow-1)] sm:px-5 sm:py-5">
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          Today
+        </p>
+        <p className="text-sm text-muted-foreground">
+          No sessions scheduled for today.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full min-w-0 overflow-hidden rounded-2xl border border-border bg-card px-4 py-4 shadow-[var(--shadow-1)] sm:px-5 sm:py-5">
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          Today
+        </p>
+        <Badge variant="outline" className="font-mono text-xs">
+          {tasks.length}
+        </Badge>
+      </div>
+      <div className="space-y-2">
+        {tasks.map((t) => {
+          const isActive = t.status === "in_progress";
+          const isOverdue = t.status === "overdue";
+          return (
+            <button
+              key={t.id}
+              onClick={() => onOpen(t.id, t.plan_id)}
+              className={cn(
+                "flex w-full min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2.5 text-left transition-colors hover:bg-muted/30 sm:gap-3 sm:px-3 sm:py-3",
+                isActive
+                  ? "border-[color:var(--brand-indigo)]/40 bg-[color:var(--brand-indigo)]/8"
+                  : isOverdue
+                    ? "border-[color:var(--brand-indigo)]/30 bg-[color:var(--brand-indigo)]/5"
+                    : "border-border bg-background",
+              )}
+            >
+              <div
+                className={cn(
+                  "h-2 w-2 shrink-0 rounded-full",
+                  isActive
+                    ? "bg-[color:var(--brand-indigo)] animate-pulse"
+                    : isOverdue
+                      ? "bg-[color:var(--brand-indigo)]/60"
+                      : "bg-muted-foreground/30",
+                )}
+              />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                {t.title}
+              </span>
+              {(t.estimated_duration_minutes ?? t.estimated_duration) && (
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {t.estimated_duration_minutes ?? t.estimated_duration}m
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
 export default function DashboardPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const canQuery = !authLoading && !!user;
 
-  const { data: homeData } = useHomeDashboard({ enabled: canQuery });
+  const { data: homeData, isLoading: homeLoading } = useHomeDashboard({
+    enabled: canQuery,
+  });
   const { data: gamificationData } = useGamificationSummary({
     enabled: canQuery,
   });
   const { data: flowData } = useFlowSuggestion("dashboard", {
     enabled: canQuery,
   });
+  const { data: mirrorData } = useMirrorSnapshot();
   const { analysisEvents } = useNotificationsSocket();
 
-  const [todaysTasksData, setTodaysTasksData] =
-    useState<TodaysTasksData | null>(null);
-  const [tasksLoading, setTasksLoading] = useState(true);
-  const [mentorPrompt, setMentorPrompt] = useState("");
-  const [mentorLoading, setMentorLoading] = useState(false);
-  const [calendarView, setCalendarView] = useState<CalendarView>("day");
-  const [calendarAnchorDate, setCalendarAnchorDate] = useState<Date>(
-    () => new Date(),
-  );
-  const [calendarTasks, setCalendarTasks] = useState<DashboardTask[]>([]);
-  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [plans, setPlans] = useState<LearningPlan[]>([]);
+  const [todayTasksRaw, setTodayTasksRaw] = useState<
+    Array<{
+      id: string;
+      title: string;
+      status: string;
+      plan_id?: string;
+      scheduled_time?: string | null;
+      estimated_duration_minutes?: number;
+      estimated_duration?: number;
+      plan_title?: string;
+    }>
+  >([]);
   const [dueCardCount, setDueCardCount] = useState(0);
+  const [mentorSending, setMentorSending] = useState(false);
 
   useEffect(() => {
-    planningApi
-      .getSpacedRepetitionDue({ limit: 0 })
-      .then(({ count }) => setDueCardCount(count))
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace("/login");
-    }
+    if (!authLoading && !user) router.replace("/login");
   }, [authLoading, router, user]);
 
   useEffect(() => {
     if (!canQuery) return;
-    let mounted = true;
-
-    import("@/lib/api")
-      .then(({ planningApi }) => planningApi.getTodaysTasks())
-      .then((data) => {
-        if (!mounted) return;
-        setTodaysTasksData(data);
-        setTasksLoading(false);
-      })
-      .catch((error) => {
-        telemetry.warn("Dashboard: failed to load planning tasks", { error });
-        if (!mounted) return;
-        setTasksLoading(false);
-      });
-
-    return () => {
-      mounted = false;
-    };
+    planningApi
+      .listPlans()
+      .then(setPlans)
+      .catch(() => {});
+    planningApi
+      .getTodaysTasks()
+      .then((d) => setTodayTasksRaw((d.tasks ?? []) as typeof todayTasksRaw))
+      .catch(() => {});
+    planningApi
+      .getSpacedRepetitionDue({ limit: 0 })
+      .then(({ count }) => setDueCardCount(count))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canQuery]);
 
-  useEffect(() => {
-    if (!canQuery) return;
-    let mounted = true;
-    setCalendarLoading(true);
-    planningApi
-      .getCalendarTasks({
-        view: calendarView,
-        anchor_date: toIsoDate(calendarAnchorDate),
-      })
-      .then((data) => {
-        if (!mounted) return;
-        setCalendarTasks((data.tasks ?? []) as unknown as DashboardTask[]);
-      })
-      .catch((error) => {
-        telemetry.warn("Dashboard: failed to load calendar tasks", { error });
-        if (!mounted) return;
-        setCalendarTasks([]);
-      })
-      .finally(() => {
-        if (mounted) setCalendarLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [calendarAnchorDate, calendarView, canQuery]);
+  // Derived data
+  const activePlan = useMemo(
+    () => plans.find((p) => p.status === "active") ?? plans[0] ?? null,
+    [plans],
+  );
+
+  const focusTask = homeData?.today_task ?? null;
+  const additionalTasks = homeData?.additional_tasks ?? [];
+  const streak = homeData?.streak;
+  const weekly = homeData?.weekly_stats;
+  const activity = homeData?.recent_activity ?? [];
+
+  const upcomingTasks = useMemo(
+    () => [focusTask, ...additionalTasks].filter(Boolean) as TodayTask[],
+    [focusTask, additionalTasks],
+  );
 
   const profile = gamificationData?.profile;
-  const currentLevel = profile?.level ?? 1;
-  const totalXP = profile?.total_points ?? 0;
-  const xpProgress = profile?.level_progress ?? 0;
-  const xpNeeded = profile?.xp_for_next_level ?? 100;
-  const progressPercent = profile?.level_progress_percentage ?? 0;
-  const currentStreak = profile?.current_streak ?? 0;
-  const badgeCount = gamificationData?.badge_count ?? 0;
+  const currentStreak = streak?.current ?? profile?.current_streak ?? 0;
 
-  const allTasks = todaysTasksData?.tasks ?? [];
+  const nudge =
+    flowData?.suggestion?.title ??
+    (focusTask
+      ? `Your next step is "${focusTask.title}" — let's close it today.`
+      : "Your mentor is ready. Pick a goal and let's build a plan.");
 
-  const statusCounts = useMemo(() => {
-    const active = allTasks.filter((task) =>
-      ["scheduled", "in_progress"].includes(task.status),
-    ).length;
-    const overdue = allTasks.filter((task) => task.status === "overdue").length;
-    const scheduled = allTasks.filter(
-      (task) => task.status === "scheduled",
-    ).length;
-    return { active, overdue, scheduled };
-  }, [allTasks]);
-  const weeklyStats = homeData?.weekly_stats;
-  const efficacy = homeData?.learning_efficacy;
-  const medianFirstPassMins =
-    typeof efficacy?.median_time_to_first_pass === "number"
-      ? Math.max(0, Math.round(efficacy.median_time_to_first_pass / 60))
-      : null;
-  const stuckRatePct = Math.round((efficacy?.stuck_session_rate ?? 0) * 100);
-  const verifiedRatePct = Math.round(
-    (efficacy?.verified_submission_rate ?? 0) * 100,
-  );
-  const nudgeRecoveryPct = Math.round(
-    (efficacy?.nudge_recovery_rate ?? 0) * 100,
-  );
-  const outcomeGate = efficacy?.outcome_gate;
-  const outcomeGateStatus = String(
-    outcomeGate?.status ?? "not_run",
-  ).toLowerCase();
-  const outcomeGateTone =
-    outcomeGateStatus === "pass"
-      ? "border-emerald-500/35 bg-emerald-500/10"
-      : outcomeGateStatus === "fail"
-        ? "border-red-500/35 bg-red-500/10"
-        : "border-amber-500/35 bg-amber-500/10";
-  const domainBreakdownRows = useMemo(() => {
-    const raw = efficacy?.domain_family_breakdown ?? {};
-    return Object.entries(raw)
-      .map(([domain, value]) => ({
-        domain,
-        sessions: Number(value?.sessions ?? 0),
-        verifiedRatePct: Math.round(Number(value?.verified_rate ?? 0) * 100),
-        medianVerifyMins:
-          typeof value?.median_time_to_verify_seconds === "number"
-            ? Math.max(0, Math.round(value.median_time_to_verify_seconds / 60))
-            : null,
-      }))
-      .filter((row) => row.sessions > 0)
-      .sort((a, b) => b.sessions - a.sessions);
-  }, [efficacy?.domain_family_breakdown]);
+  const mentorPersona =
+    activePlan?.specialized_mentor_data?.name ??
+    activePlan?.specialized_mentor?.name ??
+    "Aria";
 
-  const focusTasks = useMemo<FocusTask[]>(() => {
-    const fromHome = [
-      homeData?.today_task,
-      ...(homeData?.additional_tasks ?? []),
-    ]
-      .filter(Boolean)
-      .map((task) => ({
-        id: task!.id,
-        title: task!.title,
-        planTitle: task!.plan_title,
-        duration: task!.estimated_duration,
-        tag: task!.time_tag,
-        planId: task!.plan_id,
-        scheduledTime: null,
-      }));
+  const deep = mirrorData?.mirror?.deep_analysis;
+  const atsScore = deep?.ats_score;
+  const topGap =
+    deep?.skill_gap_details?.[0]?.skill ?? mirrorData?.mirror?.skill_gaps?.[0];
 
-    if (fromHome.length) return fromHome.slice(0, 5);
+  const hasActivePlan = Boolean(activePlan);
+  const isLoading = authLoading || homeLoading;
 
-    return allTasks
-      .filter((task) => ["scheduled", "in_progress"].includes(task.status))
-      .slice(0, 5)
-      .map((task) => ({
-        id: task.id,
-        title: task.title,
-        planTitle: task.plan_title,
-        duration: task.estimated_duration_minutes ?? task.estimated_duration,
-        tag: task.status === "in_progress" ? "In Progress" : "Scheduled",
-        planId: task.plan_id,
-        scheduledTime: task.scheduled_time,
-      }));
-  }, [allTasks, homeData?.additional_tasks, homeData?.today_task]);
-  const skillDiagnosticsData = useMemo(
-    () =>
-      domainBreakdownRows.map((row) => ({
-        subject: toTitleCase(row.domain.replaceAll("_", " ")),
-        score: row.verifiedRatePct,
-        fullMark: 100,
-      })),
-    [domainBreakdownRows],
-  );
-
-  const isLoading = authLoading || tasksLoading;
-  const isCalendarExpanded = calendarView !== "day";
-  const momentumHeadline =
-    flowData?.suggestion?.title ?? "Pick one mission and close it with intent.";
-
-  const openTask = (task: FocusTask) => {
-    if (task.planId) {
-      router.push(`/plans/${task.planId}/playground?task=${task.id}`);
-      return;
-    }
-    router.push("/plans");
+  // Handlers
+  const openTask = (task: TodayTask) => {
+    if (task.plan_id)
+      router.push(`/plans/${task.plan_id}/playground?task=${task.id}`);
+    else router.push("/plans");
   };
 
-  const openCalendarTask = (task: DashboardTask) => {
-    const planId = task.plan_id || task.learning_plan;
-    if (planId) {
-      router.push(`/plans/${planId}/playground?task=${task.id}`);
-      return;
-    }
-    router.push("/plans");
+  const openTaskById = (id: string, planId?: string) => {
+    if (planId) router.push(`/plans/${planId}/playground?task=${id}`);
+    else router.push("/plans");
   };
 
-  const startMentor = async () => {
-    const content = mentorPrompt.trim();
-    if (!content || mentorLoading) return;
-
-    setMentorLoading(true);
+  const handleMentorChat = async (prompt: string) => {
+    if (mentorSending) return;
+    setMentorSending(true);
     try {
-      const conversation = await chatApi.createConversation({
-        title: "Horizon Mentor Session",
-        topic: "Dashboard planning",
+      const convo = await chatApi.createConversation({
+        title: "Dashboard session",
+        topic: "Mentor quick-start",
+        ...(activePlan?.specialized_conversation_id ? {} : {}),
       });
-
-      await chatApi.sendMessage(conversation.id, {
-        content,
-        context: "dashboard",
-        metadata: { source: "dashboard_quickstart" },
-      });
-
-      telemetry.track("dashboard_mentor_quickstart", {
-        prompt_length: content.length,
-      });
-
-      setMentorPrompt("");
-      router.push(`/chat?conversation=${conversation.id}&context=dashboard`);
-    } catch (error) {
+      if (prompt) {
+        await chatApi.sendMessage(convo.id, {
+          content: prompt,
+          context: "dashboard",
+          metadata: { source: "dashboard_mentor_card" },
+        });
+        telemetry.track("dashboard_mentor_quickstart", {
+          prompt_length: prompt.length,
+        });
+        router.push(`/chat?conversation=${convo.id}&context=dashboard`);
+      } else {
+        router.push(`/chat?conversation=${convo.id}`);
+      }
+    } catch {
       telemetry.toastError(
         "Could not start mentor session",
-        "Please try again in a few seconds.",
+        "Please try again.",
       );
-      telemetry.error("Dashboard mentor quickstart failed", { error });
     } finally {
-      setMentorLoading(false);
+      setMentorSending(false);
     }
   };
 
+  void mentorSending;
+
+  if (isLoading) return <DashboardSkeleton />;
+
   return (
-    <div className="h-full min-h-0 w-full overflow-hidden">
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1720px] flex-col gap-4 bg-background px-3 py-3 xl:px-5">
-        <header className="flex shrink-0 items-center justify-between rounded-2xl border border-border/80 bg-[color:var(--surface)] px-4 py-3">
-          <div>
-            <p className="font-display text-2xl leading-tight">
-              Good morning{toTitleCase((user?.first_name) ? `, ${user.first_name}` : "")}
+    <div className="h-full min-h-0 w-full overflow-x-hidden overflow-y-auto">
+      <div className="mx-auto flex min-h-full w-full max-w-[1720px] flex-col gap-4 bg-background px-3 py-4 pb-24 sm:px-4 xl:px-6">
+        {/* ── Greeting ───────────────────────────────────────────────────── */}
+        <header className="flex flex-col gap-2 rounded-2xl border border-border/60 bg-card p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
+          <div className="min-w-0">
+            <p className="font-display text-xl font-semibold leading-tight sm:text-2xl lg:text-3xl">
+              {timeOfDay()}{user?.first_name ? `, ${toTitleCase(user.first_name)}` : ""}
             </p>
-            <p className="text-xs text-muted-foreground">{momentumHeadline}</p>
+            <p className="mt-0.5 text-sm text-muted-foreground line-clamp-2">{nudge}</p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            {/* <VeloTracker /> */}
-            {/* <div className="h-6 w-px bg-border my-auto hidden sm:block"></div> */}
-            <Button
-              variant="cta"
-              size="sm"
-              className="h-8 px-3 font-mono-ui text-[11px]"
-              onClick={() => {
-                if (focusTasks[0]) {
-                  openTask(focusTasks[0]);
-                  return;
-                }
-                router.push("/plans");
-              }}
-            >
-              Continue Learning
+          <div className="flex shrink-0 items-center gap-2">
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 px-3 text-xs" onClick={() => router.push("/chat")}>
+              <MessageSquare className="h-3.5 w-3.5" />
+              Ask mentor
             </Button>
-            {/* <Button
-              variant="accent"
-              size="sm"
-              className="h-8 px-3 font-mono-ui text-[11px]"
-              onClick={() => router.push("/chat?context=dashboard")}
-            >
-              Ask Mentor
+            <Button variant="cta" size="sm" className="h-8 px-3 text-xs" onClick={() => { if (focusTask) openTask(focusTask); else router.push("/plans"); }}>
+              <Play className="mr-1 h-3.5 w-3.5" />
+              {focusTask ? "Continue" : "View plans"}
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 px-3 font-mono-ui text-[11px]"
-              onClick={() => router.push("/plans")}
-            >
-              View Plans
-            </Button> */}
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)_minmax(0,1fr)] xl:grid-rows-[auto_minmax(0,1fr)]">
-          {/* ── Column 1: Identity & Action ───────────────────────────── */}
-          <section className="grid min-h-0 h-full content-start gap-4 overflow-y-auto pr-1 xl:col-start-1 xl:row-start-1 xl:row-span-2 xl:overflow-hidden">
-            {/* <div className={`${SHELL} p-3`}> */}
-            {/* <div className="mb-2 flex items-center justify-between">
-                <p className="font-mono-ui text-[11px] text-muted-foreground">Cross-Sector Efficacy (7d)</p>
-                <Badge variant="outline" className="text-[10px] font-mono-ui">
-                  {domainBreakdownRows.length} domain{domainBreakdownRows.length === 1 ? "" : "s"}
-                </Badge>
-              </div> */}
-            {/* {domainBreakdownRows.length ? (
-                <div className="space-y-2">
-                  {domainBreakdownRows.map((row) => (
-                    <div
-                      key={row.domain}
-                      className="rounded-xl border border-border/80 bg-background px-2.5 py-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <p className="font-mono-ui text-xs font-semibold uppercase tracking-wide">
-                          {row.domain.replace("_", " ")}
-                        </p>
-                        <p className="font-mono-ui text-[11px] text-muted-foreground">
-                          {row.sessions} sessions
-                        </p>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span>Verified {row.verifiedRatePct}%</span>
-                        <span>
-                          Median verify{" "}
-                          {row.medianVerifyMins !== null
-                            ? `${row.medianVerifyMins}m`
-                            : "N/A"}
-                        </span>
-                      </div>
-                    </div>
-                  ))} */}
-            {/* </div> */}
-            {/* ) : (
-                <p className="text-xs text-muted-foreground">
-                  No submitted simulations yet this week. Run a simulator to
-                  start seeing sector metrics.
-                </p>
-              )} */}
-            {/* </div> */}
-            {dueCardCount > 0 && (
-              <button
-                onClick={() => router.push("/review")}
-                className="flex w-full items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left transition-colors hover:bg-amber-100 dark:border-amber-800/40 dark:bg-amber-950/30 dark:hover:bg-amber-950/50"
-              >
-                <div className="flex items-center gap-3">
-                  <BookOpen className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                  <div>
-                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                      {dueCardCount} card{dueCardCount !== 1 ? "s" : ""} due for
-                      review
-                    </p>
-                    <p className="text-xs text-amber-700 dark:text-amber-400">
-                      ~{Math.max(1, Math.round(dueCardCount * 0.4))} min ·
-                      spaced repetition session
-                    </p>
-                  </div>
-                </div>
-                <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
-                  Start →
-                </span>
-              </button>
+        {/* ── Responsive 3-column grid ───────────────────────────────────── */}
+        {/* Mobile: single column · md: 2-col (col1+col2 / col3 stacks below) · xl: 3-col */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          {/* ── Col 1: Focus + Progress + Stats + Monitor ──────────────── */}
+          <section className="flex min-w-0 flex-col gap-4">
+            {hasActivePlan && focusTask ? (
+              <FocusCard task={focusTask} onStart={() => openTask(focusTask)} />
+            ) : (
+              <OnboardingNudge
+                onCreatePlan={() => router.push("/chat?context=plan_create")}
+              />
             )}
-            {/* <div className={`${SHELL} grid grid-cols-2 gap-2 p-3`}>
-              <StatTile
-                label="Weekly Tasks"
-                value={weeklyStats?.tasks_completed ?? 0}
-                caption="Completed in last 7 days"
+
+            {activePlan && (
+              <PlanProgress
+                plan={activePlan}
+                upcomingTasks={upcomingTasks.slice(1)}
+                onOpenTask={openTask}
               />
-              <StatTile
-                label="XP This Week"
-                value={weeklyStats?.xp_earned ?? 0}
-                caption="Verified progress points"
-              />
-              <StatTile
-                label="Median First Pass"
-                value={medianFirstPassMins !== null ? `${medianFirstPassMins}m` : "N/A"}
-                caption="Code run to first passing check"
-              />
-              <StatTile
-                label="Stuck Session Rate"
-                value={`${stuckRatePct}%`}
-                caption="Idle-detected sessions"
-              />
-              <StatTile
-                label="Verified Submission Rate"
-                value={`${verifiedRatePct}%`}
-                caption="Passed checks per run"
-              />
-              <StatTile
-                label="Nudge Recovery"
-                value={`${nudgeRecoveryPct}%`}
-                caption="Pass after mentor nudge"
-              />
-            </div> */}
-            {/* <div className={`${SHELL} p-3`}>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-semibold text-foreground">Runtime Outcome Gate</p>
-                <span
-                  className={`rounded-full border px-2 py-0.5 font-mono-ui text-[10px] uppercase ${outcomeGateTone}`}
-                >
-                  {outcomeGateStatus}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <div className="rounded-lg border border-border/80 bg-background p-2">
-                  <p className="text-muted-foreground">Envelope Coverage</p>
-                  <p className="font-mono-ui text-sm font-semibold">
-                    {Math.round(Number(outcomeGate?.runtime_envelope_coverage ?? 0) * 100)}%
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border/80 bg-background p-2">
-                  <p className="text-muted-foreground">False Verify Risk</p>
-                  <p className="font-mono-ui text-sm font-semibold">
-                    {Math.round(Number(outcomeGate?.false_verified_risk_rate ?? 0) * 100)}%
-                  </p>
-                </div>
-              </div>
-            </div> */}
-            {/* <TheCircleTeaser /> */}
-            <SkillRadarChart className="" data={skillDiagnosticsData} />
-            {/* <XPQuests /> */}
+            )}
+
+            <StatStrip
+              tasksCompleted={weekly?.tasks_completed ?? 0}
+              xpEarned={weekly?.xp_earned ?? 0}
+              streak={currentStreak}
+              dueCardCount={dueCardCount}
+              onReview={() => router.push("/review")}
+            />
+
             <BackgroundTaskMonitor analysisEvents={analysisEvents} />
           </section>
 
-          {/* ── Column 2: Horizon Inbox + Mood ─────────────────────────── */}
-          <section className="grid min-h-0 content-start gap-4 overflow-y-auto pr-1 xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:overflow-hidden">
+          {/* ── Col 2: Mentor + Mood ───────────────────────────────────── */}
+          <section className="flex min-w-0 flex-col gap-4">
+            <MentorCard
+              nudge={nudge}
+              focusTask={focusTask}
+              mentorName={mentorPersona}
+              onChat={handleMentorChat}
+              onStart={() => {
+                if (focusTask) openTask(focusTask);
+                else router.push("/plans");
+              }}
+              onPlans={() => router.push("/plans")}
+            />
             <MoodSensor />
           </section>
 
-          {/* ── Column 3: Mentor / Calendar ────────────────────────────── */}
-          <section className="min-h-0 xl:col-start-3 xl:row-start-1">
-            <div
-              className={`flex h-full min-h-0 rounded-2xl border border-[color:var(--brand-indigo)]/25 bg-gradient-to-b from-[color:var(--brand-indigo)]/20 via-[color:var(--brand-indigo)]/14 to-[color:var(--surface)] p-4 shadow-[var(--shadow-1)] transition-all duration-300 ${
-                isCalendarExpanded ? "flex-row items-center" : "flex-col"
-              }`}
-            >
-              {isCalendarExpanded ? (
-                <div className="flex h-full min-h-0 flex-1 flex-row items-center gap-4">
-                  <div className="min-w-[7.5rem] shrink-0">
-                    <MentorOrb active={mentorLoading} />
-                  </div>
-                  <div className="flex min-h-0 flex-1 flex-col justify-center">
-                    <div className="flex items-center justify-between">
-                      <p className="font-display text-lg">Horizon Mentor</p>
-                      <Badge
-                        variant="outline"
-                        className="font-mono-ui border-[color:var(--brand-indigo)]/40 text-[color:var(--brand-indigo)] text-[10px]"
-                      >
-                        Live
-                      </Badge>
-                    </div>
-                    <p className="mt-1 text-sm font-medium">What should we work on next?</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {focusTasks[0]
-                        ? `Active focus: ${focusTasks[0].title}`
-                        : "No active task selected. Start with your next roadmap step."}
-                    </p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 bg-background/70"
-                        onClick={() => router.push("/chat?context=dashboard")}
-                      >
-                        <MessageSquare className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="default"
-                        size="icon"
-                        className="h-9 w-9 rounded-full bg-foreground text-background"
-                        onClick={() => {
-                          if (focusTasks[0]) {
-                            openTask(focusTasks[0]);
-                            return;
-                          }
-                          router.push("/plans");
-                        }}
-                      >
-                        <Play className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 bg-background/70"
-                        onClick={() => router.push("/plans")}
-                      >
-                        <CalendarDays className="h-4 w-4" />
-                      </Button>
-                      <div className="ml-2 min-w-0 flex-1">
-                        <Input
-                          value={mentorPrompt}
-                          onChange={(event) =>
-                            setMentorPrompt(event.target.value)
-                          }
-                          placeholder="Ask Mentor..."
-                          className="font-mono-ui bg-background"
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              void startMentor();
-                            }
-                          }}
-                        />
-                      </div>
-                      <Button
-                        variant="cta"
-                        className="px-3"
-                        onClick={() => void startMentor()}
-                        disabled={mentorLoading || !mentorPrompt.trim()}
-                      >
-                        {mentorLoading ? "Starting..." : "Start"}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-              {!isCalendarExpanded ? (
-                <div className="flex h-full min-h-0 flex-col">
-                  <div className="flex items-center justify-between">
-                    <p className="font-display text-lg">Horizon Mentor</p>
-                    <Badge
-                      variant="outline"
-                      className="font-mono-ui border-[color:var(--brand-indigo)]/40 text-[color:var(--brand-indigo)] text-[10px]"
-                    >
-                      Live
-                    </Badge>
-                  </div>
-
-                  <div className="mt-3 flex min-h-0 flex-1 flex-col rounded-xl border border-[color:var(--brand-indigo)]/25 bg-[color:var(--brand-indigo)]/16 p-4">
-                    <MentorOrb active={mentorLoading} />
-                    <p className="mt-2 text-center text-sm font-medium">
-                      What should we work on next?
-                    </p>
-                    <p className="mt-1 text-center text-xs text-muted-foreground">
-                      {focusTasks[0]
-                        ? `Next focus: ${focusTasks[0].title}`
-                        : "Open your plans to pick the next mission."}
-                    </p>
-                    <div className="mt-2 flex items-center justify-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 bg-background/70"
-                        onClick={() => router.push("/chat?context=dashboard")}
-                      >
-                        <MessageSquare className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="default"
-                        size="icon"
-                        className="h-9 w-9 rounded-full bg-foreground text-background"
-                        onClick={() => {
-                          if (focusTasks[0]) {
-                            openTask(focusTasks[0]);
-                            return;
-                          }
-                          router.push("/plans");
-                        }}
-                      >
-                        <Play className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 bg-background/70"
-                        onClick={() => router.push("/plans")}
-                      >
-                        <CalendarDays className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 grid gap-2">
-                    <Input
-                      value={mentorPrompt}
-                      onChange={(event) => setMentorPrompt(event.target.value)}
-                      placeholder="Ask Mentor..."
-                      className="font-mono-ui bg-background"
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void startMentor();
-                        }
-                      }}
-                    />
-                    <Button
-                      variant="cta"
-                      onClick={() => void startMentor()}
-                      disabled={mentorLoading || !mentorPrompt.trim()}
-                    >
-                      {mentorLoading
-                        ? "Starting session..."
-                        : "Start mentor session"}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </section>
-
-          <section
-            className={`min-h-0 transition-all duration-300 ${
-              isCalendarExpanded
-                ? "xl:col-start-2 xl:col-span-2 xl:row-start-2"
-                : "xl:col-start-3 xl:col-span-1 xl:row-start-2"
-            }`}
-          >
-            <div className="h-full min-h-0">
-              {calendarLoading ? (
-                <div className="flex h-full min-h-[18rem] items-center justify-center rounded-2xl border border-border bg-background text-sm text-muted-foreground">
-                  Loading calendar...
-                </div>
-              ) : (
-                <CalendarBoard
-                  tasks={calendarTasks}
-                  view={calendarView}
-                  anchorDate={calendarAnchorDate}
-                  onViewChange={setCalendarView}
-                  onAnchorDateChange={setCalendarAnchorDate}
-                  onOpenTask={openCalendarTask}
-                />
-              )}
+          {/* ── Col 3: VELO + Today + Activity · spans full width on md ── */}
+          <section className="flex min-w-0 flex-col gap-4 md:col-span-2 xl:col-span-1">
+            <VeloSignalCard
+              atsScore={atsScore}
+              topGap={topGap}
+              onOpenVelo={() => router.push("/progress?tab=velo")}
+            />
+            {/* On md breakpoint, show Today + Activity side by side inside col-3 */}
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+              <TodayList tasks={todayTasksRaw} onOpen={openTaskById} />
+              <ActivityFeed items={activity} />
             </div>
           </section>
         </div>

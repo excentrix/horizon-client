@@ -14,7 +14,9 @@ import {
   X,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
+import { cn } from "@/lib/utils";
 
 import { useAuth } from "@/context/AuthContext";
 import { usePortfolioProfile } from "@/hooks/use-portfolio";
@@ -54,6 +56,7 @@ const ADMIN_ITEMS: DockItem[] = [
 
 export function StudioDockNav() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const { data: profileData } = usePortfolioProfile();
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -98,6 +101,8 @@ export function StudioDockNav() {
   }));
 
   const autoHide= !pathname.includes("dashboard")
+  const isChatThreadOpen =
+    pathname === "/chat" && Boolean(searchParams.get("conversation"));
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -190,7 +195,10 @@ export function StudioDockNav() {
       <FloatingDock
         items={activeItems}
         desktopClassName="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-40 -translate-x-1/2"
-        mobileClassName="fixed inset-x-0 bottom-0 z-50"
+        mobileClassName={cn(
+          "fixed inset-x-0 bottom-0 z-50",
+          isChatThreadOpen && "hidden",
+        )}
         autohide={autoHide}
       />
     </>

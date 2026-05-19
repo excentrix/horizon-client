@@ -140,14 +140,27 @@ export const authApi = {
     ),
 
   reanalyseResume: () =>
-    extract<{ status: string; job_id: string }>(
+    extract<{ status: string; job_id: string; is_jd_reanalysis: boolean }>(
       http.post("/auth/profile/resume/reanalyse/")
+    ),
+
+  reanalyseWithJD: (jobDescription: string, targetRole?: string) =>
+    extract<{ status: string; job_id: string; is_jd_reanalysis: boolean }>(
+      http.post("/auth/profile/resume/reanalyse/", {
+        analysis_type: "jd",
+        job_description: jobDescription,
+        ...(targetRole ? { target_role: targetRole } : {}),
+      })
     ),
 
   getFeatureQuotas: () =>
     extract<{
       lesson_regeneration: { used: number; limit: number | null; exempt: boolean };
       resume_reanalysis: {
+        used: number; limit: number | null; exempt: boolean;
+        period_start: string | null; next_reset: string | null;
+      };
+      jd_reanalysis: {
         used: number; limit: number | null; exempt: boolean;
         period_start: string | null; next_reset: string | null;
       };
@@ -160,11 +173,13 @@ export const authApi = {
       lesson_regen_used: number; lesson_regen_limit: number | null;
       resume_reanalysis_used: number; resume_reanalysis_limit: number | null;
       resume_reanalysis_period_start: string | null;
+      jd_reanalysis_used: number; jd_reanalysis_limit: number | null;
+      jd_reanalysis_period_start: string | null;
     }>>(http.get("/auth/admin/users/")),
 
   updateUserQuotas: (
     userId: string,
-    payload: { lesson_regen_limit?: number | null; resume_reanalysis_limit?: number | null }
+    payload: { lesson_regen_limit?: number | null; resume_reanalysis_limit?: number | null; jd_reanalysis_limit?: number | null }
   ) =>
     extract<Record<string, unknown>>(
       http.patch(`/auth/admin/users/${userId}/quotas/`, payload)
@@ -1935,6 +1950,29 @@ export const auditApi = {
             }>;
             core5_slots?: Record<string, unknown>;
           };
+          jd_parsed?: {
+            role_title: string;
+            required_skills: string[];
+            nice_to_have_skills: string[];
+            responsibilities: string[];
+            seniority: string;
+            keywords: string[];
+          };
+          jd_alignment?: {
+            overall_match_score: number;
+            matched_requirements: string[];
+            unmet_requirements: string[];
+            alignment_summary: string;
+          };
+          jd_specific_gaps?: Array<{
+            skill: string;
+            priority: "P1" | "P2" | "P3";
+            jd_context: string;
+            how_to_fill: string;
+            time_estimate: string;
+          }>;
+          __analysis_status?: "complete" | "partial" | "failed";
+          __analysis_failed_components?: string[];
         };
         project_verifications?: Array<{
           verification_id: string;
