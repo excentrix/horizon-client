@@ -20,9 +20,13 @@ Versioning policy:
 - API/types/contracts expanded for scene-action generation and mirror PDF export fetch handling.
 - Studio navigation, settings, dashboard, and profile surfaces updated to support playback-first runtime UX.
 - Mermaid rendering and HTTP client behavior refined for safer runtime handling.
+- Studio dock/mirror/progress surfaces were refactored and aligned with the latest runtime layout behavior.
+- Added App Router compatibility `_document` page shim to prevent production `/_document` build resolution failures.
 
 ### Commits
 - `5a6cb58` feat(studio): add director playback engine and scene-interaction surfaces
+- `4ebdf4b` fix(simulations): resolve conditional hooks ordering in simulation lab page
+- `d93f0a7` feat(studio): refresh dock and mirror surfaces with build/runtime fixes
 
 ## v0.2.5 (2026-05-09)
 
