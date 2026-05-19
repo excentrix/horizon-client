@@ -56,7 +56,7 @@ const ADMIN_ITEMS: DockItem[] = [
 
 export function StudioDockNav() {
   const isDev = process.env.NODE_ENV === "development";
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { data: profileData } = usePortfolioProfile();
@@ -104,7 +104,7 @@ export function StudioDockNav() {
 
   const autoHide= !pathname.includes("dashboard")
   const isChatThreadOpen =
-    pathname === "/chat" && Boolean(searchParams.get("conversation"));
+    pathname === "/chat" && Boolean(searchParams?.get("conversation"));
 
   useEffect(() => {
     if (typeof window === "undefined") return;

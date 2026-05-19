@@ -27,13 +27,13 @@ import { toast } from "sonner";
 function PlansContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const searchParamsString = searchParams.toString();
+  const searchParamsString = (searchParams?.toString() ?? "");
   const { data: plans = [], isLoading: plansLoading } = usePlans();
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [isPlanDrawerOpen, setPlanDrawerOpen] = useState(false);
 
   useEffect(() => {
-    const queryPlan = searchParams.get("plan");
+    const queryPlan = searchParams?.get("plan");
     if (queryPlan && plans.some((plan) => plan.id === queryPlan)) {
       setSelectedPlanId(queryPlan);
       if (typeof window !== "undefined") {
@@ -95,7 +95,7 @@ function PlansContent() {
 
   const handleSelectPlan = (planId: string) => {
     setSelectedPlanId(planId);
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams((searchParams?.toString() ?? ""));
     params.set("plan", planId);
     router.replace(`?${params.toString()}`, { scroll: false });
     if (typeof window !== "undefined") {

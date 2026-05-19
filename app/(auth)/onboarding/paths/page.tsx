@@ -10,7 +10,7 @@ function PathSelectionRedirect() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
     params.set("legacy_route", "/onboarding/paths");
     params.set("migration_reason", "canonical_onboarding_entry");
     telemetry.track("legacy_onboarding_redirected", {

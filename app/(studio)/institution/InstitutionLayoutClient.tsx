@@ -24,7 +24,7 @@ const ALL_TABS = [
 
 export default function InstitutionLayoutClient({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const isAdmin = user?.user_type === "admin" || user?.is_superuser;
   const { isSuperuser, selectedOrgId, setSelectedOrgId, orgOptions } = useInstitutionScope();
   const tabs = ALL_TABS.filter((t) => !t.adminOnly || isAdmin);

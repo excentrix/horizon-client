@@ -9,7 +9,7 @@ function OnboardingStartRedirect() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams((searchParams?.toString() ?? ""));
     params.set("legacy_route", "/onboarding/start");
     params.set("migration_reason", "canonical_onboarding_entry");
     telemetry.track("legacy_onboarding_redirected", {

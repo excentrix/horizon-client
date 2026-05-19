@@ -63,9 +63,9 @@ function RegisterForm() {
   const { user, register, loginWithGoogle, isLoading } = useAuth();
 
   // Waitlist invite state
-  const inviteToken = searchParams.get("invite") ?? "";
-  const inviteEmail = searchParams.get("email") ?? "";
-  const fromWaitlist = searchParams.get("from") === "waitlist" || !!inviteToken;
+  const inviteToken = searchParams?.get("invite") ?? "";
+  const inviteEmail = searchParams?.get("email") ?? "";
+  const fromWaitlist = searchParams?.get("from") === "waitlist" || !!inviteToken;
 
   const [inviteData, setInviteData] = useState<{
     valid: boolean;

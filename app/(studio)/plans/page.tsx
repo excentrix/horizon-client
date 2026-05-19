@@ -19,7 +19,7 @@ import { PlanV2FocusConsole } from "@/components/plans/v2/plan-v2-focus-console"
 function PlansV2Content() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const searchParamsString = searchParams.toString();
+  const searchParamsString = (searchParams?.toString() ?? "");
   const {
     data: plans = [],
     isLoading: plansLoading,
@@ -30,7 +30,7 @@ function PlansV2Content() {
   const [rightRailTop, setRightRailTop] = useState(108);
 
   useEffect(() => {
-    const queryPlan = searchParams.get("plan");
+    const queryPlan = searchParams?.get("plan");
     if (queryPlan && plans.some((plan) => plan.id === queryPlan)) {
       setSelectedPlanId(queryPlan);
       if (typeof window !== "undefined") {
@@ -88,7 +88,7 @@ function PlansV2Content() {
 
   const handleSelectPlan = (planId: string) => {
     setSelectedPlanId(planId);
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams((searchParams?.toString() ?? ""));
     params.set("plan", planId);
     router.replace(`?${params.toString()}`, { scroll: false });
     if (typeof window !== "undefined") {

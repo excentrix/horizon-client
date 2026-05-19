@@ -77,15 +77,14 @@ const processQueue = (
   failedQueue = [];
 };
 
-if (!API_BASE_URL) {
-  throw new Error("NEXT_PUBLIC_API_URL must be configured in non-development environments");
-}
-
 const http: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_BASE_URL ?? "",
 });
 
 http.interceptors.request.use((config) => {
+  if (!API_BASE_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL must be configured in non-development environments");
+  }
   const headers = AxiosHeaders.from(config.headers ?? {});
   config.headers = headers;
   const token = Cookies.get("accessToken");
@@ -118,6 +117,9 @@ http.interceptors.response.use(
       isRefreshing = true;
 
       try {
+        if (!API_BASE_URL) {
+          throw error;
+        }
         const refreshToken =
           Cookies.get("refreshToken") ?? Cookies.get("refresh");
 

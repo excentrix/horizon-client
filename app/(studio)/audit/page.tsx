@@ -9,7 +9,7 @@ function LegacyAuditRedirect() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams((searchParams?.toString() ?? ""));
     params.set("legacy_route", "/audit");
     params.set("migration_reason", "unified_onboarding_flow");
     telemetry.track("legacy_onboarding_redirected", {

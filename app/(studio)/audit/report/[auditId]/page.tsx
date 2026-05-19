@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 
 export default function AuditReportPage() {
   const params = useParams();
-  const auditId = params.auditId as string;
+  const auditId = (params?.auditId ?? "") as string;
   const [report, setReport] = useState<AuditReport | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [handoffLoading, setHandoffLoading] = useState(false);

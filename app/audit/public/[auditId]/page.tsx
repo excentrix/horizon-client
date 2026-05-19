@@ -8,7 +8,7 @@ import { VeloShell } from "@/components/velo/velo-shell";
 
 export default function PublicAuditReportPage() {
   const params = useParams();
-  const auditId = params.auditId as string;
+  const auditId = (params?.auditId ?? "") as string;
   const [report, setReport] = useState<AuditReport | null>(null);
   const [error, setError] = useState<string | null>(null);
 

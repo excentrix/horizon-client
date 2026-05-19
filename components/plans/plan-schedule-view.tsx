@@ -188,7 +188,7 @@ export function PlanScheduleView({ plan, tasks }: PlanScheduleViewProps) {
   // Auto-sync after returning from OAuth redirect
   useEffect(() => {
     if (!isMounted) return;
-    if (searchParams.get("gcal") === "connected") {
+    if (searchParams?.get("gcal") === "connected") {
       queryClient.invalidateQueries({ queryKey: ["gcal-status"] });
       syncGcal.mutate();
     }

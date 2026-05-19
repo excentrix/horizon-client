@@ -43,7 +43,7 @@ export default function PublicPortfolioPage() {
   const [ctaDismissed, setCtaDismissed] = useState(false);
 
   const shareSource = useMemo(() => {
-    const source = (searchParams.get("utm_source") || "").toLowerCase();
+    const source = (searchParams?.get("utm_source") || "").toLowerCase();
     if (source === "whatsapp" || source === "linkedin") return source;
     return null;
   }, [searchParams]);

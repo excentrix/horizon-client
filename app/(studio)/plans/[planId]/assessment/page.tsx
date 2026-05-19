@@ -92,7 +92,7 @@ export default function PreAssessmentPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const planId = params.planId as string;
+  const planId = (params?.planId ?? "") as string;
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);

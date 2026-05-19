@@ -4,13 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Loader2, Upload, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { authApi } from "@/lib/api";
+import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 
 const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
 const ACCEPTED_EXT = ".pdf,.png,.jpg,.jpeg";
@@ -106,26 +106,11 @@ export default function OnboardingPage() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-[#f6f4ff]">
-      <div className="container mx-auto flex min-h-screen flex-col items-center justify-center px-4 py-12">
-        <div className="mb-6 text-center">
-          <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
-            Welcome to{" "}
-            <span className="inline-block -rotate-1 rounded-md border-2 border-black bg-[#fcd34d] px-2 py-1 text-black shadow-[6px_6px_0_0_#000]">
-              Horizon
-            </span>
-          </h1>
-          <p className="mt-3 text-base text-gray-700">
-            Upload your resume once. VELO runs analysis in the background while you start with your mentor.
-          </p>
-        </div>
-
-        <Card className="w-full max-w-3xl border-2 border-black bg-white shadow-[10px_10px_0_0_#000]">
-          <CardHeader>
-            <CardTitle className="text-2xl">Onboarding</CardTitle>
-            <CardDescription>Upload resume and target details to initialize your personalized roadmap context.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
+    <OnboardingShell
+      title="Set up your mentor context"
+      subtitle="Upload your resume once and VELO will personalize your learning direction in the background."
+    >
+      <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <Label htmlFor="target-role">Target role *</Label>
@@ -169,12 +154,12 @@ export default function OnboardingPage() {
             >
               {!file ? (
                 <>
-                  <Upload className="mb-3 h-7 w-7 text-gray-500" />
-                  <p className="text-sm font-medium text-gray-700">Drop resume here or click to browse</p>
-                  <p className="mt-1 text-xs text-gray-500">PDF / PNG / JPG · max 10MB</p>
+                  <Upload className="mb-3 h-7 w-7 text-muted-foreground" />
+                  <p className="text-sm font-medium text-foreground">Drop resume here or click to browse</p>
+                  <p className="mt-1 text-xs text-muted-foreground">PDF / PNG / JPG · max 10MB</p>
                 </>
               ) : (
-                <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+                <div className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
                   <CheckCircle2 className="h-5 w-5" />
                   <span>{file.name}</span>
                 </div>
@@ -221,9 +206,7 @@ export default function OnboardingPage() {
                 )}
               </Button>
             </div>
-          </CardContent>
-        </Card>
       </div>
-    </div>
+    </OnboardingShell>
   );
 }
