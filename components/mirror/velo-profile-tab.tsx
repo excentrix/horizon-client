@@ -374,7 +374,7 @@ export function VeloProfileTab() {
   const handleResumeUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type)) {
+    if (!["application/pdf", "image/jpeg", "image/png", "image/heic", "image/heif"].includes(file.type)) {
       toast.error("Please upload a PDF, JPG, or PNG resume.");
       event.target.value = ""; return;
     }
@@ -386,7 +386,11 @@ export function VeloProfileTab() {
       if (response.job_id && typeof window !== "undefined")
         window.localStorage.setItem("resumeAnalysisJobId", response.job_id);
       await queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
-      toast.success("Resume uploaded. VELO analysis is running.");
+      if (response.job_id) {
+        toast.success("Resume uploaded. VELO analysis is running.");
+      } else {
+        toast.success("Resume replaced. It is now your active resume.");
+      }
     } catch {
       toast.error("Failed to upload resume. Please try again.");
     } finally { event.target.value = ""; setUploadingResume(false); }
@@ -429,7 +433,7 @@ export function VeloProfileTab() {
   const resumeUploadInput = (
     <input
       ref={resumeInputRef} type="file"
-      accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+      accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,application/pdf,image/jpeg,image/png,image/heic,image/heif"
       className="hidden" onChange={handleResumeUpload}
     />
   );

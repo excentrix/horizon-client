@@ -683,11 +683,11 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
                             </p>
                             <p className="text-[11px] text-muted-foreground">
                               Analysis: <span className={cn("font-mono", q.resume_reanalysis_used > 0 ? "text-amber-500" : "text-foreground")}>{q.resume_reanalysis_used}</span>
-                              <span className="text-muted-foreground">/{q.resume_reanalysis_limit ?? "1 (default)"}</span>
+                              <span className="text-muted-foreground">/{q.resume_reanalysis_limit ?? "3 (default)"}</span>
                             </p>
                             <p className="text-[11px] text-muted-foreground">
                               JD: <span className={cn("font-mono", (q.jd_reanalysis_used ?? 0) > 0 ? "text-amber-500" : "text-foreground")}>{q.jd_reanalysis_used ?? 0}</span>
-                              <span className="text-muted-foreground">/{q.jd_reanalysis_limit ?? "2 (default)"}</span>
+                              <span className="text-muted-foreground">/{q.jd_reanalysis_limit ?? "3 (default)"}</span>
                             </p>
                           </div>
                         );
@@ -848,12 +848,12 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
                             </div>
                           </div>
                           <div className="space-y-1">
-                            <label className="text-xs text-muted-foreground">Analysis Limit <span className="text-muted-foreground/60">(monthly · default 1)</span></label>
+                            <label className="text-xs text-muted-foreground">Analysis Limit <span className="text-muted-foreground/60">(total · default 3)</span></label>
                             <div className="flex items-center gap-2">
                               <Input
                                 type="number"
                                 min={0}
-                                placeholder="default (1)"
+                                placeholder="default (3)"
                                 className="h-8 text-sm font-mono"
                                 value={quotaForm.resume_reanalysis_limit}
                                 onChange={(e) => setQuotaForm((s) => ({ ...s, resume_reanalysis_limit: e.target.value }))}
@@ -862,12 +862,12 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
                             </div>
                           </div>
                           <div className="space-y-1">
-                            <label className="text-xs text-muted-foreground">JD Analysis Limit <span className="text-muted-foreground/60">(monthly · default 2)</span></label>
+                            <label className="text-xs text-muted-foreground">JD Analysis Limit <span className="text-muted-foreground/60">(total · default 3)</span></label>
                             <div className="flex items-center gap-2">
                               <Input
                                 type="number"
                                 min={0}
-                                placeholder="default (2)"
+                                placeholder="default (3)"
                                 className="h-8 text-sm font-mono"
                                 value={quotaForm.jd_reanalysis_limit}
                                 onChange={(e) => setQuotaForm((s) => ({ ...s, jd_reanalysis_limit: e.target.value }))}
@@ -876,9 +876,6 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
                             </div>
                           </div>
                         </div>
-                        {q?.resume_reanalysis_period_start && (
-                          <p className="text-[11px] text-muted-foreground">Analysis period started: {new Date(q.resume_reanalysis_period_start).toLocaleDateString()}</p>
-                        )}
                         <div className="flex items-center gap-2">
                           <Button size="sm" onClick={saveQuotas} disabled={quotaSaving} className="gap-1.5">
                             {quotaSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Gauge className="h-3.5 w-3.5" />}
