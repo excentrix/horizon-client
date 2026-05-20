@@ -12,7 +12,7 @@ import { useAuth } from "@/context/AuthContext";
 import { authApi } from "@/lib/api";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 
-const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
+const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/jpg", "image/heic", "image/heif"];
 const ACCEPTED_EXT = ".pdf,.png,.jpg,.jpeg";
 
 type Stage = "idle" | "uploading" | "ready" | "failed";

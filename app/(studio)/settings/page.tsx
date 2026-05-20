@@ -359,7 +359,7 @@ function ResumeTab() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type)) {
+    if (!["application/pdf", "image/jpeg", "image/png", "image/heic", "image/heif"].includes(file.type)) {
       toast.error("Please upload a PDF, JPG, or PNG resume.");
       event.target.value = "";
       return;
@@ -381,7 +381,11 @@ function ResumeTab() {
       const refreshed = await http.get("/auth/profile/detail/");
       setProfile(refreshed.data);
       setDismissedNamePrompt(false);
-      toast.success("Resume uploaded. VELO analysis queued.");
+      if (jobId) {
+        toast.success("Resume uploaded. VELO analysis queued.");
+      } else {
+        toast.success("Resume replaced successfully.");
+      }
     } catch {
       toast.error("Failed to upload resume.");
     } finally {
@@ -401,7 +405,7 @@ function ResumeTab() {
           <input
             ref={resumeInputRef}
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+            accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,application/pdf,image/jpeg,image/png,image/heic,image/heif"
             className="hidden"
             onChange={uploadResume}
           />

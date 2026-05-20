@@ -101,7 +101,7 @@ export const authApi = {
 
   uploadResume: (payload: FormData) =>
     extract<{
-      status: "queued" | "parsed";
+      status: "queued" | "parsed" | "uploaded";
       resume_url: string;
       job_id?: string;
       onboarding_completed?: boolean;
