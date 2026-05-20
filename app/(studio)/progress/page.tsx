@@ -26,6 +26,9 @@ import {
   usePortfolioProfile,
 } from "@/hooks/use-portfolio";
 import { useLocalQrCode } from "@/hooks/use-local-qr";
+import { portfolioApi } from "@/lib/api";
+import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
 import { VeloProfileTab } from "@/components/mirror/velo-profile-tab";
 import { PortfolioVaultTab } from "@/components/mirror/portfolio-vault-tab";
 import { MomentumTab } from "@/components/mirror/momentum-tab";
@@ -370,7 +373,7 @@ export default function ProgressHubPage() {
     ?.ats_score as number | undefined;
 
   return (
-    <div className="h-full min-h-0 w-full overflow-x-hidden overflow-y-auto">
+    <div className="h-full min-h-0 w-full overflow-x-hidden overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+7rem)] sm:pb-8">
       <div className="mx-auto mt-4 flex min-h-full max-w-[1720px] flex-col gap-0 ">
 
         {/* ── Hero banner ──────────────────────────────────────────────────── */}
@@ -683,7 +686,7 @@ function PublicProfileCard({
   onCopy,
   onShare,
 }: {
-  profile: { full_name?: string; slug?: string; avatar_url?: string; is_public?: boolean; view_count?: number } | undefined;
+  profile: { id?: string; full_name?: string; slug?: string; avatar_url?: string; is_public?: boolean; view_count?: number } | undefined;
   user: { profile_completion?: number; full_name?: string } | null | undefined;
   publicUrl: string;
   usernameLabel: string;
@@ -693,6 +696,29 @@ function PublicProfileCard({
   onCopy: () => void;
   onShare: () => void;
 }) {
+  const [isPublic, setIsPublic] = useState(Boolean(profile?.is_public));
+  const [savingVisibility, setSavingVisibility] = useState(false);
+
+  useEffect(() => {
+    setIsPublic(Boolean(profile?.is_public));
+  }, [profile?.is_public]);
+
+  const updateVisibility = async (next: boolean) => {
+    if (!profile?.id || savingVisibility) return;
+    const prev = isPublic;
+    setIsPublic(next);
+    setSavingVisibility(true);
+    try {
+      await portfolioApi.updateProfile(profile.id, { is_public: next });
+      toast.success(next ? "Portfolio is now public." : "Portfolio is now private.");
+    } catch {
+      setIsPublic(prev);
+      toast.error("Could not update portfolio visibility.");
+    } finally {
+      setSavingVisibility(false);
+    }
+  };
+
   const completion = Math.round(user?.profile_completion ?? 0);
   const initials = (profile?.full_name || user?.full_name || usernameLabel)
     .split(" ")
@@ -717,17 +743,28 @@ function PublicProfileCard({
         <span
           className={cn(
             "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-            profile?.is_public
+            isPublic
               ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/25 dark:text-emerald-400"
               : "border-border bg-muted text-muted-foreground",
           )}
         >
-          {profile?.is_public ? (
+          {isPublic ? (
             <><Globe2 className="h-2.5 w-2.5" /> Live</>
           ) : (
             <><Lock className="h-2.5 w-2.5" /> Private</>
           )}
         </span>
+      </div>
+
+      {/* Visibility switch */}
+      <div className="mb-4 flex items-center justify-between rounded-xl border bg-muted/30 px-3 py-2.5">
+        <div>
+          <p className="text-xs font-medium">Public portfolio</p>
+          <p className="text-[10px] text-muted-foreground">
+            {isPublic ? "Anyone with the link can view it." : "Only you can view it."}
+          </p>
+        </div>
+        <Switch checked={isPublic} onCheckedChange={updateVisibility} disabled={!profile?.id || savingVisibility} />
       </div>
 
       {/* Identity block */}

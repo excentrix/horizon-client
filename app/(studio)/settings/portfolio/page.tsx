@@ -122,7 +122,7 @@ export default function PortfolioSettingsPage() {
   }
 
   return (
-    <div className="container max-w-4xl py-8 px-4 space-y-6">
+    <div className="container max-w-4xl py-8 px-4 pb-[calc(env(safe-area-inset-bottom)+7rem)] sm:pb-8 space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
@@ -135,8 +135,13 @@ export default function PortfolioSettingsPage() {
           </p>
         </div>
 
-        {/* Visibility badge + link */}
-        <div className="flex items-center gap-2">
+        {/* Top actions */}
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <Button onClick={save} disabled={saving} size="sm" className="min-w-[168px]">
+            {saving
+              ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</>
+              : <><Save className="mr-2 h-4 w-4" />Save Changes</>}
+          </Button>
           {profile.is_public ? (
             <Badge variant="default" className="gap-1">
               <Eye className="h-3 w-3" /> Public
@@ -326,14 +331,6 @@ export default function PortfolioSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Save */}
-      <div className="flex justify-end">
-        <Button onClick={save} disabled={saving} size="lg">
-          {saving
-            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</>
-            : <><Save className="mr-2 h-4 w-4" />Save Portfolio Settings</>}
-        </Button>
-      </div>
     </div>
   );
 }
