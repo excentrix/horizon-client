@@ -466,6 +466,10 @@ export function VeloProfileTab() {
             {data?.analysis_job?.error ?? "Something went wrong. Try re-uploading your resume."}
           </p>
           <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={handleReanalyse} disabled={reanalysing}>
+              <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", reanalysing && "animate-spin")} />
+              {reanalysing ? "Retrying…" : "Retry analysis"}
+            </Button>
             <Button size="sm" onClick={() => resumeInputRef.current?.click()} disabled={uploadingResume}>
               <Upload className="mr-1.5 h-3.5 w-3.5" />
               {uploadingResume ? "Uploading…" : "Upload new resume"}
