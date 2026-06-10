@@ -16,6 +16,15 @@ const nextConfig: NextConfig = {
 
   allowedDevOrigins: ["http://localhost:3000", "http://192.168.29.138:3000"],
 
+  async redirects() {
+    return [
+      { source: "/mirror", destination: "/progress", permanent: true },
+      { source: "/audit", destination: "/onboarding", permanent: true },
+      { source: "/audit/queue", destination: "/onboarding", permanent: true },
+      { source: "/onboarding/start", destination: "/onboarding", permanent: true },
+    ];
+  },
+
   async rewrites() {
     return [
       {
