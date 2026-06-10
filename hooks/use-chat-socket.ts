@@ -25,6 +25,9 @@ export type SocketStatus = "idle" | "connecting" | "open" | "closed" | "error";
 const HEARTBEAT_INTERVAL = 20000;
 const HEARTBEAT_TIMEOUT = 10000;
 const MAX_RECONNECT_DELAY = 30000;
+const STREAM_FLUSH_INTERVAL_MS = 120;
+const STREAM_FLUSH_LARGE_BUFFER_THRESHOLD = 256;
+const STREAM_FLUSH_LARGE_BUFFER_DELAY_MS = 30;
 const SAFETY_ALERT_EVENT = "mentor_safety_alert";
 const BACKEND_STAGE_COMPLETE_EVENT = "mentor_stage_complete";
 
@@ -423,10 +426,15 @@ export function useChatSocket(conversationId: string | null) {
       return;
     }
 
+    const delay =
+      streamBufferRef.current.length >= STREAM_FLUSH_LARGE_BUFFER_THRESHOLD
+        ? STREAM_FLUSH_LARGE_BUFFER_DELAY_MS
+        : STREAM_FLUSH_INTERVAL_MS;
+
     streamFlushTimerRef.current = window.setTimeout(() => {
       streamFlushTimerRef.current = null;
       flushStreamBuffer();
-    }, 50);
+    }, delay);
   }, [flushStreamBuffer]);
 
   const stopHeartbeat = useCallback(() => {

@@ -1,21 +1,20 @@
 /**
- * Flow Starter Card - Hero CTA on dashboard showing contextual next action.
+ * Flow Starter Card - Contextual next-action suggestion on the dashboard.
  */
 "use client";
 
 import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
-import { 
-  Sparkles, 
-  Flame, 
-  Target, 
-  Trophy, 
-  Zap, 
+import {
+  Sparkles,
+  Flame,
+  Target,
+  Trophy,
+  Zap,
   Compass,
-  X 
+  X,
+  ArrowRight,
 } from 'lucide-react';
 import type { FlowSuggestion } from '@/hooks/use-flow-suggestion';
 import { useAcceptSuggestion, useDismissSuggestion } from '@/hooks/use-flow-suggestion';
@@ -40,29 +39,20 @@ const SUGGESTION_ICONS = {
   apply: Zap,
 };
 
-const SUGGESTION_COLORS = {
-  continue: 'from-blue-500/10 to-cyan-500/10 border-blue-500/20',
-  quick_win: 'from-orange-500/10 to-red-500/10 border-orange-500/20',
-  celebrate: 'from-yellow-500/10 to-amber-500/10 border-yellow-500/20',
-  stretch: 'from-purple-500/10 to-violet-500/10 border-purple-500/20',
-  explore: 'from-green-500/10 to-emerald-500/10 border-green-500/20',
-  personalize: 'from-violet-500/10 to-fuchsia-500/10 border-violet-500/20',
-  alternate: 'from-indigo-500/10 to-blue-500/10 border-indigo-500/20',
-  nudge: 'from-pink-500/10 to-rose-500/10 border-pink-500/20',
-  showcase: 'from-amber-500/10 to-orange-500/10 border-amber-500/20',
-  apply: 'from-cyan-500/10 to-blue-500/10 border-cyan-500/20',
+const ACCENT_COLORS: Record<string, { bg: string; icon: string; button: string }> = {
+  continue:    { bg: 'bg-blue-50 dark:bg-blue-950/20',    icon: 'text-blue-600 dark:text-blue-400',    button: 'bg-blue-600 hover:bg-blue-700 text-white' },
+  quick_win:   { bg: 'bg-orange-50 dark:bg-orange-950/20', icon: 'text-orange-600 dark:text-orange-400', button: 'bg-orange-500 hover:bg-orange-600 text-white' },
+  celebrate:   { bg: 'bg-amber-50 dark:bg-amber-950/20',  icon: 'text-amber-600 dark:text-amber-400',  button: 'bg-amber-500 hover:bg-amber-600 text-white' },
+  stretch:     { bg: 'bg-purple-50 dark:bg-purple-950/20', icon: 'text-purple-600 dark:text-purple-400', button: 'bg-purple-600 hover:bg-purple-700 text-white' },
+  explore:     { bg: 'bg-emerald-50 dark:bg-emerald-950/20', icon: 'text-emerald-600 dark:text-emerald-400', button: 'bg-emerald-600 hover:bg-emerald-700 text-white' },
+  apply:       { bg: 'bg-cyan-50 dark:bg-cyan-950/20',    icon: 'text-cyan-600 dark:text-cyan-400',    button: 'bg-cyan-600 hover:bg-cyan-700 text-white' },
+  personalize: { bg: 'bg-violet-50 dark:bg-violet-950/20', icon: 'text-violet-600 dark:text-violet-400', button: 'bg-violet-600 hover:bg-violet-700 text-white' },
+  alternate:   { bg: 'bg-indigo-50 dark:bg-indigo-950/20', icon: 'text-indigo-600 dark:text-indigo-400', button: 'bg-indigo-600 hover:bg-indigo-700 text-white' },
+  nudge:       { bg: 'bg-pink-50 dark:bg-pink-950/20',    icon: 'text-pink-600 dark:text-pink-400',    button: 'bg-pink-600 hover:bg-pink-700 text-white' },
+  showcase:    { bg: 'bg-amber-50 dark:bg-amber-950/20',  icon: 'text-amber-600 dark:text-amber-400',  button: 'bg-amber-500 hover:bg-amber-600 text-white' },
 };
 
-function getPriorityBadge(priority: number) {
-  if (priority >= 8) {
-    return <Badge className="bg-red-500/10 text-red-700 dark:text-red-300">Urgent</Badge>;
-  } else if (priority >= 6) {
-    return <Badge className="bg-orange-500/10 text-orange-700 dark:text-orange-300">High</Badge>;
-  } else if (priority >= 4) {
-    return <Badge className="bg-blue-500/10 text-blue-700 dark:text-blue-300">Medium</Badge>;
-  }
-  return <Badge variant="outline">Low</Badge>;
-}
+const DEFAULT_ACCENT = { bg: 'bg-muted', icon: 'text-muted-foreground', button: 'bg-primary hover:bg-primary/90 text-primary-foreground' };
 
 export function FlowStarter({ suggestion, shownAt }: FlowStarterProps) {
   const router = useRouter();
@@ -70,114 +60,96 @@ export function FlowStarter({ suggestion, shownAt }: FlowStarterProps) {
   const acceptMutation = useAcceptSuggestion();
   const dismissMutation = useDismissSuggestion();
 
-  const Icon = SUGGESTION_ICONS[suggestion.type] || Sparkles;
-  const colorClass = SUGGESTION_COLORS[suggestion.type] || SUGGESTION_COLORS.explore;
+  const accent = ACCENT_COLORS[suggestion.type] ?? DEFAULT_ACCENT;
+  const Icon = SUGGESTION_ICONS[suggestion.type] ?? Sparkles;
 
   const handleAccept = () => {
     if (suggestion.log_id) {
-      acceptMutation.mutate({
-        logId: suggestion.log_id,
-        suggestionType: suggestion.type,
-        shownAt,
-      });
+      acceptMutation.mutate({ logId: suggestion.log_id, suggestionType: suggestion.type, shownAt });
     }
 
-    // Navigate based on suggestion type
     if (suggestion.type === 'continue' && suggestion.metadata?.plan_id) {
-      router.push(`/learning-plans/${suggestion.metadata.plan_id}`);
+      router.push(`/plans/${suggestion.metadata.plan_id}`);
     } else if (suggestion.type === 'explore') {
-      router.push('/learning-plans');
+      router.push('/plans');
     } else if (suggestion.type === 'celebrate') {
       router.push('/profile');
+    } else if (suggestion.type === 'apply' && suggestion.metadata?.plan_id) {
+      router.push(`/plans/${suggestion.metadata.plan_id}`);
     }
 
-    toast.success('Let\'s go! 🚀');
+    toast.success("Let's go!");
   };
 
   const handleDismiss = () => {
     if (suggestion.log_id) {
-      dismissMutation.mutate({
-        logId: suggestion.log_id,
-        suggestionType: suggestion.type,
-        shownAt,
-      });
+      dismissMutation.mutate({ logId: suggestion.log_id, suggestionType: suggestion.type, shownAt });
     }
-
     setDismissed(true);
   };
 
-  if (dismissed) {
-    return null;
-  }
+  if (dismissed) return null;
 
   return (
-    <Card className={`col-span-full border-2 bg-gradient-to-br ${colorClass} relative overflow-hidden`}>
-      {/* Dismiss button */}
+    <div className={`col-span-full rounded-2xl border border-border/60 ${accent.bg} relative overflow-hidden`}>
+      {/* Dismiss */}
       <button
         onClick={handleDismiss}
-        className="absolute right-4 top-4 rounded-full p-1 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+        className="absolute right-3 top-3 rounded-full p-1.5 hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
         aria-label="Dismiss suggestion"
       >
         <X className="h-4 w-4 text-muted-foreground" />
       </button>
 
-      <CardHeader>
-        <div className="flex items-start justify-between pr-8">
-          <div className="flex items-start gap-4">
-            <div className="rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 p-3">
-              <Icon className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <CardTitle className="text-2xl">{suggestion.title}</CardTitle>
-              <CardDescription className="mt-2 text-base">
-                {suggestion.message}
-              </CardDescription>
-            </div>
+      <div className="px-5 pt-5 pb-4">
+        {/* Header */}
+        <div className="flex items-start gap-3 pr-8">
+          <div className={`mt-0.5 shrink-0 rounded-xl p-2 ${accent.bg}`}>
+            <Icon className={`h-5 w-5 ${accent.icon}`} />
           </div>
-          {getPriorityBadge(suggestion.priority)}
+          <div className="min-w-0">
+            <p className="font-semibold text-foreground leading-snug">{suggestion.title}</p>
+            <p className="mt-0.5 text-sm text-muted-foreground leading-relaxed">{suggestion.message}</p>
+          </div>
         </div>
-      </CardHeader>
 
-      {/* Inline content - Quiz, TaskPreview, Reflection */}
-      {suggestion.inline_content && (
-        <CardContent>
-          <div className="rounded-lg border bg-background/80 p-4">
-            <InlineWorkspace 
+        {/* Inline content — quiz, reflection, task preview */}
+        {suggestion.inline_content && (
+          <div className="mt-4 rounded-xl border border-border/50 bg-background/80 p-4">
+            <InlineWorkspace
               content={suggestion.inline_content as InlineContent}
               onComplete={() => {
-                // Handle inline content completion
                 if (suggestion.log_id) {
-                  acceptMutation.mutate({
-                    logId: suggestion.log_id,
-                    suggestionType: suggestion.type,
-                    shownAt,
-                  });
+                  acceptMutation.mutate({ logId: suggestion.log_id, suggestionType: suggestion.type, shownAt });
                 }
-                toast.success('Great work! 🎉');
+                toast.success('Great work!');
               }}
             />
           </div>
-        </CardContent>
-      )}
+        )}
 
-      <CardFooter className="gap-3">
-        <Button
-          onClick={handleAccept}
-          size="lg"
-          className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700"
-          disabled={acceptMutation.isPending}
-        >
-          {acceptMutation.isPending ? 'Loading...' : suggestion.action_label}
-        </Button>
-        <Button
-          onClick={handleDismiss}
-          variant="ghost"
-          size="lg"
-          disabled={dismissMutation.isPending}
-        >
-          Not now
-        </Button>
-      </CardFooter>
-    </Card>
+        {/* Actions */}
+        <div className="mt-4 flex items-center gap-2">
+          <Button
+            onClick={handleAccept}
+            size="sm"
+            className={`gap-1.5 ${accent.button}`}
+            disabled={acceptMutation.isPending}
+          >
+            {acceptMutation.isPending ? 'Loading...' : suggestion.action_label}
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            onClick={handleDismiss}
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            disabled={dismissMutation.isPending}
+          >
+            Not now
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

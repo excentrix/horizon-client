@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useRoadmap, roadmapKey } from "@/hooks/use-roadmap";
 import RoadmapJourneyMap from "@/components/roadmap/RoadmapJourneyMap";
 
@@ -39,14 +40,19 @@ import { PlanProgressTimeline } from "@/components/mentor-lounge/plan-progress-t
 
 export default function RoadmapPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { data, isLoading } = useRoadmap();
   const roadmap = data?.roadmap;
-  const { planBuildStatus, planBuildMessage, planUpdates } = useMentorLoungeStore();
+  const { planBuildStatus, planBuildMessage, planUpdates, planBuildType } = useMentorLoungeStore();
+  // ?generating=1 passed from chat page after roadmapApi.generateRoadmap() returns 202
+  const generatingParam = searchParams?.get("generating") === "1";
+  const [buildingBannerDismissed, setBuildingBannerDismissed] = useState(false);
   const isBuilding =
-    planBuildStatus === "queued" ||
-    planBuildStatus === "in_progress" ||
-    planBuildStatus === "warning";
+    !buildingBannerDismissed &&
+    (planBuildStatus === "queued" ||
+      planBuildStatus === "in_progress" ||
+      planBuildStatus === "warning");
 
   const buildProgress = useMemo(() => {
     if (planBuildStatus === "completed") return 100;
@@ -140,16 +146,17 @@ export default function RoadmapPage() {
     );
   }, [levelStats]);
 
-  // Re-fetch roadmap when generation completes
+  // Re-fetch roadmap when generation completes, then dismiss the building banner
   useEffect(() => {
     if (planBuildStatus === "completed") {
       queryClient.invalidateQueries({ queryKey: roadmapKey });
       queryClient.invalidateQueries({ queryKey: ["learning-plans"] });
-      // Also clear the status after a delay so the "completed" UI doesn't stick forever if we move back and forth
-      const timer = setTimeout(() => {
-        // We might want to keep it completed for a bit, but invalidating the query is the key.
-      }, 5000);
+      const timer = setTimeout(() => setBuildingBannerDismissed(true), 3000);
       return () => clearTimeout(timer);
+    }
+    // Reset dismissed state when a new build starts
+    if (planBuildStatus === "queued" || planBuildStatus === "in_progress") {
+      setBuildingBannerDismissed(false);
     }
   }, [planBuildStatus, queryClient]);
 
@@ -176,7 +183,9 @@ export default function RoadmapPage() {
 
   if (!roadmap) {
     const isGenerating =
-      planBuildStatus === "in_progress" || planBuildStatus === "queued";
+      generatingParam ||
+      planBuildStatus === "in_progress" ||
+      planBuildStatus === "queued";
 
     return (
       <div className="max-w-3xl mx-auto space-y-6 p-6 pb-24 mt-12">
@@ -214,7 +223,7 @@ export default function RoadmapPage() {
                 </div>
               </div>
               {planUpdates.length > 0 ? (
-                <PlanProgressTimeline updates={planUpdates} />
+                <PlanProgressTimeline updates={planUpdates} itemType={planBuildType} />
               ) : null}
               <p className="text-sm text-muted-foreground">
                 This usually takes about 20-30 seconds. Feel free to stay here;
@@ -225,20 +234,20 @@ export default function RoadmapPage() {
         ) : (
           <Card className="border-dashed border-2 shadow-none bg-muted/30">
             <CardHeader>
-              <CardTitle>No roadmap found</CardTitle>
+              <CardTitle>No roadmap yet</CardTitle>
               <CardDescription>
-                You haven&apos;t generated a career roadmap yet. Complete your
-                mentor intake to get started.
+                Chat with Aria to share your goals and background. Once she has
+                enough context she&apos;ll prompt you to generate your roadmap.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-wrap gap-3">
               <Button
                 size="lg"
-                onClick={() => router.push("/chat?context=mentor_intake")}
+                onClick={() => router.push("/chat")}
                 className="gap-2"
               >
                 <Brain className="w-4 h-4" />
-                Start Mentor Intake
+                Chat with Aria
               </Button>
             </CardContent>
           </Card>

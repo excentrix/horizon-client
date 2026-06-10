@@ -502,6 +502,15 @@ useEffect(() => {
   setMentorActions,
 ]);
 
+  // Seed composer draft from ?message= query param (used by dashboard quick-ask)
+  useEffect(() => {
+    const msg = searchParams?.get("message");
+    if (msg && selectedConversationId) {
+      setComposerDraft(decodeURIComponent(msg));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConversationId]);
+
   useEffect(() => {
     if (!selectedConversationId) {
       clearAnalysisPolling();
@@ -513,6 +522,7 @@ useEffect(() => {
   const planBuildStatus = useMentorLoungeStore(state => state.planBuildStatus);
   const planBuildId = useMentorLoungeStore(state => state.planBuildId);
   const planBuildTitle = useMentorLoungeStore(state => state.planBuildTitle);
+  const planBuildType = useMentorLoungeStore(state => state.planBuildType);
   const mirrorAnalysisReady = useMentorLoungeStore(state => state.mirrorAnalysisReady);
   const planIdFromQuery = searchParams?.get("plan");
   const effectivePlanId =
@@ -851,6 +861,131 @@ useEffect(() => {
     !selectedConversationId || createPlan.isPending || isPlanBuilding;
   const disableRoadmapButton = disablePlanButton;
 
+  // Aria readiness action popup state
+  const [pendingAction, setPendingAction] = useState<{
+    action: "confirm_roadmap" | "confirm_learning_plan";
+    roadmapSummary?: { title: string; target_role: string; stages: number; estimated_weeks: number; stage_names: string[] };
+    planSummary?: { title: string; estimated_hours: number; topics: string[] };
+  } | null>(null);
+
+  const handleSendMessage = useCallback(
+    async (content: string) => {
+      await sendMessage(content);
+    },
+    [sendMessage]
+  );
+
+  // Intent-triggered questions widget (populated by generate_roadmap tool via ask_questions action)
+  const [pendingQuestions, setPendingQuestions] = useState<Array<{
+    id: string;
+    question: string;
+    options: string[];
+    priority: string;
+    category?: string;
+  }> | null>(null);
+
+  // Watch incoming messages for Aria action signals
+  useEffect(() => {
+    if (!messages.length) return;
+    const latest = [...messages].reverse().find(
+      (m) => m.sender_type === "ai" && m.metadata?.action
+    );
+    if (!latest) return;
+    const action = latest.metadata?.action as string | undefined;
+    if (action === "roadmap_generating") {
+      router.push("/roadmap?generating=1");
+    } else if (action === "ask_questions" && !pendingQuestions && !pendingAction) {
+      const qs = (latest.metadata?.questions ?? []) as InlineQuestion[];
+      if (qs.length > 0) setPendingQuestions(qs);
+    } else if (action === "confirm_roadmap" && !pendingAction) {
+      setPendingQuestions(null);
+      setPendingAction({
+        action: "confirm_roadmap",
+        roadmapSummary: (latest.metadata?.roadmap_summary ?? undefined) as NonNullable<typeof pendingAction>["roadmapSummary"],
+      });
+    } else if (action === "confirm_learning_plan" && !pendingAction) {
+      setPendingAction({
+        action: "confirm_learning_plan",
+        planSummary: (latest.metadata?.plan_summary ?? undefined) as NonNullable<typeof pendingAction>["planSummary"],
+      });
+    }
+  }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSubmitQuestions = useCallback(
+    async (answers: Record<string, string>) => {
+      setPendingQuestions(null);
+
+      // Build a natural visible message from the answers
+      const parts = Object.entries(answers)
+        .filter(([, v]) => v.trim())
+        .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`);
+      if (parts.length) {
+        await handleSendMessage(parts.join(" | "));
+      }
+
+      // Persist answers + trigger roadmap generation
+      const targetRole = answers["target_role"] || answers["role"] || "";
+      const answeredIds = Object.keys(answers);
+      try {
+        const { roadmapApi: rdmApi } = await import("@/lib/api");
+        await rdmApi.generateRoadmap(
+          targetRole || "my target role",
+          false,
+          { ...answers, _answered_question_ids: answeredIds.join(",") } as Record<string, string>,
+        );
+        router.push("/roadmap?generating=1");
+      } catch {
+        telemetry.toastError("Couldn't start roadmap generation. Please try again.");
+      }
+    },
+    [handleSendMessage, router],
+  );
+
+  const handleWelcomeMessage = useCallback(async (text: string) => {
+    if (!text.trim()) return;
+    try {
+      const conversation = await chatApi.createConversation({ title: "Mentor chat" });
+      setSelectedConversationId(conversation.id);
+      await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      router.replace(`/chat?conversation=${conversation.id}`, { scroll: false });
+      await chatApi.sendMessage(conversation.id, { content: text.trim() });
+    } catch {
+      telemetry.toastError("Couldn't start conversation. Please try again.");
+    }
+  }, [queryClient, router, setSelectedConversationId]);
+
+  const handleConfirmRoadmap = useCallback(async () => {
+    if (!pendingAction?.roadmapSummary?.target_role) return;
+    setPendingAction(null);
+    try {
+      const { roadmapApi } = await import("@/lib/api");
+      await roadmapApi.generateRoadmap(pendingAction.roadmapSummary.target_role);
+      router.push("/roadmap?generating=1");
+    } catch {
+      telemetry.toastError("Couldn't start roadmap generation. Please try again.");
+    }
+  }, [pendingAction, router]);
+
+  const handleConfirmLearningPlan = useCallback(async () => {
+    if (!selectedConversationId) return;
+    setPendingAction(null);
+    try {
+      const { planningApi } = await import("@/lib/api");
+      const result = await planningApi.createPlanFromConversation({
+        conversation_id: selectedConversationId,
+      });
+      if (result?.session_id) {
+        router.push(`/plans?session=${result.session_id}`);
+      } else if (result?.learning_plan_id) {
+        router.push(`/plans/${result.learning_plan_id}`);
+      } else {
+        router.push("/plans");
+      }
+    } catch {
+      telemetry.toastError("Couldn't create learning plan. Please try again.");
+    }
+  }, [selectedConversationId, router]);
+
   const handleCreatePlan = async () => {
     if (!selectedConversationId) {
       telemetry.toastError("Select a conversation first");
@@ -949,14 +1084,6 @@ useEffect(() => {
     createPlan.mutate({ conversationId: selectedConversationId, forceGuardOverride: true });
     setSoftGateDialogOpen(false);
   }, [createPlan, selectedConversationId]);
-
-
-  const handleSendMessage = useCallback(
-    async (content: string) => {
-      await sendMessage(content);
-    },
-    [sendMessage]
-  );
 
   const planWorkbenchData = useMemo(() => {
     if (planRecord) {
@@ -1138,7 +1265,7 @@ useEffect(() => {
                 selectedConversationId={selectedConversationId}
                 isLoading={conversationsLoading}
                 activeClass={activeListClass}
-                autoSelectFirst={false}
+                autoSelectFirst={true}
               />
             </div>
           </div>
@@ -1712,6 +1839,62 @@ useEffect(() => {
                             socketStatus !== "open"
                           }
                         />
+                        {pendingQuestions && (
+                          <InlineQuestionWidget
+                            questions={pendingQuestions}
+                            onSubmit={handleSubmitQuestions}
+                            onDismiss={() => setPendingQuestions(null)}
+                          />
+                        )}
+                        {pendingAction?.action === "confirm_roadmap" && pendingAction.roadmapSummary && (
+                          <div className="mx-4 mb-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                            <p className="text-xs font-semibold text-primary mb-1">✦ Ready to build your roadmap</p>
+                            <p className="text-sm font-medium">{pendingAction.roadmapSummary.title}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {pendingAction.roadmapSummary.stages} stages · ~{pendingAction.roadmapSummary.estimated_weeks} weeks · {pendingAction.roadmapSummary.stage_names.join(" → ")}
+                            </p>
+                            <div className="mt-3 flex items-center gap-2">
+                              <Button size="sm" onClick={handleConfirmRoadmap}>
+                                Create Roadmap
+                              </Button>
+                              <button
+                                type="button"
+                                className="text-xs text-muted-foreground hover:underline"
+                                onClick={() => setPendingAction(null)}
+                              >
+                                Not now
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {pendingAction?.action === "confirm_learning_plan" && (
+                          <div className="mx-4 mb-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900/40 dark:bg-emerald-950/30">
+                            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-1">✦ Ready to create a learning plan</p>
+                            {pendingAction.planSummary?.title && (
+                              <p className="text-sm font-medium">{pendingAction.planSummary.title}</p>
+                            )}
+                            {pendingAction.planSummary?.estimated_hours && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                ~{pendingAction.planSummary.estimated_hours}h estimated
+                                {pendingAction.planSummary.topics?.length
+                                  ? ` · ${pendingAction.planSummary.topics.slice(0, 3).join(", ")}`
+                                  : ""}
+                              </p>
+                            )}
+                            <div className="mt-3 flex items-center gap-2">
+                              <Button size="sm" variant="default" className="bg-emerald-600 hover:bg-emerald-700" onClick={handleConfirmLearningPlan}>
+                                Create Plan
+                              </Button>
+                              <button
+                                type="button"
+                                className="text-xs text-muted-foreground hover:underline"
+                                onClick={() => setPendingAction(null)}
+                              >
+                                Not now
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         <MessageComposer
                           disabled={
                             messagesLoading ||
@@ -1728,52 +1911,24 @@ useEffect(() => {
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="w-full max-w-xl space-y-3">
-                {analysisJobRunning ? (
-                  <Card className="border-blue-200 bg-blue-50/80">
-                    <CardHeader>
-                      <CardTitle className="text-base">
-                        Your analysis is running
-                      </CardTitle>
-                      <CardDescription>
-                        Resume and skill-gap analysis is processing in
-                        background. Start mentor chat now; context will sync
-                        automatically when ready.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => setCreateModalOpen(true)}
-                      >
-                        <PlusCircle className="mr-2 h-4 w-4" /> Start Mentor
-                        Conversation
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => router.push("/onboarding")}
-                      >
-                        Open Onboarding
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ) : null}
-                <Card className="w-full text-center">
-                  <CardHeader>
-                    <CardTitle>Welcome to the Mentor Lounge</CardTitle>
-                    <CardDescription>
-                      Select a conversation from the list on the left, or start
-                      a new one to begin.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Button onClick={() => setCreateModalOpen(true)}>
-                      <PlusCircle className="mr-2 h-4 w-4" /> Start New
-                      Conversation
-                    </Button>
-                  </CardContent>
-                </Card>
+            <div className="flex h-full flex-col items-center justify-center px-4">
+              <div className="w-full max-w-lg space-y-6">
+                <div className="text-center space-y-2">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                    <Brain className="h-6 w-6 text-primary" />
+                  </div>
+                  <h2 className="text-xl font-semibold">Hi, I&apos;m Aria</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Your personal learning mentor. Tell me what you&apos;re working toward and I&apos;ll start building a path with you.
+                  </p>
+                </div>
+                {analysisJobRunning && (
+                  <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                    <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-blue-400" />
+                    Your resume analysis is running in the background — I&apos;ll have your context shortly.
+                  </div>
+                )}
+                <WelcomeComposer onSend={handleWelcomeMessage} />
               </div>
             </div>
           )}
@@ -1781,6 +1936,141 @@ useEffect(() => {
         {/* Right Sidebar for Intelligence/Context */}
       </div>
       <CortexDebugDrawer />
+    </div>
+  );
+}
+
+interface InlineQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  priority: string;
+  category?: string;
+}
+
+function InlineQuestionWidget({
+  questions,
+  onSubmit,
+  onDismiss,
+}: {
+  questions: InlineQuestion[];
+  onSubmit: (answers: Record<string, string>) => void;
+  onDismiss: () => void;
+}) {
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+
+  const pick = (id: string, value: string) =>
+    setAnswers((prev) => ({ ...prev, [id]: prev[id] === value ? "" : value }));
+
+  const type = (id: string, value: string) =>
+    setAnswers((prev) => ({ ...prev, [id]: value }));
+
+  const allRequired = questions
+    .filter((q) => q.priority === "required")
+    .every((q) => (answers[q.id] ?? "").trim() !== "");
+
+  return (
+    <div className="mx-2 mb-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-primary">
+          ✦ A few things that will shape your roadmap
+        </p>
+        <button
+          type="button"
+          className="text-xs text-muted-foreground hover:underline"
+          onClick={onDismiss}
+        >
+          Skip for now
+        </button>
+      </div>
+      {questions.map((q) => (
+        <div key={q.id} className="space-y-1.5">
+          <p className="text-sm font-medium leading-snug">
+            {q.question}
+            {q.priority === "required" && (
+              <span className="ml-1.5 text-[10px] font-normal text-primary/70 uppercase tracking-wide">required</span>
+            )}
+          </p>
+          {q.options.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {q.options.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => pick(q.id, opt)}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs transition-colors",
+                    answers[q.id] === opt
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-background hover:border-primary/40 hover:bg-primary/5"
+                  )}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          )}
+          <input
+            type="text"
+            value={q.options.length > 0 && q.options.includes(answers[q.id] ?? "") ? "" : (answers[q.id] ?? "")}
+            onChange={(e) => type(q.id, e.target.value)}
+            placeholder={q.options.length > 0 ? "Or type your own answer…" : "Your answer…"}
+            className="w-full rounded-lg border bg-background px-3 py-1.5 text-xs outline-none placeholder:text-muted-foreground focus:border-primary/50"
+          />
+        </div>
+      ))}
+      <div className="flex items-center gap-3 pt-1">
+        <Button size="sm" disabled={!allRequired} onClick={() => onSubmit(answers)}>
+          Build my roadmap
+        </Button>
+        <button
+          type="button"
+          className="text-xs text-muted-foreground hover:underline"
+          onClick={onDismiss}
+        >
+          Skip
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function WelcomeComposer({ onSend }: { onSend: (text: string) => void }) {
+  const [value, setValue] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const submit = () => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    onSend(trimmed);
+    setValue("");
+  };
+
+  return (
+    <div className="rounded-xl border bg-background shadow-sm">
+      <textarea
+        ref={inputRef}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            submit();
+          }
+        }}
+        placeholder="What role are you aiming for? What's your timeline?"
+        className="w-full resize-none rounded-t-xl bg-transparent px-4 py-3 text-sm outline-none placeholder:text-muted-foreground"
+        rows={3}
+      />
+      <div className="flex justify-end border-t px-3 py-2">
+        <Button size="sm" onClick={submit} disabled={!value.trim()}>
+          Send
+        </Button>
+      </div>
     </div>
   );
 }

@@ -558,8 +558,35 @@ export const planningApi = {
       execution_descriptor?: Record<string, unknown>;
       surface_type?: string;
       pack_ref?: string | null;
+      simulation_type?: string;
+      experience_type?: string | null;
+      pack_version?: string | null;
+      runtime_state?: Record<string, unknown>;
+      completion_state?: Record<string, unknown>;
+      intervention_state?: Record<string, unknown>;
+      world_state?: Record<string, number>;
+      available_actions?: Array<Record<string, unknown>>;
+      observation_feed?: Array<Record<string, unknown>>;
+      session_state?: Record<string, unknown>;
+      checkpoint_state?: Record<string, unknown>;
+      phase_state?: Record<string, unknown>;
+      mentor_state?: Record<string, unknown>;
+      scoring_state?: Record<string, unknown>;
+      session_timeline?: Array<Record<string, unknown>>;
+      unlocked_evidence?: string[];
+      evidence_board?: Array<Record<string, unknown>>;
+      stakeholder_state?: Array<Record<string, unknown>>;
+      pressure_events?: Array<Record<string, unknown>>;
     }>(
       http.post(`/planning/tasks/${taskId}/simulation-scenarios/start/`, payload ?? {})
+    ),
+  interactSimulationScenario: (
+    taskId: string,
+    scenarioId: string,
+    payload: { action_payload?: Record<string, unknown> }
+  ) =>
+    extract<SimulationResultEnvelope & { message: string }>(
+      http.post(`/planning/tasks/${taskId}/simulation-scenarios/${scenarioId}/interact/`, payload)
     ),
   submitSimulationScenario: (
     taskId: string,
@@ -568,6 +595,10 @@ export const planningApi = {
   ) =>
     extract<SimulationResultEnvelope & { message: string }>(
       http.post(`/planning/tasks/${taskId}/simulation-scenarios/${scenarioId}/submit/`, payload)
+    ),
+  getSimulationScenarioState: (taskId: string, scenarioId: string) =>
+    extract<SimulationResultEnvelope>(
+      http.get(`/planning/tasks/${taskId}/simulation-scenarios/${scenarioId}/state/`)
     ),
   getSimulationScenarioResult: (taskId: string, scenarioId: string) =>
     extract<SimulationResultEnvelope>(
@@ -722,6 +753,56 @@ export const planningApi = {
       verification_confidence?: number | null;
       error?: string;
     }>(http.post("/planning/simulation-lab/run-usecase/", payload)),
+  startSimulationLabSession: (payload: {
+    simulation_type: string;
+    surface_type?: string;
+    scenario_payload?: Record<string, unknown>;
+  }) =>
+    extract<{
+      message: string;
+      scenario: DomainScenarioPayload;
+      synthetic_task_id?: string;
+      surface_type?: string;
+      pack_ref?: string | null;
+      simulation_type?: string;
+      experience_type?: string | null;
+      pack_version?: string | null;
+      runtime_state?: Record<string, unknown>;
+      completion_state?: Record<string, unknown>;
+      intervention_state?: Record<string, unknown>;
+      execution_descriptor?: Record<string, unknown>;
+      world_state?: Record<string, number>;
+      available_actions?: Array<Record<string, unknown>>;
+      observation_feed?: Array<Record<string, unknown>>;
+      session_state?: Record<string, unknown>;
+      checkpoint_state?: Record<string, unknown>;
+      phase_state?: Record<string, unknown>;
+      mentor_state?: Record<string, unknown>;
+      scoring_state?: Record<string, unknown>;
+      session_timeline?: Array<Record<string, unknown>>;
+      unlocked_evidence?: string[];
+      evidence_board?: Array<Record<string, unknown>>;
+      stakeholder_state?: Array<Record<string, unknown>>;
+      pressure_events?: Array<Record<string, unknown>>;
+    }>(http.post("/planning/simulation-lab/sessions/start/", payload)),
+  interactSimulationLabSession: (
+    scenarioId: string,
+    payload: { action_payload?: Record<string, unknown> }
+  ) =>
+    extract<SimulationResultEnvelope & { message: string }>(
+      http.post(`/planning/simulation-lab/sessions/${scenarioId}/interact/`, payload)
+    ),
+  finalizeSimulationLabSession: (
+    scenarioId: string,
+    payload: { learner_submission: Record<string, unknown> | string | string[] }
+  ) =>
+    extract<SimulationResultEnvelope & { message: string }>(
+      http.post(`/planning/simulation-lab/sessions/${scenarioId}/finalize/`, payload)
+    ),
+  getSimulationLabSessionState: (scenarioId: string) =>
+    extract<SimulationResultEnvelope>(
+      http.get(`/planning/simulation-lab/sessions/${scenarioId}/state/`)
+    ),
   generateTaskLesson: (
     taskId: string,
     payload?: {
@@ -1692,7 +1773,15 @@ export const hqApi = {
 // ROADMAP ---------------------------------------------------------------
 export const roadmapApi = {
   getRoadmap: () => extract<RoadmapResponse>(http.get("/roadmap/")),
-  generateLevelPlan: (levelId: string) => 
+  generateRoadmap: (targetRole: string, force = false, profileContext?: Record<string, string>) =>
+    extract<{ success: boolean; message: string; task_id: string }>(
+      http.post("/roadmap/generate/", {
+        target_role: targetRole,
+        force,
+        ...(profileContext ? { profile_context: profileContext } : {}),
+      })
+    ),
+  generateLevelPlan: (levelId: string) =>
     extract<{ message: string; plan_id: string }>(http.post(`/roadmap/levels/${levelId}/generate_plan/`)),
 };
 

@@ -248,7 +248,22 @@ function PlansV2Content() {
         </div>
       ) : null}
 
-      {!plansLoading && !planLoading && !plan ? (
+      {!plansLoading && !planLoading && !plan && plans.length === 0 ? (
+        <section className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-dashed border-black/20 bg-white/60 py-16 text-center">
+          <p className="text-base font-medium text-[#414141]">You don&apos;t have any learning plans yet.</p>
+          <p className="max-w-xs text-sm text-[#414141]/60">
+            Learning plans are created from your roadmap. Open your roadmap, pick a stage, and click &ldquo;Start Learning&rdquo; to generate one.
+          </p>
+          <button
+            onClick={() => router.push("/roadmap")}
+            className="mt-2 rounded-xl bg-[#141414] px-5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-80"
+          >
+            Go to Roadmap
+          </button>
+        </section>
+      ) : null}
+
+      {!plansLoading && !planLoading && !plan && plans.length > 0 ? (
         <section className="rounded-3xl border border-dashed border-black/20 bg-white/60 p-6 text-sm text-[#414141]/75">
           No plan selected. Choose a plan to open the workspace.
         </section>

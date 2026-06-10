@@ -9,6 +9,7 @@ import type { PlanUpdateEvent } from "@/types";
 interface PlanProgressTimelineProps {
   updates: PlanUpdateEvent[];
   onDismiss?: () => void;
+  itemType?: "plan" | "roadmap" | null;
 }
 
 const statusVariant: Record<string, "default" | "secondary" | "outline" | "destructive"> =
@@ -54,6 +55,7 @@ const formatTime = (timestamp: string) => {
 export function PlanProgressTimeline({
   updates,
   onDismiss,
+  itemType,
 }: PlanProgressTimelineProps) {
   const orderedUpdates = useMemo(
     () =>
@@ -72,7 +74,7 @@ export function PlanProgressTimeline({
     <Card className="border-amber-100 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/40">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-          Plan builder status
+          {itemType === "roadmap" ? "Roadmap builder status" : "Plan builder status"}
         </CardTitle>
         {onDismiss ? (
           <Button
@@ -116,8 +118,9 @@ export function PlanProgressTimeline({
           })}
         </ol>
         <p className="text-[11px]">
-          Hang tight while we stitch together the plan. We&apos;ll surface the
-          final roadmap as soon as it&apos;s saved.
+          {itemType === "roadmap"
+            ? "Hang tight while we build your roadmap. It will appear automatically when ready."
+            : "Hang tight while we stitch together the plan. We’ll surface the final plan as soon as it’s saved."}
         </p>
       </CardContent>
     </Card>

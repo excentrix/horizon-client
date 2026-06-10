@@ -118,7 +118,8 @@ export function FlowSuggestionChip({
     onDismiss?.();
   };
 
-  if (dismissed) {
+  // Low-value suggestion types don't belong in the focused chat context
+  if (dismissed || suggestion.type === 'explore') {
     return null;
   }
 

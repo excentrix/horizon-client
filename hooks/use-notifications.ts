@@ -535,11 +535,13 @@ export function useNotificationsSocket() {
                         : data.status === "error" || data.status === "failed"
                           ? "failed"
                           : "in_progress";
+                  const itemType = data.item_type === "roadmap" ? "roadmap" : data.item_type === "plan" ? "plan" : undefined;
                   setPlanBuildStatus(
                     mapped,
                     (data.message as string) ?? undefined,
                     planId,
                     data.plan_title as string | undefined,
+                    itemType,
                   );
                   updateLastPlanActivity();
 

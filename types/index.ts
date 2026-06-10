@@ -786,6 +786,29 @@ export interface PublicPortfolioResponse {
     verified_at: string | null;
     submitted_repos: Array<{ url: string; label: string }>;
   }>;
+  resume_data?: {
+    summary?: string;
+    experience?: Array<{
+      company?: string;
+      role?: string;
+      timeframe?: string;
+      highlights?: string[];
+      technologies?: string[];
+    }>;
+    projects?: Array<{
+      title?: string;
+      description?: string;
+      technologies?: string[];
+      repo_url?: string;
+      demo_url?: string;
+    }>;
+    skills?: string[];
+    education?: Array<{
+      degree?: string;
+      institution?: string;
+      year?: string | number;
+    }>;
+  };
 }
 
 export interface SpacedRepetitionCard {
@@ -1390,6 +1413,7 @@ export interface ExecutionDescriptor {
     | "teachback_session";
   simulation_type_or_pack_ref?: string | null;
   pack_ref?: string | null;
+  experience_type?: "scenario_response" | "turn_based_sim" | "workspace_first" | "rich_scene" | "hybrid" | string;
   evaluation_mode?: string;
   evidence_target?: string;
   adapter?: string;
@@ -1490,6 +1514,7 @@ export interface DomainScenarioPayload {
   simulation_type?: string;
   surface_type?: string | null;
   pack_ref?: string | null;
+  experience_type?: string | null;
   domain_family: "business" | "marketing" | "design" | "finance" | "tech" | "other";
   scenario_payload: Record<string, unknown>;
   learner_submission: Record<string, unknown>;
@@ -1513,6 +1538,20 @@ export interface DomainScenarioPayload {
   pack_version?: string | null;
   scoring_components?: ScoringComponents;
   verification_confidence?: number | null;
+  world_state?: Record<string, number>;
+  state_variables?: Record<string, { label?: string; higher_is_better?: boolean; unit?: string }>;
+  available_actions?: Array<Record<string, unknown>>;
+  observation_feed?: Array<Record<string, unknown>>;
+  session_state?: Record<string, unknown>;
+  checkpoint_state?: Record<string, unknown>;
+  phase_state?: Record<string, unknown>;
+  mentor_state?: Record<string, unknown>;
+  scoring_state?: Record<string, unknown>;
+  session_timeline?: Array<Record<string, unknown>>;
+  unlocked_evidence?: string[];
+  evidence_board?: Array<Record<string, unknown>>;
+  stakeholder_state?: Array<Record<string, unknown>>;
+  pressure_events?: Array<Record<string, unknown>>;
   portfolio_evidence_draft: Record<string, unknown>;
   metadata: Record<string, unknown>;
   started_at: string;
@@ -1535,14 +1574,28 @@ export interface SimulationResultEnvelope {
   surface_type?: string;
   pack_ref?: string | null;
   simulation_type?: string;
+  experience_type?: string | null;
   pack_version?: string | null;
   scoring_components?: ScoringComponents;
   verification_confidence?: number | null;
   runtime_state?: Record<string, unknown>;
+  world_state?: Record<string, number>;
+  state_variables?: Record<string, { label?: string; higher_is_better?: boolean; unit?: string }>;
+  available_actions?: Array<Record<string, unknown>>;
+  observation_feed?: Array<Record<string, unknown>>;
+  session_state?: Record<string, unknown>;
+  checkpoint_state?: Record<string, unknown>;
+  phase_state?: Record<string, unknown>;
+  mentor_state?: Record<string, unknown>;
+  scoring_state?: Record<string, unknown>;
   round_index?: number;
   round_context?: Record<string, unknown>;
   round_outcome?: Record<string, unknown>;
   session_timeline?: Array<Record<string, unknown>>;
+  unlocked_evidence?: string[];
+  evidence_board?: Array<Record<string, unknown>>;
+  stakeholder_state?: Array<Record<string, unknown>>;
+  pressure_events?: Array<Record<string, unknown>>;
   completion_state?: CompletionContract | Record<string, unknown>;
   intervention_state?: InterventionEnvelope | Record<string, unknown>;
   execution_descriptor?: ExecutionDescriptor | Record<string, unknown>;
@@ -1575,10 +1628,14 @@ export interface ScoringComponents {
 export interface SimulationDefinitionRef {
   simulation_type: string;
   surface_type?: string;
+  experience_type?: string;
   domain_family: string;
   sdl_version: string;
   pack_version: string;
   criterion_count: number;
+  pack_source?: "static" | "generated";
+  generated_db_id?: number | null;
+  variation_seed?: string | null;
   execution_mode?: string;
   input_contract?: Record<string, unknown>;
   submission_contract?: Record<string, unknown>;

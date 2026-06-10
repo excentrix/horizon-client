@@ -36,9 +36,10 @@ interface MentorLoungeState {
   planBuildMessage: string | null;
   planBuildId: string | null; // The resulting Plan ID
   planBuildTitle: string | null;
+  planBuildType: "plan" | "roadmap" | null; // Distinguishes roadmap vs learning plan generation
   planSessionId: string | null; // The tracking Session ID
   lastPlanActivityAt: number | null; // Timestamp of last WS update
-  setPlanBuildStatus: (status: "idle" | "queued" | "in_progress" | "warning" | "completed" | "failed", message?: string, planId?: string, planTitle?: string) => void;
+  setPlanBuildStatus: (status: "idle" | "queued" | "in_progress" | "warning" | "completed" | "failed", message?: string, planId?: string, planTitle?: string, itemType?: "plan" | "roadmap") => void;
   setPlanSessionId: (sessionId: string | null) => void;
   updateLastPlanActivity: () => void;
   resetPlanBuild: () => void;
@@ -112,16 +113,18 @@ export const useMentorLoungeStore = create<MentorLoungeState>((set) => ({
   planBuildMessage: null,
   planBuildId: null,
   planBuildTitle: null,
+  planBuildType: null,
   planSessionId: null,
   lastPlanActivityAt: null,
-  setPlanBuildStatus: (status: "idle" | "queued" | "in_progress" | "warning" | "completed" | "failed", message?: string, planId?: string, planTitle?: string) =>
-    set({
+  setPlanBuildStatus: (status, message?, planId?, planTitle?, itemType?) =>
+    set((state) => ({
       planBuildStatus: status,
       planBuildMessage: message ?? null,
       planBuildId: planId ?? null,
       planBuildTitle: planTitle ?? null,
+      planBuildType: itemType ?? state.planBuildType,
       lastPlanActivityAt: Date.now(),
-    }),
+    })),
   setPlanSessionId: (sessionId) => set({ planSessionId: sessionId, lastPlanActivityAt: Date.now() }),
   updateLastPlanActivity: () => set({ lastPlanActivityAt: Date.now() }),
   resetPlanBuild: () =>
@@ -130,6 +133,7 @@ export const useMentorLoungeStore = create<MentorLoungeState>((set) => ({
       planBuildMessage: null,
       planBuildId: null,
       planBuildTitle: null,
+      planBuildType: null,
       planSessionId: null,
       lastPlanActivityAt: null,
     }),

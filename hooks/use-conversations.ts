@@ -62,7 +62,6 @@ export function useConversationMessages(conversationId: string | null) {
 
       return chatApi.fetchMessagesPage(conversationId, {
         page: pageParam,
-        ordering: "-sequence_number",
       });
     },
     getNextPageParam: (lastPage) => getPageFromUrl(lastPage.next),
@@ -74,11 +73,7 @@ export function useConversationMessages(conversationId: string | null) {
       return [] as ChatMessage[];
     }
 
-    const combined = result.data.pages.flatMap((page) => page.results ?? []);
-    return combined.sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-    );
+    return result.data.pages.flatMap((page) => page.results ?? []);
   }, [result.data]);
 
   return {

@@ -33,6 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MoodSensor, BackgroundTaskMonitor } from "./DashboardWidgets";
+import { FlowStarter } from "@/components/dashboard/flow-starter";
 import { useNotificationsSocket } from "@/hooks/use-notifications";
 import { cn } from "@/lib/utils";
 import type { LearningPlan, TodayTask, ActivityItem } from "@/types";
@@ -693,6 +694,7 @@ export default function DashboardPage() {
   >([]);
   const [dueCardCount, setDueCardCount] = useState(0);
   const [mentorSending, setMentorSending] = useState(false);
+  const [flowSuggestionShownAt] = useState(() => new Date());
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
@@ -770,21 +772,27 @@ export default function DashboardPage() {
     if (mentorSending) return;
     setMentorSending(true);
     try {
+      // Reuse the most recent conversation if one exists; create only when none do.
+      const existing = await chatApi.listConversations();
+      const existingId = existing?.[0]?.id;
+
+      if (existingId) {
+        if (prompt) {
+          telemetry.track("dashboard_mentor_quickstart", { prompt_length: prompt.length });
+          router.push(`/chat?conversation=${existingId}&message=${encodeURIComponent(prompt)}`);
+        } else {
+          router.push(`/chat?conversation=${existingId}`);
+        }
+        return;
+      }
+
       const convo = await chatApi.createConversation({
-        title: "Dashboard session",
+        title: "Mentor session",
         topic: "Mentor quick-start",
-        ...(activePlan?.specialized_conversation_id ? {} : {}),
       });
       if (prompt) {
-        await chatApi.sendMessage(convo.id, {
-          content: prompt,
-          context: "dashboard",
-          metadata: { source: "dashboard_mentor_card" },
-        });
-        telemetry.track("dashboard_mentor_quickstart", {
-          prompt_length: prompt.length,
-        });
-        router.push(`/chat?conversation=${convo.id}&context=dashboard`);
+        telemetry.track("dashboard_mentor_quickstart", { prompt_length: prompt.length });
+        router.push(`/chat?conversation=${convo.id}&message=${encodeURIComponent(prompt)}`);
       } else {
         router.push(`/chat?conversation=${convo.id}`);
       }
@@ -815,6 +823,33 @@ export default function DashboardPage() {
           </div>
           
         </header>
+
+        {/* ── Re-entry Banner ────────────────────────────────────────────── */}
+        {(() => {
+          const lastTs = activity[0]?.timestamp;
+          if (!lastTs) return null;
+          const daysSince = Math.floor((Date.now() - new Date(lastTs).getTime()) / 86_400_000);
+          if (daysSince < 3) return null;
+          return (
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900/40 dark:bg-amber-950/30">
+              <span className="text-amber-800 dark:text-amber-300">
+                Welcome back! It&apos;s been{" "}
+                <strong>{daysSince} {daysSince === 1 ? "day" : "days"}</strong> since your last session. Ready to pick up where you left off?
+              </span>
+              <button
+                onClick={() => focusTask ? openTask(focusTask) : router.push("/plans")}
+                className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
+              >
+                Resume
+              </button>
+            </div>
+          );
+        })()}
+
+        {/* ── Flow Suggestion ────────────────────────────────────────────── */}
+        {flowData?.suggestion && (
+          <FlowStarter suggestion={flowData.suggestion} shownAt={flowSuggestionShownAt} />
+        )}
 
         {/* ── Responsive 3-column grid ───────────────────────────────────── */}
         {/* Mobile: single column · md: 2-col (col1+col2 / col3 stacks below) · xl: 3-col */}

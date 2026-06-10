@@ -103,7 +103,7 @@ export function VeloAnalysisStatusPill() {
       <p className="mt-1 text-[11px] text-emerald-700">Your Mirror report is available now.</p>
       <div className="mt-2 flex items-center gap-2">
         <Button asChild size="sm" variant="outline" className="h-7 text-xs">
-          <Link href="/mirror">View Mirror</Link>
+          <Link href="/progress">View Progress</Link>
         </Button>
         <button
           type="button"
