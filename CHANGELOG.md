@@ -9,6 +9,23 @@ Versioning policy:
 - else `patch` (fix/docs/chore/refactor/perf/test only).
 - Entries are tracked per commit for precise release traceability.
 
+## v0.2.6 (2026-06-10)
+
+### Added
+- Shell-driven onboarding entry with resume upload and mentor context setup.
+- Re-entry and quick-ask mentor flows across dashboard and chat.
+- Stateful SDL runtime console and playground surface for simulation sessions.
+
+### Changed
+- Old onboarding, audit, and mirror routes were retired in favor of the new shell and redirects.
+- Mentor, dashboard, roadmap, plans, and profile surfaces were updated to align with the new flow.
+- Simulation and plan surfaces now use the stateful playground runtime.
+
+### Commits
+- `5727c3c` feat(onboarding): consolidate onboarding routes into shell-driven flow
+- `0b06441` feat(studio): refresh mentor, dashboard, roadmap, and profile surfaces
+- `4b29d1f` feat(planning): ship stateful simulation console and playground runtime
+
 ## Unreleased
 
 ### Added
