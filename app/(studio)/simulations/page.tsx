@@ -1,13 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { chatApi, planningApi, playgroundApi } from "@/lib/api";
+import { planningApi, playgroundApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
 import type {
-  ChatMessage,
-  DailyTask,
   DomainScenarioPayload,
   PlaygroundEventPayload,
   SimulationDefinitionRef,
@@ -17,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { StatefulSimulationConsole } from "@/components/planning/stateful-simulation-console";
 
 type EventResponse = {
   event_id: string;
@@ -898,18 +896,46 @@ function RuntimeConsole({ envelope }: { envelope: SimulationResultEnvelope }) {
   );
 }
 
+function StatefulSimulationLabConsole({
+  envelope,
+  busy,
+  reflectionValue,
+  onReflectionChange,
+  onApplyAction,
+  onFinalize,
+}: {
+  envelope: SimulationResultEnvelope;
+  busy: boolean;
+  reflectionValue: string;
+  onReflectionChange: (value: string) => void;
+  onApplyAction: (actionId: string) => void;
+  onFinalize: () => void;
+}) {
+  return (
+    <StatefulSimulationConsole
+      envelope={envelope}
+      busy={busy}
+      finalizeBusy={busy}
+      reflectionValue={reflectionValue}
+      onReflectionChange={onReflectionChange}
+      onApplyAction={onApplyAction}
+      onFinalize={onFinalize}
+      emptyStateLabel="No actions yet. Use the panel below to drive the synthetic run."
+    />
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function SimulationLabPage() {
   const isDev = process.env.NODE_ENV === "development";
 
   const [packs, setPacks] = useState<SimulationDefinitionRef[]>([]);
-  const [tasks, setTasks] = useState<DailyTask[]>([]);
-  const [selectedTaskId, setSelectedTaskId] = useState("");
   const [selectedSurfaceType, setSelectedSurfaceType] = useState("simulation_scenario");
   const [selectedSimulationType, setSelectedSimulationType] = useState("");
   const [scenarioPayload, setScenarioPayload] = useState(DEFAULT_SCENARIO_PAYLOAD);
   const [submissionPayload, setSubmissionPayload] = useState(DEFAULT_SUBMISSION);
+  const [statefulReflection, setStatefulReflection] = useState("");
 
   const [activeScenario, setActiveScenario] = useState<DomainScenarioPayload | null>(null);
   const [resultEnvelope, setResultEnvelope] = useState<SimulationResultEnvelope | null>(null);
@@ -917,7 +943,6 @@ export default function SimulationLabPage() {
   const [suiteResults, setSuiteResults] = useState<SuiteResult[]>([]);
   const [suiteRunning, setSuiteRunning] = useState(false);
   const [includeArtifactFlowTests, setIncludeArtifactFlowTests] = useState(false);
-  const [suiteMode, setSuiteMode] = useState<"synthetic" | "selected_task">("synthetic");
   const [surfaceFilter, setSurfaceFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [severityFilter, setSeverityFilter] = useState<string>("all");
@@ -927,11 +952,11 @@ export default function SimulationLabPage() {
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-
-  const selectedTask = useMemo(
-    () => tasks.find((task) => task.id === selectedTaskId) ?? null,
-    [tasks, selectedTaskId]
+  const selectedPack = useMemo(
+    () => packs.find((pack) => pack.simulation_type === selectedSimulationType) ?? null,
+    [packs, selectedSimulationType]
   );
+  const isStatefulTurnBased = selectedPack?.experience_type === "turn_based_sim";
 
   const suiteSummary = useMemo(() => {
     const total = suiteResults.length;
@@ -986,7 +1011,7 @@ export default function SimulationLabPage() {
   const exportSuiteJson = () => {
     const payload = {
       exported_at: new Date().toISOString(),
-      suite_mode: suiteMode,
+      suite_mode: "synthetic",
       release_gate: releaseGate,
       summary: suiteSummary,
       filters: {
@@ -1052,23 +1077,10 @@ export default function SimulationLabPage() {
     async function bootstrap() {
       setLoading(true);
       try {
-        const [defs, today, week] = await Promise.all([
-          planningApi.getSimulationDefinitions(),
-          planningApi.getTodaysTasks(),
-          planningApi.getCalendarTasks({ view: "week" }),
-        ]);
+        const defs = await planningApi.getSimulationDefinitions();
 
         if (!mounted) return;
         setPacks(defs.packs ?? []);
-
-        const deduped = new Map<string, DailyTask>();
-        for (const task of [...(today.tasks ?? []), ...(week.tasks ?? [])]) {
-          deduped.set(task.id, task);
-        }
-        const merged = Array.from(deduped.values());
-        setTasks(merged);
-
-        if (merged[0]) setSelectedTaskId(merged[0].id);
         if (defs.packs?.[0]) setSelectedSimulationType(defs.packs[0].simulation_type);
       } catch (error) {
         telemetry.toastError("Failed to load simulation lab data");
@@ -1094,6 +1106,7 @@ export default function SimulationLabPage() {
     if (submission) {
       setSubmissionPayload(submission);
     }
+    setStatefulReflection("");
   }, [selectedSimulationType]);
 
   const runAction = async (fn: () => Promise<void>) => {
@@ -1108,9 +1121,6 @@ export default function SimulationLabPage() {
       setBusy(false);
     }
   };
-
-  const isUniversalSessionSurface = (surfaceType: string) =>
-    !["simulation_scenario", "code_playground"].includes(surfaceType);
 
   const normalizeInteractionPayload = (): Record<string, unknown> => {
     const parsed = safeParse(submissionPayload);
@@ -1147,6 +1157,7 @@ export default function SimulationLabPage() {
       surface_type: payload.surface_type ?? scenario.surface_type ?? selectedSurfaceType,
       pack_ref: payload.pack_ref ?? scenario.pack_ref ?? scenario.scenario_type,
       simulation_type: scenario.simulation_type ?? scenario.scenario_type,
+      experience_type: scenario.experience_type ?? ((payload.execution_descriptor as Record<string, unknown> | undefined)?.experience_type as string | undefined) ?? null,
       pack_version: scenario.pack_version ?? null,
       scoring_components: scenario.scoring_components,
       verification_confidence: scenario.verification_confidence ?? null,
@@ -1154,6 +1165,13 @@ export default function SimulationLabPage() {
       completion_state: payload.completion_state ?? scenario.completion_state ?? {},
       intervention_state: payload.intervention_state ?? scenario.intervention_state ?? {},
       execution_descriptor: payload.execution_descriptor ?? scenario.execution_descriptor ?? {},
+      world_state: scenario.world_state ?? {},
+      available_actions: scenario.available_actions ?? [],
+      observation_feed: scenario.observation_feed ?? [],
+      session_state: scenario.session_state ?? payload.session_state ?? {},
+      checkpoint_state: scenario.checkpoint_state ?? {},
+      scoring_state: scenario.scoring_state ?? {},
+      session_timeline: scenario.session_timeline ?? [],
       execution_diagnostics: {
         scenario_type: scenario.simulation_type ?? scenario.scenario_type,
         surface_type: payload.surface_type ?? scenario.surface_type ?? selectedSurfaceType,
@@ -1218,12 +1236,6 @@ export default function SimulationLabPage() {
   };
 
   const runStandardSuite = async () => {
-    if (suiteMode === "selected_task" && !selectedTaskId) {
-      telemetry.toastError("Pick a task first");
-      return;
-    }
-
-    const taskId = selectedTaskId;
     const testCases: Array<{
       id: string;
       scenarioId: string;
@@ -1242,10 +1254,7 @@ export default function SimulationLabPage() {
         id: `sim-pack-${pack.simulation_type}`,
         scenarioId: `sim-pack-${pack.simulation_type}`,
         surface: "simulator",
-        label:
-          suiteMode === "synthetic"
-            ? `SDL synthetic usecase: ${pack.simulation_type}`
-            : `SDL pack roundtrip: ${pack.simulation_type}`,
+        label: `SDL synthetic usecase: ${pack.simulation_type}`,
         severity: pack.simulation_type === "code_challenge" ? "critical" : "high",
         run: async () => {
           const scenarioCase = STANDARD_SCENARIOS[pack.simulation_type] ?? { smoke: true };
@@ -1253,73 +1262,30 @@ export default function SimulationLabPage() {
             STANDARD_SUBMISSIONS[pack.simulation_type] ??
             JSON.stringify({ response: "Simulation lab generic submission." });
           const learnerSubmission = safeParse(rawSubmission) as Record<string, unknown> | string | string[];
-
-          if (suiteMode === "synthetic") {
-            const run = await planningApi.runSimulationLabUseCase({
-              simulation_type: pack.simulation_type,
-              surface_type: pack.surface_type,
-              scenario_payload: scenarioCase,
-              learner_submission: learnerSubmission,
-              persist_records: false,
-            });
-            const reportObj = (run.report || {}) as {
-              assertions?: Array<{ passed?: boolean }>;
-            };
-            const assertions = reportObj.assertions || [];
-            const failedAssertions = assertions.filter((item) => !item.passed).length;
-            return {
-              status: run.qualified && failedAssertions === 0 ? "passed" : "failed",
-              details:
-                failedAssertions === 0
-                  ? `status=${run.scenario?.verification_status ?? "n/a"}, confidence=${run.verification_confidence ?? "n/a"}`
-                  : `${failedAssertions} assertion(s) failed`,
-              report: {
-                mode: "synthetic",
-                task_id: run.task_id,
-                scenario_id: run.scenario_id,
-                payload: run.report,
-                pack_version: run.pack_version,
-              },
-            };
-          }
-
-          if (!taskId) {
-            return {
-              status: "failed",
-              details: "No selected task provided for task-bound run.",
-              report: { reason: "missing_task_id" },
-            };
-          }
-
-          const started = await planningApi.startSimulationScenario(taskId, {
+          const run = await planningApi.runSimulationLabUseCase({
+            simulation_type: pack.simulation_type,
             surface_type: pack.surface_type,
-            scenario_type: pack.simulation_type,
             scenario_payload: scenarioCase,
-          });
-          const submitted = await planningApi.submitSimulationScenario(taskId, started.scenario.id, {
             learner_submission: learnerSubmission,
+            persist_records: false,
           });
-          const result = await planningApi.getSimulationScenarioResult(taskId, started.scenario.id);
-          const packVersion = result.pack_version || submitted.pack_version;
-          if (!packVersion) {
-            return {
-              status: "failed",
-              details: "Missing pack_version in result envelope.",
-              report: { started, submitted, result },
-            };
-          }
+          const reportObj = (run.report || {}) as {
+            assertions?: Array<{ passed?: boolean }>;
+          };
+          const assertions = reportObj.assertions || [];
+          const failedAssertions = assertions.filter((item) => !item.passed).length;
           return {
-            status: "passed",
-            details: `status=${result.scenario.verification_status}, confidence=${result.verification_confidence ?? "n/a"}`,
+            status: run.qualified && failedAssertions === 0 ? "passed" : "failed",
+            details:
+              failedAssertions === 0
+                ? `status=${run.scenario?.verification_status ?? "n/a"}, confidence=${run.verification_confidence ?? "n/a"}`
+                : `${failedAssertions} assertion(s) failed`,
             report: {
-              mode: "task_bound",
-              task_id: taskId,
-              scenario_id: started.scenario.id,
-              result: {
-                pack_version: result.pack_version,
-                verification_confidence: result.verification_confidence,
-                efficacy_metrics: result.efficacy_metrics,
-              },
+              mode: "synthetic",
+              task_id: run.task_id,
+              scenario_id: run.scenario_id,
+              payload: run.report,
+              pack_version: run.pack_version,
             },
           };
         },
@@ -1374,125 +1340,13 @@ export default function SimulationLabPage() {
     });
 
     testCases.push({
-      id: "flashcards",
-      scenarioId: "flashcards",
-      surface: "flashcards",
-      label: "Flashcard generation contract",
-      severity: "medium",
-      run: async () => {
-        if (!taskId) {
-          return { status: "skipped", details: "Needs a real task context.", report: { reason: "no_task_selected" } };
-        }
-        const payload = await planningApi.generateFlashcards(taskId, { force: true, count: 4 });
-        const cards = payload.cards ?? [];
-        const valid = cards.length >= 2 && cards.every((card) => card.front.trim() && card.back.trim());
-        return valid
-          ? { status: "passed", details: `${cards.length} cards generated`, report: payload as unknown as Record<string, unknown> }
-          : { status: "failed", details: "Flashcard payload missing front/back entries.", report: payload as unknown as Record<string, unknown> };
-      },
-    });
-
-    testCases.push({
-      id: "micro-practice",
-      scenarioId: "micro-practice",
-      surface: "micro_practice",
-      label: "Micro-practice question contract",
-      severity: "medium",
-      run: async () => {
-        if (!taskId) {
-          return { status: "skipped", details: "Needs a real task context.", report: { reason: "no_task_selected" } };
-        }
-        const payload = await planningApi.generateMicroPractice(taskId, { force: true, count: 3 });
-        const questions = payload.questions ?? [];
-        const valid = questions.length >= 2 && questions.every((q) => q.options.length >= 2 && Number.isInteger(q.correct_index));
-        return valid
-          ? { status: "passed", details: `${questions.length} questions generated`, report: payload as unknown as Record<string, unknown> }
-          : { status: "failed", details: "Invalid quiz contract (options/correct_index).", report: payload as unknown as Record<string, unknown> };
-      },
-    });
-
-    testCases.push({
-      id: "teach-back",
-      scenarioId: "teach-back",
-      surface: "teach_me_back",
-      label: "Teach-me-back message pipeline",
-      severity: "high",
-      run: async () => {
-        if (!taskId) {
-          return { status: "skipped", details: "Needs a real task context.", report: { reason: "no_task_selected" } };
-        }
-        const convo = await planningApi.getOrCreatePlaygroundConversation(taskId);
-        const msg: ChatMessage = await chatApi.sendMessage(convo.conversation_id, {
-          content: "Teach-back test: explain event loops in plain language.",
-          context: "Simulation Lab teach-back contract smoke test.",
-          metadata: {
-            action_type: "feynman_check",
-            skip_intelligence: true,
-            source: "simulation-lab",
-          },
-        });
-        if (!msg?.id) {
-          return { status: "failed", details: "No message id returned from chat send.", report: { conversation_id: convo.conversation_id, msg } };
-        }
-        return {
-          status: "passed",
-          details: `conversation=${convo.conversation_id}`,
-          report: { conversation_id: convo.conversation_id, message_id: msg.id, metadata: msg.metadata },
-        };
-      },
-    });
-
-    testCases.push({
-      id: "mentor-nudge",
-      scenarioId: "mentor-nudge",
-      surface: "mentor_intervention",
-      label: "Proactive nudge trigger loop",
-      severity: "high",
-      run: async () => {
-        if (!taskId) {
-          return { status: "skipped", details: "Needs a real task context.", report: { reason: "no_task_selected" } };
-        }
-        const runId = `suite-${Date.now()}`;
-        let last: EventResponse | null = null;
-        for (let idx = 0; idx < 3; idx += 1) {
-          await planningApi.emitPlaygroundEvent(
-            taskId,
-            toEventPayload("compile_error", {
-              run_id: `${runId}-${idx}`,
-              error_type: "syntax",
-              status: "compilation error",
-            })
-          );
-          last = (await planningApi.emitPlaygroundEvent(
-            taskId,
-            toEventPayload("test_failed", {
-              run_id: `${runId}-${idx}`,
-              error_type: "syntax",
-              status: "failed",
-              meta: { scope: "hidden", source: "simulation-lab-suite" },
-            })
-          )) as EventResponse;
-        }
-        setLatestEvent(last);
-        if (last?.nudge?.message) {
-          return { status: "passed", details: `nudge=${last.nudge.trigger}`, report: { runId, last } };
-        }
-        return {
-          status: "skipped",
-          details: "No nudge in this run (likely cooldown or recent nudge).",
-          report: { runId, last },
-        };
-      },
-    });
-
-    testCases.push({
       id: "canvas-local",
       scenarioId: "canvas-local",
       surface: "canvas",
       label: "Canvas local persistence contract",
       severity: "low",
       run: async () => {
-        const key = `canvas:simulation-lab:${taskId || "synthetic"}`;
+        const key = `canvas:simulation-lab:${selectedSimulationType || "synthetic"}`;
         const html = `<p>Simulation lab canvas test ${Date.now()}</p>`;
         localStorage.setItem(key, html);
         const restored = localStorage.getItem(key);
@@ -1512,17 +1366,7 @@ export default function SimulationLabPage() {
         label: "Canvas proof submission pipeline",
         severity: "medium",
         run: async () => {
-          if (!taskId) {
-            return { status: "skipped", details: "Needs a real task context.", report: { reason: "no_task_selected" } };
-          }
-          const proof = await planningApi.submitTaskProof(taskId, {
-            submission_type: "text",
-            content: `Simulation lab canvas proof ${new Date().toISOString()}`,
-            metadata: { source: "simulation-lab", surface: "canvas" },
-          });
-          return proof.artifact_id
-            ? { status: "passed", details: `artifact=${proof.artifact_id}`, report: proof as unknown as Record<string, unknown> }
-            : { status: "failed", details: "No artifact_id returned for canvas proof.", report: proof as unknown as Record<string, unknown> };
+          return { status: "skipped", details: "Artifact checks are not part of the taskless simulation sandbox.", report: { reason: "taskless_lab" } };
         },
       });
 
@@ -1533,19 +1377,7 @@ export default function SimulationLabPage() {
         label: "Diagram proof upload pipeline",
         severity: "medium",
         run: async () => {
-          if (!taskId) {
-            return { status: "skipped", details: "Needs a real task context.", report: { reason: "no_task_selected" } };
-          }
-          const blob = new Blob(["simulation-lab-diagram"], { type: "image/png" });
-          const file = new File([blob], `diagram-lab-${Date.now()}.png`, { type: "image/png" });
-          const formData = new FormData();
-          formData.append("submission_type", "file");
-          formData.append("content", "Simulation lab diagram upload proof");
-          formData.append("file", file);
-          const proof = await planningApi.submitTaskProof(taskId, formData);
-          return proof.artifact_id
-            ? { status: "passed", details: `artifact=${proof.artifact_id}`, report: proof as unknown as Record<string, unknown> }
-            : { status: "failed", details: "No artifact_id returned for diagram proof upload.", report: proof as unknown as Record<string, unknown> };
+          return { status: "skipped", details: "Artifact checks are not part of the taskless simulation sandbox.", report: { reason: "taskless_lab" } };
         },
       });
     }
@@ -1638,66 +1470,119 @@ export default function SimulationLabPage() {
   };
 
   const handleStartScenario = async () => {
-    if (!selectedTaskId) {
-      telemetry.toastError("Pick a task first");
+    if (!selectedSimulationType) {
+      telemetry.toastError("Pick a simulator pack first");
       return;
     }
     await runAction(async () => {
-      if (isUniversalSessionSurface(selectedSurfaceType)) {
-        const session = await planningApi.startSurfaceSession(selectedTaskId, {
-          surface_type: selectedSurfaceType as
-            | "simulation_scenario"
-            | "code_playground"
-            | "diagram_workspace"
-            | "canvas_workspace"
-            | "flashcard_session"
-            | "teachback_session",
-          pack_ref: selectedSimulationType || undefined,
-          session_payload:
-            (safeParse(scenarioPayload) as Record<string, unknown>) || {},
-        });
-        setActiveScenario(session.session);
-        setResultEnvelope(buildSessionEnvelope(session));
-        telemetry.toastSuccess(
-          `Session started: ${session.session.simulation_type || session.session.scenario_type}`
-        );
-        return;
-      }
-
-      const scenario = await planningApi.startSimulationScenario(selectedTaskId, {
+      const scenario = await planningApi.startSimulationLabSession({
         surface_type: selectedSurfaceType || undefined,
-        scenario_type: selectedSimulationType || undefined,
+        simulation_type: selectedSimulationType,
         scenario_payload:
           (safeParse(scenarioPayload) as Record<string, unknown>) || {},
       });
       setActiveScenario(scenario.scenario);
-      setResultEnvelope(null);
+      setResultEnvelope({
+        scenario: scenario.scenario,
+        surface_type: scenario.surface_type,
+        pack_ref: scenario.pack_ref,
+        simulation_type: scenario.simulation_type,
+        experience_type:
+          scenario.experience_type ??
+          (typeof scenario.execution_descriptor?.experience_type === "string"
+            ? scenario.execution_descriptor.experience_type
+            : null),
+        pack_version: scenario.pack_version ?? null,
+        runtime_state: scenario.runtime_state ?? {},
+        completion_state: scenario.completion_state ?? {},
+        intervention_state: scenario.intervention_state ?? {},
+        execution_descriptor: scenario.execution_descriptor ?? {},
+        world_state: scenario.world_state ?? {},
+        available_actions: scenario.available_actions ?? [],
+        observation_feed: scenario.observation_feed ?? [],
+        session_state: scenario.session_state ?? {},
+        checkpoint_state: scenario.checkpoint_state ?? {},
+        phase_state: scenario.phase_state ?? {},
+        mentor_state: scenario.mentor_state ?? {},
+        scoring_state: scenario.scoring_state ?? {},
+        session_timeline: scenario.session_timeline ?? [],
+        unlocked_evidence: scenario.unlocked_evidence ?? [],
+        evidence_board: scenario.evidence_board ?? [],
+        stakeholder_state: scenario.stakeholder_state ?? [],
+        pressure_events: scenario.pressure_events ?? [],
+        execution_diagnostics: {
+          scenario_type: scenario.scenario.simulation_type || scenario.scenario.scenario_type,
+          surface_type: scenario.surface_type ?? scenario.scenario.surface_type ?? selectedSurfaceType,
+          domain_family: scenario.scenario.domain_family,
+          rubric_breakdown: scenario.scenario.rubric_breakdown ?? {},
+          verification_status: scenario.scenario.verification_status,
+          evaluator_rationale: scenario.scenario.evaluator_rationale ?? {},
+        },
+        efficacy_metrics: {
+          attempt_count: Number(scenario.session_state?.turn_index ?? 0),
+          time_to_verify_seconds: null,
+          error_pattern_count: 0,
+          nudge_count: 0,
+          self_check_pass_rate: 0,
+        },
+      });
+      setStatefulReflection("");
       telemetry.toastSuccess(`Scenario started: ${scenario.scenario.simulation_type || scenario.scenario.scenario_type}`);
     });
   };
 
-  const handleSubmitScenario = async () => {
-    if (!selectedTaskId || !activeScenario?.id) {
+  const handleApplySimulationAction = async (actionId: string) => {
+    if (!activeScenario?.id) {
       telemetry.toastError("Start a scenario first");
       return;
     }
     await runAction(async () => {
-      const surfaceType = activeScenario.surface_type || selectedSurfaceType;
-      if (isUniversalSessionSurface(surfaceType)) {
-        const result = await planningApi.interactSurfaceSession(
-          selectedTaskId,
-          activeScenario.id,
-          { interaction_payload: normalizeInteractionPayload() }
-        );
-        const envelope = buildSessionEnvelope(result);
-        setResultEnvelope(envelope);
-        setActiveScenario(result.session);
-        telemetry.toastSuccess(`Session processed: ${envelope.scenario.verification_status}`);
+      const result = await planningApi.interactSimulationLabSession(
+        activeScenario.id,
+        { action_payload: { action_id: actionId } }
+      );
+      setResultEnvelope(result);
+      setActiveScenario(result.scenario);
+      telemetry.toastSuccess("Simulation action applied");
+    });
+  };
+
+  const handleFinalizeStatefulSimulation = async () => {
+    if (!activeScenario?.id) {
+      telemetry.toastError("Start a scenario first");
+      return;
+    }
+    await runAction(async () => {
+      const result = await planningApi.finalizeSimulationLabSession(
+        activeScenario.id,
+        { learner_submission: { reflection: statefulReflection } }
+      );
+      setResultEnvelope(result);
+      setActiveScenario(result.scenario);
+      telemetry.toastSuccess(`Simulation finalized: ${result.scenario.verification_status}`);
+    });
+  };
+
+  const handleSubmitScenario = async () => {
+    if (!activeScenario?.id) {
+      telemetry.toastError("Start a scenario first");
+      return;
+    }
+    await runAction(async () => {
+      if (
+        String(
+          resultEnvelope?.experience_type ||
+          resultEnvelope?.execution_descriptor?.experience_type ||
+          activeScenario.experience_type ||
+          activeScenario.execution_descriptor?.experience_type ||
+          ""
+        ) === "turn_based_sim"
+      ) {
+        telemetry.toastInfo("Use the action panel and finalize step for this stateful simulator.");
         return;
       }
 
-      const result = await planningApi.submitSimulationScenario(
-        selectedTaskId,
+      const result = await planningApi.finalizeSimulationLabSession(
         activeScenario.id,
         { learner_submission: safeParse(submissionPayload) as Record<string, unknown> | string | string[] }
       );
@@ -1708,34 +1593,34 @@ export default function SimulationLabPage() {
   };
 
   const handleFetchResult = async () => {
-    if (!selectedTaskId || !activeScenario?.id) {
+    if (!activeScenario?.id) {
       telemetry.toastError("Start a scenario first");
       return;
     }
     await runAction(async () => {
-      const surfaceType = activeScenario.surface_type || selectedSurfaceType;
-      if (isUniversalSessionSurface(surfaceType)) {
-        const result = await planningApi.getSurfaceSessionState(selectedTaskId, activeScenario.id);
-        const envelope = buildSessionEnvelope(result);
-        setResultEnvelope(envelope);
-        setActiveScenario(result.session);
-        telemetry.toastSuccess("Latest surface session state loaded");
-        return;
-      }
-
-      const result = await planningApi.getSimulationScenarioResult(selectedTaskId, activeScenario.id);
+      const experienceType = String(
+        resultEnvelope?.experience_type ||
+        resultEnvelope?.execution_descriptor?.experience_type ||
+        activeScenario.experience_type ||
+        activeScenario.execution_descriptor?.experience_type ||
+        ""
+      );
+      const result = experienceType === "turn_based_sim"
+        ? await planningApi.getSimulationLabSessionState(activeScenario.id)
+        : await planningApi.getSimulationLabSessionState(activeScenario.id);
       setResultEnvelope(result);
-      telemetry.toastSuccess("Latest simulation result loaded");
+      telemetry.toastSuccess(experienceType === "turn_based_sim" ? "Latest simulation state loaded" : "Latest simulation result loaded");
     });
   };
 
   const emitEvent = async (payload: PlaygroundEventPayload) => {
-    if (!selectedTaskId) {
-      telemetry.toastError("Pick a task first");
+    const syntheticTaskId = activeScenario?.task;
+    if (!syntheticTaskId) {
+      telemetry.toastError("Start a sandbox session first");
       return;
     }
     await runAction(async () => {
-      const response = await planningApi.emitPlaygroundEvent(selectedTaskId, {
+      const response = await planningApi.emitPlaygroundEvent(String(syntheticTaskId), {
         surface_type: selectedSurfaceType,
         ...payload,
       });
@@ -1751,8 +1636,9 @@ export default function SimulationLabPage() {
   };
 
   const emitFailureLoop = async () => {
-    if (!selectedTaskId) {
-      telemetry.toastError("Pick a task first");
+    const syntheticTaskId = activeScenario?.task;
+    if (!syntheticTaskId) {
+      telemetry.toastError("Start a sandbox session first");
       return;
     }
     await runAction(async () => {
@@ -1760,7 +1646,7 @@ export default function SimulationLabPage() {
       let last: EventResponse | null = null;
       for (let idx = 0; idx < 3; idx += 1) {
         await planningApi.emitPlaygroundEvent(
-          selectedTaskId,
+          String(syntheticTaskId),
           toEventPayload("compile_error", {
             run_id: `${runId}-${idx}`,
             error_type: "syntax",
@@ -1768,7 +1654,7 @@ export default function SimulationLabPage() {
           })
         );
         last = (await planningApi.emitPlaygroundEvent(
-          selectedTaskId,
+          String(syntheticTaskId),
           toEventPayload("test_failed", {
             run_id: `${runId}-${idx}`,
             error_type: "syntax",
@@ -1817,20 +1703,30 @@ export default function SimulationLabPage() {
         <div>
           <h1 className="text-2xl font-semibold">Simulation Lab</h1>
           <p className="text-sm text-muted-foreground">
-            UI test harness for SDL simulators, runtime scoring, and proactive mentor interventions.
+            Dev-only sandbox for SDL simulators. Pick a pack, start a synthetic session, interact with it, then inspect the runtime envelope.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {selectedTask ? (
-            <Link
-              href={`/plans/${selectedTask.learning_plan}/playground?task=${selectedTask.id}`}
-              className="text-sm underline underline-offset-4"
-            >
-              Open selected task in Playground
-            </Link>
-          ) : null}
-        </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>How To Use This Page</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-md border bg-muted/20 p-3 text-sm">
+            <p className="font-medium">1. Choose a pack</p>
+            <p className="mt-1 text-muted-foreground">Select a simulator definition and review its SDL version, surface, and experience type.</p>
+          </div>
+          <div className="rounded-md border bg-muted/20 p-3 text-sm">
+            <p className="font-medium">2. Start synthetic sandbox</p>
+            <p className="mt-1 text-muted-foreground">The lab creates an internal synthetic task automatically. No real learner task is required.</p>
+          </div>
+          <div className="rounded-md border bg-muted/20 p-3 text-sm">
+            <p className="font-medium">3. Interact or finalize</p>
+            <p className="mt-1 text-muted-foreground">Turn-based packs use actions plus final reflection. Legacy packs go straight to submission.</p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -1881,20 +1777,9 @@ export default function SimulationLabPage() {
             <p>{releaseGate.note}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={runStandardSuite} disabled={suiteRunning || (suiteMode === "selected_task" && !selectedTaskId)}>
+            <Button onClick={runStandardSuite} disabled={suiteRunning}>
               {suiteRunning ? "Running Suite…" : "Run Standard Suite"}
             </Button>
-            <label className="inline-flex items-center gap-2 text-sm">
-              Mode
-              <select
-                className="rounded-md border bg-background px-2 py-1 text-xs"
-                value={suiteMode}
-                onChange={(event) => setSuiteMode(event.target.value as "synthetic" | "selected_task")}
-              >
-                <option value="synthetic">Synthetic use cases</option>
-                <option value="selected_task">Selected task only</option>
-              </select>
-            </label>
             <label className="inline-flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -2109,24 +1994,9 @@ export default function SimulationLabPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>1. Context</CardTitle>
+          <CardTitle>1. Sandbox Setup</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-3">
-          <label className="flex flex-col gap-1 text-sm">
-            <span>Task</span>
-            <select
-              className="rounded-md border bg-background px-3 py-2"
-              value={selectedTaskId}
-              onChange={(event) => setSelectedTaskId(event.target.value)}
-            >
-              {tasks.length === 0 ? <option value="">No tasks found</option> : null}
-              {tasks.map((task) => (
-                <option key={task.id} value={task.id}>
-                  {task.title} ({task.task_type}) - {task.scheduled_date}
-                </option>
-              ))}
-            </select>
-          </label>
           <label className="flex flex-col gap-1 text-sm">
             <span>Simulator Pack</span>
             <select
@@ -2136,13 +2006,13 @@ export default function SimulationLabPage() {
             >
               {packs.map((pack) => (
                 <option key={pack.simulation_type} value={pack.simulation_type}>
-                  {pack.simulation_type} · {pack.domain_family} · v{pack.pack_version}
+                  {pack.simulation_type} · SDL v{pack.sdl_version} · {pack.experience_type || "scenario_response"} · {pack.pack_source || "static"}
                 </option>
               ))}
             </select>
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            <span>Surface Type</span>
+            <span>Surface Type Override</span>
             <select
               className="rounded-md border bg-background px-3 py-2"
               value={selectedSurfaceType}
@@ -2156,6 +2026,18 @@ export default function SimulationLabPage() {
               <option value="teachback_session">teachback_session</option>
             </select>
           </label>
+          {selectedPack ? (
+            <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <p>experience: <span className="font-medium text-foreground">{selectedPack.experience_type || "scenario_response"}</span></p>
+              <p className="mt-1">SDL v{selectedPack.sdl_version} · {selectedPack.domain_family}</p>
+              <p className="mt-1">surface: {selectedPack.surface_type || "simulation_scenario"}</p>
+              <p className="mt-1">
+                source: <span className="font-medium text-foreground">{selectedPack.pack_source || "static"}</span>
+                {selectedPack.generated_db_id ? ` · db #${selectedPack.generated_db_id}` : ""}
+                {selectedPack.variation_seed ? ` · seed ${selectedPack.variation_seed}` : ""}
+              </p>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -2173,11 +2055,11 @@ export default function SimulationLabPage() {
             />
           </label>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={handleStartScenario} disabled={busy || !selectedTaskId}>
-              Start Scenario
+            <Button onClick={handleStartScenario} disabled={busy || !selectedSimulationType}>
+              Start Synthetic Sandbox
             </Button>
             <Button variant="outline" onClick={handleFetchResult} disabled={busy || !activeScenario?.id}>
-              Fetch Result
+              {isStatefulTurnBased ? "Fetch State" : "Fetch Result"}
             </Button>
           </div>
           {activeScenario ? (
@@ -2185,8 +2067,13 @@ export default function SimulationLabPage() {
               {JSON.stringify(
                 {
                   id: activeScenario.id,
+                  synthetic_task_id: activeScenario.task,
                   simulation_type: activeScenario.simulation_type || activeScenario.scenario_type,
                   surface_type: activeScenario.surface_type || selectedSurfaceType,
+                  experience_type:
+                    activeScenario.experience_type ||
+                    activeScenario.execution_descriptor?.experience_type ||
+                    selectedPack?.experience_type,
                   verification_status: activeScenario.verification_status,
                   pack_version: activeScenario.pack_version,
                 },
@@ -2200,31 +2087,53 @@ export default function SimulationLabPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>3. Submit + Evaluate</CardTitle>
+          <CardTitle>3. {isStatefulTurnBased ? "Interact + Finalize" : "Submit + Evaluate"}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <label className="flex flex-col gap-1 text-sm">
-            <span>Learner Submission (JSON or text)</span>
-            <textarea
-              className="min-h-28 rounded-md border bg-background p-3 font-mono text-xs"
-              value={submissionPayload}
-              onChange={(event) => setSubmissionPayload(event.target.value)}
-            />
-          </label>
-          <Button onClick={handleSubmitScenario} disabled={busy || !activeScenario?.id}>
-            Submit Scenario
-          </Button>
+          {isStatefulTurnBased ? (
+            <div className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
+              This pack uses the live action panel below. Apply actions first, then write the final reflection inside the stateful console.
+            </div>
+          ) : (
+            <label className="flex flex-col gap-1 text-sm">
+              <span>Learner Submission (JSON or text)</span>
+              <textarea
+                className="min-h-28 rounded-md border bg-background p-3 font-mono text-xs"
+                value={submissionPayload}
+                onChange={(event) => setSubmissionPayload(event.target.value)}
+              />
+            </label>
+          )}
+          {!isStatefulTurnBased ? (
+            <Button onClick={handleSubmitScenario} disabled={busy || !activeScenario?.id}>
+              Submit Scenario
+            </Button>
+          ) : null}
           {resultEnvelope ? (
-            <RuntimeConsole envelope={resultEnvelope} />
+            isStatefulTurnBased ? (
+              <StatefulSimulationLabConsole
+                envelope={resultEnvelope}
+                busy={busy}
+                reflectionValue={statefulReflection}
+                onReflectionChange={setStatefulReflection}
+                onApplyAction={handleApplySimulationAction}
+                onFinalize={handleFinalizeStatefulSimulation}
+              />
+            ) : (
+              <RuntimeConsole envelope={resultEnvelope} />
+            )
           ) : null}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>4. Mentor Trigger Checks</CardTitle>
+          <CardTitle>4. Runtime Events</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            These event controls target the current synthetic sandbox task behind the active scenario.
+          </p>
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
@@ -2236,11 +2145,11 @@ export default function SimulationLabPage() {
                   })
                 )
               }
-              disabled={busy || !selectedTaskId}
+              disabled={busy || !activeScenario?.id}
             >
               Emit Idle Event
             </Button>
-            <Button variant="outline" onClick={emitFailureLoop} disabled={busy || !selectedTaskId}>
+            <Button variant="outline" onClick={emitFailureLoop} disabled={busy || !activeScenario?.id}>
               Emit 3x Failure Loop
             </Button>
             <Button
@@ -2252,7 +2161,7 @@ export default function SimulationLabPage() {
                   })
                 )
               }
-              disabled={busy || !selectedTaskId}
+              disabled={busy || !activeScenario?.id}
             >
               Emit Hint Requested
             </Button>
@@ -2271,7 +2180,7 @@ export default function SimulationLabPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>5. Learning Runtime Console</CardTitle>
+          <CardTitle>5. Runtime Console</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
@@ -2288,6 +2197,10 @@ export default function SimulationLabPage() {
                       runtime_state: resultEnvelope.runtime_state,
                       completion_state: resultEnvelope.completion_state,
                       intervention_state: resultEnvelope.intervention_state,
+                      world_state: resultEnvelope.world_state,
+                      session_state: resultEnvelope.session_state,
+                      checkpoint_state: resultEnvelope.checkpoint_state,
+                      scoring_state: resultEnvelope.scoring_state,
                     }
                   : null,
                 latest_event: latestEvent

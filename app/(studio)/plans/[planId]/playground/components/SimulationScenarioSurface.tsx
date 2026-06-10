@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { planningApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
 import type { DomainScenarioPayload, ExecutionDescriptor, SimulationResultEnvelope } from "@/types";
+import { StatefulSimulationSurface } from "./StatefulSimulationSurface";
 
 interface SimulationScenarioSurfaceProps {
   taskId: string;
@@ -265,6 +266,7 @@ export function SimulationScenarioSurface({
   useEffect(() => {
     if (!taskId) return;
     if ((executionDescriptor?.surface_type || "simulation_scenario") !== "simulation_scenario") return;
+    if (String(executionDescriptor?.experience_type || "").trim() === "turn_based_sim") return;
     if (scenario) return;
 
     let cancelled = false;
@@ -310,6 +312,24 @@ export function SimulationScenarioSurface({
   );
   const contextRows = useMemo(() => summarizeContext(scenarioPayload), [scenarioPayload]);
   const criteriaRows = useMemo(() => normalizeSections(verificationCriteria), [verificationCriteria]);
+  const experienceType = String(
+    executionDescriptor?.experience_type ||
+      scenario?.experience_type ||
+      scenario?.execution_descriptor?.experience_type ||
+      "",
+  ).trim();
+
+  if (experienceType === "turn_based_sim") {
+    return (
+      <StatefulSimulationSurface
+        taskId={taskId}
+        taskTitle={taskTitle}
+        taskDescription={taskDescription}
+        executionDescriptor={executionDescriptor}
+        onSubmissionProcessed={onSubmissionProcessed}
+      />
+    );
+  }
 
   const handleSubmit = async () => {
     if (!scenario?.id || !submission.trim()) return;
