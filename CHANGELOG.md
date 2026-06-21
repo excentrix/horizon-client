@@ -26,6 +26,26 @@ Versioning policy:
 - `0b06441` feat(studio): refresh mentor, dashboard, roadmap, and profile surfaces
 - `4b29d1f` feat(planning): ship stateful simulation console and playground runtime
 
+## v0.2.7 (2026-06-21)
+
+### Added
+- Public portfolio visibility controls and route wiring for the updated studio shell.
+- Simulation debrief and calendar-entry surfaces for the planning runtime.
+
+### Changed
+- Onboarding, mentor, dashboard, chat, roadmap, profile, and plans surfaces were refreshed to match the new studio flow.
+- Studio navigation, charting, task preview, and redirect behavior were hardened for the latest routing and layout mix.
+- Planning schedule management now opens the full calendar view and accepts the complete plan model.
+
+### Commits
+- `57fe9f2` fix(studio): refine onboarding, hq, settings, and mirror api wiring
+- `9580086` feat(portfolio): add visibility toggle for public portfolio settings
+- `5727c3c` feat(onboarding): consolidate onboarding routes into shell-driven flow
+- `0b06441` feat(studio): refresh mentor, dashboard, roadmap, and profile surfaces
+- `4b29d1f` feat(planning): ship stateful simulation console and playground runtime
+- `c405952` feat(planning): add simulation debrief and schedule surfaces
+- `a0464d2` feat(studio): refresh mentor, chat, and dashboard surfaces
+
 ## Unreleased
 
 ### Added
