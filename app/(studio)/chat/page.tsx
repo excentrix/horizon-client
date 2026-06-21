@@ -1,25 +1,48 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import posthog from "posthog-js";
 import { useAuth } from "@/context/AuthContext";
 import { ConversationList } from "@/components/mentor-lounge/conversation-list";
-import { MessageFeed } from "@/components/mentor-lounge/message-feed";
+import { MessageFeed, CHAT_WALLPAPER_SVG } from "@/components/mentor-lounge/message-feed";
 import { MessageComposer } from "@/components/mentor-lounge/message-composer";
-import { useConversations, useConversationMessages } from "@/hooks/use-conversations";
+import {
+  useConversations,
+  useConversationMessages,
+} from "@/hooks/use-conversations";
 import { useMentorLoungeStore } from "@/stores/mentor-lounge-store";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { getPersonaTheme } from "@/lib/persona-theme";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { useCreatePlanFromConversation, usePlan } from "@/hooks/use-plans";
 import { telemetry } from "@/lib/telemetry";
 import { CreateConversationModal } from "@/components/mentor-lounge/create-conversation-modal";
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle } from "lucide-react";
 import type { MentorAction, PlanCreationResponse } from "@/types";
 import { useNotifications } from "@/context/NotificationContext";
 import { SafetyAlert } from "@/components/mentor-lounge/safety-alert";
@@ -50,26 +73,26 @@ import { usePlanSessionPoller } from "@/hooks/use-plan-poller";
 
 // Stage to progress percentage mapping
 const STAGE_PROGRESS_MAP: Record<string, number> = {
-  'analysis_started': 5,
-  'core_analysis_started': 20,
-  'core_analysis_completed': 40,
-  'wellness_analysis_started': 50,
-  'wellness_analysis_completed': 50,
-  'crisis_analysis_started': 60,
-  'crisis_analysis_completed': 60,
-  'support_analysis_started': 70,
-  'support_analysis_completed': 70,
-  'saving_analysis': 75,
-  'analysis_saved': 75,
-  'extract_start': 80,
-  'domain_extracted': 82,
-  'extract_complete': 85,
-  'tracking_start': 90,
-  'domain_tracked': 92,
-  'tracking_complete': 95,
-  'analysis_successful': 100,
-  'analysis_complete': 100,
-  'analysis_completed': 100,
+  analysis_started: 5,
+  core_analysis_started: 20,
+  core_analysis_completed: 40,
+  wellness_analysis_started: 50,
+  wellness_analysis_completed: 50,
+  crisis_analysis_started: 60,
+  crisis_analysis_completed: 60,
+  support_analysis_started: 70,
+  support_analysis_completed: 70,
+  saving_analysis: 75,
+  analysis_saved: 75,
+  extract_start: 80,
+  domain_extracted: 82,
+  extract_complete: 85,
+  tracking_start: 90,
+  domain_tracked: 92,
+  tracking_complete: 95,
+  analysis_successful: 100,
+  analysis_complete: 100,
+  analysis_completed: 100,
 };
 
 interface StageHistoryEntry {
@@ -83,11 +106,13 @@ const mentorActionKey = (action: MentorAction) =>
 
 export default function ChatPage() {
   return (
-    <Suspense fallback={
-      <div className="flex h-screen w-full items-center justify-center bg-background/50 backdrop-blur-sm">
-        <Brain className="h-8 w-8 animate-pulse text-primary" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex h-screen w-full items-center justify-center bg-background/50 backdrop-blur-sm">
+          <Brain className="h-8 w-8 animate-pulse text-primary" />
+        </div>
+      }
+    >
       <ChatContent />
     </Suspense>
   );
@@ -98,11 +123,11 @@ function ChatContent() {
   const router = useRouter();
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
-  const searchParamsString = (searchParams?.toString() ?? "");
+  const searchParamsString = searchParams?.toString() ?? "";
   const conversationFromQuery = searchParams?.get("conversation");
   const contextFromQuery = searchParams?.get("context");
   const queryClient = useQueryClient();
-  
+
   const selectedConversationId = useMentorLoungeStore(
     (state) => state.selectedConversationId,
   );
@@ -117,12 +142,12 @@ function ChatContent() {
     (state) => state.setMentorActions,
   );
   const planUpdates = useMentorLoungeStore((state) => state.planUpdates);
-  const missingInformation = useMentorLoungeStore((state) => state.missingInformation);
-  
-  const {
-    data: conversations = [],
-    isLoading: conversationsLoading,
-  } = useConversations();
+  const missingInformation = useMentorLoungeStore(
+    (state) => state.missingInformation,
+  );
+
+  const { data: conversations = [], isLoading: conversationsLoading } =
+    useConversations();
 
   const {
     messages,
@@ -152,26 +177,36 @@ function ChatContent() {
 
   const personaTheme = getPersonaTheme(activeConversation?.ai_personality);
   const activeListClass = personaTheme.conversationActive;
-  
+
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [isReportModalOpen, setReportModalOpen] = useState(false);
   const [isInsightsOpen, setInsightsOpen] = useState(false);
-  
+
   // Analysis history state
-  const [analysisHistory, setAnalysisHistory] = useState<Array<{
-    id: string;
-    conversation_id: string;
-    conversation_title: string;
-    status: 'running' | 'completed' | 'failed';
-    started_at: string;
-    completed_at?: string;
-    progress?: number;
-    current_stage?: string;
-    stage_messages?: Array<{stage: string; message: string; timestamp: string}>;
-    results?: Record<string, unknown>;
-  }>>([]);
-  const [analysisByConversation, setAnalysisByConversation] = useState<Record<string, Record<string, unknown>>>({});
-  const [latestPlan, setLatestPlan] = useState<PlanCreationResponse | null>(null);
+  const [analysisHistory, setAnalysisHistory] = useState<
+    Array<{
+      id: string;
+      conversation_id: string;
+      conversation_title: string;
+      status: "running" | "completed" | "failed";
+      started_at: string;
+      completed_at?: string;
+      progress?: number;
+      current_stage?: string;
+      stage_messages?: Array<{
+        stage: string;
+        message: string;
+        timestamp: string;
+      }>;
+      results?: Record<string, unknown>;
+    }>
+  >([]);
+  const [analysisByConversation, setAnalysisByConversation] = useState<
+    Record<string, Record<string, unknown>>
+  >({});
+  const [latestPlan, setLatestPlan] = useState<PlanCreationResponse | null>(
+    null,
+  );
   const [analysisJobRunning, setAnalysisJobRunning] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return Boolean(localStorage.getItem("resumeAnalysisJobId"));
@@ -181,7 +216,10 @@ function ChatContent() {
   useEffect(() => {
     if (!analysisJobRunning) return;
     const jobId = localStorage.getItem("resumeAnalysisJobId");
-    if (!jobId) { setAnalysisJobRunning(false); return; }
+    if (!jobId) {
+      setAnalysisJobRunning(false);
+      return;
+    }
     // WS event will also dismiss it; this is the polling fallback
     const interval = window.setInterval(async () => {
       try {
@@ -190,7 +228,9 @@ function ChatContent() {
           localStorage.removeItem("resumeAnalysisJobId");
           setAnalysisJobRunning(false);
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }, 3000);
     return () => window.clearInterval(interval);
   }, [analysisJobRunning]);
@@ -205,10 +245,18 @@ function ChatContent() {
   const [intakeError, setIntakeError] = useState<string | null>(null);
   const [intakeModalOpen, setIntakeModalOpen] = useState(false);
   const [intakePreviewLoading, setIntakePreviewLoading] = useState(false);
-  const [intakePreview, setIntakePreview] = useState<Record<string, unknown> | null>(null);
-  const [intakeState, setIntakeState] = useState<Record<string, unknown> | null>(null);
+  const [intakePreview, setIntakePreview] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [intakeState, setIntakeState] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
   const [intakeSubmitted, setIntakeSubmitted] = useState(false);
-  const [dismissedMentorActionKeys, setDismissedMentorActionKeys] = useState<string[]>([]);
+  const [dismissedMentorActionKeys, setDismissedMentorActionKeys] = useState<
+    string[]
+  >([]);
   const [softGateDialogOpen, setSoftGateDialogOpen] = useState(false);
   const [softGatePayload, setSoftGatePayload] = useState<{
     message?: string;
@@ -245,14 +293,20 @@ function ChatContent() {
         ? `${intakeMissing} details left`
         : "Collecting insights";
   const mentorStateV2 =
-    (intakeState?.mentor_state_v2 as Record<string, unknown> | undefined) ?? null;
+    (intakeState?.mentor_state_v2 as Record<string, unknown> | undefined) ??
+    null;
   const debriefMissingFields = Array.isArray(mentorStateV2?.missing_fields)
     ? (mentorStateV2?.missing_fields as string[])
     : [];
   const debriefTotal = 5;
-  const debriefCompleted = Math.max(0, debriefTotal - debriefMissingFields.length);
+  const debriefCompleted = Math.max(
+    0,
+    debriefTotal - debriefMissingFields.length,
+  );
   const debriefStage =
-    typeof mentorStateV2?.stage === "string" ? (mentorStateV2.stage as string) : "exploring";
+    typeof mentorStateV2?.stage === "string"
+      ? (mentorStateV2.stage as string)
+      : "exploring";
 
   useEffect(() => {
     if (forceConversationList) {
@@ -265,11 +319,19 @@ function ChatContent() {
     if (!queryConversation) {
       return;
     }
-    const exists = conversations.some((conversation) => conversation.id === queryConversation);
+    const exists = conversations.some(
+      (conversation) => conversation.id === queryConversation,
+    );
     if (exists) {
       setSelectedConversationId(queryConversation);
     }
-  }, [conversations, forceConversationList, searchParams, selectedConversationId, setSelectedConversationId]);
+  }, [
+    conversations,
+    forceConversationList,
+    searchParams,
+    selectedConversationId,
+    setSelectedConversationId,
+  ]);
 
   useEffect(() => {
     if (!forceConversationList) {
@@ -282,9 +344,15 @@ function ChatContent() {
   }, [forceConversationList, searchParams]);
 
   useEffect(() => {
-    const shouldSeedKickoff = analysisJobRunning || contextFromQuery === "mirror_review";
+    const shouldSeedKickoff =
+      analysisJobRunning || contextFromQuery === "mirror_review";
     if (!shouldSeedKickoff) return;
-    if (selectedConversationId || conversations.length > 0 || conversationsLoading) return;
+    if (
+      selectedConversationId ||
+      conversations.length > 0 ||
+      conversationsLoading
+    )
+      return;
     if (autoPromptedMentorRef.current) return;
     autoPromptedMentorRef.current = true;
 
@@ -327,7 +395,9 @@ function ChatContent() {
 
   useEffect(() => {
     setIntakeState(
-      (activeConversation?.intake_state as Record<string, unknown> | undefined) ?? null,
+      (activeConversation?.intake_state as
+        | Record<string, unknown>
+        | undefined) ?? null,
     );
   }, [activeConversation?.id, activeConversation?.intake_state]);
 
@@ -335,13 +405,15 @@ function ChatContent() {
     if (!messages.length) {
       return;
     }
-    const latestWithState = [...messages].reverse().find((message) => message.metadata?.intake_state);
+    const latestWithState = [...messages]
+      .reverse()
+      .find((message) => message.metadata?.intake_state);
     if (latestWithState?.metadata?.intake_state) {
-      setIntakeState(latestWithState.metadata.intake_state as Record<string, unknown>);
+      setIntakeState(
+        latestWithState.metadata.intake_state as Record<string, unknown>,
+      );
     }
   }, [messages]);
-
-
 
   const handleCompleteMentorIntake = useCallback(async () => {
     if (!activeConversation?.id) return;
@@ -360,13 +432,13 @@ function ChatContent() {
       setIntakeSubmitted(true);
       setIntakeModalOpen(false);
     } catch (err: unknown) {
-      setIntakeError(err instanceof Error ? err.message : "Something went wrong");
+      setIntakeError(
+        err instanceof Error ? err.message : "Something went wrong",
+      );
     } finally {
       setIntakeSubmitting(false);
     }
-  }, [
-    activeConversation?.id,
-  ]);
+  }, [activeConversation?.id]);
 
   const handlePreviewMentorIntake = useCallback(async () => {
     if (!activeConversation?.id) return;
@@ -385,7 +457,9 @@ function ChatContent() {
       setIntakePreview((data.intake_data as Record<string, unknown>) || {});
       setIntakeModalOpen(true);
     } catch (err: unknown) {
-      setIntakeError(err instanceof Error ? err.message : "Something went wrong");
+      setIntakeError(
+        err instanceof Error ? err.message : "Something went wrong",
+      );
     } finally {
       setIntakePreviewLoading(false);
     }
@@ -401,14 +475,14 @@ function ChatContent() {
   const fetchLatestAnalysis = useCallback(
     async (conversationId: string, options?: { silent?: boolean }) => {
       try {
-        const response = await intelligenceApi.getConversationAnalysis(conversationId);
+        const response =
+          await intelligenceApi.getConversationAnalysis(conversationId);
         if (!response) {
           return null;
         }
-        const metadata =
-          (response.analysis_metadata ??
-            response.analysis_results ??
-            {}) as Record<string, unknown>;
+        const metadata = (response.analysis_metadata ??
+          response.analysis_results ??
+          {}) as Record<string, unknown>;
 
         if (!options?.silent) {
           setAnalysisByConversation((previous) => {
@@ -416,18 +490,19 @@ function ChatContent() {
             const history = Array.isArray(prior.stage_history)
               ? (prior.stage_history as StageHistoryEntry[])
               : [];
-            const completionEntry: StageHistoryEntry | null = response.analyzed_at
-              ? {
-                  stage: "analysis_complete",
-                  message: "Analysis synchronized",
-                  timestamp: response.analyzed_at,
-                }
-              : null;
+            const completionEntry: StageHistoryEntry | null =
+              response.analyzed_at
+                ? {
+                    stage: "analysis_complete",
+                    message: "Analysis synchronized",
+                    timestamp: response.analyzed_at,
+                  }
+                : null;
 
             const mergedHistory =
               completionEntry &&
               !history.some(
-                (entry) => entry.timestamp === completionEntry.timestamp
+                (entry) => entry.timestamp === completionEntry.timestamp,
               )
                 ? [...history, completionEntry].slice(-stageHistoryLimit)
                 : history;
@@ -439,7 +514,8 @@ function ChatContent() {
                 analysis_results: metadata,
                 analysis_record: response,
                 message:
-                  response.urgency_level && typeof response.urgency_level === "string"
+                  response.urgency_level &&
+                  typeof response.urgency_level === "string"
                     ? `Urgency level: ${response.urgency_level}`
                     : "Latest intelligence ready",
                 progress_update: { status: "analysis_complete" },
@@ -450,8 +526,8 @@ function ChatContent() {
         }
         return response;
       } catch (error: unknown) {
-        const axiosStatus =
-          (error as { response?: { status?: number } })?.response?.status;
+        const axiosStatus = (error as { response?: { status?: number } })
+          ?.response?.status;
         if (axiosStatus === 404) {
           return null;
         }
@@ -464,7 +540,7 @@ function ChatContent() {
         return null;
       }
     },
-    [stageHistoryLimit]
+    [stageHistoryLimit],
   );
 
   useEffect(() => {
@@ -477,30 +553,30 @@ function ChatContent() {
   useEffect(() => {
     const fetchAnalysisHistory = async () => {
       if (!user) return;
-      
+
       try {
         const data = await intelligenceApi.getMyAnalyses();
         setAnalysisHistory(data);
       } catch (error) {
-        console.error('Failed to fetch analysis history:', error);
+        console.error("Failed to fetch analysis history:", error);
       }
     };
-    
+
     fetchAnalysisHistory();
   }, [user]);
 
-useEffect(() => {
-  setComposerDraft("");
-  setTypingStatus(false);
-  setLatestPlan(null);
-  setMentorActions([]);
-  setDismissedMentorActionKeys([]);
-}, [
-  selectedConversationId,
-  setComposerDraft,
-  setTypingStatus,
-  setMentorActions,
-]);
+  useEffect(() => {
+    setComposerDraft("");
+    setTypingStatus(false);
+    setLatestPlan(null);
+    setMentorActions([]);
+    setDismissedMentorActionKeys([]);
+  }, [
+    selectedConversationId,
+    setComposerDraft,
+    setTypingStatus,
+    setMentorActions,
+  ]);
 
   // Seed composer draft from ?message= query param (used by dashboard quick-ask)
   useEffect(() => {
@@ -508,7 +584,7 @@ useEffect(() => {
     if (msg && selectedConversationId) {
       setComposerDraft(decodeURIComponent(msg));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversationId]);
 
   useEffect(() => {
@@ -519,11 +595,15 @@ useEffect(() => {
     fetchLatestAnalysis(selectedConversationId, { silent: true });
   }, [selectedConversationId, fetchLatestAnalysis, clearAnalysisPolling]);
 
-  const planBuildStatus = useMentorLoungeStore(state => state.planBuildStatus);
-  const planBuildId = useMentorLoungeStore(state => state.planBuildId);
-  const planBuildTitle = useMentorLoungeStore(state => state.planBuildTitle);
-  const planBuildType = useMentorLoungeStore(state => state.planBuildType);
-  const mirrorAnalysisReady = useMentorLoungeStore(state => state.mirrorAnalysisReady);
+  const planBuildStatus = useMentorLoungeStore(
+    (state) => state.planBuildStatus,
+  );
+  const planBuildId = useMentorLoungeStore((state) => state.planBuildId);
+  const planBuildTitle = useMentorLoungeStore((state) => state.planBuildTitle);
+  const planBuildType = useMentorLoungeStore((state) => state.planBuildType);
+  const mirrorAnalysisReady = useMentorLoungeStore(
+    (state) => state.mirrorAnalysisReady,
+  );
   const planIdFromQuery = searchParams?.get("plan");
   const effectivePlanId =
     planBuildId ?? planIdFromQuery ?? latestPlan?.learning_plan_id ?? undefined;
@@ -536,9 +616,15 @@ useEffect(() => {
     } else {
       params.delete("conversation");
     }
-    const allowPlanParam = contextFromQuery !== "mirror_review" && contextFromQuery !== "onboarding_kickoff";
+    const allowPlanParam =
+      contextFromQuery !== "mirror_review" &&
+      contextFromQuery !== "onboarding_kickoff";
     const desiredPlanId = allowPlanParam
-      ? (planBuildId ?? latestPlan?.learning_plan_id ?? planIdFromQuery ?? lastPlanId ?? null)
+      ? (planBuildId ??
+        latestPlan?.learning_plan_id ??
+        planIdFromQuery ??
+        lastPlanId ??
+        null)
       : null;
     if (desiredPlanId) {
       params.set("plan", desiredPlanId);
@@ -596,7 +682,8 @@ useEffect(() => {
       }
     };
     window.addEventListener("mentor_stage_complete", onStageComplete);
-    return () => window.removeEventListener("mentor_stage_complete", onStageComplete);
+    return () =>
+      window.removeEventListener("mentor_stage_complete", onStageComplete);
   }, [queryClient, selectedConversationId]);
 
   // Refresh messages when a proactive mentor message arrives via WS
@@ -610,7 +697,8 @@ useEffect(() => {
       }
     };
     window.addEventListener("proactive_mentor_message", handler);
-    return () => window.removeEventListener("proactive_mentor_message", handler);
+    return () =>
+      window.removeEventListener("proactive_mentor_message", handler);
   }, [selectedConversationId, queryClient]);
 
   useEffect(() => {
@@ -700,7 +788,9 @@ useEffect(() => {
         const history = Array.isArray(prior.stage_history)
           ? (prior.stage_history as StageHistoryEntry[])
           : [];
-        const updatedHistory = [...history, stageEntry].slice(-stageHistoryLimit);
+        const updatedHistory = [...history, stageEntry].slice(
+          -stageHistoryLimit,
+        );
 
         const snapshot: Record<string, unknown> = {
           ...prior,
@@ -764,31 +854,39 @@ useEffect(() => {
       if (stage) {
         const stageDescriptor = describeStageEvent(payload);
         const description = stageDescriptor?.message;
-        
-        if (description && typeof description === 'string') {
+
+        if (description && typeof description === "string") {
           // Map stage to progress percentage
           const mappedProgress = STAGE_PROGRESS_MAP[stage];
-          const currentProgress = typeof payload.progress === 'number' ? payload.progress : mappedProgress;
-          
+          const currentProgress =
+            typeof payload.progress === "number"
+              ? payload.progress
+              : mappedProgress;
+
           // Update analysis history with new stage message
-          setAnalysisHistory(prev => prev.map(analysis => {
-            if (analysis.conversation_id === conversationId && analysis.status === 'running') {
-              return {
-                ...analysis,
-                current_stage: stage,
-                stage_messages: [
-                  ...(analysis.stage_messages || []),
-                  {
-                    stage,
-                    message: description,
-                    timestamp: new Date().toISOString()
-                  }
-                ],
-                progress: currentProgress ?? analysis.progress ?? 0,
-              };
-            }
-            return analysis;
-          }));
+          setAnalysisHistory((prev) =>
+            prev.map((analysis) => {
+              if (
+                analysis.conversation_id === conversationId &&
+                analysis.status === "running"
+              ) {
+                return {
+                  ...analysis,
+                  current_stage: stage,
+                  stage_messages: [
+                    ...(analysis.stage_messages || []),
+                    {
+                      stage,
+                      message: description,
+                      timestamp: new Date().toISOString(),
+                    },
+                  ],
+                  progress: currentProgress ?? analysis.progress ?? 0,
+                };
+              }
+              return analysis;
+            }),
+          );
         }
       }
 
@@ -803,7 +901,7 @@ useEffect(() => {
       const normalizedEvent = eventType?.toLowerCase();
       const isErrorEvent =
         normalizedEvent === "analysis_error" || stage === "analysis_failed";
-       const isFinalEvent =
+      const isFinalEvent =
         normalizedEvent === "analysis_complete" ||
         normalizedEvent === "analysis_completed" ||
         progressStatus === "completed" ||
@@ -812,20 +910,32 @@ useEffect(() => {
 
       if (isFinalEvent || isErrorEvent) {
         // UPDATE ANALYSIS HISTORY to mark as complete/failed
-        setAnalysisHistory(prev => prev.map(analysis => {
-          if (analysis.conversation_id === conversationId && analysis.status === 'running') {
-            return {
-              ...analysis,
-              status: isErrorEvent ? 'failed' as const : 'completed' as const,
-              completed_at: new Date().toISOString(),
-              progress: 100,
-              results: hasAnalysisSummary ? payload as Record<string, unknown> : analysis.results,
-            };
-          }
-          return analysis;
-        }));
-        
-        if (selectedConversationId && conversationId === selectedConversationId) {
+        setAnalysisHistory((prev) =>
+          prev.map((analysis) => {
+            if (
+              analysis.conversation_id === conversationId &&
+              analysis.status === "running"
+            ) {
+              return {
+                ...analysis,
+                status: isErrorEvent
+                  ? ("failed" as const)
+                  : ("completed" as const),
+                completed_at: new Date().toISOString(),
+                progress: 100,
+                results: hasAnalysisSummary
+                  ? (payload as Record<string, unknown>)
+                  : analysis.results,
+              };
+            }
+            return analysis;
+          }),
+        );
+
+        if (
+          selectedConversationId &&
+          conversationId === selectedConversationId
+        ) {
           clearAnalysisPolling();
           // AUTO-REFRESH: Fetch latest analysis results to update UI
           setTimeout(() => {
@@ -836,8 +946,7 @@ useEffect(() => {
       }
     }
 
-    processedStageEventSeqRef.current =
-      pending[pending.length - 1].__seq;
+    processedStageEventSeqRef.current = pending[pending.length - 1].__seq;
   }, [
     analysisEvents,
     stageHistoryLimit,
@@ -847,16 +956,18 @@ useEffect(() => {
   ]);
 
   const analysisSummary = selectedConversationId
-    ? analysisByConversation[selectedConversationId] ?? null
+    ? (analysisByConversation[selectedConversationId] ?? null)
     : null;
   const analysisResults = analysisSummary?.analysis_results as
     | Record<string, unknown>
     | undefined;
   const hasAnalysisResults =
     Boolean(analysisResults) && Object.keys(analysisResults ?? {}).length > 0;
-  
+
   // Disable if pending, or if we have an active plan build in progress
-  const isPlanBuilding = ["queued", "in_progress", "warning"].includes(planBuildStatus);
+  const isPlanBuilding = ["queued", "in_progress", "warning"].includes(
+    planBuildStatus,
+  );
   const disablePlanButton =
     !selectedConversationId || createPlan.isPending || isPlanBuilding;
   const disableRoadmapButton = disablePlanButton;
@@ -864,7 +975,13 @@ useEffect(() => {
   // Aria readiness action popup state
   const [pendingAction, setPendingAction] = useState<{
     action: "confirm_roadmap" | "confirm_learning_plan";
-    roadmapSummary?: { title: string; target_role: string; stages: number; estimated_weeks: number; stage_names: string[] };
+    roadmapSummary?: {
+      title: string;
+      target_role: string;
+      stages: number;
+      estimated_weeks: number;
+      stage_names: string[];
+    };
     planSummary?: { title: string; estimated_hours: number; topics: string[] };
   } | null>(null);
 
@@ -872,7 +989,7 @@ useEffect(() => {
     async (content: string) => {
       await sendMessage(content);
     },
-    [sendMessage]
+    [sendMessage],
   );
 
   // Intent-triggered questions widget (populated by generate_roadmap tool via ask_questions action)
@@ -887,26 +1004,32 @@ useEffect(() => {
   // Watch incoming messages for Aria action signals
   useEffect(() => {
     if (!messages.length) return;
-    const latest = [...messages].reverse().find(
-      (m) => m.sender_type === "ai" && m.metadata?.action
-    );
+    const latest = [...messages]
+      .reverse()
+      .find((m) => m.sender_type === "ai" && m.metadata?.action);
     if (!latest) return;
     const action = latest.metadata?.action as string | undefined;
     if (action === "roadmap_generating") {
       router.push("/roadmap?generating=1");
-    } else if (action === "ask_questions" && !pendingQuestions && !pendingAction) {
+    } else if (
+      action === "ask_questions" &&
+      !pendingQuestions &&
+      !pendingAction
+    ) {
       const qs = (latest.metadata?.questions ?? []) as InlineQuestion[];
       if (qs.length > 0) setPendingQuestions(qs);
     } else if (action === "confirm_roadmap" && !pendingAction) {
       setPendingQuestions(null);
       setPendingAction({
         action: "confirm_roadmap",
-        roadmapSummary: (latest.metadata?.roadmap_summary ?? undefined) as NonNullable<typeof pendingAction>["roadmapSummary"],
+        roadmapSummary: (latest.metadata?.roadmap_summary ??
+          undefined) as NonNullable<typeof pendingAction>["roadmapSummary"],
       });
     } else if (action === "confirm_learning_plan" && !pendingAction) {
       setPendingAction({
         action: "confirm_learning_plan",
-        planSummary: (latest.metadata?.plan_summary ?? undefined) as NonNullable<typeof pendingAction>["planSummary"],
+        planSummary: (latest.metadata?.plan_summary ??
+          undefined) as NonNullable<typeof pendingAction>["planSummary"],
       });
     }
   }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -928,41 +1051,53 @@ useEffect(() => {
       const answeredIds = Object.keys(answers);
       try {
         const { roadmapApi: rdmApi } = await import("@/lib/api");
-        await rdmApi.generateRoadmap(
-          targetRole || "my target role",
-          false,
-          { ...answers, _answered_question_ids: answeredIds.join(",") } as Record<string, string>,
-        );
+        await rdmApi.generateRoadmap(targetRole || "my target role", false, {
+          ...answers,
+          _answered_question_ids: answeredIds.join(","),
+        } as Record<string, string>);
         router.push("/roadmap?generating=1");
       } catch {
-        telemetry.toastError("Couldn't start roadmap generation. Please try again.");
+        telemetry.toastError(
+          "Couldn't start roadmap generation. Please try again.",
+        );
       }
     },
     [handleSendMessage, router],
   );
 
-  const handleWelcomeMessage = useCallback(async (text: string) => {
-    if (!text.trim()) return;
-    try {
-      const conversation = await chatApi.createConversation({ title: "Mentor chat" });
-      setSelectedConversationId(conversation.id);
-      await queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      router.replace(`/chat?conversation=${conversation.id}`, { scroll: false });
-      await chatApi.sendMessage(conversation.id, { content: text.trim() });
-    } catch {
-      telemetry.toastError("Couldn't start conversation. Please try again.");
-    }
-  }, [queryClient, router, setSelectedConversationId]);
+  const handleWelcomeMessage = useCallback(
+    async (text: string) => {
+      if (!text.trim()) return;
+      try {
+        const conversation = await chatApi.createConversation({
+          title: "Mentor chat",
+        });
+        setSelectedConversationId(conversation.id);
+        await queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        router.replace(`/chat?conversation=${conversation.id}`, {
+          scroll: false,
+        });
+        await chatApi.sendMessage(conversation.id, { content: text.trim() });
+      } catch {
+        telemetry.toastError("Couldn't start conversation. Please try again.");
+      }
+    },
+    [queryClient, router, setSelectedConversationId],
+  );
 
   const handleConfirmRoadmap = useCallback(async () => {
     if (!pendingAction?.roadmapSummary?.target_role) return;
     setPendingAction(null);
     try {
       const { roadmapApi } = await import("@/lib/api");
-      await roadmapApi.generateRoadmap(pendingAction.roadmapSummary.target_role);
+      await roadmapApi.generateRoadmap(
+        pendingAction.roadmapSummary.target_role,
+      );
       router.push("/roadmap?generating=1");
     } catch {
-      telemetry.toastError("Couldn't start roadmap generation. Please try again.");
+      telemetry.toastError(
+        "Couldn't start roadmap generation. Please try again.",
+      );
     }
   }, [pendingAction, router]);
 
@@ -1004,14 +1139,14 @@ useEffect(() => {
       if (!latestReady) {
         telemetry.toastInfo(
           "Generating roadmap",
-          "Your mentor has enough context to get started."
+          "Your mentor has enough context to get started.",
         );
       }
     }
     setLatestPlan(null);
 
     // Capture plan created event
-    posthog.capture('plan_created', {
+    posthog.capture("plan_created", {
       conversation_id: selectedConversationId,
       conversation_title: activeConversation?.title,
     });
@@ -1020,16 +1155,26 @@ useEffect(() => {
       { conversationId: selectedConversationId },
       {
         onSuccess: (data) => {
-          const queuedStatus = (data as { status?: string; error?: string; message?: string })?.status;
-          const queuedError = (data as { status?: string; error?: string; message?: string })?.error;
-          if (queuedError === "analysis_not_ready" || queuedStatus === "processing") {
+          const queuedStatus = (
+            data as { status?: string; error?: string; message?: string }
+          )?.status;
+          const queuedError = (
+            data as { status?: string; error?: string; message?: string }
+          )?.error;
+          if (
+            queuedError === "analysis_not_ready" ||
+            queuedStatus === "processing"
+          ) {
             telemetry.toastInfo(
               "Refreshing intelligence context",
-              (data as { message?: string })?.message || "Preparing the latest context. Try again in a few seconds."
+              (data as { message?: string })?.message ||
+                "Preparing the latest context. Try again in a few seconds.",
             );
             if (selectedConversationId) {
               setTimeout(() => {
-                void fetchLatestAnalysis(selectedConversationId, { silent: false });
+                void fetchLatestAnalysis(selectedConversationId, {
+                  silent: false,
+                });
               }, 5000);
             }
             return;
@@ -1067,7 +1212,11 @@ useEffect(() => {
               setSoftGateDialogOpen(true);
               return;
             }
-            telemetry.toastError("Mentor context required", guardPayload.message || "Continue with mentor to personalize roadmap.");
+            telemetry.toastError(
+              "Mentor context required",
+              guardPayload.message ||
+                "Continue with mentor to personalize roadmap.",
+            );
             if (guardPayload.handoff_url && typeof window !== "undefined") {
               window.location.href = guardPayload.handoff_url;
               return;
@@ -1081,7 +1230,10 @@ useEffect(() => {
 
   const handleForceCreatePlan = useCallback(() => {
     if (!selectedConversationId) return;
-    createPlan.mutate({ conversationId: selectedConversationId, forceGuardOverride: true });
+    createPlan.mutate({
+      conversationId: selectedConversationId,
+      forceGuardOverride: true,
+    });
     setSoftGateDialogOpen(false);
   }, [createPlan, selectedConversationId]);
 
@@ -1093,7 +1245,8 @@ useEffect(() => {
         task_count: planRecord.daily_tasks?.length,
         estimated_duration: planRecord.total_estimated_hours,
         mentor_id:
-          planRecord.specialized_mentor?.id ?? planRecord.specialized_mentor_data?.id,
+          planRecord.specialized_mentor?.id ??
+          planRecord.specialized_mentor_data?.id,
       };
     }
     if (latestPlan) {
@@ -1123,12 +1276,18 @@ useEffect(() => {
     planRecord && planBuildStatus === "idle" ? "completed" : planBuildStatus;
   const [planWorkbenchDismissed, setPlanWorkbenchDismissed] = useState(false);
   const showPlanWorkbench =
-    (["queued", "in_progress", "warning", "completed"].includes(planBuildStatus) || createPlan.isPending) &&
+    (["queued", "in_progress", "warning", "completed"].includes(
+      planBuildStatus,
+    ) ||
+      createPlan.isPending) &&
     !planWorkbenchDismissed;
 
   useEffect(() => {
     if (planBuildStatus !== "completed") return;
-    const timer = window.setTimeout(() => setPlanWorkbenchDismissed(true), 8000);
+    const timer = window.setTimeout(
+      () => setPlanWorkbenchDismissed(true),
+      8000,
+    );
     return () => window.clearTimeout(timer);
   }, [planBuildStatus]);
 
@@ -1170,7 +1329,8 @@ useEffect(() => {
   const visibleMentorActions = useMemo(
     () =>
       mentorActions.filter(
-        (action) => !dismissedMentorActionKeys.includes(mentorActionKey(action)),
+        (action) =>
+          !dismissedMentorActionKeys.includes(mentorActionKey(action)),
       ),
     [mentorActions, dismissedMentorActionKeys],
   );
@@ -1179,7 +1339,10 @@ useEffect(() => {
     const candidates = mentorActions.filter((action) => {
       const isPlanAction =
         action.type === "view_plan" || action.type === "open_plan_task";
-      return isPlanAction && dismissedMentorActionKeys.includes(mentorActionKey(action));
+      return (
+        isPlanAction &&
+        dismissedMentorActionKeys.includes(mentorActionKey(action))
+      );
     });
     return candidates.length ? candidates[candidates.length - 1] : null;
   }, [mentorActions, dismissedMentorActionKeys]);
@@ -1265,7 +1428,7 @@ useEffect(() => {
                 selectedConversationId={selectedConversationId}
                 isLoading={conversationsLoading}
                 activeClass={activeListClass}
-                autoSelectFirst={true}
+                autoSelectFirst={false}
               />
             </div>
           </div>
@@ -1278,21 +1441,24 @@ useEffect(() => {
         >
           {activeConversation ? (
             <div className="flex min-h-0 flex-1 flex-col bg-background lg:rounded-[28px] lg:border lg:border-white/80 lg:bg-white/80 lg:backdrop-blur lg:overflow-hidden">
-              <header className="border-b border-white/80 bg-background px-2 py-2 lg:bg-transparent lg:px-0 lg:py-0">
+              <header className="border-b border-foreground/20 bg-background px-2 py-2 lg:bg-transparent lg:px-0 lg:py-0">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 lg:gap-3 lg:px-4 lg:py-4">
                   <div className="min-w-0 flex-1">
-                      <div className="mb-2 lg:hidden">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 rounded-full px-3 text-xs"
-                          onClick={handleBackToConversations}
-                        >
-                          <ArrowLeft className="mr-1 h-3.5 w-3.5" />
-                          Conversations
-                        </Button>
-                      </div>
-                    <h3 className="truncate text-lg font-semibold leading-tight">
+                    <div className="flex items-center gap-4 lg:hidden">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="h-8 rounded-full px-3 text-xs"
+                        onClick={handleBackToConversations}
+                      >
+                        <ArrowLeft className="h-4 w-4 text-background" />
+                        {/* Conversations */}
+                      </Button>
+                      <h3 className="md:hidden truncate text-lg font-semibold leading-tight">
+                        {conversationTitle}
+                      </h3>
+                    </div>
+                    <h3 className="hidden md:flex truncate text-lg font-semibold leading-tight">
                       {conversationTitle}
                     </h3>
                     {/* Show selector if plan is active (mocked logic for now as 'specialized' check) 
@@ -1570,7 +1736,14 @@ useEffect(() => {
                 onOpenChange={setReportModalOpen}
                 analysisSummary={analysisSummary}
               />
-              <div className="min-h-0 flex-1 overflow-hidden">
+              <div
+                className="relative min-h-0 flex-1 overflow-hidden"
+                style={{
+                  backgroundColor: "#fffcf5",
+                  backgroundImage: CHAT_WALLPAPER_SVG,
+                  backgroundSize: "52px 52px",
+                }}
+              >
                 <div className="flex h-full min-h-0 flex-col gap-2 px-0 pb-0 pt-0 lg:gap-4 lg:px-4 lg:pb-4 lg:pt-3">
                   {planWorkbenchData && showPlanWorkbench ? (
                     <PlanWorkbench
@@ -1798,7 +1971,7 @@ useEffect(() => {
                           </DialogFooter>
                         </DialogContent>
                       </Dialog>
-                      <div className="space-y-2 border-t border-white/80 bg-background px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 lg:space-y-3 lg:bg-white/65 lg:px-4 lg:pb-4 lg:pt-3">
+                      <div className="space-y-2 border-t border-black/5 bg-transparent px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 lg:space-y-3 lg:px-4 lg:pb-4 lg:pt-3">
                         {(socketStatus === "closed" ||
                           socketStatus === "error") && (
                           <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -1846,43 +2019,66 @@ useEffect(() => {
                             onDismiss={() => setPendingQuestions(null)}
                           />
                         )}
-                        {pendingAction?.action === "confirm_roadmap" && pendingAction.roadmapSummary && (
-                          <div className="mx-4 mb-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
-                            <p className="text-xs font-semibold text-primary mb-1">✦ Ready to build your roadmap</p>
-                            <p className="text-sm font-medium">{pendingAction.roadmapSummary.title}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {pendingAction.roadmapSummary.stages} stages · ~{pendingAction.roadmapSummary.estimated_weeks} weeks · {pendingAction.roadmapSummary.stage_names.join(" → ")}
-                            </p>
-                            <div className="mt-3 flex items-center gap-2">
-                              <Button size="sm" onClick={handleConfirmRoadmap}>
-                                Create Roadmap
-                              </Button>
-                              <button
-                                type="button"
-                                className="text-xs text-muted-foreground hover:underline"
-                                onClick={() => setPendingAction(null)}
-                              >
-                                Not now
-                              </button>
+                        {pendingAction?.action === "confirm_roadmap" &&
+                          pendingAction.roadmapSummary && (
+                            <div className="mx-4 mb-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                              <p className="text-xs font-semibold text-primary mb-1">
+                                ✦ Ready to build your roadmap
+                              </p>
+                              <p className="text-sm font-medium">
+                                {pendingAction.roadmapSummary.title}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {pendingAction.roadmapSummary.stages} stages · ~
+                                {pendingAction.roadmapSummary.estimated_weeks}{" "}
+                                weeks ·{" "}
+                                {pendingAction.roadmapSummary.stage_names.join(
+                                  " → ",
+                                )}
+                              </p>
+                              <div className="mt-3 flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={handleConfirmRoadmap}
+                                >
+                                  Create Roadmap
+                                </Button>
+                                <button
+                                  type="button"
+                                  className="text-xs text-muted-foreground hover:underline"
+                                  onClick={() => setPendingAction(null)}
+                                >
+                                  Not now
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
                         {pendingAction?.action === "confirm_learning_plan" && (
                           <div className="mx-4 mb-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900/40 dark:bg-emerald-950/30">
-                            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-1">✦ Ready to create a learning plan</p>
+                            <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-1">
+                              ✦ Ready to create a learning plan
+                            </p>
                             {pendingAction.planSummary?.title && (
-                              <p className="text-sm font-medium">{pendingAction.planSummary.title}</p>
+                              <p className="text-sm font-medium">
+                                {pendingAction.planSummary.title}
+                              </p>
                             )}
                             {pendingAction.planSummary?.estimated_hours && (
                               <p className="text-xs text-muted-foreground mt-0.5">
-                                ~{pendingAction.planSummary.estimated_hours}h estimated
+                                ~{pendingAction.planSummary.estimated_hours}h
+                                estimated
                                 {pendingAction.planSummary.topics?.length
                                   ? ` · ${pendingAction.planSummary.topics.slice(0, 3).join(", ")}`
                                   : ""}
                               </p>
                             )}
                             <div className="mt-3 flex items-center gap-2">
-                              <Button size="sm" variant="default" className="bg-emerald-600 hover:bg-emerald-700" onClick={handleConfirmLearningPlan}>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="bg-emerald-600 hover:bg-emerald-700"
+                                onClick={handleConfirmLearningPlan}
+                              >
                                 Create Plan
                               </Button>
                               <button
@@ -1919,13 +2115,15 @@ useEffect(() => {
                   </div>
                   <h2 className="text-xl font-semibold">Hi, I&apos;m Aria</h2>
                   <p className="text-sm text-muted-foreground">
-                    Your personal learning mentor. Tell me what you&apos;re working toward and I&apos;ll start building a path with you.
+                    Your personal learning mentor. Tell me what you&apos;re
+                    working toward and I&apos;ll start building a path with you.
                   </p>
                 </div>
                 {analysisJobRunning && (
                   <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
                     <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-blue-400" />
-                    Your resume analysis is running in the background — I&apos;ll have your context shortly.
+                    Your resume analysis is running in the background —
+                    I&apos;ll have your context shortly.
                   </div>
                 )}
                 <WelcomeComposer onSend={handleWelcomeMessage} />
@@ -1988,7 +2186,9 @@ function InlineQuestionWidget({
           <p className="text-sm font-medium leading-snug">
             {q.question}
             {q.priority === "required" && (
-              <span className="ml-1.5 text-[10px] font-normal text-primary/70 uppercase tracking-wide">required</span>
+              <span className="ml-1.5 text-[10px] font-normal text-primary/70 uppercase tracking-wide">
+                required
+              </span>
             )}
           </p>
           {q.options.length > 0 && (
@@ -2002,7 +2202,7 @@ function InlineQuestionWidget({
                     "rounded-full border px-3 py-1 text-xs transition-colors",
                     answers[q.id] === opt
                       ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-background hover:border-primary/40 hover:bg-primary/5"
+                      : "border-border bg-background hover:border-primary/40 hover:bg-primary/5",
                   )}
                 >
                   {opt}
@@ -2012,15 +2212,25 @@ function InlineQuestionWidget({
           )}
           <input
             type="text"
-            value={q.options.length > 0 && q.options.includes(answers[q.id] ?? "") ? "" : (answers[q.id] ?? "")}
+            value={
+              q.options.length > 0 && q.options.includes(answers[q.id] ?? "")
+                ? ""
+                : (answers[q.id] ?? "")
+            }
             onChange={(e) => type(q.id, e.target.value)}
-            placeholder={q.options.length > 0 ? "Or type your own answer…" : "Your answer…"}
+            placeholder={
+              q.options.length > 0 ? "Or type your own answer…" : "Your answer…"
+            }
             className="w-full rounded-lg border bg-background px-3 py-1.5 text-xs outline-none placeholder:text-muted-foreground focus:border-primary/50"
           />
         </div>
       ))}
       <div className="flex items-center gap-3 pt-1">
-        <Button size="sm" disabled={!allRequired} onClick={() => onSubmit(answers)}>
+        <Button
+          size="sm"
+          disabled={!allRequired}
+          onClick={() => onSubmit(answers)}
+        >
           Build my roadmap
         </Button>
         <button

@@ -14,14 +14,22 @@ const nextConfig: NextConfig = {
     return config;
   },
 
-  allowedDevOrigins: ["http://localhost:3000", "http://192.168.29.138:3000"],
+  allowedDevOrigins: [
+    "http://localhost:3000",
+    "http://192.168.29.138",
+    "192.168.29.138",
+  ],
 
   async redirects() {
     return [
       { source: "/mirror", destination: "/progress", permanent: true },
       { source: "/audit", destination: "/onboarding", permanent: true },
       { source: "/audit/queue", destination: "/onboarding", permanent: true },
-      { source: "/onboarding/start", destination: "/onboarding", permanent: true },
+      {
+        source: "/onboarding/start",
+        destination: "/onboarding",
+        permanent: true,
+      },
     ];
   },
 

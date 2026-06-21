@@ -65,6 +65,27 @@ const normalizeMessageContent = (raw: string) => {
 };
 
 const showAgentInsights = process.env.NEXT_PUBLIC_SHOW_AGENT_INSIGHTS === "true";
+// Small botanical tile — leaf at center, corner dots. Doodle color matches the warm
+// cream palette (#faedcd) so the pattern reads as texture, not decoration.
+const _WALLPAPER_SVG =
+  "<svg xmlns='http://www.w3.org/2000/svg' width='52' height='52' viewBox='0 0 52 52'>" +
+  "<g fill='#faedcd'>" +
+  "<path fill-opacity='0.75' d='M26 13c1.2 2.8 4.2 5.8 4.2 9s-3 6.2-4.2 9c-1.2-2.8-4.2-5.8-4.2-9s3-6.2 4.2-9z'/>" +
+  "<path fill-opacity='0.57' transform='rotate(90 26 26)' d='M26 13c1.2 2.8 4.2 5.8 4.2 9s-3 6.2-4.2 9c-1.2-2.8-4.2-5.8-4.2-9s3-6.2 4.2-9z'/>" +
+  "<circle fill-opacity='0.40' cx='0'  cy='0'  r='2.2'/>" +
+  "<circle fill-opacity='0.40' cx='52' cy='0'  r='2.2'/>" +
+  "<circle fill-opacity='0.40' cx='0'  cy='52' r='2.2'/>" +
+  "<circle fill-opacity='0.40' cx='52' cy='52' r='2.2'/>" +
+  "<circle fill-opacity='0.28' cx='26' cy='0'  r='1.3'/>" +
+  "<circle fill-opacity='0.28' cx='0'  cy='26' r='1.3'/>" +
+  "<circle fill-opacity='0.28' cx='52' cy='26' r='1.3'/>" +
+  "<circle fill-opacity='0.28' cx='26' cy='52' r='1.3'/>" +
+  "</g></svg>";
+
+export const CHAT_WALLPAPER_SVG =
+  'url("data:image/svg+xml,' + encodeURIComponent(_WALLPAPER_SVG) + '")';
+
+const CHAT_WALLPAPER = CHAT_WALLPAPER_SVG;
 
 interface MessageFeedProps {
   conversation?: Conversation;
@@ -180,15 +201,25 @@ export function MessageFeed({
   return (
     <div
       className={cn(
-        "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden",
+        "relative isolate flex h-full min-h-0 flex-1 flex-col overflow-hidden",
         variant === "card"
           ? "rounded-2xl border bg-white/80 shadow-[var(--shadow-1)]"
           : "rounded-none border-0 bg-transparent shadow-none",
         theme?.containerBorder,
       )}
     >
+      {variant === "card" && (
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div className="absolute inset-0 bg-[#e9dfd2]" />
+          <div
+            className="absolute inset-0"
+            style={{ backgroundImage: CHAT_WALLPAPER, backgroundSize: "52px 52px" }}
+          />
+          <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white/20 to-transparent" />
+        </div>
+      )}
       {showHeader ? (
-        <header className="border-b bg-white/70 px-6 py-4 backdrop-blur">
+        <header className="relative z-10 border-b bg-white/70 px-6 py-4 backdrop-blur">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold">{conversation.title}</h2>
@@ -231,8 +262,8 @@ export function MessageFeed({
         </header>
       ) : null}
 
-      <ConversationContainer className="flex-1" key={conversation.id}>
-        <ConversationContent className="gap-3 px-2 pt-2 pb-2 sm:px-3 lg:gap-4 lg:px-5 lg:pt-4">
+      <ConversationContainer className="relative z-10 flex-1" key={conversation.id}>
+        <ConversationContent className="relative gap-3 px-2 pt-2 pb-2 sm:px-3 lg:gap-4 lg:px-5 lg:pt-4">
           <MessageFeedContent
             hasMore={hasMore}
             isLoading={isLoading}
@@ -248,7 +279,9 @@ export function MessageFeed({
         <ConversationScrollButton className="bottom-6" />
       </ConversationContainer>
 
-      <PlanStatusBanner />
+      <div className="relative z-10">
+        <PlanStatusBanner />
+      </div>
     </div>
   );
 }

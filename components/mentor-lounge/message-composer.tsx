@@ -16,12 +16,18 @@ interface MessageComposerProps {
   onTypingChange?: (isTyping: boolean) => void;
 }
 
-export function MessageComposer({ disabled, onSend, onTypingChange }: MessageComposerProps) {
+export function MessageComposer({
+  disabled,
+  onSend,
+  onTypingChange,
+}: MessageComposerProps) {
   const selectedConversationId = useMentorLoungeStore(
     (state) => state.selectedConversationId,
   );
   const composerDraft = useMentorLoungeStore((state) => state.composerDraft);
-  const setComposerDraft = useMentorLoungeStore((state) => state.setComposerDraft);
+  const setComposerDraft = useMentorLoungeStore(
+    (state) => state.setComposerDraft,
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
   const typingStartTimerRef = useRef<number | null>(null);
@@ -86,12 +92,13 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
       return;
     }
     if (composerDraft === dismissedDraft) return;
-    if (draftReviewTimerRef.current) window.clearTimeout(draftReviewTimerRef.current);
+    if (draftReviewTimerRef.current)
+      window.clearTimeout(draftReviewTimerRef.current);
     draftReviewTimerRef.current = window.setTimeout(async () => {
       try {
         const { warning } = await chatApi.reviewDraft(
           composerDraft,
-          selectedConversationId || undefined
+          selectedConversationId || undefined,
         );
         setDraftWarning(warning);
       } catch {
@@ -99,9 +106,15 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
       }
     }, 3000);
     return () => {
-      if (draftReviewTimerRef.current) window.clearTimeout(draftReviewTimerRef.current);
+      if (draftReviewTimerRef.current)
+        window.clearTimeout(draftReviewTimerRef.current);
     };
-  }, [composerDraft, draftReviewEnabled, dismissedDraft, selectedConversationId]);
+  }, [
+    composerDraft,
+    draftReviewEnabled,
+    dismissedDraft,
+    selectedConversationId,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -125,7 +138,7 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
       await onSend(trimmed);
 
       // Capture message sent event
-      posthog.capture('message_sent', {
+      posthog.capture("message_sent", {
         conversation_id: selectedConversationId,
         message_length: trimmed.length,
       });
@@ -157,71 +170,78 @@ export function MessageComposer({ disabled, onSend, onTypingChange }: MessageCom
           <span className="flex-1">{draftWarning}</span>
           <button
             type="button"
-            onClick={() => { setDraftWarning(null); setDismissedDraft(composerDraft); }}
+            onClick={() => {
+              setDraftWarning(null);
+              setDismissedDraft(composerDraft);
+            }}
             className="shrink-0 rounded p-0.5 hover:bg-amber-200 dark:hover:bg-amber-800"
           >
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
-    <form
-      className={cn(
-        "relative rounded-2xl border bg-card/95 shadow-sm",
-        "transition-colors focus-within:border-ring",
-      )}
-      onSubmit={async (event) => {
-        event.preventDefault();
-        await handleSubmit();
-      }}
-    >
-      <Textarea
-        placeholder={
-          selectedConversationId
-            ? "Ask your mentor anything..."
-            : "Select a conversation to start"
-        }
-        disabled={disabled || !selectedConversationId || isSubmitting}
-        value={composerDraft}
-        onChange={(event) => {
-          const nextValue = event.target.value;
-          setComposerDraft(nextValue);
-          scheduleTypingState(nextValue);
-        }}
-        onBlur={() => {
-          clearTypingTimers();
-          emitTypingState(false);
-        }}
-        onCompositionStart={() => setIsComposing(true)}
-        onCompositionEnd={() => setIsComposing(false)}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter") {
-            return;
-          }
-          if (event.shiftKey || isComposing || event.nativeEvent.isComposing) {
-            return;
-          }
-          event.preventDefault();
-          void handleSubmit();
-        }}
+      <form
         className={cn(
-          "min-h-[58px] max-h-48 resize-none border-0 bg-transparent pl-4 pr-16 py-3 text-base leading-6 shadow-none",
-          "focus-visible:border-0 focus-visible:ring-0",
+          "relative flex items-center rounded-4xl border bg-card/95 shadow-sm",
+          "transition-colors focus-within:border-ring",
         )}
-      />
-      <Button
-        type="submit"
-        size="icon"
-        disabled={
-          disabled ||
-          !selectedConversationId ||
-          isSubmitting ||
-          !composerDraft.trim()
-        }
-        className="absolute right-2 bottom-2 h-9 w-9 rounded-lg"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          await handleSubmit();
+        }}
       >
-        <Send className="h-4 w-4" />
-      </Button>
-    </form>
+        <Textarea
+          placeholder={
+            selectedConversationId
+              ? "Ask your mentor anything..."
+              : "Select a conversation to start"
+          }
+          disabled={disabled || !selectedConversationId || isSubmitting}
+          value={composerDraft}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            setComposerDraft(nextValue);
+            scheduleTypingState(nextValue);
+          }}
+          onBlur={() => {
+            clearTypingTimers();
+            emitTypingState(false);
+          }}
+          onCompositionStart={() => setIsComposing(true)}
+          onCompositionEnd={() => setIsComposing(false)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") {
+              return;
+            }
+            if (
+              event.shiftKey ||
+              isComposing ||
+              event.nativeEvent.isComposing
+            ) {
+              return;
+            }
+            event.preventDefault();
+            void handleSubmit();
+          }}
+          className={cn(
+            "min-h-[58px] max-h-48 resize-none border-0 bg-transparent pl-4 pr-16 py-4 text-base leading-6 shadow-none",
+            "focus-visible:border-0 focus-visible:ring-0 ",
+          )}
+        />
+        <Button
+          type="submit"
+          size="icon"
+          disabled={
+            disabled ||
+            !selectedConversationId ||
+            isSubmitting ||
+            !composerDraft.trim()
+          }
+          className="absolute right-2 bottom-2 h-10 w-10 rounded-4xl"
+        >
+          <Send className="h-5 w-5" />
+        </Button>
+      </form>
     </div>
   );
 }

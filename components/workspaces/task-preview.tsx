@@ -60,8 +60,8 @@ export function TaskPreview({ task, onStartTask }: TaskPreviewProps) {
           <span className="text-xl">{typeIcon}</span>
           <h4 className="font-semibold text-foreground">{task.title}</h4>
         </div>
-        <Badge variant="secondary" className={cn('shrink-0', difficulty.color)}>
-          {difficulty.label}
+        <Badge variant="secondary" className={cn('shrink-0', difficulty?.color)}>
+          {difficulty?.label}
         </Badge>
       </div>
 
@@ -78,7 +78,7 @@ export function TaskPreview({ task, onStartTask }: TaskPreviewProps) {
         </div>
         <div className="flex items-center gap-1">
           <BookOpen className="h-3.5 w-3.5" />
-          <span className="capitalize">{task.task_type.replace('_', ' ')}</span>
+          <span className="capitalize">{task?.task_type?.replace('_', ' ')}</span>
         </div>
       </div>
 

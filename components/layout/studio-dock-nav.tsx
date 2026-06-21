@@ -3,15 +3,19 @@
 import { useState } from "react";
 import { useEffect, useRef } from "react";
 import {
-  Briefcase,
-  BrainCircuit,
+  BarChart3,
+  ClipboardList,
   Compass,
   FlaskConical,
   Inbox,
-  MessageCircle,
-  Radar,
-  Trophy,
+  LayoutDashboard,
+  Route,
+  ShieldCheck,
+  TrendingUp,
+  Users,
   X,
+  MessagesSquare,
+  Layers3,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useSearchParams } from "next/navigation";
@@ -32,26 +36,43 @@ type DockItem = {
   isActive?: boolean;
 };
 
+type IconProps = {
+  className?: string;
+};
+
+const DashboardIcon = ({ className }: IconProps) => <LayoutDashboard className={className} />;
+const MentorIcon = ({ className }: IconProps) => <MessagesSquare className={className} />;
+const PlansIcon = ({ className }: IconProps) => <ClipboardList className={className} />;
+const RoadmapIcon = ({ className }: IconProps) => <Route className={className} />;
+const ProgressIcon = ({ className }: IconProps) => <TrendingUp className={className} />;
+const SimLabIcon = ({ className }: IconProps) => <FlaskConical className={className} />;
+const InboxIcon = ({ className }: IconProps) => <Inbox className={className} />;
+const OverviewIcon = ({ className }: IconProps) => <Compass className={className} />;
+const AuditIcon = ({ className }: IconProps) => <ShieldCheck className={className} />;
+const StudentsIcon = ({ className }: IconProps) => <Users className={className} />;
+const ReportsIcon = ({ className }: IconProps) => <BarChart3 className={className} />;
+const CohortsIcon = ({ className }: IconProps) => <Layers3 className={className} />;
+
 const STUDENT_ITEMS: DockItem[] = [
-  { href: "/dashboard", title: "Dashboard", icon: <Compass className="h-full w-full" /> },
-  { href: "/chat", title: "Mentor", icon: <MessageCircle className="h-full w-full" /> },
-  { href: "/plans", title: "Plans", icon: <BrainCircuit className="h-full w-full" /> },
-  { href: "/roadmap", title: "Roadmap", icon: <Compass className="h-full w-full" /> },
-  { href: "/progress", title: "Mirror", icon: <Trophy className="h-full w-full" /> },
+  { href: "/dashboard", title: "Dashboard", icon: <DashboardIcon className="h-full w-full" /> },
+  { href: "/chat", title: "Mentor", icon: <MentorIcon className="h-full w-full" /> },
+  { href: "/plans", title: "Plans", icon: <PlansIcon className="h-full w-full" /> },
+  { href: "/roadmap", title: "Roadmap", icon: <RoadmapIcon className="h-full w-full" /> },
+  { href: "/progress", title: "Progress", icon: <ProgressIcon className="h-full w-full" /> },
 ];
 
 const EDU_ITEMS: DockItem[] = [
-  { href: "/institution/overview", title: "Overview", icon: <Radar className="h-full w-full" /> },
-  { href: "/audit/admin/dashboard", title: "Audit", icon: <Briefcase className="h-full w-full" /> },
-  { href: "/institution/students", title: "Students", icon: <BrainCircuit className="h-full w-full" /> },
-  { href: "/institution/reports", title: "Reports", icon: <Trophy className="h-full w-full" /> },
+  { href: "/institution/overview", title: "Overview", icon: <OverviewIcon className="h-full w-full" /> },
+  { href: "/audit/admin/dashboard", title: "Audit", icon: <AuditIcon className="h-full w-full" /> },
+  { href: "/institution/students", title: "Students", icon: <StudentsIcon className="h-full w-full" /> },
+  { href: "/institution/reports", title: "Reports", icon: <ReportsIcon className="h-full w-full" /> },
 ];
 
 const ADMIN_ITEMS: DockItem[] = [
-  { href: "/institution/overview", title: "Overview", icon: <Briefcase className="h-full w-full" /> },
-  { href: "/institution/cohorts", title: "Cohorts", icon: <Compass className="h-full w-full" /> },
-  { href: "/institution/students", title: "Students", icon: <BrainCircuit className="h-full w-full" /> },
-  { href: "/institution/reports", title: "Reports", icon: <Trophy className="h-full w-full" /> },
+  { href: "/institution/overview", title: "Overview", icon: <OverviewIcon className="h-full w-full" /> },
+  { href: "/institution/cohorts", title: "Cohorts", icon: <CohortsIcon className="h-full w-full" /> },
+  { href: "/institution/students", title: "Students", icon: <StudentsIcon className="h-full w-full" /> },
+  { href: "/institution/reports", title: "Reports", icon: <ReportsIcon className="h-full w-full" /> },
 ];
 
 export function StudioDockNav() {
@@ -71,7 +92,7 @@ export function StudioDockNav() {
   const studentItems: DockItem[] = isDev
     ? [
         ...STUDENT_ITEMS,
-        { href: "/simulations", title: "Sim Lab", icon: <FlaskConical className="h-full w-full" /> },
+        { href: "/simulations", title: "Sim Lab", icon: <SimLabIcon className="h-full w-full" /> },
       ]
     : STUDENT_ITEMS;
 
@@ -88,7 +109,7 @@ export function StudioDockNav() {
           ...baseItems,
           {
             title: "Inbox",
-            icon: <Inbox className="h-full w-full" />,
+            icon: <InboxIcon className="h-full w-full" />,
             onClick: () => setInboxOpen((prev) => !prev),
             isActive: inboxOpen,
           },

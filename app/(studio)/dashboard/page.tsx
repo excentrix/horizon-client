@@ -379,7 +379,7 @@ function MentorCard({
       )}
 
       {/* Quick-ask input */}
-      <div className="flex min-w-0 gap-2 mb-4">
+      <div className="flex items-center min-w-0 gap-2 mb-4">
         <input
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
@@ -390,7 +390,7 @@ function MentorCard({
             }
           }}
           placeholder="Ask your mentor anything…"
-          className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-[color:var(--brand-indigo)]/40"
+          className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-3 text-sm outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-[color:var(--brand-indigo)]/40"
         />
         <Button
           size="sm"
@@ -778,8 +778,12 @@ export default function DashboardPage() {
 
       if (existingId) {
         if (prompt) {
-          telemetry.track("dashboard_mentor_quickstart", { prompt_length: prompt.length });
-          router.push(`/chat?conversation=${existingId}&message=${encodeURIComponent(prompt)}`);
+          telemetry.track("dashboard_mentor_quickstart", {
+            prompt_length: prompt.length,
+          });
+          router.push(
+            `/chat?conversation=${existingId}&message=${encodeURIComponent(prompt)}`,
+          );
         } else {
           router.push(`/chat?conversation=${existingId}`);
         }
@@ -791,8 +795,12 @@ export default function DashboardPage() {
         topic: "Mentor quick-start",
       });
       if (prompt) {
-        telemetry.track("dashboard_mentor_quickstart", { prompt_length: prompt.length });
-        router.push(`/chat?conversation=${convo.id}&message=${encodeURIComponent(prompt)}`);
+        telemetry.track("dashboard_mentor_quickstart", {
+          prompt_length: prompt.length,
+        });
+        router.push(
+          `/chat?conversation=${convo.id}&message=${encodeURIComponent(prompt)}`,
+        );
       } else {
         router.push(`/chat?conversation=${convo.id}`);
       }
@@ -817,27 +825,36 @@ export default function DashboardPage() {
         <header className="flex flex-col gap-2 rounded-2xl border border-border/60 bg-card p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
           <div className="min-w-0">
             <p className="font-display text-xl font-semibold leading-tight sm:text-2xl lg:text-3xl">
-              {timeOfDay()}{user?.first_name ? `, ${toTitleCase(user.first_name)}` : ""}
+              {timeOfDay()}
+              {user?.first_name ? `, ${toTitleCase(user.first_name)}` : ""}
             </p>
-            <p className="mt-0.5 text-sm text-muted-foreground line-clamp-2">{nudge}</p>
+            <p className="mt-0.5 text-sm text-muted-foreground line-clamp-2">
+              {nudge}
+            </p>
           </div>
-          
         </header>
 
         {/* ── Re-entry Banner ────────────────────────────────────────────── */}
         {(() => {
           const lastTs = activity[0]?.timestamp;
           if (!lastTs) return null;
-          const daysSince = Math.floor((Date.now() - new Date(lastTs).getTime()) / 86_400_000);
+          const daysSince = Math.floor(
+            (Date.now() - new Date(lastTs).getTime()) / 86_400_000,
+          );
           if (daysSince < 3) return null;
           return (
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900/40 dark:bg-amber-950/30">
               <span className="text-amber-800 dark:text-amber-300">
                 Welcome back! It&apos;s been{" "}
-                <strong>{daysSince} {daysSince === 1 ? "day" : "days"}</strong> since your last session. Ready to pick up where you left off?
+                <strong>
+                  {daysSince} {daysSince === 1 ? "day" : "days"}
+                </strong>{" "}
+                since your last session. Ready to pick up where you left off?
               </span>
               <button
-                onClick={() => focusTask ? openTask(focusTask) : router.push("/plans")}
+                onClick={() =>
+                  focusTask ? openTask(focusTask) : router.push("/plans")
+                }
                 className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
               >
                 Resume
@@ -848,7 +865,10 @@ export default function DashboardPage() {
 
         {/* ── Flow Suggestion ────────────────────────────────────────────── */}
         {flowData?.suggestion && (
-          <FlowStarter suggestion={flowData.suggestion} shownAt={flowSuggestionShownAt} />
+          <FlowStarter
+            suggestion={flowData.suggestion}
+            shownAt={flowSuggestionShownAt}
+          />
         )}
 
         {/* ── Responsive 3-column grid ───────────────────────────────────── */}
