@@ -319,7 +319,7 @@ function PlansV2Content() {
             />
             <PlanV2ScheduleManager
               className=""
-              planId={plan.id}
+              plan={plan}
               tasks={tasks}
               isUpdating={
                 updateTaskStatus.isPending || rescheduleTask.isPending

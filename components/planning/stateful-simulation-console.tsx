@@ -810,26 +810,89 @@ export function StatefulSimulationConsole({
               <SectionLabel>Observation log</SectionLabel>
               {observationFeed.length > 0 ? (
                 <div className="mt-3 space-y-3">
-                  {observationFeed.map((entry, idx) => (
-                    <div
-                      key={`obs-${entry.action_id || entry.turn_index || idx}`}
-                      className="relative pl-5"
-                    >
-                      {/* Timeline spine */}
-                      {idx < observationFeed.length - 1 && (
-                        <span className="absolute left-1.5 top-4 bottom-0 w-px bg-slate-200" />
-                      )}
-                      <span className="absolute left-0 top-1.5 h-3 w-3 rounded-full border-2 border-white bg-slate-300 ring-1 ring-slate-200" />
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                        {entry.turn_index
-                          ? `Turn ${entry.turn_index}`
-                          : "Briefing"}
-                      </p>
-                      <p className="mt-0.5 text-sm leading-6 text-slate-700">
-                        {String(entry.text || "")}
-                      </p>
-                    </div>
-                  ))}
+                  {observationFeed.map((entry, idx) => {
+                    const isMentorDebrief = entry.type === "mentor_debrief";
+                    const qualityLabel = String(entry.quality_label || "");
+                    const qualityColors: Record<string, string> = {
+                      strong_move: "border-emerald-300 bg-emerald-50 text-emerald-700",
+                      solid: "border-blue-200 bg-blue-50 text-blue-700",
+                      risky: "border-amber-300 bg-amber-50 text-amber-700",
+                      anti_pattern: "border-rose-300 bg-rose-50 text-rose-700",
+                    };
+                    const qualityDot: Record<string, string> = {
+                      strong_move: "bg-emerald-400",
+                      solid: "bg-blue-400",
+                      risky: "bg-amber-400",
+                      anti_pattern: "bg-rose-400",
+                    };
+                    const qualityBadge: Record<string, string> = {
+                      strong_move: "Strong move",
+                      solid: "Solid",
+                      risky: "Risky",
+                      anti_pattern: "Anti-pattern",
+                    };
+
+                    if (isMentorDebrief) {
+                      return (
+                        <div
+                          key={`debrief-${entry.turn_index}-${idx}`}
+                          className="relative pl-5"
+                        >
+                          {idx < observationFeed.length - 1 && (
+                            <span className="absolute left-1.5 top-4 bottom-0 w-px bg-slate-200" />
+                          )}
+                          <span className={`absolute left-0 top-1.5 h-3 w-3 rounded-full border-2 border-white ring-1 ring-slate-200 ${qualityDot[qualityLabel] || "bg-violet-400"}`} />
+                          <div className={`rounded-lg border px-3 py-2.5 ${qualityColors[qualityLabel] || "border-violet-200 bg-violet-50 text-violet-700"}`}>
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wide opacity-70">
+                                Mentor
+                              </span>
+                              {qualityLabel && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-white/60">
+                                  {qualityBadge[qualityLabel] || qualityLabel}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm leading-5">
+                              {String(entry.commentary || "")}
+                            </p>
+                            {!!entry.principle && (
+                              <p className="mt-1.5 text-[11px] font-medium opacity-80 border-t border-current/10 pt-1.5">
+                                <span className="opacity-60">Principle: </span>
+                                {String(entry.principle)}
+                              </p>
+                            )}
+                            {!!entry.watch_for && (
+                              <p className="mt-1 text-[11px] opacity-70">
+                                <span className="font-medium">Watch for: </span>
+                                {String(entry.watch_for)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={`obs-${entry.action_id || entry.turn_index || idx}`}
+                        className="relative pl-5"
+                      >
+                        {idx < observationFeed.length - 1 && (
+                          <span className="absolute left-1.5 top-4 bottom-0 w-px bg-slate-200" />
+                        )}
+                        <span className="absolute left-0 top-1.5 h-3 w-3 rounded-full border-2 border-white bg-slate-300 ring-1 ring-slate-200" />
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                          {entry.turn_index
+                            ? `Turn ${entry.turn_index}`
+                            : "Briefing"}
+                        </p>
+                        <p className="mt-0.5 text-sm leading-6 text-slate-700">
+                          {String(entry.text || "")}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="mt-3 text-sm text-slate-400">{emptyStateLabel}</p>

@@ -2,15 +2,23 @@
 
 import { useMemo, useState } from "react";
 import { addDays, eachDayOfInterval, endOfWeek, format, isSameDay, parseISO, startOfDay, startOfWeek } from "date-fns";
-import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, PlayCircle } from "lucide-react";
+import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Expand, PlayCircle } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { DailyTask } from "@/types";
+import { PlanScheduleView } from "@/components/plans/plan-schedule-view";
+import type { DailyTask, LearningPlan } from "@/types";
 
 interface PlanV2ScheduleManagerProps {
-  planId: string;
+  plan: LearningPlan;
   tasks: DailyTask[];
   isUpdating?: boolean;
   onQuickReschedule: (taskId: string, date: string) => void;
@@ -20,7 +28,7 @@ interface PlanV2ScheduleManagerProps {
 type ViewMode = "day" | "week";
 
 export function PlanV2ScheduleManager({
-  planId,
+  plan,
   tasks,
   isUpdating,
   onQuickReschedule,
@@ -28,6 +36,7 @@ export function PlanV2ScheduleManager({
 }: PlanV2ScheduleManagerProps) {
   const [mode, setMode] = useState<ViewMode>("day");
   const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [calendarModalOpen, setCalendarModalOpen] = useState(false);
 
   const selected = useMemo(() => parseISO(selectedDate), [selectedDate]);
   const selectedStart = startOfDay(selected);
@@ -57,39 +66,53 @@ export function PlanV2ScheduleManager({
   }, [tasks, weekDays]);
 
   return (
-    <section className={`rounded-3xl border border-black/10 bg-white/80 p-4 shadow-[var(--shadow-1)] ${className ?? ""}`}>
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-[#5858CC]" />
-          <h3 className="text-sm font-semibold text-[#414141]">Schedule Manager</h3>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant={mode === "day" ? "default" : "outline"}
-            className={
-              mode === "day"
-                ? "h-7 rounded-full bg-[#5858CC] px-2.5 text-xs text-white hover:bg-[#4d4db3]"
-                : "h-7 rounded-full border-black/15 px-2.5 text-xs"
-            }
-            onClick={() => setMode("day")}
+    <>
+      <section className={`rounded-3xl border border-black/10 bg-white/80 p-4 shadow-[var(--shadow-1)] ${className ?? ""}`}>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setCalendarModalOpen(true)}
+            className="group flex min-w-0 items-center gap-2 rounded-2xl px-1 py-1 text-left transition hover:bg-[#FAEDCD]/45"
           >
-            Day
-          </Button>
-          <Button
-            size="sm"
-            variant={mode === "week" ? "default" : "outline"}
-            className={
-              mode === "week"
-                ? "h-7 rounded-full bg-[#5858CC] px-2.5 text-xs text-white hover:bg-[#4d4db3]"
-                : "h-7 rounded-full border-black/15 px-2.5 text-xs"
-            }
-            onClick={() => setMode("week")}
-          >
-            Week
-          </Button>
+            <CalendarDays className="h-4 w-4 text-[#5858CC]" />
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-[#414141]">Schedule Manager</h3>
+              <p className="text-[11px] text-[#414141]/60">
+                Open full calendar, sync Google Calendar, and export your schedule.
+              </p>
+            </div>
+            <span className="ml-1 inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#5858CC] transition group-hover:border-[#5858CC]/25 group-hover:bg-[#5858CC]/5">
+              <Expand className="h-3 w-3" />
+              Open
+            </span>
+          </button>
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant={mode === "day" ? "default" : "outline"}
+              className={
+                mode === "day"
+                  ? "h-7 rounded-full bg-[#5858CC] px-2.5 text-xs text-white hover:bg-[#4d4db3]"
+                  : "h-7 rounded-full border-black/15 px-2.5 text-xs"
+              }
+              onClick={() => setMode("day")}
+            >
+              Day
+            </Button>
+            <Button
+              size="sm"
+              variant={mode === "week" ? "default" : "outline"}
+              className={
+                mode === "week"
+                  ? "h-7 rounded-full bg-[#5858CC] px-2.5 text-xs text-white hover:bg-[#4d4db3]"
+                  : "h-7 rounded-full border-black/15 px-2.5 text-xs"
+              }
+              onClick={() => setMode("week")}
+            >
+              Week
+            </Button>
+          </div>
         </div>
-      </div>
 
       <div className="mb-3 flex items-center gap-2 rounded-2xl border border-black/10 bg-[#FAEDCD]/45 p-2">
         <Button
@@ -118,86 +141,103 @@ export function PlanV2ScheduleManager({
         </Button>
       </div>
 
-      <div>
-        {mode === "day" ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between rounded-xl border border-black/10 bg-white/80 px-3 py-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#414141]/75">
-                {format(selectedStart, "EEEE, MMM d")}
-              </p>
-              <Badge className="rounded-full border border-black/15 bg-white text-[10px] text-[#414141]">
-                {todayTasks.length} tasks
-              </Badge>
-            </div>
-
-            {todayTasks.length ? (
-              todayTasks.map((task) => {
-                const tomorrow = format(addDays(selectedStart, 1), "yyyy-MM-dd");
-                return (
-                  <article key={task.id} className="rounded-xl border border-black/10 bg-white/85 p-3">
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <p className="line-clamp-1 text-sm font-medium text-[#414141]">{task.title}</p>
-                      <Badge className="rounded-full border border-black/15 bg-[#FAEDCD] text-[10px] text-[#414141]">
-                        {task.scheduled_time ?? "Anytime"}
-                      </Badge>
-                    </div>
-                    <p className="mb-2 text-xs text-[#414141]/70">{task.description}</p>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Button asChild size="sm" className="h-7 rounded-full bg-[#5858CC] px-3 text-xs text-white hover:bg-[#4d4db3]">
-                        <Link href={`/plans/${planId}/playground?task=${task.id}`}>
-                          <PlayCircle className="mr-1 h-3.5 w-3.5" />
-                          Open
-                        </Link>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 rounded-full border-black/15 px-2.5 text-xs"
-                        onClick={() => onQuickReschedule(task.id, tomorrow)}
-                        disabled={isUpdating}
-                      >
-                        Move to tomorrow
-                      </Button>
-                    </div>
-                  </article>
-                );
-              })
-            ) : (
-              <p className="rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 text-xs text-[#414141]/70">
-                No tasks for this day.
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#414141]/70">
-              <CalendarRange className="h-3.5 w-3.5" />
-              Week snapshot
-            </div>
-            {weekly.map(({ day, tasks: dayTasks }) => (
-              <div key={day.toISOString()} className="rounded-xl border border-black/10 bg-white/85 p-2.5">
-                <div className="mb-1 flex items-center justify-between">
-                  <p className="text-xs font-semibold text-[#414141]">{format(day, "EEE, MMM d")}</p>
-                  <Badge className="rounded-full border border-black/15 bg-white text-[10px] text-[#414141]">
-                    {dayTasks.length}
-                  </Badge>
-                </div>
-                {dayTasks.length ? (
-                  <ul className="space-y-1">
-                    {dayTasks.slice(0, 2).map((task) => (
-                      <li key={task.id} className="truncate text-xs text-[#414141]/75">
-                        • {task.title}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-[#414141]/55">No scheduled tasks</p>
-                )}
+        <div>
+          {mode === "day" ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between rounded-xl border border-black/10 bg-white/80 px-3 py-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#414141]/75">
+                  {format(selectedStart, "EEEE, MMM d")}
+                </p>
+                <Badge className="rounded-full border border-black/15 bg-white text-[10px] text-[#414141]">
+                  {todayTasks.length} tasks
+                </Badge>
               </div>
-            ))}
+
+              {todayTasks.length ? (
+                todayTasks.map((task) => {
+                  const tomorrow = format(addDays(selectedStart, 1), "yyyy-MM-dd");
+                  return (
+                    <article key={task.id} className="rounded-xl border border-black/10 bg-white/85 p-3">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <p className="line-clamp-1 text-sm font-medium text-[#414141]">{task.title}</p>
+                        <Badge className="rounded-full border border-black/15 bg-[#FAEDCD] text-[10px] text-[#414141]">
+                          {task.scheduled_time ?? "Anytime"}
+                        </Badge>
+                      </div>
+                      <p className="mb-2 text-xs text-[#414141]/70">{task.description}</p>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Button asChild size="sm" className="h-7 rounded-full bg-[#5858CC] px-3 text-xs text-white hover:bg-[#4d4db3]">
+                          <Link href={`/plans/${plan.id}/playground?task=${task.id}`}>
+                            <PlayCircle className="mr-1 h-3.5 w-3.5" />
+                            Open
+                          </Link>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 rounded-full border-black/15 px-2.5 text-xs"
+                          onClick={() => onQuickReschedule(task.id, tomorrow)}
+                          disabled={isUpdating}
+                        >
+                          Move to tomorrow
+                        </Button>
+                      </div>
+                    </article>
+                  );
+                })
+              ) : (
+                <p className="rounded-xl border border-dashed border-black/15 bg-white/70 px-3 py-2 text-xs text-[#414141]/70">
+                  No tasks for this day.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#414141]/70">
+                <CalendarRange className="h-3.5 w-3.5" />
+                Week snapshot
+              </div>
+              {weekly.map(({ day, tasks: dayTasks }) => (
+                <div key={day.toISOString()} className="rounded-xl border border-black/10 bg-white/85 p-2.5">
+                  <div className="mb-1 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-[#414141]">{format(day, "EEE, MMM d")}</p>
+                    <Badge className="rounded-full border border-black/15 bg-white text-[10px] text-[#414141]">
+                      {dayTasks.length}
+                    </Badge>
+                  </div>
+                  {dayTasks.length ? (
+                    <ul className="space-y-1">
+                      {dayTasks.slice(0, 2).map((task) => (
+                        <li key={task.id} className="truncate text-xs text-[#414141]/75">
+                          • {task.title}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-[#414141]/55">No scheduled tasks</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+      <Dialog open={calendarModalOpen} onOpenChange={setCalendarModalOpen}>
+        <DialogContent className="h-[min(92vh,960px)] w-[min(96vw,1280px)] max-w-[96vw] overflow-hidden border-[#E7D8AF] bg-[#FFF9EA] p-0 shadow-2xl sm:max-w-[min(96vw,1280px)]">
+          <DialogHeader className="border-b border-[#E7D8AF] bg-[linear-gradient(135deg,rgba(250,237,205,0.88),rgba(88,88,204,0.08))] px-6 py-5">
+            <DialogTitle className="flex items-center gap-2 text-xl text-[#414141]">
+              <CalendarDays className="h-5 w-5 text-[#5858CC]" />
+              Full Schedule Manager
+            </DialogTitle>
+            <DialogDescription className="text-[#414141]/65">
+              Review the full calendar, drag tasks to reschedule, connect Google Calendar, and export your plan feed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-hidden p-4">
+            <PlanScheduleView plan={plan} tasks={tasks} />
           </div>
-        )}
-      </div>
-    </section>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

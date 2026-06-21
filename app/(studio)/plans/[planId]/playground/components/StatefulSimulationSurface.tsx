@@ -5,6 +5,7 @@ import { AlertTriangle, Loader2 } from "lucide-react";
 import { planningApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
 import { StatefulSimulationConsole } from "@/components/planning/stateful-simulation-console";
+import { SimDebriefPanel } from "./SimDebriefPanel";
 import type { ExecutionDescriptor, SimulationResultEnvelope } from "@/types";
 
 interface StatefulSimulationSurfaceProps {
@@ -29,6 +30,7 @@ export function StatefulSimulationSurface({
   const [envelope, setEnvelope] = useState<SimulationResultEnvelope | null>(null);
   const [reflection, setReflection] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showDebrief, setShowDebrief] = useState(false);
 
   useEffect(() => {
     setStatus("idle");
@@ -36,6 +38,7 @@ export function StatefulSimulationSurface({
     setEnvelope(null);
     setReflection("");
     setErrorMessage(null);
+    setShowDebrief(false);
   }, [taskId]);
 
   useEffect(() => {
@@ -124,6 +127,7 @@ export function StatefulSimulationSurface({
       setEnvelope(result);
       onSubmissionProcessed?.(result);
       setStatus("ready");
+      setShowDebrief(true);
       telemetry.toastSuccess(`Simulation ${result.scenario.verification_status.replace(/_/g, " ")}.`);
     } catch (error) {
       setStatus("ready");
@@ -153,6 +157,17 @@ export function StatefulSimulationSurface({
           <p className="text-sm font-semibold text-amber-900">Stateful simulation unavailable</p>
           <p className="mt-1 text-xs text-amber-800">{errorMessage || "The runtime could not start."}</p>
         </div>
+      </div>
+    );
+  }
+
+  if (showDebrief) {
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto pr-2 custom-scrollbar animate-in fill-mode-both fade-in slide-in-from-bottom-4 duration-500">
+        <SimDebriefPanel
+          envelope={envelope}
+          onContinue={() => setShowDebrief(false)}
+        />
       </div>
     );
   }
