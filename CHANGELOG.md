@@ -46,6 +46,20 @@ Versioning policy:
 - `c405952` feat(planning): add simulation debrief and schedule surfaces
 - `a0464d2` feat(studio): refresh mentor, chat, and dashboard surfaces
 
+## v0.2.8 (2026-06-24)
+
+### Added
+- VELO verification hub for resume upload, ad-hoc project intake, and repo-based defense flows.
+- Feature-flag-driven route gating, home redirects, and studio navigation filtering.
+
+### Changed
+- Project verification sheets now keep GitHub connection state, guide the interrogation with live thinking states, and surface clearer progress copy.
+- HTTP auth handling now treats expired or absent tokens consistently and redirects dead sessions back to login.
+- Gamification, dashboard, and GitHub repo hooks now respect live feature availability before firing queries.
+
+### Commits
+- `bb1b70a` feat(verify): add VELO hub and feature-flag gating
+
 ## Unreleased
 
 ### Added
