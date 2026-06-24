@@ -1928,6 +1928,11 @@ export const auditApi = {
       http.post(`/interrogations/${sessionId}/complete/`)
     ),
 
+  addManualProject: (payload: { title?: string; repo_url?: string; description?: string }) =>
+    extract<{ snapshot_id: string; project_index: number; title: string }>(
+      http.post("/mirror/projects/add/", payload)
+    ),
+
   getMirrorLatest: () =>
     extract<{
       status: "empty" | "running" | "ready" | "failed";
@@ -2073,6 +2078,8 @@ export const auditApi = {
           audit_doc_status: "pending" | "accepted" | "rejected" | "missing";
           submitted_repos: Array<{ url: string; label: string; check_status: string; language?: string }>;
           audit_id: string | null;
+          verdict_summary?: string | null;
+          verified_at?: string | null;
         }>;
         created_at: string;
         updated_at: string;

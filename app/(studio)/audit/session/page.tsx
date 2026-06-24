@@ -9,22 +9,15 @@ function LegacyAuditSessionRedirect() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const params = new URLSearchParams((searchParams?.toString() ?? ""));
-    params.set("legacy_route", "/audit/session");
-    params.set("migration_reason", "unified_onboarding_flow");
-    if (!params.get("step")) {
-      params.set("step", "audit_session");
-    }
-    telemetry.track("legacy_onboarding_redirected", {
+    telemetry.track("legacy_audit_session_redirected", {
       from: "/audit/session",
-      to: "/onboarding",
-      reason: "unified_onboarding_flow",
-      step: params.get("step"),
+      to: "/verify",
+      reason: "velo_verify_hub",
     });
-    router.replace(`/onboarding?${params.toString()}`);
+    router.replace("/verify");
   }, [router, searchParams]);
 
-  return <div className="p-6 text-sm text-muted-foreground">Redirecting to VELO audit session...</div>;
+  return <div className="p-6 text-sm text-muted-foreground">Redirecting to VELO verification…</div>;
 }
 
 export default function LegacyAuditSessionRedirectPage() {

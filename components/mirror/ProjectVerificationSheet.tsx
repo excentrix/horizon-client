@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -209,6 +209,13 @@ export function ProjectVerificationSheet({
   const [repoSearch, setRepoSearch] = useState("");
   const [githubConnecting, setGithubConnecting] = useState(false);
 
+  // Reflect the real GitHub connection state when the drawer opens, so it
+  // doesn't show "Connect GitHub" for an already-connected user.
+  const githubFetch = github.fetchRepos;
+  useEffect(() => {
+    if (open) githubFetch();
+  }, [open, githubFetch]);
+
   const handleOpenChange = (isOpen: boolean) => {
     onOpenChange(isOpen);
     if (!isOpen) {
@@ -263,7 +270,7 @@ export function ProjectVerificationSheet({
               Verify: {projectTitle}
             </SheetTitle>
             <SheetDescription className="text-[11px] text-muted-foreground">
-              Submit repos → add VELO_AUDIT.md → complete adaptive interrogation
+              Submit repos → complete the adaptive interrogation
             </SheetDescription>
           </SheetHeader>
         </div>
@@ -277,9 +284,8 @@ export function ProjectVerificationSheet({
               <div className="space-y-3">
                 {[
                   { n: 1, title: "Submit repositories", body: "Add one or more GitHub repos for this project — frontend, backend, or both." },
-                  { n: 2, title: "Add VELO_AUDIT.md", body: "Document your technical decisions in a structured file. VELO uses it to generate your interview questions." },
-                  { n: 3, title: "Complete the interrogation", body: "6–15 adaptive questions that probe ownership, architecture, trade-offs, and debugging depth." },
-                  { n: 4, title: "Earn your badge", body: "A verified badge appears on this project in your public profile." },
+                  { n: 2, title: "Complete the interrogation", body: "6–15 adaptive questions that probe ownership, architecture, trade-offs, and debugging depth." },
+                  { n: 3, title: "Earn your badge", body: "A verified badge appears on this project in your public profile." },
                 ].map(({ n, title, body }) => (
                   <div key={n} className="flex gap-3">
                     <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
@@ -421,14 +427,14 @@ export function ProjectVerificationSheet({
 
               {!canStartInterrogation && (
                 <p className="text-[11px] text-muted-foreground">
-                  Fix the VELO_AUDIT.md issues, push the file to your repo, then hit
-                  Re-check. The interrogation unlocks once the document is accepted.
+                  Optional: add a VELO_AUDIT.md to your repo and hit Re-check to boost your
+                  verification score. Not required — you can start the interrogation now.
                 </p>
               )}
 
               <Button
                 onClick={hook.startInterrogation}
-                disabled={hook.isLoading || !canStartInterrogation}
+                disabled={hook.isLoading}
                 className="w-full"
               >
                 {hook.isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -445,9 +451,20 @@ export function ProjectVerificationSheet({
 
           {/* ── Starting interrogation ───────────────────────────────────── */}
           {hook.step === "starting_interrogation" && (
-            <div className="flex flex-col items-center gap-3 py-12">
+            <div className="flex flex-col items-center gap-3 py-12 text-center">
               <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Preparing your interrogation…</p>
+              <ThinkingMessages
+                messages={[
+                  "Cloning a read-only view of your repository…",
+                  "Reading your actual source files…",
+                  "Analyzing your architecture and decisions…",
+                  "Preparing your first question…",
+                ]}
+              />
+              <p className="max-w-xs text-[11px] text-muted-foreground/70">
+                VELO reads your real code so questions are specific to what you built. This
+                takes a few seconds the first time.
+              </p>
             </div>
           )}
 
@@ -492,8 +509,21 @@ export function ProjectVerificationSheet({
                 className="w-full"
               >
                 {hook.isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Submit Answer →
+                {hook.isLoading ? "Reviewing your answer…" : "Submit Answer →"}
               </Button>
+
+              {hook.isLoading && (
+                <div className="flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
+                  <ThinkingMessages
+                    small
+                    messages={[
+                      "Weighing your answer against the code…",
+                      "Deciding where to probe next…",
+                      "Writing the next question…",
+                    ]}
+                  />
+                </div>
+              )}
 
               {hook.error && (
                 <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -1064,5 +1094,19 @@ function VerdictCard({
         View in Profile
       </Button>
     </div>
+  );
+}
+
+/** Cycles through status messages so a long async wait feels alive and informed. */
+function ThinkingMessages({ messages, small }: { messages: string[]; small?: boolean }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((p) => (p + 1) % messages.length), 2200);
+    return () => clearInterval(t);
+  }, [messages.length]);
+  return (
+    <p className={small ? "text-[11px] text-muted-foreground" : "text-sm text-muted-foreground"}>
+      {messages[i]}
+    </p>
   );
 }

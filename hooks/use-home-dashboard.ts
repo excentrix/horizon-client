@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { dashboardApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
+import { useFeature } from "@/hooks/use-features";
 import type { HomeDashboard } from "@/types";
 
 const homeKey = ["dashboard", "home"] as const;
 
 export function useHomeDashboard(options?: { enabled?: boolean }) {
+  const dashboardEnabled = useFeature("dashboard");
   return useQuery<HomeDashboard>({
     queryKey: homeKey,
     queryFn: async () => {
@@ -16,7 +18,7 @@ export function useHomeDashboard(options?: { enabled?: boolean }) {
         throw error;
       }
     },
-    enabled: options?.enabled ?? true,
+    enabled: (options?.enabled ?? true) && dashboardEnabled,
     staleTime: 60_000, // 1 minute - dashboard data changes moderately
     refetchOnWindowFocus: true, // Refresh when user returns
   });

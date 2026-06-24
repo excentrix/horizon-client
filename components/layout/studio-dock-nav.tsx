@@ -24,6 +24,8 @@ import { cn } from "@/lib/utils";
 
 import { useAuth } from "@/context/AuthContext";
 import { usePortfolioProfile } from "@/hooks/use-portfolio";
+import { useFeatureFlags } from "@/hooks/use-features";
+import type { FeatureName } from "@/lib/feature-flags";
 import { FloatingDock } from "@/components/ui/floating-dock";
 import { MentorInbox } from "@/components/intelligence/MentorInbox";
 import { Button } from "@/components/ui/button";
@@ -34,6 +36,8 @@ type DockItem = {
   icon: React.ReactNode;
   onClick?: () => void;
   isActive?: boolean;
+  /** When set, the item only shows if this feature flag is enabled. */
+  feature?: FeatureName;
 };
 
 type IconProps = {
@@ -54,25 +58,26 @@ const ReportsIcon = ({ className }: IconProps) => <BarChart3 className={classNam
 const CohortsIcon = ({ className }: IconProps) => <Layers3 className={className} />;
 
 const STUDENT_ITEMS: DockItem[] = [
-  { href: "/dashboard", title: "Dashboard", icon: <DashboardIcon className="h-full w-full" /> },
-  { href: "/chat", title: "Mentor", icon: <MentorIcon className="h-full w-full" /> },
-  { href: "/plans", title: "Plans", icon: <PlansIcon className="h-full w-full" /> },
-  { href: "/roadmap", title: "Roadmap", icon: <RoadmapIcon className="h-full w-full" /> },
-  { href: "/progress", title: "Progress", icon: <ProgressIcon className="h-full w-full" /> },
+  { href: "/dashboard", title: "Dashboard", icon: <DashboardIcon className="h-full w-full" />, feature: "dashboard" },
+  { href: "/verify", title: "Verify", icon: <AuditIcon className="h-full w-full" />, feature: "velo" },
+  { href: "/chat", title: "Mentor", icon: <MentorIcon className="h-full w-full" />, feature: "chat" },
+  { href: "/plans", title: "Plans", icon: <PlansIcon className="h-full w-full" />, feature: "plans" },
+  { href: "/roadmap", title: "Roadmap", icon: <RoadmapIcon className="h-full w-full" />, feature: "roadmap" },
+  { href: "/progress", title: "Progress", icon: <ProgressIcon className="h-full w-full" />, feature: "progress" },
 ];
 
 const EDU_ITEMS: DockItem[] = [
-  { href: "/institution/overview", title: "Overview", icon: <OverviewIcon className="h-full w-full" /> },
-  { href: "/audit/admin/dashboard", title: "Audit", icon: <AuditIcon className="h-full w-full" /> },
-  { href: "/institution/students", title: "Students", icon: <StudentsIcon className="h-full w-full" /> },
-  { href: "/institution/reports", title: "Reports", icon: <ReportsIcon className="h-full w-full" /> },
+  { href: "/institution/overview", title: "Overview", icon: <OverviewIcon className="h-full w-full" />, feature: "institutions" },
+  { href: "/audit/admin/dashboard", title: "Audit", icon: <AuditIcon className="h-full w-full" />, feature: "velo" },
+  { href: "/institution/students", title: "Students", icon: <StudentsIcon className="h-full w-full" />, feature: "institutions" },
+  { href: "/institution/reports", title: "Reports", icon: <ReportsIcon className="h-full w-full" />, feature: "institutions" },
 ];
 
 const ADMIN_ITEMS: DockItem[] = [
-  { href: "/institution/overview", title: "Overview", icon: <OverviewIcon className="h-full w-full" /> },
-  { href: "/institution/cohorts", title: "Cohorts", icon: <CohortsIcon className="h-full w-full" /> },
-  { href: "/institution/students", title: "Students", icon: <StudentsIcon className="h-full w-full" /> },
-  { href: "/institution/reports", title: "Reports", icon: <ReportsIcon className="h-full w-full" /> },
+  { href: "/institution/overview", title: "Overview", icon: <OverviewIcon className="h-full w-full" />, feature: "institutions" },
+  { href: "/institution/cohorts", title: "Cohorts", icon: <CohortsIcon className="h-full w-full" />, feature: "institutions" },
+  { href: "/institution/students", title: "Students", icon: <StudentsIcon className="h-full w-full" />, feature: "institutions" },
+  { href: "/institution/reports", title: "Reports", icon: <ReportsIcon className="h-full w-full" />, feature: "institutions" },
 ];
 
 export function StudioDockNav() {
@@ -81,6 +86,7 @@ export function StudioDockNav() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { data: profileData } = usePortfolioProfile();
+  const flags = useFeatureFlags();
   const [inboxOpen, setInboxOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const inboxPopupRef = useRef<HTMLDivElement | null>(null);
@@ -116,7 +122,11 @@ export function StudioDockNav() {
         ]
       : baseItems;
 
-  const activeItems = items.map((item: DockItem) => ({
+  const visibleItems = items.filter(
+    (item: DockItem) => !item.feature || flags[item.feature],
+  );
+
+  const activeItems = visibleItems.map((item: DockItem) => ({
     ...item,
     isActive:
       item.isActive ??

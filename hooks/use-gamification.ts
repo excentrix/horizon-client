@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { gamificationApi } from "@/lib/api";
 import { telemetry } from "@/lib/telemetry";
+import { useFeature } from "@/hooks/use-features";
 import type { 
   GamificationSummary, 
   GamificationBadge, 
@@ -17,6 +18,7 @@ const earnedBadgesKey = ["gamification", "badges", "earned"];
 const leaderboardKey = ["gamification", "leaderboard"];
 
 export function useGamificationSummary(options?: { enabled?: boolean }) {
+  const gamificationEnabled = useFeature("gamification");
   return useQuery<GamificationSummary>({
     queryKey: summaryKey,
     queryFn: async () => {
@@ -27,13 +29,14 @@ export function useGamificationSummary(options?: { enabled?: boolean }) {
         throw error;
       }
     },
-    enabled: options?.enabled ?? true,
+    enabled: (options?.enabled ?? true) && gamificationEnabled,
     staleTime: 60_000, // 1 minute - gamification changes frequently
     refetchOnWindowFocus: true, // Refresh on focus for up-to-date stats
   });
 }
 
 export function useGamificationBadges() {
+  const gamificationEnabled = useFeature("gamification");
   return useQuery<GamificationBadge[]>({
     queryKey: badgesKey,
     queryFn: async () => {
@@ -44,12 +47,14 @@ export function useGamificationBadges() {
         throw error;
       }
     },
+    enabled: gamificationEnabled,
     staleTime: 300_000, // 5 minutes - badges don't change often
     refetchOnWindowFocus: false,
   });
 }
 
 export function useEarnedBadges() {
+  const gamificationEnabled = useFeature("gamification");
   return useQuery<GamificationUserBadge[]>({
     queryKey: earnedBadgesKey,
     queryFn: async () => {
@@ -60,12 +65,14 @@ export function useEarnedBadges() {
         throw error;
       }
     },
+    enabled: gamificationEnabled,
     staleTime: 60_000,
     refetchOnWindowFocus: true,
   });
 }
 
 export function useLeaderboard() {
+  const gamificationEnabled = useFeature("gamification");
   return useQuery<GamificationLeaderboard>({
     queryKey: leaderboardKey,
     queryFn: async () => {
@@ -76,6 +83,7 @@ export function useLeaderboard() {
         throw error;
       }
     },
+    enabled: gamificationEnabled,
     staleTime: 120_000, // 2 minutes
     refetchOnWindowFocus: false,
   });

@@ -269,11 +269,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             provider: 'google',
             options: {
                 redirectTo: `${window.location.origin}/auth/callback`,
-                scopes: 'https://www.googleapis.com/auth/calendar',
-                queryParams: {
-                    access_type: 'offline', // ensures we get a refresh token
-                    prompt: 'consent',
-                }
+                // Login needs identity only (email/profile, requested by default).
+                // Do NOT request the sensitive Calendar scope here — that triggers
+                // Google's "unverified app" warning and a scary permissions prompt.
+                // Calendar access is requested separately, only when a user opts
+                // into calendar sync (see plan-schedule-view.tsx).
             }
         });
         if (error) throw error;

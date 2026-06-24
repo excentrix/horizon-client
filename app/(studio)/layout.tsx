@@ -6,11 +6,14 @@ import { GamificationProvider } from "@/components/gamification";
 import { cn } from "@/lib/utils";
 import { SupportFeedbackWidget } from "@/components/ui/support-feedback-widget";
 import { StudioDockNav } from "@/components/layout/studio-dock-nav";
+import { RouteFeatureGuard, useIsRouteDisabled } from "@/components/layout/route-feature-guard";
 import { ProfileMenu } from "@/components/layout/profile-menu";
+import { Loader2 } from "lucide-react";
 import Link from "next/link";
 
 export default function StudioLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "";
+  const routeDisabled = useIsRouteDisabled();
   const isDashboard = pathname.startsWith("/dashboard");
   const isPlansV2 = pathname === "/plans/v2";
   const isPlaygroundRoute =
@@ -23,6 +26,7 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
 
   return (
     <GamificationProvider>
+      <RouteFeatureGuard />
       <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-background">
         {isPlaygroundRoute ? null : (
           <header
@@ -65,7 +69,13 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
                 isNoPageScrollRoute ? "overflow-hidden" : "overflow-y-auto",
               )}
             >
-              {children}
+              {routeDisabled ? (
+                <div className="flex h-full items-center justify-center text-muted-foreground">
+                  <Loader2 className="size-5 animate-spin" />
+                </div>
+              ) : (
+                children
+              )}
             </div>
           </main>
         </div>

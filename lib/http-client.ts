@@ -105,7 +105,21 @@ http.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // DRF's SupabaseAuthentication has no WWW-Authenticate header, so a missing/
+    // expired token comes back as 403 "Authentication credentials were not provided"
+    // — not 401. Treat that as an auth failure too, while letting genuine
+    // permission-denied 403s pass through untouched.
+    const status = error.response?.status;
+    const detail = String(
+      (error.response?.data as { detail?: string; code?: string } | undefined)?.detail ??
+        (error.response?.data as { detail?: string; code?: string } | undefined)?.code ??
+        "",
+    );
+    const isAuthFailure =
+      status === 401 ||
+      (status === 403 && /not_authenticated|credentials were not provided|not valid|token/i.test(detail));
+
+    if (isAuthFailure && !originalRequest._retry) {
       if (!REFRESH_ENDPOINT) {
         return Promise.reject(error);
       }
@@ -155,6 +169,11 @@ http.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError as AxiosError, null, http);
         clearSessionTokens();
+        // Session is truly dead — send the user to login instead of leaving
+        // them on a page firing silent 403s.
+        if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+          window.location.href = "/login";
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
