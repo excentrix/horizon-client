@@ -60,6 +60,20 @@ Versioning policy:
 ### Commits
 - `bb1b70a` feat(verify): add VELO hub and feature-flag gating
 
+## v0.2.9 (2026-07-01)
+
+### Added
+- Public verified-profile surfaces for recruiters, including `/p/[username]?tab=verified` and public credential pages.
+- Funnel tracking around acquisition, signup, GitHub connect, resume upload, and credential sharing.
+
+### Changed
+- Verification pages now render the defended-work narrative directly from the new verified-profile API.
+- Auth routing now keeps public credential/profile pages reachable without a session redirect.
+- GitHub and portfolio hooks now feed the verified-profile workflow instead of assuming a portfolio-only path.
+
+### Commits
+- `bb7a927` feat(verify): add public verified profile surfaces
+
 ## Unreleased
 
 ### Added
