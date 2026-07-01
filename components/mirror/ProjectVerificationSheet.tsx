@@ -884,11 +884,22 @@ function AuditDocGuide({
 function RepoResultRow({ repo }: { repo: RepoEntry }) {
   const passed = repo.check_status === "passed";
   const skipped = repo.check_status === "skipped";
+  const failed = !passed && !skipped;
+  // We can't see private repos (public-only for now), so a 404 reads as
+  // "not found". Tell the user the real, actionable reason.
+  const failMessage =
+    repo.reason === "repo_not_found"
+      ? "Can't access this repo. VELO verifies public repos only right now — make it public, or pick a public one."
+      : repo.reason === "unparseable_url"
+      ? "That doesn't look like a GitHub repo URL."
+      : failed
+      ? "Couldn't verify this repo."
+      : null;
 
   return (
     <div
       className={cn(
-        "flex items-center justify-between rounded-md border px-3 py-2",
+        "flex items-start justify-between rounded-md border px-3 py-2",
         passed
           ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/30 dark:bg-emerald-950/20"
           : skipped
@@ -896,17 +907,22 @@ function RepoResultRow({ repo }: { repo: RepoEntry }) {
           : "border-rose-200 bg-rose-50/40 dark:border-rose-900/30 dark:bg-rose-950/20",
       )}
     >
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 items-start gap-2">
         {passed ? (
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
         ) : skipped ? (
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
         ) : (
-          <XCircle className="h-3.5 w-3.5 shrink-0 text-rose-600 dark:text-rose-400" />
+          <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-600 dark:text-rose-400" />
         )}
         <div className="min-w-0">
           <p className="text-[11px] font-medium">{repo.label}</p>
           <p className="truncate text-[10px] text-muted-foreground">{repo.url || "—"}</p>
+          {failMessage && (
+            <p className="mt-1 text-[10px] leading-snug text-rose-600 dark:text-rose-400">
+              {failMessage}
+            </p>
+          )}
         </div>
       </div>
       {repo.language && (

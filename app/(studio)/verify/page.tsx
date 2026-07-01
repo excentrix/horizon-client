@@ -443,7 +443,8 @@ function AddProjectForm({ onAdd }: { onAdd: (title: string, repoUrl: string) => 
 
   return (
     <div className="rounded-xl border border-dashed border-border bg-card/50 p-4">
-      <p className="mb-3 text-sm font-medium">Verify a repo directly</p>
+      <p className="mb-1 text-sm font-medium">Verify a repo directly</p>
+      <p className="mb-3 text-xs text-muted-foreground">Public repos only for now.</p>
       <div className="flex flex-col gap-2 sm:flex-row">
         <Input
           value={repoUrl}
@@ -525,7 +526,7 @@ function GithubReposPicker({
       <div className="rounded-xl border border-dashed border-border bg-card/50 p-4">
         <p className="mb-1 text-sm font-medium">Connect your GitHub</p>
         <p className="mb-3 text-xs text-muted-foreground">
-          Pick a repo straight from your account to defend — no resume needed.
+          Pick a repo straight from your account to defend — no resume needed. Public repos only for now.
         </p>
         <Button onClick={handleConnect} disabled={connecting} variant="outline">
           {connecting ? <Loader2 className="size-4 animate-spin" /> : "Connect GitHub"}
