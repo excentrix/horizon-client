@@ -13,6 +13,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Cookies from "js-cookie";
 import { toast } from "sonner";
 import { telemetry } from "@/lib/telemetry";
+import { captureAcquisitionSource, trackFunnel, FUNNEL } from "@/lib/funnel";
 import { authApi } from "@/lib/api";
 import { supabase } from "@/lib/supabase/client";
 import type {
@@ -57,6 +58,20 @@ function clearSessionTokens() {
   Cookies.remove("refreshToken");
 }
 
+// Routes viewable without a session — auth pages, OAuth callback, and the
+// public shareable surfaces (VELO credentials, public portfolios). A logged-out
+// recruiter opening a credential must NOT be bounced to /login.
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/auth/callback",
+  "/audit/public",
+  "/p/",
+];
+const isPublicPath = (p: string | null | undefined) =>
+  !!p && PUBLIC_PREFIXES.some((prefix) => p.startsWith(prefix));
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (status === 401 || status === 403) {
         clearSessionTokens();
         setUser(null);
-        if (pathname && !pathname.startsWith("/login")) {
+        if (!isPublicPath(pathname)) {
           router.replace("/login");
         }
       } else {
@@ -86,6 +101,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [pathname, router]);
 
   useEffect(() => {
+    // First-touch acquisition source (UTM / ref / referrer), captured once.
+    captureAcquisitionSource();
     const accessToken = Cookies.get("accessToken");
     if (!accessToken) {
       setIsLoading(false);
@@ -310,6 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: payload.email,
           username: payload.username,
         });
+        trackFunnel(FUNNEL.SIGNED_UP, { method: "password" });
 
         toast.success("Account created.");
         if (
@@ -344,7 +362,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/register");
     const isOnboardingPage = pathname.startsWith("/onboarding");
     const isMentorChat = pathname.startsWith("/chat");
-    if (!isAuthPage && !isOnboardingPage && !isMentorChat) {
+    if (!isAuthPage && !isOnboardingPage && !isMentorChat && !isPublicPath(pathname)) {
       router.replace("/onboarding");
     }
   }, [pathname, router, user]);

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/accordion";
 import {
   Upload,
+  Loader2,
   AlertCircle,
   RefreshCw,
   CheckCircle2,
@@ -371,12 +372,10 @@ export function VeloProfileTab() {
     } finally { setExportingPdf(false); }
   };
 
-  const handleResumeUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const processResumeFile = async (file: File) => {
     if (!["application/pdf", "image/jpeg", "image/png", "image/heic", "image/heif"].includes(file.type)) {
       toast.error("Please upload a PDF, JPG, or PNG resume.");
-      event.target.value = ""; return;
+      return;
     }
     setUploadingResume(true);
     try {
@@ -393,7 +392,13 @@ export function VeloProfileTab() {
       }
     } catch {
       toast.error("Failed to upload resume. Please try again.");
-    } finally { event.target.value = ""; setUploadingResume(false); }
+    } finally { setUploadingResume(false); }
+  };
+
+  const handleResumeUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) await processResumeFile(file);
+    event.target.value = "";
   };
 
   const handleReVerify = async (verificationId: string, projectIndex: number) => {
@@ -427,6 +432,15 @@ export function VeloProfileTab() {
   const isRunning = data?.status === "running" || data?.status === "empty";
   const isFailed  = data?.status === "failed";
   const isReady   = data?.status === "ready" && Boolean(mirror);
+  // A snapshot can be "ready" with no actual resume analysis — e.g. a user who
+  // only verified repos directly (a project-only snapshot has an empty
+  // deep_analysis and no resume-derived profile). Detect that so we prompt for
+  // a resume instead of rendering an empty analysis.
+  const hasResumeAnalysis =
+    Object.keys(deep).length > 0 ||
+    experience.length > 0 ||
+    education.length > 0 ||
+    skills.length > 0;
 
   if (isLoading) return <VeloSkeleton />;
 
@@ -529,6 +543,13 @@ export function VeloProfileTab() {
   const mentioned    = skillMastery.filter((s) => s.level === "mentioned");
   const masteryGaps  = skillMastery.filter((s) => s.level === "gap");
 
+  // Verified-capability overlay: deep_analysis is the claim layer; this is the
+  // trust layer reconciled from the project verifications.
+  const verifiedProfile = mirror.verified_profile;
+  const verifiedSkillSet = new Set(
+    (verifiedProfile?.verified_skills ?? []).map((s) => s.skill.toLowerCase()),
+  );
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="pb-12 bg-white rounded-2xl">
@@ -569,6 +590,13 @@ export function VeloProfileTab() {
         {/* ── Right column: ATS + Fit + Actions (below on mobile) ────────── */}
         <aside className="order-last border-t border-border/60 xl:order-none xl:col-start-2 xl:row-start-1 xl:row-span-[999] xl:border-l xl:border-t-0 xl:border-border/60">
           <div className="xl:sticky xl:top-0">
+
+            {/* No resume analyzed yet (project-only user) — offer a drop zone */}
+            {!hasResumeAnalysis && (
+              <div className="border-b border-border/60 p-5">
+                <ResumeDropzone onFile={processResumeFile} uploading={uploadingResume} />
+              </div>
+            )}
 
             {/* ATS score */}
             {atsScore !== undefined && (
@@ -721,6 +749,100 @@ export function VeloProfileTab() {
         {/* ── Left column: main content ─────────────────────────────────── */}
         <div className="order-first min-w-0 divide-y divide-border/60 xl:order-none xl:col-start-1">
 
+          {/* Verified Capability — the claim layer reconciled with defended evidence */}
+          {verifiedProfile && (verifiedProfile.claimed_project_count > 0 || verifiedProfile.verified_project_count > 0) && (
+            <section className="p-5 sm:p-6">
+              <SectionHead icon={<ShieldCheck className="h-3.5 w-3.5" />} title="Verified Capability" />
+
+              {/* Synthesized capability statement — grounded in defended evidence */}
+              {verifiedProfile.narrative && (
+                <div className="mb-4 rounded-2xl border border-[color:var(--brand-indigo)]/25 bg-[color:var(--brand-indigo)]/[0.04] p-4">
+                  {verifiedProfile.headline && (
+                    <p className="mb-1 font-display text-sm font-semibold text-[color:var(--brand-indigo)]">
+                      {verifiedProfile.headline}
+                    </p>
+                  )}
+                  <p className="text-sm leading-relaxed text-foreground/80">{verifiedProfile.narrative}</p>
+                </div>
+              )}
+
+              {/* Coverage banner — sample-size honesty */}
+              {(() => {
+                const cov = verifiedProfile.coverage;
+                const style =
+                  cov === "strong"
+                    ? "border-emerald-200 bg-emerald-50/60 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/15 dark:text-emerald-300"
+                    : cov === "partial"
+                      ? "border-blue-200 bg-blue-50/60 text-blue-800 dark:border-blue-900/40 dark:bg-blue-950/15 dark:text-blue-300"
+                      : cov === "limited"
+                        ? "border-amber-200 bg-amber-50/60 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/15 dark:text-amber-300"
+                        : "border-slate-200 bg-slate-50/60 text-slate-700 dark:border-slate-800 dark:bg-slate-900/30 dark:text-slate-300";
+                return (
+                  <div className={cn("mb-4 flex items-center gap-3 rounded-2xl border px-4 py-3", style)}>
+                    <span className="flex flex-col items-center">
+                      <span className="font-display text-2xl font-bold leading-none tabular-nums">
+                        {verifiedProfile.verified_project_count}
+                        <span className="text-sm font-medium opacity-60">/{verifiedProfile.claimed_project_count}</span>
+                      </span>
+                      <span className="mt-0.5 text-[9px] uppercase tracking-wide opacity-70">defended</span>
+                    </span>
+                    <p className="min-w-0 text-xs leading-relaxed">{verifiedProfile.confidence_note}</p>
+                  </div>
+                );
+              })()}
+
+              {/* Skills backed by a defended project */}
+              {verifiedProfile.verified_skills.length > 0 && (
+                <div className="mb-4">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Backed by defended work
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {verifiedProfile.verified_skills.map((s) => (
+                      <span
+                        key={s.skill}
+                        title={`Defended in: ${s.via_projects.join(", ")}`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[12px] font-medium text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300"
+                      >
+                        <ShieldCheck className="h-3 w-3" /> {s.skill}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Contradictions — claim says demonstrated, evidence disagrees */}
+              {verifiedProfile.contradictions.length > 0 && (
+                <div>
+                  <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-400">
+                    <ShieldAlert className="h-3.5 w-3.5" /> Claim vs. evidence
+                  </p>
+                  <div className="space-y-2">
+                    {verifiedProfile.contradictions.map((c, i) => (
+                      <div
+                        key={i}
+                        className="rounded-xl border border-rose-200 bg-rose-50/60 p-3 dark:border-rose-900/40 dark:bg-rose-950/15"
+                      >
+                        <div className="mb-1 flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold">{c.project_title}</span>
+                          <Badge variant="outline" className="h-5 border-rose-300 text-[10px] text-rose-700 dark:text-rose-400">
+                            {c.verdict === "suspicious" ? "Flagged" : "Not defended"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{c.note}</p>
+                        {c.claimed_skills.length > 0 && (
+                          <p className="mt-1.5 text-[11px] text-rose-700 dark:text-rose-400">
+                            Unbacked claims: {c.claimed_skills.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* Role Readiness */}
           {mirror.role_readiness_narrative && (
             <section className="p-5 sm:p-6">
@@ -852,11 +974,24 @@ export function VeloProfileTab() {
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {demonstrated.map((s) => (
-                      <span key={s.skill} className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[12px] font-medium text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300">
-                        {s.skill}
-                      </span>
-                    ))}
+                    {demonstrated.map((s) => {
+                      const isVerified = verifiedSkillSet.has(s.skill.toLowerCase());
+                      return (
+                        <span
+                          key={s.skill}
+                          title={isVerified ? "Backed by a defended project" : "Claimed on resume — not yet defended"}
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[12px] font-medium",
+                            isVerified
+                              ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300"
+                              : "border-emerald-200/60 bg-emerald-50/40 text-emerald-700/80 dark:border-emerald-900/30 dark:bg-emerald-950/15 dark:text-emerald-400/70",
+                          )}
+                        >
+                          {isVerified && <ShieldCheck className="h-3 w-3" />}
+                          {s.skill}
+                        </span>
+                      );
+                    })}
                     {demonstrated.length === 0 && <p className="text-[11px] italic text-muted-foreground">None yet</p>}
                   </div>
                 </div>
@@ -1366,6 +1501,79 @@ export function VeloProfileTab() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Resume drop zone ─────────────────────────────────────────────────────────
+// Shown in the right column when a snapshot exists but no resume was analyzed
+// (e.g. a project-only user). Drag-and-drop or click to upload; queues analysis
+// on top of any verified work.
+function ResumeDropzone({
+  onFile,
+  uploading,
+}: {
+  onFile: (file: File) => void;
+  uploading: boolean;
+}) {
+  const [over, setOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  return (
+    <div>
+      <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+        Resume analysis
+      </p>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => !uploading && inputRef.current?.click()}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && !uploading && inputRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setOver(false);
+          const file = e.dataTransfer.files?.[0];
+          if (file) onFile(file);
+        }}
+        className={cn(
+          "flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-6 text-center transition-colors",
+          over
+            ? "border-[color:var(--brand-indigo)] bg-[color:var(--brand-indigo)]/5"
+            : "border-border hover:border-[color:var(--brand-indigo)]/50",
+          uploading && "pointer-events-none opacity-70",
+        )}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,application/pdf,image/jpeg,image/png,image/heic,image/heif"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onFile(file);
+            e.target.value = "";
+          }}
+        />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[color:var(--brand-indigo)]/10">
+          {uploading ? (
+            <Loader2 className="h-5 w-5 animate-spin text-[color:var(--brand-indigo)]" />
+          ) : (
+            <Upload className="h-5 w-5 text-[color:var(--brand-indigo)]" />
+          )}
+        </div>
+        <p className="text-xs font-medium">
+          {uploading ? "Uploading…" : "Drop your resume here"}
+        </p>
+        <p className="text-[11px] text-muted-foreground">or click to browse · PDF, JPG, PNG</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+          Adds ATS score, role fit, skill mastery &amp; gaps on top of your verified work.
+        </p>
+      </div>
     </div>
   );
 }

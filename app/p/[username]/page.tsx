@@ -30,7 +30,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { usePublicPortfolio } from "@/hooks/use-portfolio";
+import { usePublicPortfolio, usePublicVerifiedProfile } from "@/hooks/use-portfolio";
+import { VerifiedProfileView } from "@/components/verified/verified-profile-view";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -110,13 +111,50 @@ function TechChip({ label }: { label: string }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+/**
+ * Minimal shell shown when a person has defended work but no public portfolio.
+ * Keeps the verified profile reachable at the same `/p/<username>` URL without
+ * coupling the HR-trust artifact to portfolio setup.
+ */
+function VerifiedOnlyPage({
+  data,
+}: {
+  data: NonNullable<ReturnType<typeof usePublicVerifiedProfile>["data"]>;
+}) {
+  return (
+    <main className="min-h-screen bg-background px-5 py-12">
+      <div className="mx-auto w-full max-w-3xl">
+        <div className="mb-2 flex items-center gap-2">
+          <ShieldCheck className="size-4 text-[color:var(--brand-indigo)]" />
+          <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
+            VELO Verified Profile
+          </span>
+        </div>
+        <h1 className="font-display text-3xl font-semibold tracking-tight">{data.candidate.name}</h1>
+        {data.claimed_role && (
+          <p className="mb-6 mt-1 text-sm text-muted-foreground">Targeting: {data.claimed_role}</p>
+        )}
+        <div className="mt-6">
+          <VerifiedProfileView data={data} />
+        </div>
+      </div>
+    </main>
+  );
+}
+
 export default function PublicPortfolioPage() {
   const params = useParams<{ username?: string }>();
   const searchParams = useSearchParams();
   const username = params?.username ?? "";
   const { data, isLoading, error } = usePublicPortfolio(username);
+  const verified = usePublicVerifiedProfile(username);
+  const hasVerified =
+    !!verified.data && verified.data.verified_profile.verified_project_count > 0;
   const [showJoinCta, setShowJoinCta] = useState(false);
   const [ctaDismissed, setCtaDismissed] = useState(false);
+  const [tab, setTab] = useState<"showcase" | "verified">(
+    searchParams?.get("tab") === "verified" ? "verified" : "showcase",
+  );
 
   const shareSource = useMemo(() => {
     const source = (searchParams?.get("utm_source") || "").toLowerCase();
@@ -144,7 +182,10 @@ export default function PublicPortfolioPage() {
     setShowJoinCta(false);
   };
 
-  if (isLoading) {
+  // Wait for both the portfolio and the (independent) verified profile before
+  // deciding — otherwise a fast portfolio error would flash before the verified
+  // fallback resolves.
+  if (isLoading || ((error || !data) && verified.isLoading)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Spinner className="h-8 w-8 text-[color:var(--brand-indigo)]" />
@@ -153,6 +194,11 @@ export default function PublicPortfolioPage() {
   }
 
   if (error || !data) {
+    // No public portfolio, but the person has defended work → still serve the
+    // verified profile (the HR-trust artifact must not depend on portfolio setup).
+    if (hasVerified && verified.data) {
+      return <VerifiedOnlyPage data={verified.data} />;
+    }
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-4">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10">
@@ -320,6 +366,44 @@ export default function PublicPortfolioPage() {
         </div>
       </div>
 
+      {/* ── Lens tabs: self-curated showcase vs. evidence-only verified ───── */}
+      {hasVerified && (
+        <div className="sticky top-0 z-30 border-b border-border/60 bg-background/95 backdrop-blur">
+          <div className="mx-auto flex max-w-5xl items-center gap-1 px-4 py-2 sm:px-6 lg:px-8">
+            <button
+              type="button"
+              onClick={() => setTab("showcase")}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                tab === "showcase" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Showcase
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("verified")}
+              className={cn(
+                "flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                tab === "verified" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <ShieldCheck className="size-3.5" /> Verified
+            </button>
+          </div>
+        </div>
+      )}
+
+      {tab === "verified" && hasVerified && verified.data ? (
+        <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
+          <p className="mb-4 text-sm text-muted-foreground">
+            Independently verified by interrogating real work — not self-reported. This is the lens a
+            recruiter reads.
+          </p>
+          <VerifiedProfileView data={verified.data} />
+        </div>
+      ) : (
+      <>
       {/* ── Sticky nav ───────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 border-b border-border/60 bg-background/95 backdrop-blur">
         <div className="mx-auto max-w-5xl overflow-x-auto px-4 sm:px-6 lg:px-8">
@@ -698,6 +782,9 @@ export default function PublicPortfolioPage() {
           </aside>
         </div>
       </div>
+
+      </>
+      )}
 
       {/* ── Join CTA (social referral) ────────────────────────────────────── */}
       {shareSource && showJoinCta && !ctaDismissed && (

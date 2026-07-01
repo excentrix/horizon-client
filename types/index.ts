@@ -1735,6 +1735,18 @@ export interface AuditReport {
   evidence_completeness_score?: number;
   generated_at: string;
   public?: boolean;
+  verification?: {
+    status: "unverified" | "evidence_submitted" | "interrogating" | "verified" | "failed" | "suspicious";
+    score: number | null;
+    verdict_summary: string;
+    project_title: string;
+    questions_answered: number;
+    expertise_estimate: string;
+    github_check_status: "pending" | "passed" | "failed" | "skipped";
+    repos: Array<{ url: string; label: string; language?: string }>;
+    files_analyzed: number;
+    verified_at: string | null;
+  };
 }
 
 export interface VeloOnboardingSession {

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { portfolioApi } from "@/lib/api";
+import { portfolioApi, auditApi } from "@/lib/api";
 import type {
   PortfolioArtifact,
   PortfolioProfile,
@@ -68,6 +68,19 @@ export function usePortfolioArtifacts() {
       }
       return failureCount < 1;
     },
+  });
+}
+
+// HR-facing verified profile (evidence-only). Independent of portfolio setup —
+// works off the user's verification record, so it can render even when no
+// public portfolio exists. 404 when the user has no defended work.
+export function usePublicVerifiedProfile(username: string) {
+  return useQuery({
+    queryKey: ["public-verified-profile", username],
+    queryFn: () => auditApi.getPublicVerifiedProfile(username),
+    enabled: Boolean(username),
+    retry: false,
+    staleTime: 300_000,
   });
 }
 

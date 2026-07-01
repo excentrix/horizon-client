@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useMirrorSnapshot } from "@/hooks/use-mirror-snapshot";
 import { useGithubRepos } from "@/hooks/use-github-repos";
+import { useAuth } from "@/context/AuthContext";
 import { ProjectVerificationSheet } from "@/components/mirror/ProjectVerificationSheet";
 import { authApi, auditApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { VeloProfileTab } from "@/components/mirror/velo-profile-tab";
+import { trackFunnel, FUNNEL } from "@/lib/funnel";
 import { toast } from "sonner";
 
 const ACCEPTED = ["application/pdf", "image/png", "image/jpeg"];
@@ -68,6 +70,7 @@ function statusBadge(status?: VerificationStatus, score?: number | null) {
 
 export default function VerifyPage() {
   const { data, isLoading } = useMirrorSnapshot();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -86,6 +89,16 @@ export default function VerifyPage() {
   const verifications = mirror?.project_verifications ?? [];
   const verifiedCount = verifications.filter((v) => v.status === "verified").length;
   const deep = (mirror?.deep_analysis ?? {}) as { ats_score?: number };
+  const verifiedProfile = mirror?.verified_profile;
+
+  // Fire ANALYSIS_READY once when the snapshot first flips to "ready".
+  const analysisReadyFired = useRef(false);
+  useEffect(() => {
+    if (status === "ready" && mirror && !analysisReadyFired.current) {
+      analysisReadyFired.current = true;
+      trackFunnel(FUNNEL.ANALYSIS_READY, { projects: projects.length });
+    }
+  }, [status, mirror, projects.length]);
 
   const handleUpload = async (file: File) => {
     if (!ACCEPTED.includes(file.type)) {
@@ -97,6 +110,7 @@ export default function VerifyPage() {
       const form = new FormData();
       form.append("resume", file);
       await authApi.uploadResume(form);
+      trackFunnel(FUNNEL.RESUME_UPLOADED);
       toast.success("Resume uploaded — VELO is extracting your claims.");
       await queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
     } catch {
@@ -123,10 +137,22 @@ export default function VerifyPage() {
     }
   };
 
+  const shareVerifiedProfile = async () => {
+    if (!user?.username) return;
+    const url = `${window.location.origin}/p/${encodeURIComponent(user.username)}?tab=verified`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Verified-profile link copied — send it to a recruiter.");
+    } catch {
+      toast.error(url);
+    }
+  };
+
   const copyCredentialLink = async (auditId: string) => {
     const url = `${window.location.origin}/audit/public/${auditId}`;
     try {
       await navigator.clipboard.writeText(url);
+      trackFunnel(FUNNEL.CREDENTIAL_SHARED, { audit_id: auditId });
       toast.success("Credential link copied — share it anywhere.");
     } catch {
       toast.error(url);
@@ -235,30 +261,63 @@ export default function VerifyPage() {
       </div>
 
       {/* Credential header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card p-6">
-        <div>
-          <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
-            your proof of work
-          </p>
-          <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight">
-            {verifiedCount > 0
-              ? `${verifiedCount} project${verifiedCount > 1 ? "s" : ""} verified`
-              : "Nothing verified yet"}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {verifiedCount > 0
-              ? "Share your verified credential where it counts."
-              : "Defend a project below to earn your first credential."}
-          </p>
-        </div>
-        {typeof deep.ats_score === "number" && (
-          <div className="text-right">
-            <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
-              resume ATS
-            </p>
-            <p className="font-display text-3xl font-semibold tabular-nums">{deep.ats_score}</p>
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-6">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-accent/5 blur-2xl"
+        />
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+              <ShieldCheck className="size-5" />
+            </div>
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                your proof of work
+              </p>
+              <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight">
+                {verifiedCount > 0
+                  ? `${verifiedCount} project${verifiedCount > 1 ? "s" : ""} verified`
+                  : "Nothing verified yet"}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {verifiedCount > 0
+                  ? "Share your verified credential where it counts."
+                  : "Defend a project below to earn your first credential."}
+              </p>
+              {verifiedProfile?.narrative && (
+                <div className="mt-3 max-w-xl rounded-xl border border-accent/20 bg-accent/[0.04] p-3">
+                  {verifiedProfile.headline && (
+                    <p className="mb-0.5 text-sm font-semibold text-accent">
+                      {verifiedProfile.headline}
+                    </p>
+                  )}
+                  <p className="text-sm leading-relaxed text-foreground/80">
+                    {verifiedProfile.narrative}
+                  </p>
+                  <p className="mt-2 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Synthesized from your defended work · see Resume analysis for the full breakdown
+                  </p>
+                </div>
+              )}
+              {verifiedCount > 0 && user?.username && (
+                <Button size="sm" variant="outline" className="mt-3 gap-1.5" onClick={shareVerifiedProfile}>
+                  <Share2 className="size-3.5" /> Share verified profile
+                </Button>
+              )}
+            </div>
           </div>
-        )}
+          {typeof deep.ats_score === "number" && (
+            <div className="flex flex-col items-center rounded-xl border border-border bg-muted/40 px-5 py-3">
+              <p className="font-display text-3xl font-semibold leading-none tabular-nums">
+                {deep.ats_score}
+              </p>
+              <p className="mt-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                resume ATS
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Projects */}
@@ -276,7 +335,12 @@ export default function VerifyPage() {
           return (
             <div
               key={index}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4"
+              className={
+                "flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 transition-colors " +
+                (v?.status === "verified"
+                  ? "border border-emerald-500/80 "
+                  : "border-border hover:border-accent/50")
+              }
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -326,8 +390,8 @@ export default function VerifyPage() {
           );
         })}
 
-        <AddProjectForm onAdd={handleAddProject} />
         <GithubReposPicker onPick={handlePickRepo} pickingUrl={pickingUrl} />
+        <AddProjectForm onAdd={handleAddProject} />
       </div>
         </TabsContent>
 

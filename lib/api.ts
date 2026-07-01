@@ -1818,6 +1818,39 @@ export const auditApi = {
   getPublicReport: (auditId: string) =>
     extract<AuditReport>(http.get(`/audits/${auditId}/public/`)),
 
+  // HR-facing "assessment of a person" — only verified facts, no private claim layer.
+  getPublicVerifiedProfile: (username: string) =>
+    extract<{
+      candidate: { name: string; username: string };
+      claimed_role: string | null;
+      verified_profile: {
+        claimed_project_count: number;
+        verified_project_count: number;
+        flagged_project_count: number;
+        coverage: "none" | "unverified" | "limited" | "partial" | "strong";
+        confidence_note: string;
+        headline?: string;
+        narrative?: string;
+        verified_skills: Array<{ skill: string; via_projects: string[] }>;
+        contradictions: Array<{
+          project_title: string;
+          verdict: "suspicious" | "failed";
+          claimed_skills: string[];
+          note: string;
+        }>;
+      };
+      defended_projects: Array<{
+        project_title: string;
+        score: number | null;
+        verdict_summary: string;
+        audit_id: string | null;
+        expertise_estimate: string;
+        questions_answered: number;
+        repos: Array<{ url: string; label: string; language?: string }>;
+        verified_at: string | null;
+      }>;
+    }>(http.get(`/verified-profile/${encodeURIComponent(username)}/`)),
+
   submitNarrative: (auditId: string, payload: FormData) =>
     extract<{ status: string }>(
       http.post(`/audits/${auditId}/submit-narrative/`, payload)
@@ -2081,6 +2114,22 @@ export const auditApi = {
           verdict_summary?: string | null;
           verified_at?: string | null;
         }>;
+        verified_profile?: {
+          claimed_project_count: number;
+          verified_project_count: number;
+          flagged_project_count: number;
+          coverage: "none" | "unverified" | "limited" | "partial" | "strong";
+          confidence_note: string;
+          headline?: string;
+          narrative?: string;
+          verified_skills: Array<{ skill: string; via_projects: string[] }>;
+          contradictions: Array<{
+            project_title: string;
+            verdict: "suspicious" | "failed";
+            claimed_skills: string[];
+            note: string;
+          }>;
+        };
         created_at: string;
         updated_at: string;
       };

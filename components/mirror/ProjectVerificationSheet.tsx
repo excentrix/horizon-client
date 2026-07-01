@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -38,6 +38,7 @@ import {
   type AuditDocSection,
 } from "@/hooks/use-project-verification";
 import { useGithubRepos, type GithubRepo } from "@/hooks/use-github-repos";
+import { trackFunnel, FUNNEL } from "@/lib/funnel";
 
 // ─── VELO_AUDIT.md template (hardcoded so copy works before any API call) ────
 
@@ -216,6 +217,20 @@ export function ProjectVerificationSheet({
     if (open) githubFetch();
   }, [open, githubFetch]);
 
+  // Fire VERIFICATION_COMPLETED once when a verdict lands.
+  const verdictFired = useRef(false);
+  useEffect(() => {
+    if (hook.step === "verdict" && hook.verdict && !verdictFired.current) {
+      verdictFired.current = true;
+      trackFunnel(FUNNEL.VERIFICATION_COMPLETED, {
+        project: projectTitle,
+        status: hook.verdict.status,
+        score: hook.verdict.verification_score,
+      });
+    }
+    if (!open) verdictFired.current = false; // reset for the next session
+  }, [hook.step, hook.verdict, open, projectTitle]);
+
   const handleOpenChange = (isOpen: boolean) => {
     onOpenChange(isOpen);
     if (!isOpen) {
@@ -231,6 +246,7 @@ export function ProjectVerificationSheet({
 
   const handleBeginVerification = async () => {
     setHasStarted(true);
+    trackFunnel(FUNNEL.VERIFICATION_STARTED, { project: projectTitle });
     await hook.startVerification(projectIndex);
   };
 

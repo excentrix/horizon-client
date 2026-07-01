@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { authApi } from "@/lib/api";
+import { trackFunnel, FUNNEL } from "@/lib/funnel";
 
 export type GithubRepo = {
   id: number;
@@ -85,6 +86,7 @@ export function useGithubRepos() {
         settled = true;
         window.removeEventListener("message", handler);
         clearInterval(pollClosed);
+        if (result.success) trackFunnel(FUNNEL.GITHUB_CONNECTED);
         resolve(result);
       };
 
