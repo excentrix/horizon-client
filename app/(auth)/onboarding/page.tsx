@@ -6,7 +6,6 @@ import { AlertCircle, CheckCircle2, Loader2, Upload, ArrowRight } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { authApi } from "@/lib/api";
@@ -29,15 +28,12 @@ export default function OnboardingPage() {
 
   const [targetRole, setTargetRole] = useState("");
   const [targetCompany, setTargetCompany] = useState("");
-  const [timeline, setTimeline] = useState("");
-  const [constraints, setConstraints] = useState("");
-  const [jobId, setJobId] = useState<string | null>(null);
 
   const statusCopy = useMemo(() => {
-    if (stage === "uploading") return "Uploading resume...";
-    if (stage === "ready") return "Resume uploaded. VELO analysis started in background.";
-    if (stage === "failed") return error || "Resume analysis failed.";
-    return "Upload resume to start VELO analysis.";
+    if (stage === "uploading") return "Uploading résumé...";
+    if (stage === "ready") return "Résumé uploaded. VELO is extracting the projects you claim.";
+    if (stage === "failed") return error || "Résumé analysis failed.";
+    return "Upload your résumé to begin.";
   }, [error, stage]);
 
   const validateFile = (selectedFile: File): string | null => {
@@ -57,22 +53,20 @@ export default function OnboardingPage() {
   };
 
   const parseResume = async (): Promise<boolean> => {
-    if (!file || !targetRole.trim()) return false;
+    if (!file) return false;
     setError("");
     setStage("uploading");
 
     try {
       const form = new FormData();
       form.append("resume", file);
-      form.append("target_role", targetRole.trim());
-      form.append("target_company", targetCompany.trim());
-      form.append("timeline", timeline.trim());
-      form.append("constraints", constraints.trim());
+      // Optional context — sharpens role-fit analysis, not required to verify.
+      if (targetRole.trim()) form.append("target_role", targetRole.trim());
+      if (targetCompany.trim()) form.append("target_company", targetCompany.trim());
       const payload = await authApi.uploadResume(form);
 
       setStage("ready");
       if (payload.job_id) {
-        setJobId(payload.job_id);
         window.localStorage.setItem("resumeAnalysisJobId", payload.job_id);
       }
       return true;
@@ -83,18 +77,27 @@ export default function OnboardingPage() {
     }
   };
 
-  const canContinue = Boolean(file) && Boolean(targetRole.trim());
+  const canContinue = Boolean(file);
+
+  // Mark onboarding complete explicitly so returning users are never looped back
+  // here, then land them in the VELO verification hub (not the learning mentor).
+  const finishOnboarding = async () => {
+    try {
+      await authApi.completeOnboarding();
+    } catch {
+      /* upload already sets the flag server-side; this is belt-and-suspenders */
+    }
+    await refreshProfile();
+    router.push("/verify");
+  };
 
   const handleGetStarted = async () => {
-    if (stage === "ready" && jobId) {
-      router.push("/chat");
+    if (stage === "ready") {
+      await finishOnboarding();
       return;
     }
     const ok = await parseResume();
-    if (ok) {
-      await refreshProfile();
-      router.push("/chat");
-    }
+    if (ok) await finishOnboarding();
   };
 
   useEffect(() => {
@@ -107,27 +110,22 @@ export default function OnboardingPage() {
 
   return (
     <OnboardingShell
-      title="Set up your mentor context"
-      subtitle="Upload your resume once and VELO will personalize your learning direction in the background."
+      title="Verify the work on your résumé"
+      subtitle="Upload your résumé — VELO extracts the projects you claim, then interrogates you on each so you can defend them into a verifiable credential."
     >
       <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <Label htmlFor="target-role">Target role *</Label>
+                <Label htmlFor="target-role">Target role (optional)</Label>
                 <Input id="target-role" value={targetRole} onChange={(e) => setTargetRole(e.target.value)} placeholder="e.g., Backend Engineer" />
               </div>
               <div>
                 <Label htmlFor="target-company">Target company (optional)</Label>
                 <Input id="target-company" value={targetCompany} onChange={(e) => setTargetCompany(e.target.value)} placeholder="e.g., Google" />
               </div>
-              <div>
-                <Label htmlFor="timeline">Timeline</Label>
-                <Input id="timeline" value={timeline} onChange={(e) => setTimeline(e.target.value)} placeholder="e.g., 3 months" />
-              </div>
-              <div className="md:col-span-2">
-                <Label htmlFor="constraints">Constraints</Label>
-                <Textarea id="constraints" value={constraints} onChange={(e) => setConstraints(e.target.value)} placeholder="e.g., 2 hrs/day weekdays" className="min-h-[90px]" />
-              </div>
+              <p className="md:col-span-2 -mt-1 text-xs text-muted-foreground">
+                Optional — sharpens how VELO scores your role fit. You can verify without it.
+              </p>
             </div>
 
             <div
@@ -196,11 +194,11 @@ export default function OnboardingPage() {
                 {stage === "uploading" ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Uploading resume...
+                    Uploading résumé...
                   </>
                 ) : (
                   <>
-                    Upload & Open Mentor
+                    Upload &amp; start verifying
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </>
                 )}
