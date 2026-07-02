@@ -74,6 +74,19 @@ Versioning policy:
 ### Commits
 - `bb7a927` feat(verify): add public verified profile surfaces
 
+## v0.2.10 (2026-07-02)
+
+### Added
+- Verification-first onboarding that feeds directly into the VELO hub.
+
+### Changed
+- Onboarding now treats résumé upload as the first step in verification, not mentor setup.
+- Optional role/company context still sharpens scoring, but no longer blocks progress.
+- Returning users now land on the verification flow instead of being routed back into chat.
+
+### Commits
+- `5b36a6a` feat(onboarding): redirect onboarding into verification hub
+
 ## Unreleased
 
 ### Added
