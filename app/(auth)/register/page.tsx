@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertCircle } from "lucide-react";
+import { AuthBrandPanel } from "@/components/auth/auth-brand-panel";
 
 const resolveApiUrl = () => {
   if (process.env.NEXT_PUBLIC_API_URL) {
@@ -161,7 +162,10 @@ function RegisterForm() {
   const isInviteInvalid = inviteToken && inviteData.checked && !inviteData.valid;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 rounded-2xl border bg-card/80 p-8 shadow-xl backdrop-blur">
+    <div className="grid w-full overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-3)] lg:grid-cols-[1.05fr_1fr]">
+      <AuthBrandPanel heading="One verified project beats a page of claims." />
+
+      <div className="flex flex-col gap-6 p-8 sm:p-10">
 
       {/* ── Waitlist invite banner ────────────────────────────────────── */}
       {inviteToken && !inviteData.checked && (
@@ -203,13 +207,18 @@ function RegisterForm() {
       )}
       {/* ──────────────────────────────────────────────────────────────── */}
 
-      <div className="space-y-2 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight">
-          {fromWaitlist ? "Claim your Horizon spot" : "Join the mentorship studio"}
+      <div className="space-y-2">
+        <p className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--brand-tangerine)" }} />
+          Create your account
+        </p>
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-[color:var(--brand-ink)]">
+          {fromWaitlist ? "Claim your spot" : "Prove your work with VELO"}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Already have an account?{" "}
-          <Link href="/login" className="text-primary underline">
+          Upload your résumé, defend a project, and walk away with a verifiable proof-of-work
+          credential you can share. Already have an account?{" "}
+          <Link href="/login" className="font-medium text-(--brand-tangerine) underline-offset-4 hover:underline">
             Sign in
           </Link>
         </p>
@@ -233,6 +242,7 @@ function RegisterForm() {
         <div className="grid gap-2 md:grid-cols-2">
           <Button
             type="button"
+            className="bg-(--brand-tangerine) text-accent-foreground hover:opacity-90"
             onClick={() => {
               form.setValue("email", signupEmail, { shouldValidate: true });
               setShowEmailSignup(true);
@@ -438,7 +448,7 @@ function RegisterForm() {
 
           <Button
             type="submit"
-            className="md:col-span-2 w-full"
+            className="md:col-span-2 w-full bg-(--brand-tangerine) text-accent-foreground hover:opacity-90"
             disabled={isLoading}
           >
             {isLoading ? "Creating account…" : "Create account"}
@@ -446,6 +456,7 @@ function RegisterForm() {
           </form>
         </Form>
       ) : null}
+      </div>
     </div>
   );
 }

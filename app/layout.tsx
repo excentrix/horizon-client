@@ -1,30 +1,31 @@
 import type { Metadata, Viewport } from "next";
 import {
-  IBM_Plex_Mono,
-  Inter,
+  Bricolage_Grotesque,
+  Geist_Mono,
+  Instrument_Sans,
   Roboto_Mono,
   Silkscreen,
-  Space_Grotesk,
 } from "next/font/google";
 import "./globals.css";
 import "katex/dist/katex.min.css";
 import { AppProviders } from "@/providers/app-providers";
 import { cn } from "@/lib/utils";
 
-const inter = Inter({
+// Brand stack shared with horizon-web ("first light"): Instrument Sans (body),
+// Bricolage Grotesque (display), Geist Mono (mono).
+const inter = Instrument_Sans({
   subsets: ["latin"],
   variable: "--font-body",
 });
 
-const display = Space_Grotesk({
+const display = Bricolage_Grotesque({
   subsets: ["latin"],
   variable: "--font-display",
 });
 
-const mono = IBM_Plex_Mono({
+const mono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-mono-ui",
-  weight: ["400", "500", "600"],
 });
 
 const retroDisplay = Silkscreen({
