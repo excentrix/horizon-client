@@ -62,11 +62,8 @@ export default function LoginPage() {
 
       <div className="p-8 sm:p-10">
         <div className="mb-7 space-y-2">
-          <p className="flex items-center gap-2 font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: "var(--brand-tangerine)" }}
-            />
+          <p className="eyebrow flex items-center gap-2">
+            <span className="eyebrow-dot" />
             Welcome back
           </p>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-[color:var(--brand-ink)]">

@@ -173,8 +173,11 @@ export default function VerifyPage() {
   if (status === "empty" || (!mirror && !analysisRunning)) {
     return (
       <div className="mx-auto w-full max-w-2xl p-6">
-        <div className="rounded-2xl border border-border bg-card p-8 text-center">
-          <ShieldCheck className="mx-auto mb-4 size-10 text-primary" />
+        <div className="grain relative overflow-hidden rounded-2xl border border-border bg-card p-8 text-center">
+          <ShieldCheck className="mx-auto mb-4 size-10 text-(--brand-tangerine)" />
+          <p className="eyebrow mb-3 flex items-center justify-center gap-2">
+            <span className="eyebrow-dot" /> Proof of work
+          </p>
           <h1 className="font-display text-2xl font-semibold tracking-tight">
             Verify the claims on your resume
           </h1>
@@ -193,7 +196,7 @@ export default function VerifyPage() {
             }}
           />
           <Button
-            className="mt-6"
+            className="mt-6 bg-(--brand-tangerine) text-accent-foreground hover:opacity-90"
             size="lg"
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
@@ -261,7 +264,7 @@ export default function VerifyPage() {
       </div>
 
       {/* Credential header */}
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-6">
+      <div className="grain relative overflow-hidden rounded-2xl border border-border bg-card p-6">
         <div
           aria-hidden
           className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-accent/5 blur-2xl"
@@ -272,8 +275,8 @@ export default function VerifyPage() {
               <ShieldCheck className="size-5" />
             </div>
             <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                your proof of work
+              <p className="eyebrow flex items-center gap-2">
+                <span className="eyebrow-dot" /> Your proof of work
               </p>
               <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight">
                 {verifiedCount > 0

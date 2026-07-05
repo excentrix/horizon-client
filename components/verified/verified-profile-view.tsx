@@ -61,8 +61,8 @@ export function VerifiedProfileView({ data }: { data: VerifiedProfileData }) {
       {/* Skills backed by defended work */}
       {vp.verified_skills.length > 0 && (
         <div>
-          <p className="mb-2 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-            Backed by defended work
+          <p className="eyebrow mb-2 flex items-center gap-2">
+            <span className="eyebrow-dot" /> Backed by defended work
           </p>
           <div className="flex flex-wrap gap-1.5">
             {vp.verified_skills.map((s) => (
@@ -80,8 +80,8 @@ export function VerifiedProfileView({ data }: { data: VerifiedProfileData }) {
 
       {/* Defended projects — the evidence */}
       <div>
-        <p className="mb-3 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-          Defended projects
+        <p className="eyebrow mb-3 flex items-center gap-2">
+          <span className="eyebrow-dot" /> Defended projects
         </p>
         <div className="space-y-3">
           {defended_projects.map((p, i) => (
