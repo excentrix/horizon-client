@@ -1404,6 +1404,7 @@ export function VeloProfileTab() {
           snapshotId={mirror.id}
           projectIndex={verifyingProjectIndex}
           projectTitle={(projects[verifyingProjectIndex]?.title as string | undefined) ?? `Project ${verifyingProjectIndex + 1}`}
+          initialRepoUrl={projects[verifyingProjectIndex]?.repo_url}
         />
       )}
 

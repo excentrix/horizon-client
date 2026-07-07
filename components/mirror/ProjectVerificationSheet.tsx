@@ -23,11 +23,7 @@ import {
   AlertTriangle,
   Plus,
   Trash2,
-  Copy,
   Check,
-  RefreshCw,
-  FileText,
-  ChevronDown,
   Search,
   Unplug,
 } from "lucide-react";
@@ -35,152 +31,14 @@ import { cn } from "@/lib/utils";
 import {
   useProjectVerification,
   type RepoEntry,
-  type AuditDocSection,
 } from "@/hooks/use-project-verification";
 import { useGithubRepos, type GithubRepo } from "@/hooks/use-github-repos";
 import { trackFunnel, FUNNEL } from "@/lib/funnel";
 
-// ─── VELO_AUDIT.md template (hardcoded so copy works before any API call) ────
-
-function buildTemplate(projectName: string) {
-  return `# VELO Technical Audit — ${projectName}
-
-> Commit this file as \`VELO_AUDIT.md\` in the root of your primary repository.
-> VELO uses it to generate your personalised interview questions.
-> **Minimum 50 words per section. Vague or placeholder text will fail validation.**
-
----
-
-## Architecture
-
-Describe the complete system architecture:
-- What are the main components or modules? How do they fit together?
-- How do they communicate — REST, WebSocket, message queue, direct calls?
-- What design patterns did you follow (MVC, Clean Architecture, event-driven…) and why?
-- How is data stored and retrieved? Describe your data layer.
-- If you have a frontend and backend, describe both and how they integrate.
-- Sketch a rough component diagram in text if it helps.
-
-<!-- Your answer -->
-
-
----
-
-## Technology Choices
-
-For each major technology, library, or framework:
-- Why did you choose it specifically over the obvious alternative?
-- What trade-offs did you accept?
-- Would you make the same choice today?
-
-"I chose React because it's popular" will fail validation.
-"I chose React over Vue because react-query gave me server-state caching out of the box,
-which saved ~2 weeks of manual cache invalidation logic" is what VELO is looking for.
-
-<!-- Your answer -->
-
-
----
-
-## Key Implementation Decisions
-
-List at least 3 significant technical decisions. For each:
-1. **What was the decision?** (e.g., how to handle auth tokens, schema design, caching strategy)
-2. **What alternatives did you consider?** (name at least two)
-3. **Why did you choose this approach?** (be specific — not just "it was simpler")
-4. **What did you give up?** (every decision has a trade-off)
-5. **Would you change it today?** If yes, what would you do instead?
-
-<!-- Your answer -->
-
-
----
-
-## Hardest Problem Solved
-
-Describe the hardest technical problem you hit while building this project:
-
-1. **The symptom** — what were you observing? Error messages, wrong output, slow performance?
-2. **Why it was hard** — what made it non-obvious to diagnose?
-3. **What you tried first** — approaches that didn't work and exactly why they failed
-4. **The root cause** — what was actually wrong
-5. **The fix** — what you changed and why it worked
-6. **What you learned** — what would prevent this class of problem in future
-
-If you solved multiple hard problems, describe the one that took the longest.
-
-<!-- Your answer -->
-
-
----
-
-## Known Limitations & Technical Debt
-
-Be brutally honest. What is currently broken, incomplete, or held together with duct tape?
-
-- What breaks under moderate load (100+ concurrent users)?
-- What input edge cases are unhandled?
-- What security assumptions are you making that might not hold?
-- What did you hardcode that should be configurable?
-- What needs to be refactored before this goes to production?
-- What is on your backlog that you never got to?
-
-This section is not marked negatively — every real project has debt. Hiding it from VELO
-just results in harder interview questions.
-
-<!-- Your answer -->
-
-
----
-
-## Testing Approach
-
-Describe your testing strategy:
-- What kinds of tests exist? (unit, integration, e2e, manual only)
-- What specific things are covered? Name the most important test cases.
-- What is NOT tested and why? (time constraints, complexity, difficulty)
-- How did you verify your main user flows work end-to-end?
-- If you had to add 10 tests tomorrow, what would they cover and why those?
-- Name at least one bug you shipped that a test would have caught.
-
-If you wrote zero automated tests, explain your manual testing process in detail.
-
-<!-- Your answer -->
-
-
----
-
-## Security & Performance
-
-**Security:**
-- How is authentication implemented? Where are tokens stored and why?
-- What input validation exists? Where could XSS, SQLi, or IDOR occur?
-- What are the trust boundaries? What do you trust that you perhaps shouldn't?
-- What would you harden first if this went to production next week?
-
-**Performance:**
-- What are the slowest operations right now? Have you profiled them?
-- What happens if the database grows to 1 million rows?
-- Where do you make N+1 queries or redundant API calls?
-- What caching have you implemented? What would you add next and why?
-
-<!-- Your answer -->
-`;
-}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const REPO_LABELS = ["Full Stack", "Frontend", "Backend", "Mobile", "ML / AI", "Other"];
-
-const AUDIT_SECTIONS = [
-  "Architecture",
-  "Technology Choices",
-  "Key Implementation Decisions",
-  "Hardest Problem Solved",
-  "Known Limitations & Technical Debt",
-  "Testing Approach",
-  "Security & Performance",
-];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -190,6 +48,9 @@ interface ProjectVerificationSheetProps {
   snapshotId: string;
   projectIndex: number;
   projectTitle: string;
+  /** Repo the project already points at — pre-seeds the picker so the user
+   *  doesn't have to re-select it (and avoids a stray empty row). */
+  initialRepoUrl?: string;
 }
 
 export function ProjectVerificationSheet({
@@ -198,6 +59,7 @@ export function ProjectVerificationSheet({
   snapshotId,
   projectIndex,
   projectTitle,
+  initialRepoUrl,
 }: ProjectVerificationSheetProps) {
   const hook = useProjectVerification(snapshotId);
   const github = useGithubRepos();
@@ -206,7 +68,6 @@ export function ProjectVerificationSheet({
   const [demoUrl, setDemoUrl] = useState("");
   const [answer, setAnswer] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [repoSearch, setRepoSearch] = useState("");
   const [githubConnecting, setGithubConnecting] = useState(false);
 
@@ -214,8 +75,13 @@ export function ProjectVerificationSheet({
   // doesn't show "Connect GitHub" for an already-connected user.
   const githubFetch = github.fetchRepos;
   useEffect(() => {
-    if (open) githubFetch();
-  }, [open, githubFetch]);
+    if (open) {
+      githubFetch();
+      // Pre-seed the repo the project already points at (replaces the empty
+      // starter row) so the picker shows it selected — no re-selection needed.
+      if (initialRepoUrl) setRepos([{ url: initialRepoUrl, label: "Full Stack" }]);
+    }
+  }, [open, githubFetch, initialRepoUrl]);
 
   // Fire VERIFICATION_COMPLETED once when a verdict lands.
   const verdictFired = useRef(false);
@@ -239,7 +105,6 @@ export function ProjectVerificationSheet({
       setDemoUrl("");
       setAnswer("");
       setHasStarted(false);
-      setCopied(false);
       setRepoSearch("");
     }
   };
@@ -264,14 +129,6 @@ export function ProjectVerificationSheet({
       await hook.completeAndFinalize();
     }
   };
-
-  const handleCopyTemplate = () => {
-    navigator.clipboard.writeText(buildTemplate(projectTitle));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const canStartInterrogation = hook.auditDoc?.status === "accepted";
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -384,9 +241,6 @@ export function ProjectVerificationSheet({
                 />
               </div>
 
-              {/* VELO_AUDIT.md */}
-              <AuditDocGuide onCopy={handleCopyTemplate} copied={copied} />
-
               <Button
                 onClick={handleSubmitRepos}
                 disabled={hook.isLoading || !repos.some((r) => r.url.trim())}
@@ -431,22 +285,6 @@ export function ProjectVerificationSheet({
                   <RepoResultRow key={i} repo={repo} />
                 ))}
               </div>
-
-              {/* Audit doc */}
-              <AuditDocResultCard
-                result={hook.auditDoc}
-                onCopy={handleCopyTemplate}
-                copied={copied}
-                onRecheck={hook.recheckAuditDoc}
-                isRechecking={hook.isLoading}
-              />
-
-              {!canStartInterrogation && (
-                <p className="text-[11px] text-muted-foreground">
-                  Optional: add a VELO_AUDIT.md to your repo and hit Re-check to boost your
-                  verification score. Not required — you can start the interrogation now.
-                </p>
-              )}
 
               <Button
                 onClick={hook.startInterrogation}
@@ -808,78 +646,6 @@ function CenteredSpinner() {
   );
 }
 
-function AuditDocGuide({
-  onCopy,
-  copied,
-}: {
-  onCopy: () => void;
-  copied: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="rounded-lg border bg-muted/20">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-3 py-2.5 text-left"
-      >
-        <div className="flex items-center gap-2">
-          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-medium">VELO_AUDIT.md required</span>
-          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
-            REQUIRED
-          </span>
-        </div>
-        <ChevronDown
-          className={cn(
-            "h-3.5 w-3.5 text-muted-foreground transition-transform",
-            open && "rotate-180",
-          )}
-        />
-      </button>
-
-      {open && (
-        <div className="border-t px-3 pb-3 pt-2.5 space-y-3">
-          <p className="text-[11px] text-muted-foreground">
-            Add a <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">VELO_AUDIT.md</code>{" "}
-            file to the root of your primary repository. It must contain all 7 sections
-            with at least 50 words each. VELO generates your interview questions directly
-            from this document — the more honest and specific you are, the more accurately
-            it can assess your depth.
-          </p>
-
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-            {AUDIT_SECTIONS.map((s) => (
-              <div key={s} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <span className="h-1 w-1 shrink-0 rounded-full bg-muted-foreground/50" />
-                {s}
-              </div>
-            ))}
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 w-full text-xs"
-            onClick={onCopy}
-          >
-            {copied ? (
-              <>
-                <Check className="mr-2 h-3.5 w-3.5 text-emerald-500" />
-                Copied to clipboard
-              </>
-            ) : (
-              <>
-                <Copy className="mr-2 h-3.5 w-3.5" />
-                Copy VELO_AUDIT.md template
-              </>
-            )}
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function RepoResultRow({ repo }: { repo: RepoEntry }) {
   const passed = repo.check_status === "passed";
@@ -934,123 +700,6 @@ function RepoResultRow({ repo }: { repo: RepoEntry }) {
   );
 }
 
-function AuditDocResultCard({
-  result,
-  onCopy,
-  copied,
-  onRecheck,
-  isRechecking,
-}: {
-  result: {
-    status: string;
-    sections: AuditDocSection[];
-    feedback: string;
-    template?: string;
-  } | null;
-  onCopy: () => void;
-  copied: boolean;
-  onRecheck: () => void;
-  isRechecking: boolean;
-}) {
-  if (!result) return null;
-
-  const accepted = result.status === "accepted";
-  const missing = result.status === "missing";
-
-  return (
-    <div
-      className={cn(
-        "rounded-lg border p-3 space-y-2.5",
-        accepted
-          ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/30 dark:bg-emerald-950/20"
-          : missing
-          ? "border-amber-200 bg-amber-50/40 dark:border-amber-900/30 dark:bg-amber-950/20"
-          : "border-rose-200 bg-rose-50/40 dark:border-rose-900/30 dark:bg-rose-950/20",
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <div
-          className={cn(
-            "flex items-center gap-1.5 text-xs font-semibold",
-            accepted
-              ? "text-emerald-700 dark:text-emerald-400"
-              : missing
-              ? "text-amber-700 dark:text-amber-400"
-              : "text-rose-700 dark:text-rose-400",
-          )}
-        >
-          {accepted ? (
-            <CheckCircle2 className="h-3.5 w-3.5" />
-          ) : (
-            <AlertTriangle className="h-3.5 w-3.5" />
-          )}
-          VELO_AUDIT.md —{" "}
-          {accepted ? "Accepted" : missing ? "Not found" : "Needs more detail"}
-        </div>
-        {!accepted && (
-          <button
-            onClick={onRecheck}
-            disabled={isRechecking}
-            className="flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
-          >
-            <RefreshCw
-              className={cn("h-3 w-3", isRechecking && "animate-spin")}
-            />
-            Re-check
-          </button>
-        )}
-      </div>
-
-      <p className="text-[11px] text-muted-foreground">{result.feedback}</p>
-
-      {result.sections.length > 0 && !accepted && (
-        <div className="space-y-1 pt-0.5">
-          {result.sections.map((s) => (
-            <div key={s.name} className="flex items-center justify-between text-[10px]">
-              <span
-                className={cn(
-                  "flex items-center gap-1.5",
-                  s.passed ? "text-muted-foreground" : "font-medium text-rose-600 dark:text-rose-400",
-                )}
-              >
-                {s.passed ? (
-                  <Check className="h-2.5 w-2.5 text-emerald-500" />
-                ) : (
-                  <XCircle className="h-2.5 w-2.5" />
-                )}
-                {s.name}
-              </span>
-              <span className="text-muted-foreground">
-                {s.word_count} / {s.required_words} words
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {!accepted && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 w-full text-[11px]"
-          onClick={onCopy}
-        >
-          {copied ? (
-            <>
-              <Check className="mr-1.5 h-3 w-3 text-emerald-500" />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy className="mr-1.5 h-3 w-3" />
-              Copy VELO_AUDIT.md template
-            </>
-          )}
-        </Button>
-      )}
-    </div>
-  );
-}
 
 function VerdictCard({
   verdict,

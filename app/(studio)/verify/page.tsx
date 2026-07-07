@@ -415,6 +415,7 @@ export default function VerifyPage() {
           snapshotId={sheet.snapshotId}
           projectIndex={sheet.index}
           projectTitle={sheet.title}
+          initialRepoUrl={projects[sheet.index]?.repo_url}
         />
       )}
     </div>

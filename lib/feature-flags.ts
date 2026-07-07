@@ -14,6 +14,7 @@ export type FeatureName =
   | "institutions"
   | "dashboard"
   | "onboarding"
+  | "code_execution"
   | "plans"
   | "roadmap"
   | "progress"
@@ -33,6 +34,7 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   institutions: true,
   dashboard: true,
   onboarding: true,
+  code_execution: false,
   plans: false,
   roadmap: false,
   progress: false,
