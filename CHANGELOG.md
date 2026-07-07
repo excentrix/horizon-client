@@ -87,6 +87,18 @@ Versioning policy:
 ### Commits
 - `5b36a6a` feat(onboarding): redirect onboarding into verification hub
 
+## v0.2.11 (2026-07-07)
+
+### Added
+- Verification sheets now pre-seed the project repo from the active project so users do not have to re-select it.
+
+### Changed
+- Removed the VELO_AUDIT.md copy/re-check gate from the verification flow and simplified the sheet around live repo interrogation.
+- Project verification and mirror tabs now pass the selected repository URL through the sheet.
+
+### Commits
+- `df52f0c` feat(verify): streamline project verification repo selection
+
 ## Unreleased
 
 ### Added
