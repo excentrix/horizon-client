@@ -9,8 +9,61 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { auditApi } from "@/lib/api";
+import { INTERROGATION_DIMENSIONS, type DimensionScores } from "@/types";
 
 type VerifiedProfileData = Awaited<ReturnType<typeof auditApi.getPublicVerifiedProfile>>;
+
+const NOT_ASSESSED_MARKERS = new Set([
+  "not assessed across the interview",
+  "not assessed in this answer",
+]);
+
+const DIMENSION_LABELS: Record<string, string> = {
+  ownership: "Ownership",
+  technical_depth: "Technical depth",
+  debugging_ability: "Debugging",
+  communication: "Communication",
+  honesty: "Honesty",
+  consistency: "Consistency",
+};
+
+/** Lowest-density read of a project's dimension breakdown — a row of tiny
+ *  status ticks, one per scored dimension. The full breakdown (bars +
+ *  evidence citations) lives one click away on the project's own public
+ *  credential page; this is just enough to scan across several projects. */
+function DimensionDots({ dimensionScores }: { dimensionScores: DimensionScores }) {
+  const rows = INTERROGATION_DIMENSIONS.map((dim) => ({ dim, data: dimensionScores[dim] })).filter(
+    (r) => r.data,
+  );
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      {rows.map(({ dim, data }) => {
+        if (!data) return null;
+        const notAssessed = NOT_ASSESSED_MARKERS.has((data.evidence || "").trim().toLowerCase());
+        const pct = Math.round(data.score * 100);
+        const dotColor = notAssessed
+          ? "bg-muted-foreground/30"
+          : pct >= 70
+          ? "bg-emerald-500"
+          : pct >= 40
+          ? "bg-amber-500"
+          : "bg-rose-500";
+        return (
+          <span
+            key={dim}
+            title={`${DIMENSION_LABELS[dim] ?? dim}: ${notAssessed ? "not assessed" : `${pct}/100`}`}
+            className="inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground"
+          >
+            <span className={cn("size-1.5 rounded-full", dotColor)} />
+            {DIMENSION_LABELS[dim] ?? dim}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 const COVERAGE_THEME: Record<string, { label: string; cls: string }> = {
   strong: { label: "Strong sample", cls: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300" },
@@ -103,6 +156,7 @@ export function VerifiedProfileView({ data }: { data: VerifiedProfileData }) {
                   </span>
                 )}
               </div>
+              {p.dimension_scores && <DimensionDots dimensionScores={p.dimension_scores} />}
               {p.repos.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {p.repos.map((r) => (

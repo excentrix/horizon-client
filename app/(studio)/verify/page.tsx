@@ -17,6 +17,7 @@ import { useGithubRepos } from "@/hooks/use-github-repos";
 import { useAuth } from "@/context/AuthContext";
 import { ProjectVerificationSheet } from "@/components/mirror/ProjectVerificationSheet";
 import { authApi, auditApi } from "@/lib/api";
+import { INTERROGATION_DIMENSIONS, type DimensionScores } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -44,6 +45,59 @@ type VerificationStatus =
   | "failed"
   | "suspicious";
 
+// Statuses where finalize() has actually run — a real verdict with
+// dimension_scores + verdict_summary exists, even when the outcome is
+// unflattering. These must show their reasoning, not just a bare badge.
+const DECIDED_STATUSES = new Set<string>(["verified", "suspicious", "failed"]);
+
+const DIMENSION_LABELS: Record<string, string> = {
+  ownership: "Ownership",
+  technical_depth: "Technical depth",
+  debugging_ability: "Debugging",
+  communication: "Communication",
+  honesty: "Honesty",
+  consistency: "Consistency",
+};
+
+const NOT_ASSESSED_MARKERS = new Set([
+  "not assessed across the interview",
+  "not assessed in this answer",
+]);
+
+/** Compact breakdown for the project list card — same status-color
+ *  language as the verdict sheet, low density since this is a scan-many-
+ *  projects context. */
+function CardDimensionBreakdown({ dimensionScores }: { dimensionScores: DimensionScores }) {
+  const rows: { dim: string; score: number; evidence: string }[] = [];
+  for (const dim of INTERROGATION_DIMENSIONS) {
+    const data = dimensionScores[dim];
+    if (!data) continue;
+    if (NOT_ASSESSED_MARKERS.has((data.evidence || "").trim().toLowerCase())) continue;
+    rows.push({ dim, score: Math.round(data.score * 100), evidence: data.evidence });
+  }
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+      {rows.map(({ dim, score, evidence }) => (
+        <span
+          key={dim}
+          title={evidence}
+          className="inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground"
+        >
+          <span
+            className={
+              "size-1.5 rounded-full " +
+              (score >= 70 ? "bg-emerald-500" : score >= 40 ? "bg-amber-500" : "bg-rose-500")
+            }
+          />
+          {DIMENSION_LABELS[dim] ?? dim} {score}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function statusBadge(status?: VerificationStatus, score?: number | null) {
   switch (status) {
     case "verified":
@@ -58,11 +112,15 @@ function statusBadge(status?: VerificationStatus, score?: number | null) {
     case "suspicious":
       return (
         <Badge variant="destructive" className="gap-1">
-          <CircleAlert className="size-3" /> Flagged
+          <CircleAlert className="size-3" /> Flagged{score != null ? ` · ${Math.round(score * 100)}` : ""}
         </Badge>
       );
     case "failed":
-      return <Badge variant="destructive">Not defended</Badge>;
+      return (
+        <Badge variant="destructive">
+          Not defended{score != null ? ` · ${Math.round(score * 100)}` : ""}
+        </Badge>
+      );
     default:
       return <Badge variant="outline">Unverified</Badge>;
   }
@@ -360,10 +418,13 @@ export default function VerifyPage() {
                     {p.repo_url.replace(/^https?:\/\//, "")} <ExternalLink className="size-3" />
                   </a>
                 )}
-                {v?.status === "verified" && v.verdict_summary && (
+                {DECIDED_STATUSES.has(v?.status ?? "") && v?.verdict_summary && (
                   <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
                     {v.verdict_summary}
                   </p>
+                )}
+                {DECIDED_STATUSES.has(v?.status ?? "") && v?.dimension_scores && (
+                  <CardDimensionBreakdown dimensionScores={v.dimension_scores} />
                 )}
                 {v?.status === "verified" && v.audit_id && (
                   <button
@@ -377,7 +438,7 @@ export default function VerifyPage() {
               </div>
               <Button
                 size="sm"
-                variant={v?.status === "verified" ? "outline" : "default"}
+                variant={DECIDED_STATUSES.has(v?.status ?? "") ? "outline" : "default"}
                 onClick={() =>
                   mirror &&
                   setSheet({
@@ -387,7 +448,11 @@ export default function VerifyPage() {
                   })
                 }
               >
-                {v?.status === "verified" ? "Re-verify" : "Verify"}
+                {v?.status === "verified"
+                  ? "Re-verify"
+                  : DECIDED_STATUSES.has(v?.status ?? "")
+                  ? "Review result"
+                  : "Verify"}
               </Button>
             </div>
           );

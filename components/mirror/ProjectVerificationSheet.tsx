@@ -32,6 +32,7 @@ import {
   useProjectVerification,
   type RepoEntry,
 } from "@/hooks/use-project-verification";
+import { INTERROGATION_DIMENSIONS, type DimensionScores } from "@/lib/api";
 import { useGithubRepos, type GithubRepo } from "@/hooks/use-github-repos";
 import { trackFunnel, FUNNEL } from "@/lib/funnel";
 
@@ -67,9 +68,11 @@ export function ProjectVerificationSheet({
   const [repos, setRepos] = useState<RepoEntry[]>([{ url: "", label: "Full Stack" }]);
   const [demoUrl, setDemoUrl] = useState("");
   const [answer, setAnswer] = useState("");
+  const [contextText, setContextText] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
   const [repoSearch, setRepoSearch] = useState("");
   const [githubConnecting, setGithubConnecting] = useState(false);
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
 
   // Reflect the real GitHub connection state when the drawer opens, so it
   // doesn't show "Connect GitHub" for an already-connected user.
@@ -104,6 +107,7 @@ export function ProjectVerificationSheet({
       setRepos([{ url: "", label: "Full Stack" }]);
       setDemoUrl("");
       setAnswer("");
+      setContextText("");
       setHasStarted(false);
       setRepoSearch("");
     }
@@ -130,26 +134,45 @@ export function ProjectVerificationSheet({
     }
   };
 
+  const handleSubmitContext = async () => {
+    await hook.submitContext(contextText);
+  };
+
+  // Keep the transcript pinned to the latest turn as it grows.
+  useEffect(() => {
+    if (hook.step === "interrogating") {
+      transcriptEndRef.current?.scrollIntoView({ block: "end" });
+    }
+  }, [hook.step, hook.answeredTurns.length, hook.currentQuestion]);
+
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
         side="right"
-        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[480px]"
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
       >
         {/* ── Fixed header ─────────────────────────────────────────────── */}
-        <div className="border-b px-5 py-4">
-          <SheetHeader className="space-y-0.5">
-            <SheetTitle className="text-sm font-semibold leading-snug">
-              Verify: {projectTitle}
+        <div className="border-b px-6 py-4">
+          <SheetHeader className="space-y-1">
+            <span className="eyebrow">
+              <span className="eyebrow-dot mr-1.5" /> VELO Verification
+            </span>
+            <SheetTitle className="font-display text-lg font-medium leading-snug">
+              {projectTitle}
             </SheetTitle>
             <SheetDescription className="text-[11px] text-muted-foreground">
-              Submit repos → complete the adaptive interrogation
+              Submit repos → declare context → complete the adaptive interrogation
             </SheetDescription>
           </SheetHeader>
         </div>
 
         {/* ── Scrollable body ───────────────────────────────────────────── */}
-        <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
+        <div
+          className={cn(
+            "flex flex-1 flex-col overflow-y-auto",
+            hook.step === "interrogating" ? "gap-0 px-0 py-0" : "gap-5 px-6 py-5",
+          )}
+        >
 
           {/* ── Not started ─────────────────────────────────────────────── */}
           {!hasStarted && hook.step === "idle" && (
@@ -157,11 +180,12 @@ export function ProjectVerificationSheet({
               <div className="space-y-3">
                 {[
                   { n: 1, title: "Submit repositories", body: "Add one or more GitHub repos for this project — frontend, backend, or both." },
-                  { n: 2, title: "Complete the interrogation", body: "6–15 adaptive questions that probe ownership, architecture, trade-offs, and debugging depth." },
-                  { n: 3, title: "Earn your badge", body: "A verified badge appears on this project in your public profile." },
+                  { n: 2, title: "Declare your context", body: "Tell VELO what this project actually is and who it's for, so the bar calibrates fairly." },
+                  { n: 3, title: "Complete the interrogation", body: "6–15 adaptive questions that probe ownership, architecture, trade-offs, and debugging depth." },
+                  { n: 4, title: "Earn your badge", body: "A verified badge appears on this project in your public profile." },
                 ].map(({ n, title, body }) => (
                   <div key={n} className="flex gap-3">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+                    <span className="font-mono-ui mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
                       {n}
                     </span>
                     <div>
@@ -266,9 +290,7 @@ export function ProjectVerificationSheet({
           {hook.step === "checking" && (
             <div className="flex flex-col items-center gap-3 py-12">
               <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
-                Checking repositories and VELO_AUDIT.md…
-              </p>
+              <span className="eyebrow">Checking repositories and VELO_AUDIT.md…</span>
             </div>
           )}
 
@@ -278,22 +300,84 @@ export function ProjectVerificationSheet({
 
               {/* Per-repo */}
               <div className="space-y-2">
-                <SectionLabel icon={<GitBranch className="h-3.5 w-3.5" />}>
-                  Repository check
-                </SectionLabel>
+                <span className="eyebrow">
+                  <span className="eyebrow-dot mr-1.5" /> Repository check
+                </span>
                 {hook.checkedRepos.map((repo, i) => (
                   <RepoResultRow key={i} repo={repo} />
                 ))}
               </div>
 
               <Button
-                onClick={hook.startInterrogation}
+                onClick={hook.proceedToContext}
                 disabled={hook.isLoading}
                 className="w-full"
               >
                 {hook.isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Begin Interrogation →
+                Continue →
               </Button>
+
+              {hook.error && (
+                <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {hook.error}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── Declared context ─────────────────────────────────────────── */}
+          {hook.step === "context" && (
+            <div className="flex flex-col gap-4">
+              <div className="space-y-1.5">
+                <span className="eyebrow">
+                  <span className="eyebrow-dot mr-1.5" /> Before we begin
+                </span>
+                <p className="font-display text-base font-medium leading-snug">
+                  What is this project, and who&apos;s it for?
+                </p>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  A quick internal tool built for a team of interns is a different bar than a
+                  production API serving paying customers. Tell VELO the scope so questions and
+                  grading calibrate to what you were actually building — it never excuses a vague
+                  or evasive answer, only the standard.
+                </p>
+              </div>
+
+              <Textarea
+                placeholder={
+                  "e.g. \"This was a one-file internal script to pull data from a few sources for a " +
+                  "small team of interns — not meant to be production-hardened, just functional and " +
+                  "quick to build.\""
+                }
+                value={contextText}
+                onChange={(e) => setContextText(e.target.value)}
+                className="min-h-[120px] resize-none text-sm"
+                autoFocus
+              />
+
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleSubmitContext}
+                  disabled={hook.isLoading}
+                  className="flex-1"
+                >
+                  {hook.isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {contextText.trim() ? "Continue with this context →" : "Begin Interrogation →"}
+                </Button>
+                {contextText.trim() && (
+                  <Button
+                    onClick={() => {
+                      setContextText("");
+                      hook.submitContext("");
+                    }}
+                    disabled={hook.isLoading}
+                    variant="ghost"
+                    size="sm"
+                  >
+                    Skip
+                  </Button>
+                )}
+              </div>
 
               {hook.error && (
                 <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -307,6 +391,9 @@ export function ProjectVerificationSheet({
           {hook.step === "starting_interrogation" && (
             <div className="flex flex-col items-center gap-3 py-12 text-center">
               <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
+              <span className="eyebrow">
+                <span className="eyebrow-dot mr-1.5" /> VELO Interrogation
+              </span>
               <ThinkingMessages
                 messages={[
                   "Cloning a read-only view of your repository…",
@@ -322,68 +409,103 @@ export function ProjectVerificationSheet({
             </div>
           )}
 
-          {/* ── Interrogation ────────────────────────────────────────────── */}
+          {/* ── Interrogation — case-file transcript ─────────────────────── */}
           {hook.step === "interrogating" && hook.currentQuestion && (
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  VELO Interrogation
-                </span>
-                {hook.questionCount > 0 && (
-                  <span className="text-[11px] text-muted-foreground">
-                    {hook.questionCount} answered
+            <div className="flex h-full flex-col">
+              {/* Sticky sub-header */}
+              <div className="grain relative flex items-center justify-between border-b bg-muted/20 px-6 py-2.5">
+                <span className="eyebrow">
+                  <span className="relative mr-1.5 inline-flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--brand-tangerine)] opacity-60" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--brand-tangerine)]" />
                   </span>
+                  Live Interrogation
+                </span>
+                <span className="font-mono-ui text-[10px] text-muted-foreground">
+                  {hook.answeredTurns.length} logged
+                </span>
+              </div>
+
+              {/* Growing transcript log */}
+              <div className="flex-1 space-y-0 overflow-y-auto px-6 py-4">
+                {hook.answeredTurns.map((turn) => (
+                  <div key={turn.questionIndex} className="py-3">
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <span className="font-mono-ui text-[10px] font-medium text-muted-foreground">
+                        Q{String(turn.questionIndex + 1).padStart(2, "0")}
+                        {turn.area ? ` · ${turn.area.toUpperCase()}` : ""}
+                      </span>
+                    </div>
+                    <p className="text-[12px] leading-relaxed text-muted-foreground">
+                      {turn.question}
+                    </p>
+                    <p className="mt-1.5 text-[13px] leading-relaxed text-foreground">
+                      {turn.answer}
+                    </p>
+                    <div className="rule mt-3" />
+                  </div>
+                ))}
+
+                {/* Current, unanswered question — visually distinct from the log above */}
+                <div className="py-3">
+                  <div className="rounded-lg border-l-2 border-[var(--brand-tangerine)] bg-muted/30 py-3 pl-4 pr-3">
+                    <span className="font-mono-ui text-[10px] font-medium text-muted-foreground">
+                      Q{String(hook.questionCount + 1).padStart(2, "0")}
+                      {hook.currentQuestionArea ? ` · ${hook.currentQuestionArea.toUpperCase()}` : ""}
+                    </span>
+                    <p className="mt-1.5 text-sm leading-relaxed">{hook.currentQuestion}</p>
+                  </div>
+                </div>
+                <div ref={transcriptEndRef} />
+              </div>
+
+              {/* Fixed answer composer */}
+              <div className="border-t bg-card px-6 py-4">
+                <Textarea
+                  placeholder="Be specific — reference your actual code, the decisions you made, the problems you hit, and why you chose one approach over another. Vague answers trigger harder follow-ups."
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  className="min-h-[110px] resize-none text-sm"
+                  autoFocus
+                />
+
+                <p className="mt-2 text-[10px] text-muted-foreground">
+                  VELO adapts based on your answers. Shallow responses go deeper on the same area.
+                  Strong responses move to a harder uncovered topic. Minimum 5 words to submit.
+                </p>
+
+                <Button
+                  onClick={handleSubmitAnswer}
+                  disabled={
+                    hook.isLoading ||
+                    !answer.trim() ||
+                    answer.trim().split(/\s+/).length < 5
+                  }
+                  className="mt-3 w-full"
+                >
+                  {hook.isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {hook.isLoading ? "Reviewing your answer…" : "Submit Answer →"}
+                </Button>
+
+                {hook.isLoading && (
+                  <div className="mt-2 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
+                    <ThinkingMessages
+                      small
+                      messages={[
+                        "Weighing your answer against the code…",
+                        "Deciding where to probe next…",
+                        "Writing the next question…",
+                      ]}
+                    />
+                  </div>
+                )}
+
+                {hook.error && (
+                  <p className="mt-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                    {hook.error}
+                  </p>
                 )}
               </div>
-
-              <div className="rounded-lg border-l-2 border-primary bg-muted/30 py-3 pl-4 pr-3">
-                <p className="text-sm leading-relaxed">{hook.currentQuestion}</p>
-              </div>
-
-              <Textarea
-                placeholder="Be specific — reference your actual code, the decisions you made, the problems you hit, and why you chose one approach over another. Vague answers trigger harder follow-ups."
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                className="min-h-[160px] resize-none text-sm"
-                autoFocus
-              />
-
-              <p className="text-[10px] text-muted-foreground">
-                VELO adapts based on your answers. Shallow responses go deeper on the same area.
-                Strong responses move to a harder uncovered topic. Minimum 5 words to submit.
-              </p>
-
-              <Button
-                onClick={handleSubmitAnswer}
-                disabled={
-                  hook.isLoading ||
-                  !answer.trim() ||
-                  answer.trim().split(/\s+/).length < 5
-                }
-                className="w-full"
-              >
-                {hook.isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {hook.isLoading ? "Reviewing your answer…" : "Submit Answer →"}
-              </Button>
-
-              {hook.isLoading && (
-                <div className="flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
-                  <ThinkingMessages
-                    small
-                    messages={[
-                      "Weighing your answer against the code…",
-                      "Deciding where to probe next…",
-                      "Writing the next question…",
-                    ]}
-                  />
-                </div>
-              )}
-
-              {hook.error && (
-                <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                  {hook.error}
-                </p>
-              )}
             </div>
           )}
 
@@ -391,7 +513,7 @@ export function ProjectVerificationSheet({
           {hook.step === "completing" && (
             <div className="flex flex-col items-center gap-3 py-12">
               <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Calculating verdict…</p>
+              <span className="eyebrow">Calculating verdict…</span>
             </div>
           )}
 
@@ -401,6 +523,8 @@ export function ProjectVerificationSheet({
               verdict={hook.verdict}
               questionCount={hook.questionCount}
               onClose={() => handleOpenChange(false)}
+              onRetry={hook.retryFinalize}
+              isRetrying={hook.isLoading}
             />
           )}
         </div>
@@ -705,15 +829,65 @@ function VerdictCard({
   verdict,
   questionCount,
   onClose,
+  onRetry,
+  isRetrying,
 }: {
   verdict: {
     status: string;
+    scoring_status?: "pending" | "scoring" | "scored" | "scoring_failed";
     verification_score: number | null;
+    dimension_scores?: DimensionScores | null;
     verdict_summary: string;
   };
   questionCount: number;
   onClose: () => void;
+  onRetry?: () => void;
+  isRetrying?: boolean;
 }) {
+  // Grading runs turn-by-turn off the request path — by the time the
+  // interview ends, the last answer or two may still be mid-grading (or,
+  // rarely, may have failed for every answer). Both are explicit states,
+  // never a stale/fabricated number standing in for their absence.
+  if (verdict.scoring_status === "scoring") {
+    return (
+      <div className="flex flex-col items-center gap-4 py-12 text-center">
+        <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Scoring in progress…</p>
+          <p className="max-w-xs text-[11px] text-muted-foreground">
+            Grading is still catching up on your last answer(s). This usually takes a few seconds.
+          </p>
+        </div>
+        {onRetry && (
+          <Button onClick={onRetry} disabled={isRetrying} variant="outline" size="sm">
+            {isRetrying && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+            Check again
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  if (verdict.scoring_status === "scoring_failed") {
+    return (
+      <div className="flex flex-col items-center gap-4 py-12 text-center">
+        <XCircle className="h-7 w-7 text-rose-500" />
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Scoring failed</p>
+          <p className="max-w-xs text-[11px] text-muted-foreground">
+            {verdict.verdict_summary || "Something went wrong grading this interview. This is usually transient."}
+          </p>
+        </div>
+        {onRetry && (
+          <Button onClick={onRetry} disabled={isRetrying} variant="outline" size="sm">
+            {isRetrying && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+            Retry scoring
+          </Button>
+        )}
+      </div>
+    );
+  }
+
   const score =
     verdict.verification_score !== null
       ? Math.round(verdict.verification_score * 100)
@@ -771,9 +945,91 @@ function VerdictCard({
         </p>
       )}
 
+      {verdict.dimension_scores && Object.keys(verdict.dimension_scores).length > 0 && (
+        <DimensionBreakdown dimensionScores={verdict.dimension_scores} />
+      )}
+
       <Button onClick={onClose} variant="outline" className="w-full">
         View in Profile
       </Button>
+    </div>
+  );
+}
+
+const DIMENSION_LABELS: Record<string, string> = {
+  ownership: "Ownership",
+  technical_depth: "Technical depth",
+  debugging_ability: "Debugging",
+  communication: "Communication",
+  honesty: "Honesty",
+  consistency: "Consistency",
+};
+
+const NOT_ASSESSED_MARKERS = new Set([
+  "not assessed across the interview",
+  "not assessed in this answer",
+]);
+
+/** Magnitude bars, one per scored dimension — a status-color read (good/
+ *  warn/critical), same vocabulary as the verdict badge above, not an
+ *  arbitrary categorical palette. Evidence citation expands on tap. */
+function DimensionBreakdown({ dimensionScores }: { dimensionScores: DimensionScores }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const rows: { dim: string; data: { score: number; evidence: string } }[] = [];
+  for (const dim of INTERROGATION_DIMENSIONS) {
+    const data = dimensionScores[dim];
+    if (data) rows.push({ dim, data });
+  }
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="w-full space-y-2 rounded-lg border p-3">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        Breakdown
+      </p>
+      <div className="space-y-2.5">
+        {rows.map(({ dim, data }) => {
+          const notAssessed = NOT_ASSESSED_MARKERS.has((data.evidence || "").trim().toLowerCase());
+          const pct = Math.round(data.score * 100);
+          const barColor = notAssessed
+            ? "bg-muted-foreground/20"
+            : pct >= 70
+            ? "bg-emerald-500"
+            : pct >= 40
+            ? "bg-amber-500"
+            : "bg-rose-500";
+          const isExpanded = expanded === dim;
+          return (
+            <button
+              key={dim}
+              type="button"
+              onClick={() => setExpanded(isExpanded ? null : dim)}
+              className="block w-full text-left"
+            >
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-medium">{DIMENSION_LABELS[dim] ?? dim}</span>
+                <span className={cn("tabular-nums", notAssessed && "text-muted-foreground")}>
+                  {notAssessed ? "—" : pct}
+                </span>
+              </div>
+              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                {!notAssessed && (
+                  <div
+                    className={cn("h-full rounded-full transition-all", barColor)}
+                    style={{ width: `${pct}%` }}
+                  />
+                )}
+              </div>
+              {isExpanded && (
+                <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
+                  {data.evidence}
+                </p>
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

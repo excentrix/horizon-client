@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { auditApi } from "@/lib/api";
+import { auditApi, type DimensionScores } from "@/lib/api";
 
 export type VerificationStep =
   | "idle"
   | "evidence"               // multi-repo + demo URL entry
   | "checking"               // github + audit doc check running
   | "check_result"           // show combined github + audit doc results
+  | "context"                // declared project scope/intent (skippable)
   | "starting_interrogation"
   | "interrogating"          // adaptive Q&A
   | "completing"
@@ -40,10 +41,22 @@ export type AuditDocResult = {
 
 export type Verdict = {
   status: string;
+  scoring_status?: "pending" | "scoring" | "scored" | "scoring_failed";
   verification_score: number | null;
+  dimension_scores?: DimensionScores | null;
   verdict_summary: string;
   badge: boolean;
   verified_at: string | null;
+};
+
+// One logged turn in the growing interrogation transcript — the "case
+// file" the redesigned UI renders as an accumulating log, not a chat
+// widget that discards prior turns.
+export type AnsweredTurn = {
+  questionIndex: number;
+  question: string;
+  answer: string;
+  area: string | null;
 };
 
 export interface ProjectVerificationState {
@@ -57,9 +70,15 @@ export interface ProjectVerificationState {
   overallGithubStatus: "passed" | "failed" | "skipped" | null;
   auditDoc: AuditDocResult | null;
 
+  // Declared project scope/intent — optional, calibrates question generation
+  // and grading (e.g. "a quick internal tool" vs "a production service").
+  declaredContext: string;
+
   // Interrogation (adaptive)
   currentQuestion: string | null;
+  currentQuestionArea: string | null;
   questionCount: number;   // how many answered so far
+  answeredTurns: AnsweredTurn[];
 
   verdict: Verdict | null;
   error: string | null;
@@ -74,8 +93,11 @@ const INITIAL: ProjectVerificationState = {
   checkedRepos: [],
   overallGithubStatus: null,
   auditDoc: null,
+  declaredContext: "",
   currentQuestion: null,
+  currentQuestionArea: null,
   questionCount: 0,
+  answeredTurns: [],
   verdict: null,
   error: null,
   isLoading: false,
@@ -88,11 +110,35 @@ export function useProjectVerification(snapshotId: string) {
     setState((s) => ({ ...s, error, isLoading: false }));
 
   // ── 1. Create/get verification record ────────────────────────────────────
+  // startProjectVerification is idempotent (create_or_get) — reopening an
+  // already-decided verification must show that result, not offer a blank
+  // "Begin Verification" that implies the earlier work is gone. This is the
+  // fix for interviews that finish and get graded but never reach a verdict
+  // client-side (e.g. the session drops before the finalize round-trip) —
+  // finalize() itself is now also auto-triggered server-side once grading
+  // completes, but this covers reopening the sheet cold, and is idempotent
+  // either way.
+  const TERMINAL_STATUSES = new Set(["verified", "suspicious", "failed"]);
+
   const startVerification = useCallback(
     async (projectIndex: number) => {
       setState((s) => ({ ...s, step: "evidence", isLoading: true, error: null }));
       try {
         const data = await auditApi.startProjectVerification(snapshotId, projectIndex);
+
+        if (TERMINAL_STATUSES.has(data.status) && data.verification_id) {
+          const verdict = await auditApi.finalizeProjectVerification(data.verification_id);
+          setState((s) => ({
+            ...s,
+            step: "verdict",
+            verificationId: data.verification_id,
+            auditId: data.audit_id,
+            verdict,
+            isLoading: false,
+          }));
+          return;
+        }
+
         setState((s) => ({
           ...s,
           step: "evidence",
@@ -145,6 +191,15 @@ export function useProjectVerification(snapshotId: string) {
     }
   }, [state.verificationId]);
 
+  // ── 2c. Move to the declared-context step ─────────────────────────────────
+  // Repos passed the check — before starting the interrogation, give the
+  // candidate a chance to state what this project actually is (scope,
+  // audience, constraints), so grading can calibrate to it. Purely a local
+  // step transition, no request.
+  const proceedToContext = useCallback(() => {
+    setState((s) => ({ ...s, step: "context" }));
+  }, []);
+
   // ── 3. Start interrogation ────────────────────────────────────────────────
   const startInterrogation = useCallback(async () => {
     if (!state.auditId) return;
@@ -156,7 +211,9 @@ export function useProjectVerification(snapshotId: string) {
         step: "interrogating",
         sessionId: data.session_id,
         currentQuestion: data.question,
+        currentQuestionArea: data.area ?? null,
         questionCount: 0,
+        answeredTurns: [],
         isLoading: false,
       }));
     } catch (e: unknown) {
@@ -164,11 +221,49 @@ export function useProjectVerification(snapshotId: string) {
     }
   }, [state.auditId]);
 
+  // ── 2d. Submit declared context, then begin the interrogation ─────────────
+  // Skippable — an empty string is a valid, meaningful submission (no
+  // calibration context, today's behavior unchanged).
+  const submitContext = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (state.verificationId && trimmed) {
+        setState((s) => ({ ...s, isLoading: true, error: null }));
+        try {
+          await auditApi.setProjectContext(state.verificationId, trimmed);
+        } catch (e: unknown) {
+          setError(e instanceof Error ? e.message : "Failed to save project context");
+          return;
+        }
+      }
+      setState((s) => ({ ...s, declaredContext: trimmed, isLoading: false }));
+      await startInterrogation();
+    },
+    [state.verificationId, startInterrogation],
+  );
+
   // ── 4. Submit answer (adaptive — backend decides next question) ───────────
   const submitAnswer = useCallback(
     async (answer: string) => {
       if (!state.sessionId) return;
-      setState((s) => ({ ...s, isLoading: true, error: null }));
+      setState((s) => ({
+        ...s,
+        isLoading: true,
+        error: null,
+        // Log the just-answered turn immediately — the transcript grows as
+        // soon as an answer is submitted, not once the next question lands.
+        answeredTurns: s.currentQuestion
+          ? [
+              ...s.answeredTurns,
+              {
+                questionIndex: s.questionCount,
+                question: s.currentQuestion,
+                answer,
+                area: s.currentQuestionArea,
+              },
+            ]
+          : s.answeredTurns,
+      }));
       try {
         const data = await auditApi.answerInterrogation(state.sessionId, { answer });
         const done = data.next_question === null || data.status === "complete";
@@ -178,6 +273,7 @@ export function useProjectVerification(snapshotId: string) {
             ...s,
             step: "completing",
             currentQuestion: null,
+            currentQuestionArea: null,
             questionCount: s.questionCount + 1,
             isLoading: false,
           }));
@@ -186,6 +282,7 @@ export function useProjectVerification(snapshotId: string) {
           setState((s) => ({
             ...s,
             currentQuestion: data.next_question!,
+            currentQuestionArea: data.area ?? null,
             questionCount: s.questionCount + 1,
             isLoading: false,
           }));
@@ -200,17 +297,43 @@ export function useProjectVerification(snapshotId: string) {
   );
 
   // ── 5. Complete + finalize ────────────────────────────────────────────────
+  // Grading runs turn-by-turn off the request path (a Celery task per
+  // answer), so the last answer or two may still be mid-grading right when
+  // the interview ends. finalize() reports that explicitly as
+  // scoring_status: "scoring" rather than a number — poll it a few times
+  // before giving up, so the UI shows a real verdict instead of a stale one.
+  const MAX_SCORING_POLLS = 8;
+
   const completeAndFinalize = useCallback(async () => {
     if (!state.sessionId || !state.verificationId) return;
     setState((s) => ({ ...s, step: "completing", isLoading: true, error: null }));
     try {
       await auditApi.completeInterrogation(state.sessionId);
-      const verdict = await auditApi.finalizeProjectVerification(state.verificationId);
+      let verdict = await auditApi.finalizeProjectVerification(state.verificationId);
+      let attempts = 0;
+      while (verdict.scoring_status === "scoring" && attempts < MAX_SCORING_POLLS) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        verdict = await auditApi.finalizeProjectVerification(state.verificationId);
+        attempts += 1;
+      }
       setState((s) => ({ ...s, step: "verdict", verdict, isLoading: false }));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to finalize verification");
     }
   }, [state.sessionId, state.verificationId]);
+
+  // Lets the verdict screen offer a manual "Retry scoring" action if polling
+  // gave up while still "scoring", or if it came back "scoring_failed".
+  const retryFinalize = useCallback(async () => {
+    if (!state.verificationId) return;
+    setState((s) => ({ ...s, isLoading: true, error: null }));
+    try {
+      const verdict = await auditApi.finalizeProjectVerification(state.verificationId);
+      setState((s) => ({ ...s, step: "verdict", verdict, isLoading: false }));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to finalize verification");
+    }
+  }, [state.verificationId]);
 
   const reset = useCallback(() => setState(INITIAL), []);
 
@@ -219,9 +342,12 @@ export function useProjectVerification(snapshotId: string) {
     startVerification,
     submitRepos,
     recheckAuditDoc,
+    proceedToContext,
+    submitContext,
     startInterrogation,
     submitAnswer,
     completeAndFinalize,
+    retryFinalize,
     reset,
   };
 }

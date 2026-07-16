@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { auditApi } from "@/lib/api";
 import { trackFunnel, FUNNEL } from "@/lib/funnel";
-import type { AuditReport } from "@/types";
+import { INTERROGATION_DIMENSIONS, type AuditReport, type DimensionScores } from "@/types";
 
 // VELO's marketing origin — where a recruiter/peer goes to get their own credential.
 const VELO_URL = "https://excentrix.tech";
@@ -205,10 +205,25 @@ export default function PublicAuditReportPage() {
                 {v?.project_title || report.project_title}
               </h1>
 
+              {v?.scoring_status === "scoring" && (
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-wide text-[#9a9286]">
+                  Scoring still in progress — check back shortly.
+                </p>
+              )}
+              {v?.scoring_status === "scoring_failed" && (
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-wide text-[#a13a2f]">
+                  Scoring failed for this interview — this credential is not yet final.
+                </p>
+              )}
+
               {v?.verdict_summary && (
                 <p className="mt-4 max-w-lg text-balance text-[15px] leading-relaxed text-[#5a544a]">
                   {v.verdict_summary}
                 </p>
+              )}
+
+              {v?.dimension_scores && Object.keys(v.dimension_scores).length > 0 && (
+                <DimensionBreakdown dimensionScores={v.dimension_scores} />
               )}
             </motion.div>
 
@@ -330,6 +345,57 @@ function Stat({
       <span className="text-center font-mono text-[9px] uppercase leading-tight tracking-wide text-[#9a9286]">
         {label}
       </span>
+    </div>
+  );
+}
+
+const DIMENSION_LABELS: Record<string, string> = {
+  ownership: "Ownership",
+  technical_depth: "Technical depth",
+  debugging_ability: "Debugging",
+  communication: "Communication",
+  honesty: "Honesty",
+  consistency: "Consistency",
+};
+
+const NOT_ASSESSED_MARKERS = new Set([
+  "not assessed across the interview",
+  "not assessed in this answer",
+]);
+
+/** Compact 5-row breakdown beneath the verdict seal — the seal stays the
+ *  at-a-glance scalar; this is the "show your work" detail underneath. */
+function DimensionBreakdown({ dimensionScores }: { dimensionScores: DimensionScores }) {
+  const rows: { dim: string; data: { score: number; evidence: string } }[] = [];
+  for (const dim of INTERROGATION_DIMENSIONS) {
+    const data = dimensionScores[dim];
+    if (data) rows.push({ dim, data });
+  }
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="mt-6 w-full max-w-sm space-y-2.5 rounded-2xl border border-[#e7dcc2] bg-white/60 p-4 text-left">
+      {rows.map(({ dim, data }) => {
+        const notAssessed = NOT_ASSESSED_MARKERS.has((data.evidence || "").trim().toLowerCase());
+        const pct = Math.round(data.score * 100);
+        const barColor = notAssessed ? "#e7dcc2" : pct >= 70 ? "#10b981" : pct >= 40 ? "#e0930a" : "#d6553f";
+        return (
+          <div key={dim}>
+            <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-wide text-[#5a544a]">
+              <span>{DIMENSION_LABELS[dim] ?? dim}</span>
+              <span className="tabular-nums">{notAssessed ? "—" : pct}</span>
+            </div>
+            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-[#f0e9d8]">
+              {!notAssessed && (
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${pct}%`, background: barColor }}
+                />
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

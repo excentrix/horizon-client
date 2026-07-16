@@ -1704,6 +1704,18 @@ export interface AuditEvidence {
   created_at: string;
 }
 
+export type DimensionScore = { score: number; evidence: string };
+export const INTERROGATION_DIMENSIONS = [
+  "ownership",
+  "technical_depth",
+  "debugging_ability",
+  "communication",
+  "honesty",
+  "consistency",
+] as const;
+export type InterrogationDimension = (typeof INTERROGATION_DIMENSIONS)[number];
+export type DimensionScores = Partial<Record<InterrogationDimension, DimensionScore>>;
+
 export interface AuditReport {
   audit_id: UUID;
   status: AuditStatus;
@@ -1738,6 +1750,8 @@ export interface AuditReport {
   verification?: {
     status: "unverified" | "evidence_submitted" | "interrogating" | "verified" | "failed" | "suspicious";
     score: number | null;
+    scoring_status?: "pending" | "scoring" | "scored" | "scoring_failed";
+    dimension_scores?: DimensionScores | null;
     verdict_summary: string;
     project_title: string;
     questions_answered: number;

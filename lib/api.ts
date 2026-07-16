@@ -60,7 +60,10 @@ import {
   CanvasSnapshot,
   LearningProjectShape,
   MentorReviewShape,
+  DimensionScores,
 } from "@/types";
+export { INTERROGATION_DIMENSIONS } from "@/types";
+export type { DimensionScore, DimensionScores } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
   promise.then((response) => response.data);
@@ -1794,6 +1797,7 @@ export const notificationApi = {
 };
 
 // AUDIT ----------------------------------------------------------------------
+
 export const auditApi = {
   createAudit: (payload: FormData | Record<string, unknown>) =>
     extract<ExperienceAudit>(http.post("/audits/", payload)),
@@ -1842,6 +1846,7 @@ export const auditApi = {
       defended_projects: Array<{
         project_title: string;
         score: number | null;
+        dimension_scores?: DimensionScores | null;
         verdict_summary: string;
         audit_id: string | null;
         expertise_estimate: string;
@@ -1938,6 +1943,7 @@ export const auditApi = {
       session_id: string;
       question: string | null;
       question_index: number;
+      area?: string | null;
       total_questions: number | null;  // null for adaptive project verification
       adaptive?: boolean;
       question_generation?: { source: "ai" | "template" | "static"; fallback_reason: string };
@@ -1946,7 +1952,13 @@ export const auditApi = {
     ),
 
   answerInterrogation: (sessionId: string, payload: { answer: string; latency_ms?: number }) =>
-    extract<{ status: string; next_question: string | null; question_index?: number; total_questions?: number }>(
+    extract<{
+      status: string;
+      next_question: string | null;
+      question_index?: number;
+      area?: string | null;
+      total_questions?: number;
+    }>(
       http.post(`/interrogations/${sessionId}/answer/`, payload)
     ),
 
@@ -1954,11 +1966,24 @@ export const auditApi = {
     extract<{
       status: string;
       audit_id: string;
-      hm_score?: number | null;
       audit_status?: string;
+      scoring_status?: "pending" | "scoring" | "scored" | "scoring_failed";
+      dimension_scores?: DimensionScores | null;
+      hm_score?: number | null;
+      retry_after_ms?: number;
+      error?: string;
       question_generation?: { source: "ai" | "template" | "static"; fallback_reason: string };
     }>(
       http.post(`/interrogations/${sessionId}/complete/`)
+    ),
+
+  getInterrogationScoringStatus: (sessionId: string) =>
+    extract<{
+      scoring_status: "pending" | "scoring" | "scored" | "scoring_failed";
+      dimension_scores?: DimensionScores | null;
+      retry_after_ms?: number | null;
+    }>(
+      http.get(`/interrogations/${sessionId}/scoring-status/`)
     ),
 
   addManualProject: (payload: { title?: string; repo_url?: string; description?: string }) =>
@@ -2106,7 +2131,9 @@ export const auditApi = {
           project_index: number;
           project_title: string;
           status: "unverified" | "evidence_submitted" | "interrogating" | "verified" | "failed" | "suspicious";
+          scoring_status?: "pending" | "scoring" | "scored" | "scoring_failed";
           verification_score: number | null;
+          dimension_scores?: DimensionScores | null;
           github_check_status: "pending" | "passed" | "failed" | "skipped";
           audit_doc_status: "pending" | "accepted" | "rejected" | "missing";
           submitted_repos: Array<{ url: string; label: string; check_status: string; language?: string }>;
@@ -2186,6 +2213,13 @@ export const auditApi = {
       })
     ),
 
+  setProjectContext: (verificationId: string, declaredContext: string) =>
+    extract<{ declared_context: string }>(
+      http.post(`/project-verifications/${verificationId}/context/`, {
+        declared_context: declaredContext,
+      })
+    ),
+
   recheckAuditDoc: (verificationId: string) =>
     extract<{
       status: "accepted" | "rejected" | "missing";
@@ -2197,7 +2231,9 @@ export const auditApi = {
   finalizeProjectVerification: (verificationId: string) =>
     extract<{
       status: string;
+      scoring_status?: "pending" | "scoring" | "scored" | "scoring_failed";
       verification_score: number | null;
+      dimension_scores?: DimensionScores | null;
       verdict_summary: string;
       badge: boolean;
       verified_at: string | null;
