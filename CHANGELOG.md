@@ -99,6 +99,19 @@ Versioning policy:
 ### Commits
 - `df52f0c` feat(verify): streamline project verification repo selection
 
+## v0.2.12 (2026-07-16)
+
+### Added
+- Declared project-context step in the verification flow, with transcript capture and retryable scoring resolution.
+- Dimension breakdowns on project verification cards, public audit reports, and verified-profile surfaces.
+
+### Changed
+- Verification and public profile pages now surface scoring state instead of only a scalar pass/fail badge.
+- Verification sheets now carry the selected repo through the interrogation flow and preserve the live turn log.
+
+### Commits
+- `0728552` feat(verify): expand verification and public profile scoring UI
+
 ## Unreleased
 
 ### Added
