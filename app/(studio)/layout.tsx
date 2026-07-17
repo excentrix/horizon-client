@@ -18,17 +18,21 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
   const isPlansV2 = pathname === "/plans/v2";
   const isPlaygroundRoute =
     pathname.includes("/plans/") && pathname.includes("/playground");
+  const isVeloSessionRoute = pathname.startsWith("/verify/session");
   const isNoPageScrollRoute =
-    pathname === "/chat" || isDashboard || isPlaygroundRoute;
+    pathname === "/chat" || isDashboard || isPlaygroundRoute || isVeloSessionRoute;
+  // The VELO interrogation session is a full-page takeover — no dock, no
+  // competing navigation while the candidate is on the record.
   const hideDock =
     (pathname.includes("/plans/") && pathname.includes("/playground")) ||
-    pathname.startsWith("/onboarding");
+    pathname.startsWith("/onboarding") ||
+    isVeloSessionRoute;
 
   return (
     <GamificationProvider>
       <RouteFeatureGuard />
       <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-background">
-        {isPlaygroundRoute ? null : (
+        {isPlaygroundRoute || isVeloSessionRoute ? null : (
           <header
             className={cn(
               "sticky top-0 z-30 border-b border-border/80 bg-background/92 backdrop-blur",
@@ -36,8 +40,9 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
             )}
           >
             <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center justify-between px-4 lg:px-6">
-              <Link href="/dashboard" className="font-display text-sm uppercase tracking-[0.18em] text-foreground">
-                Horizon
+              <Link href="/verify" className="flex items-center" aria-label="VELO — your case file">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/brand/logo/velo-lockup-color.svg" alt="VELO by excentrix" className="h-6" />
               </Link>
               <div className="md:hidden">
                 <ProfileMenu variant="avatar" />

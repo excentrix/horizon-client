@@ -15,38 +15,26 @@ import {
 } from "lucide-react";
 import { auditApi } from "@/lib/api";
 import { trackFunnel, FUNNEL } from "@/lib/funnel";
-import { INTERROGATION_DIMENSIONS, type AuditReport, type DimensionScores } from "@/types";
+import type { AuditReport } from "@/types";
+import { DimensionMeters } from "@/components/velo/dimension-meters";
+import { ClaimsTested } from "@/components/velo/claim-chips";
+import { TranscriptPanel } from "@/components/velo/transcript-panel";
 
 // VELO's marketing origin — where a recruiter/peer goes to get their own credential.
 const VELO_URL = "https://excentrix.tech";
 
 type Verdict = NonNullable<AuditReport["verification"]>["status"];
 
+// Evidence-scale verdict theming — strong (indigo) / developing (tangerine) /
+// none (neutral). Deliberately not green/red: the scale matches the cohort &
+// profile reports colleges receive.
 const VERDICT_THEME: Record<
   string,
-  { label: string; ink: string; ring: string; soft: string; Icon: typeof ShieldCheck }
+  { label: string; ink: string; Icon: typeof ShieldCheck }
 > = {
-  verified: {
-    label: "Verified",
-    ink: "#0f7a52",
-    ring: "#10b981",
-    soft: "rgba(16,185,129,0.10)",
-    Icon: ShieldCheck,
-  },
-  suspicious: {
-    label: "Flagged",
-    ink: "#a15c00",
-    ring: "#e0930a",
-    soft: "rgba(224,147,10,0.12)",
-    Icon: ShieldAlert,
-  },
-  failed: {
-    label: "Not defended",
-    ink: "#a13a2f",
-    ring: "#d6553f",
-    soft: "rgba(214,85,63,0.10)",
-    Icon: ShieldX,
-  },
+  verified: { label: "Verified", ink: "var(--status-strong)", Icon: ShieldCheck },
+  suspicious: { label: "Flagged", ink: "var(--status-developing)", Icon: ShieldAlert },
+  failed: { label: "Not defended", ink: "var(--status-none)", Icon: ShieldX },
 };
 
 function theme(status?: Verdict) {
@@ -94,26 +82,17 @@ export default function PublicAuditReportPage() {
     : null;
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#fffcf5] text-[#2b2b2b]">
-      {/* atmosphere */}
+    <div className="grain relative min-h-screen overflow-hidden bg-background text-foreground">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(700px 340px at 12% -5%, rgba(88,88,204,0.10), transparent 70%), radial-gradient(680px 320px at 100% 8%, rgba(236,91,19,0.07), transparent 70%)",
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.5] mix-blend-multiply"
-        style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E\")",
+            "radial-gradient(700px 340px at 12% -5%, rgb(88 88 204 / 9%), transparent 70%), radial-gradient(680px 320px at 100% 8%, rgb(236 91 19 / 7%), transparent 70%)",
         }}
       />
 
-      <div className="relative mx-auto flex min-h-screen max-w-2xl flex-col px-5 py-8 md:py-14">
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-2xl flex-col px-5 py-8 md:py-14">
         {/* masthead */}
         <motion.header
           custom={0}
@@ -122,27 +101,23 @@ export default function PublicAuditReportPage() {
           animate="show"
           className="flex items-center justify-between"
         >
-          <div className="flex items-baseline gap-2">
-            <span className="font-display text-lg font-semibold tracking-tight text-[#414141]">
-              VELO
-            </span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#9a9286]">
-              proof of work
-            </span>
+          <div className="flex items-center gap-2.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/logo/mark-color.svg" alt="" className="size-6" />
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-lg font-semibold tracking-tight">VELO</span>
+              <span className="caseline uppercase tracking-[0.22em]">proof of work</span>
+            </div>
           </div>
           {verifiedDate && (
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#9a9286]">
-              Verified {verifiedDate}
-            </span>
+            <span className="caseline uppercase tracking-[0.18em]">Verified {verifiedDate}</span>
           )}
         </motion.header>
 
-        {error && (
-          <div className="mt-24 text-center font-mono text-sm text-[#a13a2f]">{error}</div>
-        )}
+        {error && <div className="mt-24 text-center font-mono-ui text-sm text-destructive">{error}</div>}
 
         {report && (
-          <main className="flex flex-1 flex-col justify-center py-10">
+          <main className="flex flex-1 flex-col py-10">
             {/* ── Verdict seal ── */}
             <motion.div
               custom={1}
@@ -152,18 +127,14 @@ export default function PublicAuditReportPage() {
               className="flex flex-col items-center text-center"
             >
               <div className="relative mb-7 grid place-items-center">
-                <div
-                  className="absolute inset-0 rounded-full blur-2xl"
-                  style={{ background: t.soft }}
-                />
                 <svg width="148" height="148" viewBox="0 0 148 148" className="relative">
-                  <circle cx="74" cy="74" r="68" fill="none" stroke="#e7dcc2" strokeWidth="2" />
+                  <circle cx="74" cy="74" r="68" fill="none" stroke="var(--border)" strokeWidth="2" />
                   <motion.circle
                     cx="74"
                     cy="74"
                     r="68"
                     fill="none"
-                    stroke={t.ring}
+                    stroke={t.ink}
                     strokeWidth="4"
                     strokeLinecap="round"
                     strokeDasharray={2 * Math.PI * 68}
@@ -176,81 +147,72 @@ export default function PublicAuditReportPage() {
                   />
                 </svg>
                 <div className="absolute flex flex-col items-center">
-                  <t.Icon className="mb-1 h-5 w-5" style={{ color: t.ink }} />
+                  <t.Icon className="mb-1 size-5" style={{ color: t.ink }} />
                   {score != null ? (
                     <>
-                      <span className="font-display text-4xl font-semibold leading-none tabular-nums text-[#2b2b2b]">
+                      <span className="font-display text-4xl font-semibold leading-none tabular-nums">
                         {score}
                       </span>
-                      <span className="font-mono text-[9px] uppercase tracking-widest text-[#9a9286]">
-                        / 100
-                      </span>
+                      <span className="caseline text-[9px] uppercase tracking-widest">/ 100</span>
                     </>
                   ) : (
-                    <span className="font-mono text-[10px] uppercase tracking-widest text-[#9a9286]">
-                      pending
-                    </span>
+                    <span className="caseline uppercase tracking-widest">pending</span>
                   )}
                 </div>
               </div>
 
-              <span
-                className="rounded-full px-3 py-1 font-mono text-[11px] font-medium uppercase tracking-[0.2em]"
-                style={{ background: t.soft, color: t.ink }}
-              >
-                {t.label} proof of work
+              <span className="stamp" style={{ color: t.ink }}>
+                <t.Icon className="size-3" /> {t.label} proof of work
               </span>
 
-              <h1 className="mt-5 font-display text-3xl font-semibold leading-tight tracking-tight text-[#1f1f1f] md:text-4xl">
+              <h1 className="mt-5 font-display text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
                 {v?.project_title || report.project_title}
               </h1>
 
               {v?.scoring_status === "scoring" && (
-                <p className="mt-4 font-mono text-[11px] uppercase tracking-wide text-[#9a9286]">
-                  Scoring still in progress — check back shortly.
-                </p>
+                <p className="caseline mt-4 uppercase">Scoring still in progress — check back shortly.</p>
               )}
               {v?.scoring_status === "scoring_failed" && (
-                <p className="mt-4 font-mono text-[11px] uppercase tracking-wide text-[#a13a2f]">
+                <p className="mt-4 font-mono-ui text-[11px] uppercase tracking-wide text-destructive">
                   Scoring failed for this interview — this credential is not yet final.
                 </p>
               )}
 
               {v?.verdict_summary && (
-                <p className="mt-4 max-w-lg text-balance text-[15px] leading-relaxed text-[#5a544a]">
+                <p className="mt-4 max-w-lg text-balance text-[15px] leading-relaxed text-muted-foreground">
                   {v.verdict_summary}
                 </p>
               )}
-
-              {v?.dimension_scores && Object.keys(v.dimension_scores).length > 0 && (
-                <DimensionBreakdown dimensionScores={v.dimension_scores} />
-              )}
             </motion.div>
 
-            {/* ── Evidence ── */}
-            <motion.section
-              custom={2}
-              variants={fadeUp}
-              initial="hidden"
-              animate="show"
-              className="mt-12"
-            >
-              <p className="mb-4 text-center font-mono text-[10px] uppercase tracking-[0.22em] text-[#9a9286]">
-                What VELO checked
-              </p>
-              <div className="grid grid-cols-3 divide-x divide-[#e7dcc2] overflow-hidden rounded-2xl border border-[#e7dcc2] bg-white/70">
+            {/* ── Graded dimensions ── */}
+            {v?.dimension_scores && Object.keys(v.dimension_scores).length > 0 && (
+              <motion.section custom={2} variants={fadeUp} initial="hidden" animate="show" className="mt-10">
+                <p className="caseline mb-3 text-center uppercase tracking-[0.22em]">
+                  Graded dimensions — tap a row for the evidence
+                </p>
+                <div className="rounded-2xl border border-border bg-card p-5">
+                  <DimensionMeters dimensionScores={v.dimension_scores} />
+                </div>
+              </motion.section>
+            )}
+
+            {/* ── Evidence stats ── */}
+            <motion.section custom={3} variants={fadeUp} initial="hidden" animate="show" className="mt-10">
+              <p className="caseline mb-4 text-center uppercase tracking-[0.22em]">What VELO checked</p>
+              <div className="grid grid-cols-3 divide-x divide-border overflow-hidden rounded-2xl border border-border bg-card/70">
                 <Stat
-                  icon={<MessagesSquare className="h-4 w-4" />}
+                  icon={<MessagesSquare className="size-4" />}
                   value={v?.questions_answered ?? 0}
                   label="questions defended"
                 />
                 <Stat
-                  icon={<FileCode2 className="h-4 w-4" />}
+                  icon={<FileCode2 className="size-4" />}
                   value={v?.files_analyzed ?? 0}
                   label="source files read"
                 />
                 <Stat
-                  icon={<CircleCheck className="h-4 w-4" />}
+                  icon={<CircleCheck className="size-4" />}
                   value={v?.github_check_status === "passed" ? "Live" : "—"}
                   label="repo verified"
                 />
@@ -264,37 +226,58 @@ export default function PublicAuditReportPage() {
                       href={r.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-full border border-[#e7dcc2] bg-white/70 px-3 py-1.5 font-mono text-[11px] text-[#5a544a] transition-colors hover:border-[#5858cc] hover:text-[#414141]"
+                      className="caseline inline-flex items-center gap-1.5 rounded-full border border-border bg-card/70 px-3 py-1.5 transition-colors hover:border-primary hover:text-foreground"
                     >
-                      <GitBranch className="h-3 w-3" />
+                      <GitBranch className="size-3" />
                       {r.url.replace(/^https?:\/\/(www\.)?github\.com\//, "")}
-                      {r.language && <span className="text-[#9a9286]">· {r.language}</span>}
+                      {r.language && <span className="opacity-70">· {r.language}</span>}
                     </a>
                   ))}
                 </div>
               )}
             </motion.section>
 
+            {/* ── Resume claims, tested ── */}
+            {!!v?.claims_tested?.length && (
+              <motion.section custom={4} variants={fadeUp} initial="hidden" animate="show" className="mt-10">
+                <p className="caseline mb-3 text-center uppercase tracking-[0.22em]">
+                  Resume claims, tested against the evidence
+                </p>
+                <div className="rounded-2xl border border-border bg-card p-5">
+                  <ClaimsTested claims={v.claims_tested} />
+                </div>
+              </motion.section>
+            )}
+
+            {/* ── The full record ── */}
+            {!!v?.transcript?.length && (
+              <motion.section custom={5} variants={fadeUp} initial="hidden" animate="show" className="mt-10">
+                <TranscriptPanel
+                  turns={v.transcript.map((turn) => ({ question: turn.question, answer: turn.answer }))}
+                />
+              </motion.section>
+            )}
+
             {/* ── Methodology / trust ── */}
             <motion.section
-              custom={3}
+              custom={6}
               variants={fadeUp}
               initial="hidden"
               animate="show"
-              className="mt-10 rounded-2xl border border-[#e7dcc2] bg-white/50 p-5"
+              className="mt-10 rounded-2xl border border-border bg-card/60 p-5"
             >
-              <p className="text-[13px] leading-relaxed text-[#5a544a]">
-                <span className="font-medium text-[#2b2b2b]">How this was verified.</span> VELO
-                read the candidate&rsquo;s actual source code, then ran a live adaptive
-                interrogation about their own implementation — probing architecture, decisions,
-                trade-offs and debugging. Output is gameable; defending your work under questions
-                that adapt to your answers is not. The full transcript is withheld for privacy.
+              <p className="text-[13px] leading-relaxed text-muted-foreground">
+                <span className="font-medium text-foreground">How this was verified.</span> VELO read
+                the candidate&rsquo;s actual source code, then ran a live adaptive interrogation about
+                their own implementation — probing architecture, decisions, trade-offs and debugging.
+                Output is gameable; defending your work under questions that adapt to your answers is
+                not. The transcript above is exactly what VELO graded — audit it yourself.
               </p>
             </motion.section>
 
             {/* ── CTA ── */}
             <motion.div
-              custom={4}
+              custom={7}
               variants={fadeUp}
               initial="hidden"
               animate="show"
@@ -302,12 +285,12 @@ export default function PublicAuditReportPage() {
             >
               <a
                 href={VELO_URL}
-                className="group inline-flex items-center gap-2 rounded-full bg-[#414141] px-5 py-2.5 text-sm font-medium text-[#fffcf5] transition-colors hover:bg-[#2b2b2b]"
+                className="group inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
               >
                 Get your own verified credential
-                <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                <ArrowUpRight className="size-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
               </a>
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#b8b0a2]">
+              <span className="caseline uppercase tracking-[0.18em] opacity-70">
                 excentrix.tech · proof of work in the AI era
               </span>
             </motion.div>
@@ -316,10 +299,8 @@ export default function PublicAuditReportPage() {
 
         {!report && !error && (
           <div className="mt-32 flex flex-col items-center gap-3">
-            <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#e7dcc2] border-t-[#5858cc]" />
-            <p className="font-mono text-xs uppercase tracking-widest text-[#9a9286]">
-              Loading credential…
-            </p>
+            <div className="size-7 animate-spin rounded-full border-2 border-border border-t-primary" />
+            <p className="caseline uppercase tracking-widest">Loading credential…</p>
           </div>
         )}
       </div>
@@ -338,64 +319,9 @@ function Stat({
 }) {
   return (
     <div className="flex flex-col items-center gap-1.5 px-3 py-5">
-      <span className="text-[#5858cc]">{icon}</span>
-      <span className="font-display text-2xl font-semibold tabular-nums text-[#1f1f1f]">
-        {value}
-      </span>
-      <span className="text-center font-mono text-[9px] uppercase leading-tight tracking-wide text-[#9a9286]">
-        {label}
-      </span>
-    </div>
-  );
-}
-
-const DIMENSION_LABELS: Record<string, string> = {
-  ownership: "Ownership",
-  technical_depth: "Technical depth",
-  debugging_ability: "Debugging",
-  communication: "Communication",
-  honesty: "Honesty",
-  consistency: "Consistency",
-};
-
-const NOT_ASSESSED_MARKERS = new Set([
-  "not assessed across the interview",
-  "not assessed in this answer",
-]);
-
-/** Compact 5-row breakdown beneath the verdict seal — the seal stays the
- *  at-a-glance scalar; this is the "show your work" detail underneath. */
-function DimensionBreakdown({ dimensionScores }: { dimensionScores: DimensionScores }) {
-  const rows: { dim: string; data: { score: number; evidence: string } }[] = [];
-  for (const dim of INTERROGATION_DIMENSIONS) {
-    const data = dimensionScores[dim];
-    if (data) rows.push({ dim, data });
-  }
-  if (rows.length === 0) return null;
-
-  return (
-    <div className="mt-6 w-full max-w-sm space-y-2.5 rounded-2xl border border-[#e7dcc2] bg-white/60 p-4 text-left">
-      {rows.map(({ dim, data }) => {
-        const notAssessed = NOT_ASSESSED_MARKERS.has((data.evidence || "").trim().toLowerCase());
-        const pct = Math.round(data.score * 100);
-        const barColor = notAssessed ? "#e7dcc2" : pct >= 70 ? "#10b981" : pct >= 40 ? "#e0930a" : "#d6553f";
-        return (
-          <div key={dim}>
-            <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-wide text-[#5a544a]">
-              <span>{DIMENSION_LABELS[dim] ?? dim}</span>
-              <span className="tabular-nums">{notAssessed ? "—" : pct}</span>
-            </div>
-            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-[#f0e9d8]">
-              {!notAssessed && (
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${pct}%`, background: barColor }}
-                />
-              )}
-            </div>
-          </div>
-        );
-      })}
+      <span className="text-(--brand-indigo)">{icon}</span>
+      <span className="font-display text-2xl font-semibold tabular-nums">{value}</span>
+      <span className="caseline text-center text-[9px] uppercase leading-tight">{label}</span>
     </div>
   );
 }

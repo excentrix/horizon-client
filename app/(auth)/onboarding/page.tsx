@@ -144,9 +144,11 @@ export default function OnboardingPage() {
                 if (dropped) handleFile(dropped);
               }}
               className={cn(
-                "relative flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition-all",
-                isDragging ? "border-black bg-[#fef9c3]" : "border-black/30 bg-[#f8fafc] hover:bg-[#f1f5f9]",
-                file && "border-emerald-500 bg-emerald-50"
+                "relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-all",
+                isDragging
+                  ? "border-primary bg-(--brand-parchment)/40"
+                  : "border-border bg-muted/40 hover:bg-muted",
+                file && "border-(--status-strong) bg-(--surface-2)"
               )}
               onClick={() => fileInputRef.current?.click()}
             >
@@ -157,7 +159,7 @@ export default function OnboardingPage() {
                   <p className="mt-1 text-xs text-muted-foreground">PDF / PNG / JPG · max 10MB</p>
                 </>
               ) : (
-                <div className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                <div className="flex items-center gap-2 text-sm font-medium text-(--status-strong)">
                   <CheckCircle2 className="h-5 w-5" />
                   <span>{file.name}</span>
                 </div>
@@ -174,14 +176,14 @@ export default function OnboardingPage() {
               />
             </div>
 
-            <div className="rounded-lg border bg-muted/20 p-3">
+            <div className="rounded-xl border border-border bg-muted/20 p-3">
               <div className="flex items-center gap-2 text-sm">
                 {stage === "uploading" ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
                 ) : stage === "failed" ? (
-                  <AlertCircle className="h-4 w-4 text-rose-600" />
+                  <AlertCircle className="h-4 w-4 text-destructive" />
                 ) : stage === "ready" ? (
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <CheckCircle2 className="h-4 w-4 text-(--status-strong)" />
                 ) : (
                   <Upload className="h-4 w-4 text-muted-foreground" />
                 )}
@@ -189,8 +191,8 @@ export default function OnboardingPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={handleGetStarted} disabled={!canContinue || stage === "uploading"}>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button size="lg" onClick={handleGetStarted} disabled={!canContinue || stage === "uploading"}>
                 {stage === "uploading" ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -198,11 +200,14 @@ export default function OnboardingPage() {
                   </>
                 ) : (
                   <>
-                    Upload &amp; start verifying
+                    Upload &amp; start defending
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </>
                 )}
               </Button>
+              <p className="caseline max-w-48 leading-snug">
+                Under a minute — you land on your case file next.
+              </p>
             </div>
       </div>
     </OnboardingShell>

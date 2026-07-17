@@ -61,9 +61,10 @@ import {
   LearningProjectShape,
   MentorReviewShape,
   DimensionScores,
+  ClaimTested,
 } from "@/types";
 export { INTERROGATION_DIMENSIONS } from "@/types";
-export type { DimensionScore, DimensionScores } from "@/types";
+export type { DimensionScore, DimensionScores, ClaimTested, TranscriptTurn } from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
   promise.then((response) => response.data);
@@ -1798,6 +1799,49 @@ export const notificationApi = {
 
 // AUDIT ----------------------------------------------------------------------
 
+/** The person-level evidence overlay + LLM case synthesis (all fields beyond
+ *  `confidence_note` are empty until at least one project is defended). */
+export type VerifiedProfileSummary = {
+  claimed_project_count: number;
+  verified_project_count: number;
+  flagged_project_count: number;
+  coverage: "none" | "unverified" | "limited" | "partial" | "strong";
+  confidence_note: string;
+  headline?: string;
+  narrative?: string;
+  seniority_calibration?: { level: "junior" | "mid" | "senior"; held_to_reason: string } | null;
+  capability_verified?: string[];
+  knowledge_gaps?: string[];
+  recommended_next_steps?: { apply_now: string[]; close_before_senior: string[] } | null;
+  examiner_note?: string;
+  verified_skills: Array<{ skill: string; via_projects: string[] }>;
+  contradictions: Array<{
+    project_title: string;
+    verdict: "suspicious" | "failed";
+    claimed_skills: string[];
+    note: string;
+  }>;
+};
+
+export type DefendedProject = {
+  project_title: string;
+  score: number | null;
+  dimension_scores?: DimensionScores | null;
+  verdict_summary: string;
+  audit_id: string | null;
+  expertise_estimate: string;
+  questions_answered: number;
+  repos: Array<{ url: string; label: string; language?: string }>;
+  verified_at: string | null;
+};
+
+export type PublicVerifiedProfile = {
+  candidate: { name: string; username: string };
+  claimed_role: string | null;
+  verified_profile: VerifiedProfileSummary;
+  defended_projects: DefendedProject[];
+};
+
 export const auditApi = {
   createAudit: (payload: FormData | Record<string, unknown>) =>
     extract<ExperienceAudit>(http.post("/audits/", payload)),
@@ -1824,37 +1868,9 @@ export const auditApi = {
 
   // HR-facing "assessment of a person" — only verified facts, no private claim layer.
   getPublicVerifiedProfile: (username: string) =>
-    extract<{
-      candidate: { name: string; username: string };
-      claimed_role: string | null;
-      verified_profile: {
-        claimed_project_count: number;
-        verified_project_count: number;
-        flagged_project_count: number;
-        coverage: "none" | "unverified" | "limited" | "partial" | "strong";
-        confidence_note: string;
-        headline?: string;
-        narrative?: string;
-        verified_skills: Array<{ skill: string; via_projects: string[] }>;
-        contradictions: Array<{
-          project_title: string;
-          verdict: "suspicious" | "failed";
-          claimed_skills: string[];
-          note: string;
-        }>;
-      };
-      defended_projects: Array<{
-        project_title: string;
-        score: number | null;
-        dimension_scores?: DimensionScores | null;
-        verdict_summary: string;
-        audit_id: string | null;
-        expertise_estimate: string;
-        questions_answered: number;
-        repos: Array<{ url: string; label: string; language?: string }>;
-        verified_at: string | null;
-      }>;
-    }>(http.get(`/verified-profile/${encodeURIComponent(username)}/`)),
+    extract<PublicVerifiedProfile>(
+      http.get(`/verified-profile/${encodeURIComponent(username)}/`)
+    ),
 
   submitNarrative: (auditId: string, payload: FormData) =>
     extract<{ status: string }>(
@@ -2140,23 +2156,9 @@ export const auditApi = {
           audit_id: string | null;
           verdict_summary?: string | null;
           verified_at?: string | null;
+          claims_tested?: ClaimTested[] | null;
         }>;
-        verified_profile?: {
-          claimed_project_count: number;
-          verified_project_count: number;
-          flagged_project_count: number;
-          coverage: "none" | "unverified" | "limited" | "partial" | "strong";
-          confidence_note: string;
-          headline?: string;
-          narrative?: string;
-          verified_skills: Array<{ skill: string; via_projects: string[] }>;
-          contradictions: Array<{
-            project_title: string;
-            verdict: "suspicious" | "failed";
-            claimed_skills: string[];
-            note: string;
-          }>;
-        };
+        verified_profile?: VerifiedProfileSummary;
         created_at: string;
         updated_at: string;
       };

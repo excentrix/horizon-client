@@ -37,7 +37,7 @@ export function useLocalQrCode(value: string) {
           margin: 1,
           width: 256,
           color: {
-            dark: "#0f172a",
+            dark: "#212121",
             light: "#ffffff",
           },
         });

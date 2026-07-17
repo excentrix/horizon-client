@@ -155,8 +155,11 @@
   --shadow-3: 0 24px 54px rgb(65 65 65 / 16%);
   --popover: #ffffff;
   --popover-foreground: #414141;
-  --primary: #5858cc;
-  --primary-foreground: #ffffff;
+  /* Tangerine is THE action color app-wide (user decision 2026-07-16, overrides
+     the indigo-primary brand export). Indigo is demoted to the evidence/data
+     scale (--status-*) so "act" and "score" never share a hue by accident. */
+  --primary: #ec5b13;
+  --primary-foreground: #fffcf5;
   --secondary: #ffffff;
   --secondary-foreground: #414141;
   --muted: #faf7ef;
@@ -166,9 +169,9 @@
   --destructive: #c63a2a;
   --border: #dccfb2;
   --input: #dccfb2;
-  --ring: #5858cc;
-  --chart-1: #5858cc;
-  --chart-2: #ec5b13;
+  --ring: #ec5b13;
+  --chart-1: #ec5b13;
+  --chart-2: #5858cc;
   --chart-3: #6c7a52;
   --chart-4: #8b6db8;
   --chart-5: #a06f4b;
@@ -176,10 +179,10 @@
   --sidebar-foreground: #414141;
   --sidebar-primary: #414141;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #5858cc;
-  --sidebar-accent-foreground: #ffffff;
+  --sidebar-accent: #ec5b13;
+  --sidebar-accent-foreground: #fffcf5;
   --sidebar-border: #dccfb2;
-  --sidebar-ring: #5858cc;
+  --sidebar-ring: #ec5b13;
 
   --intent-info: #5858cc;
   --intent-success: #2e9b5f;
@@ -190,7 +193,7 @@
   --dock-bg: rgb(255 255 255 / 82%);
   --dock-border: #dccfb2;
   --dock-item: #5a544a;
-  --dock-item-active: #5858cc;
+  --dock-item-active: #ec5b13;
   --dock-item-hover-bg: #f1e2c2;
 }
 
@@ -207,8 +210,8 @@
   --shadow-3: 0 28px 64px rgb(0 0 0 / 52%);
   --popover: #2a2a31;
   --popover-foreground: #f7f4ec;
-  --primary: #7a7ae6;
-  --primary-foreground: #ffffff;
+  --primary: #ff8a52;
+  --primary-foreground: #1f1f24;
   --secondary: #34343d;
   --secondary-foreground: #f7f4ec;
   --muted: #34343d;
@@ -218,9 +221,9 @@
   --destructive: #d65747;
   --border: #4a4a55;
   --input: #4a4a55;
-  --ring: #7a7ae6;
-  --chart-1: #7a7ae6;
-  --chart-2: #ff8a52;
+  --ring: #ff8a52;
+  --chart-1: #ff8a52;
+  --chart-2: #7a7ae6;
   --chart-3: #6bc08a;
   --chart-4: #a28add;
   --chart-5: #b48767;
@@ -228,10 +231,10 @@
   --sidebar-foreground: #f7f4ec;
   --sidebar-primary: #f7f4ec;
   --sidebar-primary-foreground: #1f1f24;
-  --sidebar-accent: #7a7ae6;
-  --sidebar-accent-foreground: #ffffff;
+  --sidebar-accent: #ff8a52;
+  --sidebar-accent-foreground: #1f1f24;
   --sidebar-border: #4a4a55;
-  --sidebar-ring: #7a7ae6;
+  --sidebar-ring: #ff8a52;
 
   --intent-info: #7a7ae6;
   --intent-success: #52b97f;
@@ -242,8 +245,14 @@
   --dock-bg: rgb(42 42 49 / 82%);
   --dock-border: #4a4a55;
   --dock-item: #d6d1c4;
-  --dock-item-active: #7a7ae6;
+  --dock-item-active: #ff8a52;
   --dock-item-hover-bg: #34343d;
+
+  /* Evidence scale, lifted for dark surfaces. */
+  --status-strong: #8f8fe0;
+  --status-solid: #a9a9e8;
+  --status-developing: #ff8a52;
+  --status-none: #8a826f;
 }
 
 @layer base {
@@ -320,6 +329,75 @@
     opacity: 0.05;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     background-size: 180px 180px;
+  }
+
+  /* ── VELO case-file vocabulary ─────────────────────────────────────────────
+     The product reads as an examiner's dossier: verdict stamps, the indigo
+     evidence scale (strong/solid/developing — never traffic-light), mono
+     metadata. Shared by /verify, the session page, public credentials and
+     printable reports so every surface speaks the same language. */
+
+  /* Verdict stamp — mono, uppercase, bordered. A record, not a pill. */
+  .stamp {
+    font-family: var(--font-mono-ui), "Geist Mono", ui-monospace, monospace;
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    border: 1px solid currentColor;
+    border-radius: 0.25rem;
+    line-height: 1.4;
+  }
+  .stamp-verified { color: var(--status-strong); }
+  .stamp-flagged { color: var(--status-developing); }
+  .stamp-failed { color: var(--status-none); }
+  .stamp-pending { color: var(--muted-foreground); border-style: dashed; }
+
+  /* Status chip — inline dimension/claim read-out with a colored dot. */
+  .cstat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-family: var(--font-mono-ui), "Geist Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    line-height: 1.5;
+  }
+  .cstat .status-dot,
+  .status-dot {
+    display: inline-block;
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: currentColor;
+    flex: none;
+  }
+  .status-strong { color: var(--status-strong); }
+  .status-solid { color: var(--status-solid); }
+  .status-developing { color: var(--status-developing); }
+  .status-none { color: var(--status-none); }
+
+  /* Mono metadata line — case number, dates, sample sizes. */
+  .caseline {
+    font-family: var(--font-mono-ui), "Geist Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
+    color: var(--muted-foreground);
+  }
+
+  /* Rise-in — the one orchestrated entrance ("first light" motif). */
+  @keyframes velo-rise {
+    from { opacity: 0; transform: translateY(0.625rem); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .rise-in { animation: velo-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .rise-in-1 { animation: velo-rise 0.5s 0.06s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .rise-in-2 { animation: velo-rise 0.5s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @media (prefers-reduced-motion: reduce) {
+    .rise-in, .rise-in-1, .rise-in-2 { animation: none; }
   }
 
   .terminal-bullet {

@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Compass, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type OnboardingShellProps = {
@@ -11,6 +10,11 @@ type OnboardingShellProps = {
   className?: string;
 };
 
+/**
+ * First-run VELO frame — the user's first impression of the product. Paper,
+ * grain, the real VELO lockup, and the whole loop stated up front so a
+ * brand-new user knows exactly what happens next.
+ */
 export function OnboardingShell({
   title,
   subtitle,
@@ -18,36 +22,52 @@ export function OnboardingShell({
   className,
 }: OnboardingShellProps) {
   return (
-    <div className="min-h-screen bg-[color:var(--color-primary-surface)] px-4 py-8 md:px-6 md:py-10">
-      <div className="mx-auto w-full max-w-4xl space-y-6">
-        <header className="rounded-3xl border border-border bg-card px-6 py-5 shadow-[var(--shadow-1)]">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-[color:var(--color-primary-surface)] text-[color:var(--dock-item-active)]">
-              <Compass className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="font-mono-ui text-[10px] tracking-[0.22em] uppercase text-muted-foreground">
-                Horizon Onboarding
-              </p>
-              <h1 className="font-display text-2xl leading-tight text-foreground md:text-3xl">
-                {title}
-              </h1>
-              {subtitle ? (
-                <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-              ) : null}
-            </div>
-            <div className="ml-auto hidden rounded-full border border-border bg-[color:var(--color-primary-surface)] px-3 py-1 text-xs text-muted-foreground md:flex md:items-center md:gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-[color:var(--dock-item-active)]" />
-              VELO ready
-            </div>
-          </div>
+    <div className="grain relative min-h-screen bg-background px-4 py-10 md:px-6">
+      <div className="relative mx-auto w-full max-w-2xl">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/logo/velo-lockup-color.svg" alt="VELO by excentrix" className="h-8" />
+
+        <header className="rise-in mt-10">
+          <p className="eyebrow flex items-center gap-2">
+            <span className="eyebrow-dot" /> Case file · step 1 of 1
+          </p>
+          <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+            {title}
+          </h1>
+          {subtitle ? (
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">{subtitle}</p>
+          ) : null}
         </header>
 
-        <main className={cn("rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-1)] md:p-7", className)}>
+        {/* The loop, before the first action — orientation beats onboarding tours. */}
+        <ol className="rise-in-1 mt-6 grid gap-2 sm:grid-cols-3">
+          {[
+            ["Upload", "We extract the projects your résumé claims."],
+            ["Defend", "VELO interrogates you on each one, grounded in your real code."],
+            ["Share", "What you defend becomes a credential recruiters can audit."],
+          ].map(([step, detail], i) => (
+            <li key={step} className="rounded-xl border border-border bg-card/60 p-3">
+              <p className="caseline uppercase tracking-[0.18em]">
+                {i + 1} · {step}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-foreground/80">{detail}</p>
+            </li>
+          ))}
+        </ol>
+
+        <main
+          className={cn(
+            "rise-in-2 mt-6 rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-1)] md:p-7",
+            className,
+          )}
+        >
           {children}
         </main>
+
+        <p className="caseline mt-6 text-center uppercase tracking-[0.18em]">
+          Free first verification · nothing is shared until you choose to
+        </p>
       </div>
     </div>
   );
 }
-

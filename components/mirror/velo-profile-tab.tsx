@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { LiveAnalysisPanel } from "@/components/mirror/live-analysis-panel";
-import { ProjectVerificationSheet } from "@/components/mirror/ProjectVerificationSheet";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
@@ -160,46 +159,49 @@ interface ImprovementAction {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// All score/priority reads use the evidence scale — strong / solid /
+// developing (indigo → tangerine), never traffic-light green/red. Matches the
+// verdict stamps and the reports colleges receive.
 function scoreColor(s: number) {
-  if (s >= 75) return "text-emerald-600 dark:text-emerald-400";
-  if (s >= 50) return "text-amber-600 dark:text-amber-400";
-  return "text-rose-600 dark:text-rose-400";
+  if (s >= 75) return "text-(--status-strong)";
+  if (s >= 50) return "text-(--status-solid)";
+  return "text-(--status-developing)";
 }
 function scoreBarColor(s: number) {
-  if (s >= 75) return "[&>div]:bg-emerald-500";
-  if (s >= 50) return "[&>div]:bg-amber-500";
-  return "[&>div]:bg-rose-500";
+  if (s >= 75) return "[&>div]:bg-(--status-strong)";
+  if (s >= 50) return "[&>div]:bg-(--status-solid)";
+  return "[&>div]:bg-(--status-developing)";
 }
 function atsLabel(s: number) {
-  if (s >= 90) return { label: "Excellent", color: "text-emerald-600 dark:text-emerald-400" };
-  if (s >= 75) return { label: "Good",      color: "text-emerald-600 dark:text-emerald-400" };
-  if (s >= 60) return { label: "Fair",      color: "text-amber-600 dark:text-amber-400" };
-  return              { label: "Needs Work",color: "text-rose-600 dark:text-rose-400" };
+  if (s >= 90) return { label: "Excellent", color: "text-(--status-strong)" };
+  if (s >= 75) return { label: "Good",      color: "text-(--status-strong)" };
+  if (s >= 60) return { label: "Fair",      color: "text-(--status-solid)" };
+  return              { label: "Needs work", color: "text-(--status-developing)" };
 }
 function seniorityStyle(s: Seniority) {
-  if (s === "senior") return "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-900/40";
-  if (s === "mid")    return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-900/40";
-  return "bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-950/30 dark:text-slate-400 dark:border-slate-800";
+  if (s === "senior") return "border-(--status-strong)/40 bg-(--status-strong)/10 text-(--status-strong)";
+  if (s === "mid")    return "border-(--status-solid)/40 bg-(--status-solid)/10 text-(--status-solid)";
+  return "border-border bg-muted text-muted-foreground";
 }
 function priorityAccent(p: Priority) {
-  if (p === "P1") return { stripe: "bg-rose-500",  text: "text-rose-700 dark:text-rose-400",  badge: "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300", row: "bg-rose-50/40 dark:bg-rose-950/10" };
-  if (p === "P2") return { stripe: "bg-amber-500", text: "text-amber-700 dark:text-amber-400",badge: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300", row: "bg-amber-50/40 dark:bg-amber-950/10" };
-  return               { stripe: "bg-blue-400",   text: "text-blue-700 dark:text-blue-400",  badge: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300", row: "bg-blue-50/40 dark:bg-blue-950/10" };
+  if (p === "P1") return { stripe: "bg-(--status-developing)", text: "text-(--status-developing)", badge: "border-(--status-developing)/40 bg-(--status-developing)/10 text-(--status-developing)", row: "bg-(--status-developing)/5" };
+  if (p === "P2") return { stripe: "bg-(--status-solid)", text: "text-(--status-solid)", badge: "border-(--status-solid)/40 bg-(--status-solid)/10 text-(--status-solid)", row: "bg-(--status-solid)/5" };
+  return               { stripe: "bg-(--status-none)", text: "text-muted-foreground", badge: "border-border bg-muted text-muted-foreground", row: "bg-muted/30" };
 }
 function verdictStyle(v: Verdict) {
-  if (v === "yes")   return { bg: "bg-emerald-500", label: "Would shortlist", sub: "text-emerald-50" };
-  if (v === "maybe") return { bg: "bg-amber-500",   label: "Maybe — needs work", sub: "text-amber-50" };
-  return                    { bg: "bg-rose-500",    label: "Would not shortlist", sub: "text-rose-50" };
+  if (v === "yes")   return { bg: "bg-(--status-strong)", label: "Would shortlist", sub: "text-white/80" };
+  if (v === "maybe") return { bg: "bg-(--status-solid)",  label: "Maybe — needs work", sub: "text-white/80" };
+  return                    { bg: "bg-(--status-developing)", label: "Would not shortlist", sub: "text-white/85" };
 }
 function impactStyle(v: ImpactLevel) {
-  if (v === "high")   return "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/30";
-  if (v === "medium") return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30";
-  return "bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900/30 dark:text-slate-400";
+  if (v === "high")   return "border-(--status-strong)/40 bg-(--status-strong)/10 text-(--status-strong)";
+  if (v === "medium") return "border-(--status-solid)/40 bg-(--status-solid)/10 text-(--status-solid)";
+  return "border-border bg-muted text-muted-foreground";
 }
 function effortStyle(v: ImpactLevel) {
-  if (v === "low")    return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30";
-  if (v === "medium") return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30";
-  return "bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900/30 dark:text-slate-400";
+  if (v === "low")    return "border-(--status-strong)/40 bg-(--status-strong)/10 text-(--status-strong)";
+  if (v === "medium") return "border-(--status-solid)/40 bg-(--status-solid)/10 text-(--status-solid)";
+  return "border-border bg-muted text-muted-foreground";
 }
 
 function findAnalysis<T extends { company?: string; role?: string; title?: string }>(
@@ -291,7 +293,21 @@ export function VeloProfileTab() {
   const [reanalysing, setReanalysing] = useState(false);
   const [uploadingResume, setUploadingResume] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
-  const [verifyingProjectIndex, setVerifyingProjectIndex] = useState<number | null>(null);
+  // Defending happens in the full-page session route, not a drawer.
+  const goDefend = (projectIndex: number) => {
+    const snapshotId = data?.mirror?.id;
+    if (!snapshotId) return;
+    const projectList = ((data?.mirror?.normalized_profile as Record<string, unknown>)?.projects ??
+      []) as Array<{ title?: string; repo_url?: string }>;
+    const p = projectList[projectIndex];
+    const params = new URLSearchParams({
+      snapshot: snapshotId,
+      project: String(projectIndex),
+      title: p?.title ?? `Project ${projectIndex + 1}`,
+    });
+    if (p?.repo_url) params.set("repo", p.repo_url);
+    router.push(`/verify/session?${params.toString()}`);
+  };
   const [resettingVerificationId, setResettingVerificationId] = useState<string | null>(null);
   const [reanalysisBlocked, setReanalysisBlocked] = useState<{ next_reset: string | null; limit: number } | null>(null);
   const [jdSheetOpen, setJdSheetOpen] = useState(false);
@@ -406,7 +422,7 @@ export function VeloProfileTab() {
     try {
       await auditApi.resetProjectVerification(verificationId);
       await queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
-      setVerifyingProjectIndex(projectIndex);
+      goDefend(projectIndex);
     } catch {
       toast.error("Couldn't reset verification. Please try again.");
     } finally { setResettingVerificationId(null); }
@@ -475,8 +491,8 @@ export function VeloProfileTab() {
     return (
       <div className="p-5 sm:p-6">
         {resumeUploadInput}
-        <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-6 dark:border-rose-900/30 dark:bg-rose-950/20">
-          <div className="mb-2 flex items-center gap-2 text-rose-700 dark:text-rose-400">
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6">
+          <div className="mb-2 flex items-center gap-2 text-destructive">
             <AlertCircle className="h-4 w-4" />
             <span className="text-sm font-semibold">Analysis failed</span>
           </div>
@@ -678,11 +694,11 @@ export function VeloProfileTab() {
                         key={i}
                         className={cn(
                           "relative overflow-hidden rounded-xl border p-3",
-                          isQuickWin && "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/15",
+                          isQuickWin && "border-(--status-strong)/40 bg-(--status-strong)/5",
                         )}
                       >
                         {isQuickWin && (
-                          <span className="absolute right-0 top-0 rounded-bl-lg bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
+                          <span className="absolute right-0 top-0 rounded-bl-lg bg-(--status-strong) px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
                             Quick win
                           </span>
                         )}
@@ -771,12 +787,12 @@ export function VeloProfileTab() {
                 const cov = verifiedProfile.coverage;
                 const style =
                   cov === "strong"
-                    ? "border-emerald-200 bg-emerald-50/60 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/15 dark:text-emerald-300"
+                    ? "border-(--status-strong)/40 bg-(--status-strong)/5 text-(--status-strong)"
                     : cov === "partial"
-                      ? "border-blue-200 bg-blue-50/60 text-blue-800 dark:border-blue-900/40 dark:bg-blue-950/15 dark:text-blue-300"
+                      ? "border-(--status-solid)/40 bg-(--status-solid)/5 text-(--status-solid)"
                       : cov === "limited"
-                        ? "border-amber-200 bg-amber-50/60 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/15 dark:text-amber-300"
-                        : "border-slate-200 bg-slate-50/60 text-slate-700 dark:border-slate-800 dark:bg-slate-900/30 dark:text-slate-300";
+                        ? "border-(--status-developing)/40 bg-(--status-developing)/5 text-(--status-developing)"
+                        : "border-border bg-muted/40 text-muted-foreground";
                 return (
                   <div className={cn("mb-4 flex items-center gap-3 rounded-2xl border px-4 py-3", style)}>
                     <span className="flex flex-col items-center">
@@ -802,7 +818,7 @@ export function VeloProfileTab() {
                       <span
                         key={s.skill}
                         title={`Defended in: ${s.via_projects.join(", ")}`}
-                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[12px] font-medium text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300"
+                        className="inline-flex items-center gap-1 rounded-lg border border-(--status-strong)/40 bg-(--status-strong)/10 px-2 py-0.5 text-[12px] font-medium text-(--status-strong)"
                       >
                         <ShieldCheck className="h-3 w-3" /> {s.skill}
                       </span>
@@ -814,24 +830,24 @@ export function VeloProfileTab() {
               {/* Contradictions — claim says demonstrated, evidence disagrees */}
               {verifiedProfile.contradictions.length > 0 && (
                 <div>
-                  <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-400">
+                  <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-(--status-developing)">
                     <ShieldAlert className="h-3.5 w-3.5" /> Claim vs. evidence
                   </p>
                   <div className="space-y-2">
                     {verifiedProfile.contradictions.map((c, i) => (
                       <div
                         key={i}
-                        className="rounded-xl border border-rose-200 bg-rose-50/60 p-3 dark:border-rose-900/40 dark:bg-rose-950/15"
+                        className="rounded-xl border border-(--status-developing)/40 bg-(--status-developing)/10 p-3"
                       >
                         <div className="mb-1 flex flex-wrap items-center gap-2">
                           <span className="text-sm font-semibold">{c.project_title}</span>
-                          <Badge variant="outline" className="h-5 border-rose-300 text-[10px] text-rose-700 dark:text-rose-400">
+                          <Badge variant="outline" className="h-5 border-(--status-developing)/40 text-[10px] text-(--status-developing)">
                             {c.verdict === "suspicious" ? "Flagged" : "Not defended"}
                           </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground">{c.note}</p>
                         {c.claimed_skills.length > 0 && (
-                          <p className="mt-1.5 text-[11px] text-rose-700 dark:text-rose-400">
+                          <p className="mt-1.5 text-[11px] text-(--status-developing)">
                             Unbacked claims: {c.claimed_skills.join(", ")}
                           </p>
                         )}
@@ -892,15 +908,15 @@ export function VeloProfileTab() {
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   {employerPerspective.what_stands_out.length > 0 && (
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/15">
-                      <div className="mb-2.5 flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                    <div className="rounded-2xl border border-(--status-strong)/40 bg-(--status-strong)/10 p-4">
+                      <div className="mb-2.5 flex items-center gap-1.5 text-(--status-strong)">
                         <ThumbsUp className="h-3.5 w-3.5" />
                         <span className="text-[11px] font-bold uppercase tracking-wide">Stands out</span>
                       </div>
                       <ul className="space-y-1.5">
                         {employerPerspective.what_stands_out.map((item, i) => (
                           <li key={i} className="flex items-start gap-1.5 text-xs text-foreground/80">
-                            <ChevronRight className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" />
+                            <ChevronRight className="mt-0.5 h-3 w-3 shrink-0 text-(--status-strong)" />
                             {item}
                           </li>
                         ))}
@@ -908,15 +924,15 @@ export function VeloProfileTab() {
                     </div>
                   )}
                   {employerPerspective.what_raises_flags.length > 0 && (
-                    <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-4 dark:border-rose-900/40 dark:bg-rose-950/15">
-                      <div className="mb-2.5 flex items-center gap-1.5 text-rose-700 dark:text-rose-400">
+                    <div className="rounded-2xl border border-(--status-developing)/40 bg-(--status-developing)/10 p-4">
+                      <div className="mb-2.5 flex items-center gap-1.5 text-(--status-developing)">
                         <AlertTriangle className="h-3.5 w-3.5" />
                         <span className="text-[11px] font-bold uppercase tracking-wide">Raises flags</span>
                       </div>
                       <ul className="space-y-1.5">
                         {employerPerspective.what_raises_flags.map((item, i) => (
                           <li key={i} className="flex items-start gap-1.5 text-xs text-foreground/80">
-                            <ChevronRight className="mt-0.5 h-3 w-3 shrink-0 text-rose-500" />
+                            <ChevronRight className="mt-0.5 h-3 w-3 shrink-0 text-(--status-developing)" />
                             {item}
                           </li>
                         ))}
@@ -943,7 +959,7 @@ export function VeloProfileTab() {
                                 <span className="text-xs text-muted-foreground">{item.current_issue}</span>
                               </div>
                               <p className="flex items-start gap-1.5 text-xs">
-                                <Lightbulb className="mt-0.5 h-3 w-3 shrink-0 text-amber-500" />
+                                <Lightbulb className="mt-0.5 h-3 w-3 shrink-0 text-(--status-solid)" />
                                 {item.suggested_fix}
                               </p>
                             </div>
@@ -965,11 +981,11 @@ export function VeloProfileTab() {
                 {/* Demonstrated */}
                 <div>
                   <div className="mb-3 flex items-center gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                    <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-(--status-strong)" />
+                    <span className="text-[11px] font-bold text-(--status-strong)">
                       Demonstrated
                     </span>
-                    <span className="ml-auto rounded-full bg-emerald-100 px-1.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                    <span className="ml-auto rounded-full bg-(--status-strong)/10 px-1.5 text-[10px] font-medium text-(--status-strong)">
                       {demonstrated.length}
                     </span>
                   </div>
@@ -983,8 +999,8 @@ export function VeloProfileTab() {
                           className={cn(
                             "inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[12px] font-medium",
                             isVerified
-                              ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300"
-                              : "border-emerald-200/60 bg-emerald-50/40 text-emerald-700/80 dark:border-emerald-900/30 dark:bg-emerald-950/15 dark:text-emerald-400/70",
+                              ? "border-(--status-strong)/40 bg-(--status-strong)/10 text-(--status-strong)"
+                              : "border-(--status-strong)/40 bg-(--status-strong)/10 text-(--status-strong)",
                           )}
                         >
                           {isVerified && <ShieldCheck className="h-3 w-3" />}
@@ -998,15 +1014,15 @@ export function VeloProfileTab() {
                 {/* Listed only */}
                 <div>
                   <div className="mb-3 flex items-center gap-1.5">
-                    <Circle className="h-3.5 w-3.5 text-amber-500" />
-                    <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">Listed only</span>
-                    <span className="ml-auto rounded-full bg-amber-100 px-1.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                    <Circle className="h-3.5 w-3.5 text-(--status-solid)" />
+                    <span className="text-[11px] font-bold text-(--status-solid)">Listed only</span>
+                    <span className="ml-auto rounded-full bg-(--status-solid)/10 px-1.5 text-[10px] font-medium text-(--status-solid)">
                       {mentioned.length}
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {mentioned.map((s) => (
-                      <span key={s.skill} className="rounded-lg border border-amber-200 bg-amber-50/60 px-2 py-0.5 text-[12px] font-medium text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+                      <span key={s.skill} className="rounded-lg border border-(--status-solid)/40 bg-(--status-solid)/10 px-2 py-0.5 text-[12px] font-medium text-(--status-solid)">
                         {s.skill}
                       </span>
                     ))}
@@ -1016,15 +1032,15 @@ export function VeloProfileTab() {
                 {/* Gaps */}
                 <div>
                   <div className="mb-3 flex items-center gap-1.5">
-                    <XCircle className="h-3.5 w-3.5 text-rose-500" />
-                    <span className="text-[11px] font-bold text-rose-700 dark:text-rose-400">Key gaps</span>
-                    <span className="ml-auto rounded-full bg-rose-100 px-1.5 text-[10px] font-medium text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">
+                    <XCircle className="h-3.5 w-3.5 text-(--status-developing)" />
+                    <span className="text-[11px] font-bold text-(--status-developing)">Key gaps</span>
+                    <span className="ml-auto rounded-full bg-(--status-developing)/10 px-1.5 text-[10px] font-medium text-(--status-developing)">
                       {masteryGaps.length}
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {masteryGaps.map((s) => (
-                      <span key={s.skill} className="rounded-lg border border-dashed border-rose-300 bg-rose-50/40 px-2 py-0.5 text-[12px] font-medium text-rose-700 dark:border-rose-800/50 dark:bg-rose-950/15 dark:text-rose-400">
+                      <span key={s.skill} className="rounded-lg border border-dashed border-(--status-developing)/40 bg-(--status-developing)/10 px-2 py-0.5 text-[12px] font-medium text-(--status-developing)">
                         {s.skill}
                       </span>
                     ))}
@@ -1065,7 +1081,7 @@ export function VeloProfileTab() {
                           <p className="text-xs text-muted-foreground">{gap.why_matters}</p>
                           {gap.how_to_fill && (
                             <p className="flex items-start gap-1 text-xs">
-                              <Lightbulb className="mt-0.5 h-3 w-3 shrink-0 text-amber-500" />
+                              <Lightbulb className="mt-0.5 h-3 w-3 shrink-0 text-(--status-solid)" />
                               {gap.how_to_fill}
                             </p>
                           )}
@@ -1120,10 +1136,10 @@ export function VeloProfileTab() {
                                   className={cn(
                                     "h-5 text-[10px]",
                                     analysis.relevance_to_target === "high"
-                                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300"
+                                      ? "border-(--status-strong)/40 bg-(--status-strong)/10 text-(--status-strong)"
                                       : analysis.relevance_to_target === "medium"
-                                        ? "border-amber-200 bg-amber-50 text-amber-700"
-                                        : "border-slate-200 bg-slate-50 text-slate-600",
+                                        ? "border-(--status-solid)/40 bg-(--status-solid)/10 text-(--status-solid)"
+                                        : "border-border bg-muted/40 text-muted-foreground",
                                   )}
                                 >
                                   {analysis.relevance_to_target} fit
@@ -1180,7 +1196,7 @@ export function VeloProfileTab() {
                                   <div className="space-y-1">
                                     {analysis.improvement_suggestions?.map((s: string, k: number) => (
                                       <p key={k} className="flex items-start gap-1.5 text-[11px]">
-                                        <Lightbulb className="mt-0.5 h-3 w-3 shrink-0 text-amber-500" /> {s}
+                                        <Lightbulb className="mt-0.5 h-3 w-3 shrink-0 text-(--status-solid)" /> {s}
                                       </p>
                                     ))}
                                   </div>
@@ -1221,41 +1237,41 @@ export function VeloProfileTab() {
                             </a>
                           )}
                           {(!pv || pv.status === "unverified") && (
-                            <button onClick={() => setVerifyingProjectIndex(i)}
-                              className="flex items-center gap-1 rounded-lg border border-dashed border-muted-foreground/40 px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-[color:var(--brand-indigo)]/60 hover:text-[color:var(--brand-indigo)]">
-                              <Shield className="h-2.5 w-2.5" /> Verify
+                            <button onClick={() => goDefend(i)}
+                              className="flex items-center gap-1 rounded-lg border border-dashed border-muted-foreground/40 px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary">
+                              <Shield className="h-2.5 w-2.5" /> Defend
                             </button>
                           )}
                           {pv?.status === "verified" && (
-                            <span className="flex items-center gap-1 rounded-lg bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                            <span className="flex items-center gap-1 rounded-lg bg-(--status-strong)/10 px-2 py-0.5 text-[10px] font-semibold text-(--status-strong)">
                               <ShieldCheck className="h-2.5 w-2.5" /> Verified
                             </span>
                           )}
                           {(pv?.status === "evidence_submitted" || pv?.status === "interrogating") && (
-                            <span className="flex items-center gap-1 rounded-lg bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                            <span className="flex items-center gap-1 rounded-lg bg-(--status-solid)/10 px-2 py-0.5 text-[10px] font-semibold text-(--status-solid)">
                               <Shield className="h-2.5 w-2.5" /> In Progress
                             </span>
                           )}
                           {pv?.status === "suspicious" && (
                             <>
-                              <span className="flex items-center gap-1 rounded-lg bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              <span className="flex items-center gap-1 rounded-lg bg-(--status-solid)/10 px-2 py-0.5 text-[10px] font-semibold text-(--status-solid)">
                                 <ShieldAlert className="h-2.5 w-2.5" /> Review Needed
                               </span>
                               <button disabled={resettingVerificationId === pv.verification_id}
                                 onClick={() => handleReVerify(pv.verification_id, i)}
-                                className="flex items-center gap-1 rounded-lg border border-dashed border-amber-400/60 px-2 py-0.5 text-[10px] text-amber-600 hover:border-amber-500 hover:text-amber-700 disabled:opacity-50">
+                                className="flex items-center gap-1 rounded-lg border border-dashed border-(--status-solid)/40 px-2 py-0.5 text-[10px] text-(--status-solid) hover:border-(--status-solid)/40 hover:text-(--status-solid) disabled:opacity-50">
                                 <RefreshCw className="h-2.5 w-2.5" /> Re-verify
                               </button>
                             </>
                           )}
                           {pv?.status === "failed" && (
                             <>
-                              <span className="flex items-center gap-1 rounded-lg bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                              <span className="flex items-center gap-1 rounded-lg bg-(--status-developing)/10 px-2 py-0.5 text-[10px] font-semibold text-(--status-developing)">
                                 <XCircle className="h-2.5 w-2.5" /> Not Verified
                               </span>
                               <button disabled={resettingVerificationId === pv.verification_id}
                                 onClick={() => handleReVerify(pv.verification_id, i)}
-                                className="flex items-center gap-1 rounded-lg border border-dashed border-rose-400/60 px-2 py-0.5 text-[10px] text-rose-600 hover:border-rose-500 hover:text-rose-700 disabled:opacity-50">
+                                className="flex items-center gap-1 rounded-lg border border-dashed border-(--status-developing)/40 px-2 py-0.5 text-[10px] text-(--status-developing) hover:border-(--status-developing)/40 hover:text-(--status-developing) disabled:opacity-50">
                                 <RefreshCw className="h-2.5 w-2.5" /> Re-verify
                               </button>
                             </>
@@ -1303,7 +1319,7 @@ export function VeloProfileTab() {
                                 <div className="space-y-1">
                                   {analysis.improvement_suggestions?.map((s: string, k: number) => (
                                     <p key={k} className="flex items-start gap-1.5 text-[11px]">
-                                      <Lightbulb className="mt-0.5 h-3 w-3 shrink-0 text-amber-500" /> {s}
+                                      <Lightbulb className="mt-0.5 h-3 w-3 shrink-0 text-(--status-solid)" /> {s}
                                     </p>
                                   ))}
                                 </div>
@@ -1371,7 +1387,7 @@ export function VeloProfileTab() {
                     <p className="mb-2.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Certifications</p>
                     {certifications.map((cert, i) => (
                       <div key={i} className="mb-2 flex items-center gap-2">
-                        <Award className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                        <Award className="h-3.5 w-3.5 shrink-0 text-(--status-solid)" />
                         <span className="text-xs">{typeof cert === "string" ? cert : (cert as { name: string }).name}</span>
                       </div>
                     ))}
@@ -1394,19 +1410,6 @@ export function VeloProfileTab() {
         </div>
       </div>
 
-      {/* ── Sheets & modals ───────────────────────────────────────────────── */}
-      {mirror?.id && verifyingProjectIndex !== null && (
-        <ProjectVerificationSheet
-          open={verifyingProjectIndex !== null}
-          onOpenChange={(open) => {
-            if (!open) { setVerifyingProjectIndex(null); queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] }); }
-          }}
-          snapshotId={mirror.id}
-          projectIndex={verifyingProjectIndex}
-          projectTitle={(projects[verifyingProjectIndex]?.title as string | undefined) ?? `Project ${verifyingProjectIndex + 1}`}
-          initialRepoUrl={projects[verifyingProjectIndex]?.repo_url}
-        />
-      )}
 
       <Sheet open={jdSheetOpen} onOpenChange={setJdSheetOpen}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
@@ -1464,7 +1467,7 @@ export function VeloProfileTab() {
               </p>
             </div>
             <div className="px-6 py-4">
-              <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/20 dark:text-amber-300">
+              <div className="rounded-xl border border-(--status-solid)/40 bg-(--status-solid)/10 px-4 py-3 text-sm text-(--status-solid)">
                 Upgrade your plan for unlimited JD-targeted analyses.
               </div>
             </div>
@@ -1492,7 +1495,7 @@ export function VeloProfileTab() {
               </p>
             </div>
             <div className="px-6 py-4">
-              <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/20 dark:text-amber-300">
+              <div className="rounded-xl border border-(--status-solid)/40 bg-(--status-solid)/10 px-4 py-3 text-sm text-(--status-solid)">
                 Upgrade your plan to re-analyse whenever you need.
               </div>
             </div>

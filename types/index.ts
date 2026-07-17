@@ -1716,6 +1716,16 @@ export const INTERROGATION_DIMENSIONS = [
 export type InterrogationDimension = (typeof INTERROGATION_DIMENSIONS)[number];
 export type DimensionScores = Partial<Record<InterrogationDimension, DimensionScore>>;
 
+/** A resume claim tested against the interrogation transcript + real code. */
+export type ClaimTested = {
+  claim: string;
+  status: "verified" | "partially_verified" | "contradicted" | "not_demonstrated";
+  evidence: string;
+};
+
+/** One Q/A turn of the interrogation, as served on the public credential. */
+export type TranscriptTurn = { question: string; answer: string };
+
 export interface AuditReport {
   audit_id: UUID;
   status: AuditStatus;
@@ -1760,6 +1770,10 @@ export interface AuditReport {
     repos: Array<{ url: string; label: string; language?: string }>;
     files_analyzed: number;
     verified_at: string | null;
+    // Full transparency — the transcript and per-claim evidence are public
+    // alongside the verdict, pass or fail ("auditable, not authoritative").
+    claims_tested?: ClaimTested[] | null;
+    transcript?: TranscriptTurn[];
   };
 }
 
