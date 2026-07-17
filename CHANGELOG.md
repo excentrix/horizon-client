@@ -112,6 +112,20 @@ Versioning policy:
 ### Commits
 - `0728552` feat(verify): expand verification and public profile scoring UI
 
+## v0.2.13 (2026-07-17)
+
+### Added
+- Full-page verification session route with transcript, repo picker, verdict stamp, and dimension meters.
+- Public audit report and verified-profile surfaces that expose transcript, claims-tested data, and share actions.
+
+### Changed
+- Onboarding, studio layout, and verification pages now route users into the new verification case-file flow.
+- Verified-profile and public audit views now present the defended-work breakdown instead of a flat summary only.
+- Local QR styling and shared API/types were updated to support the new public report surfaces.
+
+### Commits
+- `1dbe75a` feat(verify): add full verification session and public report surfaces
+
 ## Unreleased
 
 ### Added
