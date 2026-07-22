@@ -37,8 +37,17 @@ const ROLE_COLORS: Record<string, string> = {
   student: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
 };
 
-function AddMemberDialog({ onClose }: { onClose: () => void }) {
+function AddMemberDialog({
+  onClose,
+  onAdded,
+  orgId,
+}: {
+  onClose: () => void;
+  onAdded: () => void;
+  orgId?: string;
+}) {
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [role, setRole] = useState<"student" | "educator" | "admin">("student");
   const [saving, setSaving] = useState(false);
 
@@ -46,8 +55,28 @@ function AddMemberDialog({ onClose }: { onClose: () => void }) {
     if (!email.trim()) return;
     setSaving(true);
     try {
-      toast.info("Use the Invites tab CSV to bulk-add students, or contact the admin to add by email.");
+      const result = await institutionsApi.addOrgUser(
+        { email: email.trim(), name: name.trim() || undefined, role },
+        { org: orgId || undefined }
+      );
+      if (!result.user_created) {
+        toast.success(
+          result.membership_created
+            ? `${result.email} was already a Horizon user — added to this school.`
+            : `${result.email} is already a member.`
+        );
+      } else {
+        toast.success(
+          `${result.email} added. They still need a way to sign in — this creates the school membership, not a login/invite email.`
+        );
+      }
+      onAdded();
       onClose();
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        "Failed to add member";
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -64,6 +93,10 @@ function AddMemberDialog({ onClose }: { onClose: () => void }) {
           <Input className="mt-1" type="email" placeholder="user@institution.edu" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
         </div>
         <div>
+          <label className="text-xs text-muted-foreground">Name (optional)</label>
+          <Input className="mt-1" placeholder="Jane Doe" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div>
           <label className="text-xs text-muted-foreground">Role</label>
           <div className="flex gap-2 mt-1">
             {(["student", "educator", "admin"] as const).map((r) => (
@@ -71,6 +104,11 @@ function AddMemberDialog({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         </div>
+        <p className="text-xs text-muted-foreground">
+          This creates the school membership immediately. It does not send an invite or set up a
+          login — the person needs their own way to sign in first (existing account, or one you set
+          up separately).
+        </p>
       </div>
       <DialogFooter>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
@@ -244,7 +282,13 @@ export default function InstitutionMembersClient() {
       )}
 
       <Dialog open={showAdd && !(isSuperuser && !selectedOrgId)} onOpenChange={setShowAdd}>
-        {showAdd && <AddMemberDialog onClose={() => setShowAdd(false)} />}
+        {showAdd && (
+          <AddMemberDialog
+            onClose={() => setShowAdd(false)}
+            onAdded={load}
+            orgId={selectedOrgId || undefined}
+          />
+        )}
       </Dialog>
     </div>
   );

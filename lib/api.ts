@@ -264,7 +264,7 @@ export const chatApi = {
   getConversation: (conversationId: string) =>
     extract<Conversation>(http.get(`/chat/conversations/${conversationId}/`)),
 
-  createConversation: (payload: Partial<Conversation>) =>
+  createConversation: (payload: Partial<Conversation> & { initial_message?: string }) =>
     extract<Conversation>(http.post("/chat/conversations/", payload)),
 
   pinConversation: (conversationId: string) =>
@@ -1213,6 +1213,118 @@ export const portfolioApi = {
     ),
 };
 
+// PATHFINDER ------------------------------------------------------------------
+export interface PathfinderSession {
+  id: string;
+  current_step:
+    | "aspiration_intake"
+    | "exploration"
+    | "evidence_review"
+    | "report_generating"
+    | "report_ready";
+  stated_aspiration: string;
+  riasec_scores: Record<string, number>;
+  conversation: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PathwayReportMatch {
+  career_profile_id: string;
+  slug: string;
+  title: string;
+  match_score: number;
+  why: string;
+  summary: string;
+  specializations: Array<{ name: string; description: string }>;
+  pathways: Array<{ route: string; title: string; details: string; typical_duration: string }>;
+  credentials: Array<{ name: string; load_bearing: boolean; notes: string }>;
+  college_fit: Array<{ name: string; region_note: string; why_fit: string }>;
+}
+
+export interface PathwayReport {
+  id: string;
+  session: string;
+  riasec_profile: { scores: Record<string, number>; rationale: string; evidence_signals: string[] };
+  top_matches: PathwayReportMatch[];
+  evidence_summary: Array<{ artifact_id: string; title: string; artifact_type: string }>;
+  generated_at: string;
+  model_version: string;
+}
+
+export const pathfinderApi = {
+  listRegions: () =>
+    extract<Array<{ id: string; code: string; name: string }>>(http.get("/pathfinder/regions/")),
+
+  getEntitlement: () =>
+    extract<{ pathfinder_enabled: boolean }>(http.get("/pathfinder/entitlement/")),
+
+  listSessions: () =>
+    extract<PathfinderSession[] | PaginatedResponse<PathfinderSession>>(
+      http.get("/pathfinder/sessions/")
+    ).then(normalizeList),
+
+  createSession: (payload: { stated_aspiration: string }) =>
+    extract<PathfinderSession>(http.post("/pathfinder/sessions/", payload)),
+
+  getSession: (sessionId: string) =>
+    extract<PathfinderSession>(http.get(`/pathfinder/sessions/${sessionId}/`)),
+
+  // Atomic get-or-create on the backend — always returns the same conversation no matter how many
+  // times or how concurrently it's called. Never create a pathfinder conversation via
+  // chatApi.createConversation directly; that's a race between independent client requests.
+  ensureConversation: (sessionId: string) =>
+    extract<{ conversation: string }>(http.post(`/pathfinder/sessions/${sessionId}/ensure-conversation/`)),
+
+  generateReport: (sessionId: string) =>
+    extract<{ session_id: string; status: string }>(
+      http.post(`/pathfinder/sessions/${sessionId}/generate-report/`)
+    ),
+
+  getSessionReport: (sessionId: string) =>
+    extract<PathwayReport>(http.get(`/pathfinder/sessions/${sessionId}/report/`)),
+
+  shareArtifact: (payload: {
+    title: string;
+    description?: string;
+    artifact_type: "link" | "file" | "text" | "project" | "case_study" | "demo";
+    url?: string;
+    content?: string;
+    pathfinder_session: string;
+  }) => extract<PortfolioArtifact>(http.post("/portfolio/artifacts/", payload)),
+
+  // Institution/counselor side
+  institutionOverview: (params?: { org?: string }) =>
+    extract<{
+      total_students: number;
+      started_count: number;
+      completed_count: number;
+      not_started_count: number;
+      aspiration_clusters: Array<{ career: string; count: number }>;
+      fit_gap_flagged_count: number;
+      portfolio_ready_rate: number;
+      avg_top_match_score: number;
+      riasec_cohort_average?: Record<string, number>;
+      institutional_recommendations: string[];
+    }>(http.get("/pathfinder/institution/overview/", { params })),
+
+  institutionStudents: (params?: { org?: string }) =>
+    extract<{
+      students: Array<{
+        user_id: string;
+        name: string;
+        email: string;
+        status: "not_started" | "in_progress" | "report_ready";
+        stated_aspiration: string | null;
+        top_match: string | null;
+        top_match_score: number | null;
+        evidence_count: number;
+        generated_at: string | null;
+      }>;
+    }>(http.get("/pathfinder/institution/students/", { params })),
+};
+
 // INTELLIGENCE ---------------------------------------------------------------
 export const intelligenceApi = {
   getMultiDomainDashboard: (params?: {
@@ -1533,6 +1645,10 @@ export const institutionsApi = {
     extract<{ id: string; email: string; name: string; role: string }[]>(http.get("/institutions/educators/", { params })),
   listOrgUsers: (params?: { role?: string; org?: string }) =>
     extract<OrgUser[]>(http.get("/institutions/users/", { params })),
+  addOrgUser: (payload: { email: string; name?: string; role: "student" | "educator" | "admin" }, params?: { org?: string }) =>
+    extract<{ id: string; email: string; name: string; role: string; user_created: boolean; membership_created: boolean }>(
+      http.post("/institutions/users/", payload, { params })
+    ),
   updateOrgUser: (userId: string, payload: { role?: string; is_active?: boolean; org?: string }) =>
     extract<OrgUser>(http.patch(`/institutions/users/${userId}/`, payload)),
   resetOrgUserPassword: (userId: string, payload?: { org?: string }) =>
@@ -1589,6 +1705,10 @@ export interface Organization {
   educator_count: number;
   cohort_usage_pct: number;
   student_usage_pct: number;
+  pathfinder_enabled: boolean;
+  region: string | null;
+  region_code: string | null;
+  region_name: string | null;
   created_at: string;
   updated_at: string;
 }

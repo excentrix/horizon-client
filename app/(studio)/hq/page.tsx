@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   hqApi,
   authApi,
+  pathfinderApi,
   type HQPlatformStats,
   type HQVeloStats,
   type HQOrgPerformance,
@@ -14,6 +15,7 @@ import {
   type GlobalUser,
   type HQUserGovernanceDetail,
   type SupportTicket,
+  type Organization,
 } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -56,6 +58,22 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   ResponsiveContainer,
   BarChart,
@@ -1194,14 +1212,160 @@ function SupportQueueTab({ selectedOrgId }: { selectedOrgId: string }) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// ORGANIZATIONS TAB — pilot activation controls (pathfinder_enabled, region, etc.)
+// ══════════════════════════════════════════════════════════════════
+
+function EditOrgDialog({
+  org,
+  onClose,
+  onSaved,
+}: {
+  org: Organization;
+  onClose: () => void;
+  onSaved: (updated: Organization) => void;
+}) {
+  const [regions, setRegions] = useState<Array<{ id: string; code: string; name: string }>>([]);
+  const [pathfinderEnabled, setPathfinderEnabled] = useState(org.pathfinder_enabled);
+  const [regionId, setRegionId] = useState(org.region ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    pathfinderApi.listRegions().then(setRegions).catch(() => {});
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const updated = await hqApi.updateOrganization(org.id, {
+        pathfinder_enabled: pathfinderEnabled,
+        region: regionId || null,
+      } as Partial<Organization>);
+      toast.success(`${org.name} updated`);
+      onSaved(updated);
+      onClose();
+    } catch {
+      toast.error("Couldn't save changes");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{org.name}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div>
+              <p className="text-sm font-medium">Pathfinder</p>
+              <p className="text-xs text-muted-foreground">School career-discovery mode</p>
+            </div>
+            <Switch checked={pathfinderEnabled} onCheckedChange={setPathfinderEnabled} />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Region</label>
+            <Select value={regionId} onValueChange={setRegionId}>
+              <SelectTrigger>
+                <SelectValue placeholder="No region set" />
+              </SelectTrigger>
+              <SelectContent>
+                {regions.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.name} ({r.code})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {pathfinderEnabled && !regionId && (
+              <p className="text-xs text-amber-500">
+                Pathfinder needs a region before students can start a session.
+              </p>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function OrganizationsTab() {
+  const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    hqApi
+      .listOrganizations({ page: 1, page_size: 200 })
+      .then((data) => setOrgs(data.results))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) {
+    return <div className="flex justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Institution</TableHead>
+            <TableHead>Plan</TableHead>
+            <TableHead>Region</TableHead>
+            <TableHead>Pathfinder</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {orgs.map((org) => (
+            <TableRow key={org.id}>
+              <TableCell className="font-medium">{org.name}</TableCell>
+              <TableCell><Badge variant="outline">{org.plan_tier}</Badge></TableCell>
+              <TableCell className="text-muted-foreground">{org.region_name ?? "—"}</TableCell>
+              <TableCell>
+                <Badge variant={org.pathfinder_enabled ? "default" : "secondary"}>
+                  {org.pathfinder_enabled ? "Enabled" : "Off"}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-right">
+                <Button variant="ghost" size="sm" onClick={() => setEditingOrg(org)}>Edit</Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+
+      {editingOrg && (
+        <EditOrgDialog
+          org={editingOrg}
+          onClose={() => setEditingOrg(null)}
+          onSaved={(updated) => setOrgs((prev) => prev.map((o) => (o.id === updated.id ? updated : o)))}
+        />
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 // ROOT PAGE
 // ══════════════════════════════════════════════════════════════════
 
-type Tab = "overview" | "velo" | "users" | "support";
+type Tab = "overview" | "velo" | "organizations" | "users" | "support";
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "velo", label: "VELO", icon: FileCheck2 },
+  { id: "organizations", label: "Organizations", icon: Building2 },
   { id: "users", label: "Users", icon: Users },
   { id: "support", label: "Support Queue", icon: Ticket },
 ];
@@ -1330,6 +1494,7 @@ export default function MasterHQPage() {
           />
         )}
         {activeTab === "velo" && <VeloTab />}
+        {activeTab === "organizations" && <OrganizationsTab />}
         {activeTab === "users" && <UsersTab selectedOrgId={selectedOrgId} />}
         {activeTab === "support" && <SupportQueueTab selectedOrgId={selectedOrgId} />}
       </div>

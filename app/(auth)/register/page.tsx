@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useAuth } from "@/context/AuthContext";
+import { resolveHomeRoute } from "@/lib/pathfinder-routing";
 import {
   Form,
   FormControl,
@@ -115,9 +116,14 @@ function RegisterForm() {
   }, [inviteEmail, inviteData.valid, form]);
 
   useEffect(() => {
-    if (user) {
-      router.replace("/dashboard");
-    }
+    if (!user) return;
+    let cancelled = false;
+    resolveHomeRoute(user).then((path) => {
+      if (!cancelled) router.replace(path);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [router, user]);
 
   const onSubmit = async (values: RegisterFormValues) => {

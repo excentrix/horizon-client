@@ -380,6 +380,7 @@ export interface Conversation {
   description?: string;
   status: ConversationStatus;
   priority: ConversationPriority;
+  conversation_type?: "mentor" | "feynman" | "playground" | "pathfinder";
   is_pinned: boolean;
   is_intake?: boolean;
   intake_state?: Record<string, unknown>;
@@ -514,7 +515,13 @@ export interface ToolInvocation {
 }
 
 export interface MentorAction {
-  type: "view_plan" | "open_plan_task" | "confirm_plan_intent" | "open_link" | "trigger_plan_generation";
+  type:
+    | "view_plan"
+    | "open_plan_task"
+    | "confirm_plan_intent"
+    | "open_link"
+    | "trigger_plan_generation"
+    | "trigger_pathfinder_report";
   label: string;
   description?: string;
   data?: Record<string, unknown>;

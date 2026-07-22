@@ -18,6 +18,7 @@ const ROUTE_FLAGS: Array<[string, FeatureName]> = [
   ["/leaderboard", "gamification"],
   ["/institution", "institutions"],
   ["/dashboard", "dashboard"],
+  ["/pathfinder", "pathfinder"],
 ];
 
 /** True if the current route's feature flag is disabled. */
