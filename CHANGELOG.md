@@ -137,6 +137,7 @@ Versioning policy:
 
 ### Commits
 - `9e3c614` feat(pathfinder): add school pathfinder surfaces and routing
+- `a9cbd6b` feat(pathfinder): add pathfinder route pages
 
 ## v0.2.14 (2026-07-22)
 
