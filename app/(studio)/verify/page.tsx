@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -20,9 +21,7 @@ import { authApi, auditApi, type ClaimTested, type VerifiedProfileSummary } from
 import { INTERROGATION_DIMENSIONS, type DimensionScores } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { VeloProfileTab } from "@/components/mirror/velo-profile-tab";
 import { VerifiedProfileView } from "@/components/verified/verified-profile-view";
 import { RadarChart, type RadarAxis } from "@/components/velo/radar-chart";
 import { ShareActions } from "@/components/velo/share-actions";
@@ -33,6 +32,7 @@ import {
   statusClassForScore,
 } from "@/components/velo/dimension-meters";
 import { ClaimChipsInline } from "@/components/velo/claim-chips";
+import { VeloLoadingScreen } from "@/components/velo/velo-loading-screen";
 import { trackFunnel, FUNNEL } from "@/lib/funnel";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -225,12 +225,7 @@ export default function VerifyPage() {
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (isLoading) {
-    return (
-      <div className="mx-auto w-full max-w-5xl space-y-4 p-6">
-        <Skeleton className="h-44 w-full rounded-2xl" />
-        <Skeleton className="h-64 w-full rounded-2xl" />
-      </div>
-    );
+    return <VeloLoadingScreen />;
   }
 
   // ── Empty: open the case file ────────────────────────────────────────────
@@ -340,7 +335,9 @@ export default function VerifyPage() {
 
           <div className="flex gap-3">
             {typeof deep.ats_score === "number" && (
-              <StatTile value={String(deep.ats_score)} label="resume ATS" />
+              <Link href="/analysis" className="rounded-xl transition-opacity hover:opacity-80">
+                <StatTile value={String(deep.ats_score)} label="resume ATS" title="Open full resume analysis" />
+              </Link>
             )}
             <StatTile
               value={`${verifiedCount}`}
@@ -362,7 +359,6 @@ export default function VerifyPage() {
         <TabsList className="mb-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="defend">Defend</TabsTrigger>
-          <TabsTrigger value="analysis">Resume analysis</TabsTrigger>
           <TabsTrigger value="verified">Recruiter view</TabsTrigger>
         </TabsList>
 
@@ -397,6 +393,21 @@ export default function VerifyPage() {
             </div>
 
             <div className="space-y-4">
+              {typeof deep.ats_score === "number" && (
+                <Link
+                  href="/analysis"
+                  className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-5 transition-colors hover:border-primary/40"
+                >
+                  <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 font-display text-lg font-bold tabular-nums text-primary">
+                    {deep.ats_score}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">Full resume analysis</p>
+                    <p className="caseline mt-0.5">ATS breakdown · role fit · skill gaps · employer&apos;s view</p>
+                  </div>
+                  <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                </Link>
+              )}
               <SynthesisBlocks profile={verifiedProfile} />
               {verifiedCount > 0 && verifiedProfileUrl && (
                 <div className="rounded-2xl border border-border bg-card p-5">
@@ -461,11 +472,6 @@ export default function VerifyPage() {
           </div>
         </TabsContent>
 
-        {/* ── Resume analysis ──────────────────────────────────────────── */}
-        <TabsContent value="analysis">
-          <VeloProfileTab />
-        </TabsContent>
-
         {/* ── Recruiter view — exactly what they see ───────────────────── */}
         <TabsContent value="verified" className="mx-auto max-w-3xl space-y-4">
           {verifiedCount === 0 ? (
@@ -482,9 +488,15 @@ export default function VerifyPage() {
               )}
             </div>
           ) : publicVerified.isLoading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-24 w-full" />
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <div className="mb-4 flex items-center gap-2">
+                <Loader2 className="size-4 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Preparing the recruiter view…</p>
+              </div>
+              <div className="space-y-3">
+                <div className="h-24 rounded-2xl bg-muted/60" />
+                <div className="h-20 rounded-2xl bg-muted/45" />
+              </div>
             </div>
           ) : publicVerified.data ? (
             <>

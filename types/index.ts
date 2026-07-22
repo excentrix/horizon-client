@@ -1718,13 +1718,45 @@ export type DimensionScores = Partial<Record<InterrogationDimension, DimensionSc
 
 /** A resume claim tested against the interrogation transcript + real code. */
 export type ClaimTested = {
-  claim: string;
+  claim?: string;
+  claim_text?: string;
   status: "verified" | "partially_verified" | "contradicted" | "not_demonstrated";
-  evidence: string;
+  evidence?: string;
+  note?: string;
+};
+
+/** Why one answer was graded the way it was — computed per-answer during
+ * interrogation, surfaced here so the reader can re-judge it themselves. */
+export type TurnReasoning = {
+  dimensions: DimensionScores;
+  grounding_note?: string;
+  contradiction?: {
+    prior_claim_excerpt?: string;
+    this_answer_excerpt?: string;
+    note?: string;
+  } | null;
 };
 
 /** One Q/A turn of the interrogation, as served on the public credential. */
-export type TranscriptTurn = { question: string; answer: string };
+export type TranscriptTurn = {
+  question: string;
+  answer: string;
+  area?: string | null;
+  grading_status?: "scored" | "pending" | "failed" | "not_graded";
+  reasoning?: TurnReasoning | null;
+};
+
+/** Project-scoped "how to improve" guidance, generated once at finalize()
+ * time from this project's own transcript + evidence — distinct from the
+ * person-level, cross-project CaseSynthesis. */
+export type ImprovementNote = {
+  summary: string;
+  strongest_dimension: InterrogationDimension;
+  strongest_reason: string;
+  weakest_dimension: InterrogationDimension;
+  weakest_reason: string;
+  actions: string[];
+};
 
 export interface AuditReport {
   audit_id: UUID;
@@ -1774,6 +1806,8 @@ export interface AuditReport {
     // alongside the verdict, pass or fail ("auditable, not authoritative").
     claims_tested?: ClaimTested[] | null;
     transcript?: TranscriptTurn[];
+    improvement_note?: ImprovementNote | null;
+    improvement_note_status?: "not_run" | "scored" | "failed";
   };
 }
 

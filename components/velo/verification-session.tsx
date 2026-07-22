@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, GitBranch, Globe, Loader2 } from "lucide-react";
@@ -11,10 +11,13 @@ import { cn } from "@/lib/utils";
 import { useProjectVerification, type RepoEntry, type Verdict } from "@/hooks/use-project-verification";
 import { useGithubRepos } from "@/hooks/use-github-repos";
 import { auditApi, type ClaimTested, type TranscriptTurn } from "@/lib/api";
+import type { ImprovementNote } from "@/types";
+import { ImprovementNoteCard } from "@/components/velo/improvement-note";
 import { RepoPicker, RepoResultRow } from "@/components/velo/repo-picker";
 import { VerdictStamp } from "@/components/velo/verdict-stamp";
 import { DimensionMeters } from "@/components/velo/dimension-meters";
 import { ClaimsTested } from "@/components/velo/claim-chips";
+import { VeloLoadingScreen } from "@/components/velo/velo-loading-screen";
 import { TranscriptPanel, type TranscriptEntry } from "@/components/velo/transcript-panel";
 import { ShareActions } from "@/components/velo/share-actions";
 import { trackFunnel, FUNNEL } from "@/lib/funnel";
@@ -72,6 +75,37 @@ export function VerificationSession({
   const [githubConnecting, setGithubConnecting] = useState(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
 
+  // A refresh mid-interview must never eat a half-written answer — the draft
+  // persists per verification+question and clears on submit.
+  const draftKey =
+    hook.verificationId != null
+      ? `velo-answer-draft:${hook.verificationId}:${hook.questionCount}`
+      : null;
+  useEffect(() => {
+    if (!draftKey || hook.step !== "interrogating") return;
+    const saved = window.localStorage.getItem(draftKey);
+    if (saved) setAnswer(saved);
+  }, [draftKey, hook.step]);
+  useEffect(() => {
+    if (!draftKey || hook.step !== "interrogating") return;
+    if (answer) window.localStorage.setItem(draftKey, answer);
+    else window.localStorage.removeItem(draftKey);
+  }, [answer, draftKey, hook.step]);
+
+  // Elapsed time on the record — starts when the interrogation does.
+  const [elapsed, setElapsed] = useState(0);
+  const interrogationStartedAt = useRef<number | null>(null);
+  useEffect(() => {
+    if (hook.step !== "interrogating") return;
+    if (interrogationStartedAt.current == null) interrogationStartedAt.current = Date.now();
+    const t = setInterval(
+      () => setElapsed(Math.floor((Date.now() - (interrogationStartedAt.current ?? Date.now())) / 1000)),
+      1000,
+    );
+    return () => clearInterval(t);
+  }, [hook.step]);
+  const elapsedLabel = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
+
   // Auto-start: the user already chose to defend this project on the case
   // file — landing here should never ask again.
   const started = useRef(false);
@@ -112,10 +146,21 @@ export function VerificationSession({
     await hook.submitRepos(repos.filter((r) => r.url.trim()), demoUrl);
   };
 
+  const submitOnEnter = (
+    event: KeyboardEvent<HTMLTextAreaElement>,
+    action: () => void,
+  ) => {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    action();
+  };
+
   const handleSubmitAnswer = async () => {
-    if (!answer.trim() || answer.trim().split(/\s+/).length < 5) return;
+    if (!hook.currentQuestion || !answer.trim() || answer.trim().split(/\s+/).length < 5) return;
     const current = answer;
     setAnswer("");
+    if (draftKey) window.localStorage.removeItem(draftKey);
     const done = await hook.submitAnswer(current);
     if (done) await hook.completeAndFinalize();
   };
@@ -174,9 +219,7 @@ export function VerificationSession({
 
       {/* ── Flow body ────────────────────────────────────────────────────── */}
       {isBusy ? (
-        <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
-        </div>
+        <VeloLoadingScreen />
       ) : (
         <div
           className={cn(
@@ -304,6 +347,7 @@ export function VerificationSession({
                 }
                 value={contextText}
                 onChange={(e) => setContextText(e.target.value)}
+                onKeyDown={(e) => submitOnEnter(e, () => void hook.submitContext(contextText))}
                 className="min-h-[120px] resize-none text-sm"
                 autoFocus
               />
@@ -356,7 +400,7 @@ export function VerificationSession({
           )}
 
           {/* ── Interrogation — the growing case record ──────────────────── */}
-          {hook.step === "interrogating" && hook.currentQuestion && (
+          {hook.step === "interrogating" && (
             <div className="flex h-full min-h-0 flex-col">
               <div className="flex items-center justify-between border-b border-border bg-muted/20 px-6 py-2.5">
                 <span className="eyebrow flex items-center gap-2">
@@ -366,7 +410,9 @@ export function VerificationSession({
                   </span>
                   On the record
                 </span>
-                <span className="caseline">{hook.answeredTurns.length} answered</span>
+                <span className="caseline tabular-nums">
+                  {hook.answeredTurns.length} answered · {elapsedLabel}
+                </span>
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
@@ -384,14 +430,23 @@ export function VerificationSession({
                 ))}
 
                 <div className="py-3">
-                  <div className="rounded-lg border-l-2 border-primary bg-muted/30 py-3 pl-4 pr-3">
-                    <p className="caseline">
-                      Q{String(hook.questionCount + 1).padStart(2, "0")}
-                      {hook.currentQuestionArea ? ` · ${hook.currentQuestionArea.toUpperCase()}` : ""} ·
-                      VELO — Examiner
-                    </p>
-                    <p className="mt-1.5 text-sm leading-relaxed">{hook.currentQuestion}</p>
-                  </div>
+                  {hook.currentQuestion ? (
+                    <div className="rounded-lg border-l-2 border-primary bg-muted/30 py-3 pl-4 pr-3">
+                      <p className="caseline">
+                        Q{String(hook.questionCount + 1).padStart(2, "0")}
+                        {hook.currentQuestionArea ? ` · ${hook.currentQuestionArea.toUpperCase()}` : ""} ·
+                        VELO — Examiner
+                      </p>
+                      <p className="mt-1.5 text-sm leading-relaxed">{hook.currentQuestion}</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-4">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="size-4 animate-spin text-primary" />
+                        Generating the next question…
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div ref={transcriptEndRef} />
               </div>
@@ -401,18 +456,23 @@ export function VerificationSession({
                   placeholder="Be specific — reference your actual code, the decisions you made, the problems you hit, and why you chose one approach over another."
                   value={answer}
                   onChange={(e) => setAnswer(e.target.value)}
-                  className="min-h-[110px] resize-none text-sm"
+                  onKeyDown={(e) => submitOnEnter(e, () => void handleSubmitAnswer())}
+                  disabled={hook.isLoading || !hook.currentQuestion}
+                  className="min-h-[110px] max-h-[220px] resize-none overflow-y-auto text-sm"
                   autoFocus
                 />
                 <div className="mt-2 flex items-center justify-between gap-3">
                   <p className="text-[10px] text-muted-foreground">
                     Shallow answers go deeper on the same area. Strong answers move to a harder
-                    topic. Minimum 5 words.
+                    topic. Minimum 5 words. Press Enter to submit, Shift+Enter for a new line.
                   </p>
                   <Button
                     onClick={handleSubmitAnswer}
                     disabled={
-                      hook.isLoading || !answer.trim() || answer.trim().split(/\s+/).length < 5
+                      hook.isLoading ||
+                      !hook.currentQuestion ||
+                      !answer.trim() ||
+                      answer.trim().split(/\s+/).length < 5
                     }
                   >
                     {hook.isLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
@@ -484,6 +544,7 @@ function VerdictPanel({
   // the same evidence a recruiter sees.
   const [claims, setClaims] = useState<ClaimTested[] | null>(null);
   const [storedTranscript, setStoredTranscript] = useState<TranscriptTurn[] | null>(null);
+  const [improvementNote, setImprovementNote] = useState<ImprovementNote | null>(null);
   useEffect(() => {
     if (!auditId) return;
     let active = true;
@@ -493,6 +554,7 @@ function VerdictPanel({
         if (!active) return;
         setClaims(report.verification?.claims_tested ?? null);
         setStoredTranscript(report.verification?.transcript ?? null);
+        setImprovementNote(report.verification?.improvement_note ?? null);
       })
       .catch(() => {});
     return () => {
@@ -528,10 +590,29 @@ function VerdictPanel({
 
   const score = verdict.verification_score != null ? Math.round(verdict.verification_score * 100) : null;
   const isVerified = verdict.status === "verified";
+  // Live turns carry question/answer text immediately; grading reasoning
+  // runs async (Celery), so it's only available once the public-report
+  // fetch above resolves — merge it onto the live turns by index rather
+  // than blocking the answer loop on a synchronous grading channel.
   const transcript: TranscriptEntry[] =
     liveTurns.length > 0
-      ? liveTurns.map((t) => ({ question: t.question, answer: t.answer, area: t.area }))
-      : (storedTranscript ?? []).map((t) => ({ question: t.question, answer: t.answer }));
+      ? liveTurns.map((t, i) => {
+          const stored = storedTranscript?.[i];
+          return {
+            question: t.question,
+            answer: t.answer,
+            area: t.area,
+            gradingStatus: stored?.grading_status,
+            reasoning: stored?.reasoning ?? null,
+          };
+        })
+      : (storedTranscript ?? []).map((t) => ({
+          question: t.question,
+          answer: t.answer,
+          area: t.area,
+          gradingStatus: t.grading_status,
+          reasoning: t.reasoning ?? null,
+        }));
 
   const credentialUrl =
     auditId && typeof window !== "undefined"
@@ -539,9 +620,11 @@ function VerdictPanel({
       : "";
 
   return (
-    <div className="rise-in flex flex-col gap-6 pb-10">
+    // Staged reveal — the record header rises, the stamp lands on it, then
+    // the evidence sections follow. One orchestrated moment, no scattered fx.
+    <div className="flex flex-col gap-6 pb-10">
       {/* The record header — stamp first, number second. */}
-      <div className="grain relative overflow-hidden rounded-2xl border border-border bg-card p-6">
+      <div className="rise-in grain relative overflow-hidden rounded-2xl border border-border bg-card p-6">
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="eyebrow flex items-center gap-2">
@@ -549,7 +632,11 @@ function VerdictPanel({
             </p>
             <h2 className="mt-2 font-display text-2xl font-semibold tracking-tight">{projectTitle}</h2>
             <div className="mt-3">
-              <VerdictStamp status={verdict.status} score={verdict.verification_score} />
+              <VerdictStamp
+                status={verdict.status}
+                score={verdict.verification_score}
+                className="stamp-in"
+              />
             </div>
           </div>
           {score != null && (
@@ -563,7 +650,7 @@ function VerdictPanel({
           {verdict.verdict_summary}
         </p>
         {isVerified && credentialUrl && (
-          <div className="relative mt-5">
+          <div className="rise-in-3 relative mt-5">
             <p className="caseline mb-2">This credential is public and auditable — share it:</p>
             <ShareActions
               url={credentialUrl}
@@ -577,7 +664,7 @@ function VerdictPanel({
 
       {/* What the examiner graded, dimension by dimension. */}
       {verdict.dimension_scores && Object.keys(verdict.dimension_scores).length > 0 && (
-        <div className="rounded-2xl border border-border bg-card p-6">
+        <div className="rise-in-1 rounded-2xl border border-border bg-card p-6">
           <p className="eyebrow mb-4 flex items-center gap-2">
             <span className="eyebrow-dot" /> Graded dimensions
           </p>
@@ -587,7 +674,7 @@ function VerdictPanel({
 
       {/* Resume claims vs. evidence. */}
       {claims && claims.length > 0 && (
-        <div className="rounded-2xl border border-border bg-card p-6">
+        <div className="rise-in-2 rounded-2xl border border-border bg-card p-6">
           <p className="eyebrow mb-4 flex items-center gap-2">
             <span className="eyebrow-dot" /> Resume claims, tested
           </p>
@@ -595,10 +682,20 @@ function VerdictPanel({
         </div>
       )}
 
-      {/* The full record, pass or fail. */}
-      <TranscriptPanel turns={transcript} defaultOpen={!isVerified} />
+      {/* What would have changed the outcome for this project specifically. */}
+      {improvementNote && (
+        <div className="rise-in-2 rounded-2xl border border-border bg-card p-6">
+          <p className="eyebrow mb-4 flex items-center gap-2">
+            <span className="eyebrow-dot" /> How to strengthen this
+          </p>
+          <ImprovementNoteCard note={improvementNote} />
+        </div>
+      )}
 
-      <Button onClick={onDone} size="lg" className="self-start">
+      {/* The full record, pass or fail. */}
+      <TranscriptPanel turns={transcript} defaultOpen={!isVerified} className="rise-in-3" />
+
+      <Button onClick={onDone} size="lg" className="rise-in-3 self-start">
         Back to your case file
       </Button>
     </div>

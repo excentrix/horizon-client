@@ -6,6 +6,7 @@ import { Printer, GitBranch, ShieldAlert } from "lucide-react";
 import { auditApi, type PublicVerifiedProfile } from "@/lib/api";
 import { trackFunnel, FUNNEL } from "@/lib/funnel";
 import { DimensionMeters } from "@/components/velo/dimension-meters";
+import { useLocalQrCode } from "@/hooks/use-local-qr";
 import { cn } from "@/lib/utils";
 
 // The candidate report — the same document colleges receive for cohorts,
@@ -25,6 +26,13 @@ export default function CandidateReportPage() {
   const username = (params?.username ?? "") as string;
   const [data, setData] = useState<PublicVerifiedProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // On paper the QR is the verification path — it points at the live profile,
+  // so a printed report can't outlive or misrepresent the evidence behind it.
+  const liveUrl =
+    typeof window !== "undefined" && username
+      ? `${window.location.origin}/p/${encodeURIComponent(username)}?tab=verified`
+      : "";
+  const { qrDataUrl } = useLocalQrCode(liveUrl);
 
   useEffect(() => {
     if (!username) return;
@@ -94,9 +102,20 @@ export default function CandidateReportPage() {
                 </p>
               </div>
             </div>
-            <div className="text-right">
-              <p className="caseline">Issued {issued}</p>
-              <p className="caseline">velo.excentrix.tech/p/{data.candidate.username}</p>
+            <div className="flex items-start gap-3">
+              <div className="text-right">
+                <p className="caseline">Issued {issued}</p>
+                <p className="caseline">velo.excentrix.tech/p/{data.candidate.username}</p>
+                <p className="caseline mt-1 opacity-70">scan to verify live ↴</p>
+              </div>
+              {qrDataUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={qrDataUrl}
+                  alt="QR code to the live verified profile"
+                  className="size-16 rounded border border-border bg-white p-0.5"
+                />
+              )}
             </div>
           </div>
 

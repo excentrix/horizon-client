@@ -1600,6 +1600,33 @@ export interface HQPlatformStats {
   plans: { active: number; completed: number };
 }
 
+export interface HQVeloStats {
+  totals: {
+    total: number;
+    verified: number;
+    failed: number;
+    suspicious: number;
+    interrogating: number;
+    evidence_submitted: number;
+    unverified: number;
+  };
+  tokens: {
+    total_estimated: number;
+    avg_per_decided_verification: number;
+  };
+  recent: Array<{
+    id: string;
+    project_title: string;
+    candidate_email: string | null;
+    status: string;
+    verification_score: number | null;
+    scoring_status?: "pending" | "scoring" | "scored" | "scoring_failed";
+    tokens_estimated: number;
+    created_at: string;
+    updated_at: string;
+  }>;
+}
+
 export interface HQOrgPerformance {
   org_id: string;
   org_name: string;
@@ -1709,6 +1736,9 @@ export interface InviteAuditLog {
 export const hqApi = {
   getPlatformStats: () =>
     extract<HQPlatformStats>(http.get("/institutions/hq/stats/")),
+
+  getVeloStats: () =>
+    extract<HQVeloStats>(http.get("/institutions/hq/velo-stats/")),
 
   getOrgPerformance: () =>
     extract<HQOrgPerformance[]>(http.get("/institutions/hq/org-performance/")),

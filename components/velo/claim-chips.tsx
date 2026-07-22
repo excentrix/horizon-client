@@ -38,6 +38,8 @@ export function ClaimsTested({
     <ul className={cn("space-y-2", className)}>
       {claims.map((c, i) => {
         const isOpen = expanded === i;
+        const claimText = c.claim ?? c.claim_text ?? "";
+        const evidenceText = c.evidence ?? c.note ?? "";
         return (
           <li key={i}>
             <button
@@ -46,16 +48,16 @@ export function ClaimsTested({
               className="flex w-full items-start justify-between gap-3 text-left"
               aria-expanded={isOpen}
             >
-              <span className="text-xs leading-relaxed text-foreground/90">&ldquo;{c.claim}&rdquo;</span>
+              <span className="text-xs leading-relaxed text-foreground/90">&ldquo;{claimText}&rdquo;</span>
               <span className={cn("cstat mt-0.5 shrink-0", CLAIM_CLASS[c.status])}>
                 <span className="status-dot" />
                 {CLAIM_LABEL[c.status]}
                 <ChevronDown className={cn("size-3 transition-transform", isOpen && "rotate-180")} />
               </span>
             </button>
-            {isOpen && c.evidence && (
+            {isOpen && evidenceText && (
               <p className="mt-1.5 border-l-2 border-border pl-3 text-[11px] leading-relaxed text-muted-foreground">
-                {c.evidence}
+                {evidenceText}
               </p>
             )}
           </li>
@@ -71,9 +73,9 @@ export function ClaimChipsInline({ claims }: { claims: ClaimTested[] }) {
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-1">
       {claims.map((c, i) => (
-        <span key={i} title={c.evidence} className={cn("cstat", CLAIM_CLASS[c.status])}>
+        <span key={i} title={c.evidence ?? c.note} className={cn("cstat", CLAIM_CLASS[c.status])}>
           <span className="status-dot" />
-          {c.claim} · {CLAIM_LABEL[c.status].toLowerCase()}
+          {c.claim ?? c.claim_text ?? "Untitled claim"} · {CLAIM_LABEL[c.status].toLowerCase()}
         </span>
       ))}
     </div>
