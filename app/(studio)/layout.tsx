@@ -19,20 +19,23 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
   const isPlaygroundRoute =
     pathname.includes("/plans/") && pathname.includes("/playground");
   const isVeloSessionRoute = pathname.startsWith("/verify/session");
+  const isAnalysisV2Route = pathname.startsWith("/analysis/v2");
   const isNoPageScrollRoute =
     pathname === "/chat" || isDashboard || isPlaygroundRoute || isVeloSessionRoute;
   // The VELO interrogation session is a full-page takeover — no dock, no
-  // competing navigation while the candidate is on the record.
+  // competing navigation while the candidate is on the record. The redesigned
+  // analysis page (/analysis/v2) brings its own header/masthead too.
   const hideDock =
     (pathname.includes("/plans/") && pathname.includes("/playground")) ||
     pathname.startsWith("/onboarding") ||
-    isVeloSessionRoute;
+    isVeloSessionRoute ||
+    isAnalysisV2Route;
 
   return (
     <GamificationProvider>
       <RouteFeatureGuard />
       <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-background">
-        {isPlaygroundRoute || isVeloSessionRoute ? null : (
+        {isPlaygroundRoute || isVeloSessionRoute || isAnalysisV2Route ? null : (
           <header
             className={cn(
               "sticky top-0 z-30 border-b border-border/80 bg-background/92 backdrop-blur",

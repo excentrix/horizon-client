@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -124,8 +124,18 @@ export function ProjectVerificationSheet({
     await hook.submitRepos(valid, demoUrl);
   };
 
+  const submitOnEnter = (
+    event: KeyboardEvent<HTMLTextAreaElement>,
+    action: () => void,
+  ) => {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    action();
+  };
+
   const handleSubmitAnswer = async () => {
-    if (!answer.trim() || answer.trim().split(/\s+/).length < 5) return;
+    if (!hook.currentQuestion || !answer.trim() || answer.trim().split(/\s+/).length < 5) return;
     const current = answer;
     setAnswer("");
     const done = await hook.submitAnswer(current);
@@ -351,6 +361,7 @@ export function ProjectVerificationSheet({
                 }
                 value={contextText}
                 onChange={(e) => setContextText(e.target.value)}
+                onKeyDown={(e) => submitOnEnter(e, () => void handleSubmitContext())}
                 className="min-h-[120px] resize-none text-sm"
                 autoFocus
               />
@@ -410,7 +421,7 @@ export function ProjectVerificationSheet({
           )}
 
           {/* ── Interrogation — case-file transcript ─────────────────────── */}
-          {hook.step === "interrogating" && hook.currentQuestion && (
+          {hook.step === "interrogating" && (
             <div className="flex h-full flex-col">
               {/* Sticky sub-header */}
               <div className="grain relative flex items-center justify-between border-b bg-muted/20 px-6 py-2.5">
@@ -448,13 +459,22 @@ export function ProjectVerificationSheet({
 
                 {/* Current, unanswered question — visually distinct from the log above */}
                 <div className="py-3">
-                  <div className="rounded-lg border-l-2 border-[var(--brand-tangerine)] bg-muted/30 py-3 pl-4 pr-3">
-                    <span className="font-mono-ui text-[10px] font-medium text-muted-foreground">
-                      Q{String(hook.questionCount + 1).padStart(2, "0")}
-                      {hook.currentQuestionArea ? ` · ${hook.currentQuestionArea.toUpperCase()}` : ""}
-                    </span>
-                    <p className="mt-1.5 text-sm leading-relaxed">{hook.currentQuestion}</p>
-                  </div>
+                  {hook.currentQuestion ? (
+                    <div className="rounded-lg border-l-2 border-[var(--brand-tangerine)] bg-muted/30 py-3 pl-4 pr-3">
+                      <span className="font-mono-ui text-[10px] font-medium text-muted-foreground">
+                        Q{String(hook.questionCount + 1).padStart(2, "0")}
+                        {hook.currentQuestionArea ? ` · ${hook.currentQuestionArea.toUpperCase()}` : ""}
+                      </span>
+                      <p className="mt-1.5 text-sm leading-relaxed">{hook.currentQuestion}</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-4">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin text-[var(--brand-tangerine)]" />
+                        Generating the next question…
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div ref={transcriptEndRef} />
               </div>
@@ -465,19 +485,23 @@ export function ProjectVerificationSheet({
                   placeholder="Be specific — reference your actual code, the decisions you made, the problems you hit, and why you chose one approach over another. Vague answers trigger harder follow-ups."
                   value={answer}
                   onChange={(e) => setAnswer(e.target.value)}
-                  className="min-h-[110px] resize-none text-sm"
+                  onKeyDown={(e) => submitOnEnter(e, () => void handleSubmitAnswer())}
+                  disabled={hook.isLoading || !hook.currentQuestion}
+                  className="min-h-[110px] max-h-[220px] resize-none overflow-y-auto text-sm"
                   autoFocus
                 />
 
                 <p className="mt-2 text-[10px] text-muted-foreground">
                   VELO adapts based on your answers. Shallow responses go deeper on the same area.
-                  Strong responses move to a harder uncovered topic. Minimum 5 words to submit.
+                  Strong responses move to a harder uncovered topic. Enter submits. Shift+Enter adds
+                  a new line.
                 </p>
 
                 <Button
                   onClick={handleSubmitAnswer}
                   disabled={
                     hook.isLoading ||
+                    !hook.currentQuestion ||
                     !answer.trim() ||
                     answer.trim().split(/\s+/).length < 5
                   }

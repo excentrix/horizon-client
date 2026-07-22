@@ -8,6 +8,7 @@ import type { FeatureName } from "@/lib/feature-flags";
 // Map studio route prefixes → the feature flag that gates them.
 const ROUTE_FLAGS: Array<[string, FeatureName]> = [
   ["/verify", "velo"],
+  ["/analysis", "velo"],
   ["/audit", "velo"],
   ["/chat", "chat"],
   ["/plans", "plans"],

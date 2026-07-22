@@ -12,7 +12,6 @@ import { authApi, auditApi } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 import {
   Accordion,
   AccordionContent,
@@ -159,49 +158,101 @@ interface ImprovementAction {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// All score/priority reads use the evidence scale — strong / solid /
-// developing (indigo → tangerine), never traffic-light green/red. Matches the
-// verdict stamps and the reports colleges receive.
+// Resume-analysis scores use a dedicated traffic-light scale (good/warn/
+// critical) — a deliberate, scoped exception to the app-wide "never
+// traffic-light" evidence-scale rule (see --score-* in globals.css). Verdict
+// stamps / dimension meters / public credential pages elsewhere in the app
+// stay on the indigo→tangerine --status-* scale; don't reuse these here.
 function scoreColor(s: number) {
-  if (s >= 75) return "text-(--status-strong)";
-  if (s >= 50) return "text-(--status-solid)";
-  return "text-(--status-developing)";
+  if (s >= 75) return "text-(--score-good)";
+  if (s >= 50) return "text-(--score-warn)";
+  return "text-(--score-critical)";
 }
-function scoreBarColor(s: number) {
-  if (s >= 75) return "[&>div]:bg-(--status-strong)";
-  if (s >= 50) return "[&>div]:bg-(--status-solid)";
-  return "[&>div]:bg-(--status-developing)";
+function scoreBarVar(s: number) {
+  if (s >= 75) return "var(--score-good)";
+  if (s >= 50) return "var(--score-warn)";
+  return "var(--score-critical)";
+}
+
+/** A guaranteed-visible score meter — solid muted track, solid status-color
+ *  fill. The fill is pinned to the track's full box (`inset-0`) and scaled
+ *  with `transform: scaleX()` rather than given a percentage width: a
+ *  percentage width on a child of a `flex-1` container depends on the
+ *  parent's resolved flex-basis layout, which is exactly the class of bug
+ *  that made the previous version (Tailwind `Progress` + a `[&>div]`
+ *  child-selector hack) render as an invisible flat line — `scaleX` is
+ *  always relative to the element's own box, never the parent's layout
+ *  resolution. Near-zero scores still render a sliver so "some evidence"
+ *  never reads as "none". */
+function Meter({
+  value,
+  height = 6,
+  className,
+}: {
+  value: number;
+  height?: number;
+  className?: string;
+}) {
+  const pct = Math.max(0, Math.min(100, value));
+  const scale = pct > 0 ? Math.max(pct, 3) / 100 : 0;
+  return (
+    <div
+      className={cn("relative w-full overflow-hidden rounded-full bg-muted", className)}
+      style={{ height }}
+    >
+      <div
+        className="absolute inset-0 origin-left rounded-full transition-transform"
+        style={{ transform: `scaleX(${scale})`, backgroundColor: scoreBarVar(pct) }}
+      />
+    </div>
+  );
 }
 function atsLabel(s: number) {
-  if (s >= 90) return { label: "Excellent", color: "text-(--status-strong)" };
-  if (s >= 75) return { label: "Good",      color: "text-(--status-strong)" };
-  if (s >= 60) return { label: "Fair",      color: "text-(--status-solid)" };
-  return              { label: "Needs work", color: "text-(--status-developing)" };
+  if (s >= 90) return { label: "Excellent", color: "text-(--score-good)" };
+  if (s >= 75) return { label: "Good",      color: "text-(--score-good)" };
+  if (s >= 60) return { label: "Fair",      color: "text-(--score-warn)" };
+  return              { label: "Needs work", color: "text-(--score-critical)" };
 }
 function seniorityStyle(s: Seniority) {
-  if (s === "senior") return "border-(--status-strong)/40 bg-(--status-strong)/10 text-(--status-strong)";
-  if (s === "mid")    return "border-(--status-solid)/40 bg-(--status-solid)/10 text-(--status-solid)";
+  if (s === "senior") return "border-(--score-good)/40 bg-(--score-good)/10 text-(--score-good)";
+  if (s === "mid")    return "border-(--score-warn)/40 bg-(--score-warn)/10 text-(--score-warn)";
   return "border-border bg-muted text-muted-foreground";
 }
 function priorityAccent(p: Priority) {
-  if (p === "P1") return { stripe: "bg-(--status-developing)", text: "text-(--status-developing)", badge: "border-(--status-developing)/40 bg-(--status-developing)/10 text-(--status-developing)", row: "bg-(--status-developing)/5" };
-  if (p === "P2") return { stripe: "bg-(--status-solid)", text: "text-(--status-solid)", badge: "border-(--status-solid)/40 bg-(--status-solid)/10 text-(--status-solid)", row: "bg-(--status-solid)/5" };
+  if (p === "P1") return { stripe: "bg-(--score-critical)", text: "text-(--score-critical)", badge: "border-(--score-critical)/40 bg-(--score-critical)/10 text-(--score-critical)", row: "bg-(--score-critical)/5" };
+  if (p === "P2") return { stripe: "bg-(--score-warn)", text: "text-(--score-warn)", badge: "border-(--score-warn)/40 bg-(--score-warn)/10 text-(--score-warn)", row: "bg-(--score-warn)/5" };
   return               { stripe: "bg-(--status-none)", text: "text-muted-foreground", badge: "border-border bg-muted text-muted-foreground", row: "bg-muted/30" };
 }
 function verdictStyle(v: Verdict) {
-  if (v === "yes")   return { bg: "bg-(--status-strong)", label: "Would shortlist", sub: "text-white/80" };
-  if (v === "maybe") return { bg: "bg-(--status-solid)",  label: "Maybe — needs work", sub: "text-white/80" };
-  return                    { bg: "bg-(--status-developing)", label: "Would not shortlist", sub: "text-white/85" };
+  if (v === "yes")   return { bg: "bg-(--score-good)", border: "border-(--score-good)", text: "text-(--score-good)", label: "Would shortlist", sub: "text-white/80" };
+  if (v === "maybe") return { bg: "bg-(--score-warn)",  border: "border-(--score-warn)", text: "text-(--score-warn)", label: "Maybe — needs work", sub: "text-white/80" };
+  return                    { bg: "bg-(--score-critical)", border: "border-(--score-critical)", text: "text-(--score-critical)", label: "Would not shortlist", sub: "text-white/85" };
 }
 function impactStyle(v: ImpactLevel) {
-  if (v === "high")   return "border-(--status-strong)/40 bg-(--status-strong)/10 text-(--status-strong)";
-  if (v === "medium") return "border-(--status-solid)/40 bg-(--status-solid)/10 text-(--status-solid)";
+  if (v === "high")   return "border-(--score-good)/40 bg-(--score-good)/10 text-(--score-good)";
+  if (v === "medium") return "border-(--score-warn)/40 bg-(--score-warn)/10 text-(--score-warn)";
   return "border-border bg-muted text-muted-foreground";
 }
 function effortStyle(v: ImpactLevel) {
-  if (v === "low")    return "border-(--status-strong)/40 bg-(--status-strong)/10 text-(--status-strong)";
-  if (v === "medium") return "border-(--status-solid)/40 bg-(--status-solid)/10 text-(--status-solid)";
+  if (v === "low")    return "border-(--score-good)/40 bg-(--score-good)/10 text-(--score-good)";
+  if (v === "medium") return "border-(--score-warn)/40 bg-(--score-warn)/10 text-(--score-warn)";
   return "border-border bg-muted text-muted-foreground";
+}
+
+// Wraps quoted phrases (the LLM's own idiom-in-quotes habit, e.g. 'jack of
+// all trades') in a highlight so the sharpest words in the verdict pop
+// instead of blending into the rest of the pull-quote.
+function highlightQuotes(text: string): React.ReactNode[] {
+  const parts = text.split(/(['"][^'"]{3,60}['"])/g);
+  return parts.map((part, i) => {
+    const isQuoted = /^['"].*['"]$/.test(part);
+    if (!isQuoted) return part;
+    return (
+      <mark key={i} className="rounded bg-primary/15 px-0.5 font-semibold text-foreground">
+        {part}
+      </mark>
+    );
+  });
 }
 
 function findAnalysis<T extends { company?: string; role?: string; title?: string }>(
@@ -227,12 +278,28 @@ function SectionHead({
   title,
   id,
   count,
+  plain,
 }: {
   icon: React.ReactNode;
   title: string;
   id?: string;
   count?: number;
+  /** Lean eyebrow-label treatment (no icon badge) — matches the artifact's
+   *  compact card headers on the standalone /analysis page. */
+  plain?: boolean;
 }) {
+  if (plain) {
+    return (
+      <div id={id} className="mb-3 flex items-center gap-2">
+        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+          {title}
+        </span>
+        {count !== undefined && (
+          <span className="font-mono text-[11px] text-muted-foreground/70">· {count}</span>
+        )}
+      </div>
+    );
+  }
   return (
     <div id={id} className="mb-4 flex items-center gap-2.5">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[color:var(--brand-indigo)]/10 text-[color:var(--brand-indigo)]">
@@ -262,16 +329,19 @@ function VeloSkeleton() {
 
 function ATSRing({ score }: { score: number }) {
   const info = atsLabel(score);
+  const ringColor = scoreBarVar(score);
   return (
     <div className="flex flex-col items-center gap-2">
       <div
-        className="relative flex h-32 w-32 items-center justify-center rounded-full"
+        className="relative flex h-32 w-32 items-center justify-center rounded-full transition-[background]"
         style={{
-          background: `conic-gradient(hsl(var(--primary)) ${score * 3.6}deg, hsl(var(--muted)) ${score * 3.6}deg)`,
+          background: `conic-gradient(${ringColor} ${score * 3.6}deg, var(--muted) ${score * 3.6}deg)`,
         }}
       >
         <div className="flex h-[98px] w-[98px] flex-col items-center justify-center rounded-full bg-background">
-          <span className="font-display text-4xl font-bold leading-none tabular-nums">{score}</span>
+          <span className={cn("font-editorial text-4xl font-bold leading-none tabular-nums", scoreColor(score))}>
+            {score}
+          </span>
           <span className="mt-0.5 text-[10px] text-muted-foreground">/ 100</span>
         </div>
       </div>
@@ -285,7 +355,7 @@ function ATSRing({ score }: { score: number }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export function VeloProfileTab() {
+export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data, isLoading } = useMirrorSnapshot();
@@ -309,6 +379,7 @@ export function VeloProfileTab() {
     router.push(`/verify/session?${params.toString()}`);
   };
   const [resettingVerificationId, setResettingVerificationId] = useState<string | null>(null);
+  const [verifyingAllRepos, setVerifyingAllRepos] = useState(false);
   const [reanalysisBlocked, setReanalysisBlocked] = useState<{ next_reset: string | null; limit: number } | null>(null);
   const [jdSheetOpen, setJdSheetOpen] = useState(false);
   const [jdText, setJdText] = useState("");
@@ -445,6 +516,28 @@ export function VeloProfileTab() {
   );
   const unlinkedRepos = github.repos.filter((r) => !resumeUrls.has(r.url.toLowerCase()));
 
+  const handleVerifyAllRepos = async () => {
+    setVerifyingAllRepos(true);
+    let added = 0;
+    try {
+      for (const repo of unlinkedRepos) {
+        await auditApi.addManualProject({ title: repo.name, repo_url: repo.url });
+        added += 1;
+      }
+      await queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
+      toast.success(
+        added === 1 ? "Added 1 repo as a project." : `Added ${added} repos as projects.`,
+        { description: "Defend them from the Projects section above." },
+      );
+    } catch {
+      toast.error(
+        added > 0 ? `Added ${added} before running into a problem — try again for the rest.` : "Couldn't add these repos. Try again.",
+      );
+    } finally {
+      setVerifyingAllRepos(false);
+    }
+  };
+
   const isRunning = data?.status === "running" || data?.status === "empty";
   const isFailed  = data?.status === "failed";
   const isReady   = data?.status === "ready" && Boolean(mirror);
@@ -566,57 +659,88 @@ export function VeloProfileTab() {
     (verifiedProfile?.verified_skills ?? []).map((s) => s.skill.toLowerCase()),
   );
 
+  const actionButtons = (
+    <div className="ml-auto flex flex-wrap gap-1.5">
+      <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs"
+        disabled={exportingPdf || !isReady} onClick={handleExportPdf}>
+        <Download className={cn("h-3 w-3", exportingPdf && "animate-pulse")} />
+        <span className="hidden sm:inline">{exportingPdf ? "Exporting…" : "Export PDF"}</span>
+      </Button>
+      <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs"
+        disabled={reanalysing} onClick={handleReanalyse}>
+        <RefreshCw className={cn("h-3 w-3", reanalysing && "animate-spin")} />
+        <span className="hidden sm:inline">{reanalysing ? "Queuing…" : "Re-analyse"}</span>
+      </Button>
+      <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs"
+        onClick={() => setJdSheetOpen(true)}>
+        <Sparkles className="h-3 w-3" />
+        <span className="hidden sm:inline">Analyse with JD</span>
+        <span className="sm:hidden">+ JD</span>
+        {quotaData?.jd_reanalysis && !quotaData.jd_reanalysis.exempt && (
+          <span className="rounded-full bg-[color:var(--brand-indigo)]/10 px-1.5 text-[10px] font-medium text-[color:var(--brand-indigo)]">
+            {(quotaData.jd_reanalysis.limit ?? 2) - quotaData.jd_reanalysis.used} left
+          </span>
+        )}
+      </Button>
+    </div>
+  );
+
+  // Standalone (!embedded) renders each section/panel as its own bordered,
+  // shadowed card with a gap to the next one; embedded (tab/progress) keeps
+  // the flush divide-y look it always had.
+  const sectionCls = cn("p-5 sm:p-6", !embedded && "rounded-2xl border border-border bg-card shadow-sm");
+  const panelCls = cn("p-5", embedded ? "border-b border-border/60" : "rounded-2xl border border-border bg-card shadow-sm");
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="pb-12 bg-white rounded-2xl">
+    <div className={cn(embedded && "rounded-2xl border border-border bg-card pb-12", !embedded && "pb-12")}>
 
-      {/* ── Action bar ───────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-muted/20 px-5 py-3">
-        <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-          Analysis
-        </span>
-        <div className="ml-auto flex flex-wrap gap-1.5">
-          <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs"
-            disabled={exportingPdf || !isReady} onClick={handleExportPdf}>
-            <Download className={cn("h-3 w-3", exportingPdf && "animate-pulse")} />
-            <span className="hidden sm:inline">{exportingPdf ? "Exporting…" : "Export PDF"}</span>
-          </Button>
-          <Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs"
-            disabled={reanalysing} onClick={handleReanalyse}>
-            <RefreshCw className={cn("h-3 w-3", reanalysing && "animate-spin")} />
-            <span className="hidden sm:inline">{reanalysing ? "Queuing…" : "Re-analyse"}</span>
-          </Button>
-          <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs"
-            onClick={() => setJdSheetOpen(true)}>
-            <Sparkles className="h-3 w-3" />
-            <span className="hidden sm:inline">Analyse with JD</span>
-            <span className="sm:hidden">+ JD</span>
-            {quotaData?.jd_reanalysis && !quotaData.jd_reanalysis.exempt && (
-              <span className="rounded-full bg-[color:var(--brand-indigo)]/10 px-1.5 text-[10px] font-medium text-[color:var(--brand-indigo)]">
-                {(quotaData.jd_reanalysis.limit ?? 2) - quotaData.jd_reanalysis.used} left
-              </span>
-            )}
-          </Button>
+      {/* ── Action bar / page header ─────────────────────────────────────── */}
+      {embedded ? (
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-muted/20 px-5 py-3">
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Analysis
+          </span>
+          {actionButtons}
         </div>
-      </div>
+      ) : (
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <div>
+            <p className="eyebrow flex items-center gap-2">
+              <span className="eyebrow-dot" /> Case file · VELO
+            </p>
+            <h1 className="mt-1 font-editorial text-2xl font-semibold tracking-tight md:text-3xl">
+              Resume Analysis
+            </h1>
+          </div>
+          {actionButtons}
+        </div>
+      )}
 
       {/* ── Two-column body ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
 
         {/* ── Right column: ATS + Fit + Actions (below on mobile) ────────── */}
-        <aside className="order-last border-t border-border/60 xl:order-none xl:col-start-2 xl:row-start-1 xl:row-span-[999] xl:border-l xl:border-t-0 xl:border-border/60">
-          <div className="xl:sticky xl:top-0">
+        <aside
+          className={cn(
+            "order-last lg:order-none lg:col-start-2 lg:row-start-1 lg:row-span-[999]",
+            embedded
+              ? "border-t border-border/60 lg:border-l lg:border-t-0 lg:border-border/60"
+              : "mt-5 lg:mt-0",
+          )}
+        >
+          <div className={cn("lg:sticky lg:top-5", !embedded && "space-y-4")}>
 
             {/* No resume analyzed yet (project-only user) — offer a drop zone */}
             {!hasResumeAnalysis && (
-              <div className="border-b border-border/60 p-5">
+              <div className={panelCls}>
                 <ResumeDropzone onFile={processResumeFile} uploading={uploadingResume} />
               </div>
             )}
 
             {/* ATS score */}
             {atsScore !== undefined && (
-              <div className="border-b border-border/60 p-5">
+              <div className={panelCls}>
                 <div className="mb-4 flex justify-center">
                   <ATSRing score={atsScore} />
                 </div>
@@ -635,7 +759,7 @@ export function VeloProfileTab() {
                       return (
                         <div key={key} className="flex items-center gap-2">
                           <span className="w-16 shrink-0 text-[11px] text-muted-foreground">{label}</span>
-                          <Progress value={pct} className={cn("h-1.5 flex-1", scoreBarColor(pct))} />
+                          <Meter value={pct} className="flex-1" />
                           <span className="w-9 shrink-0 text-right font-mono text-[11px] text-muted-foreground">
                             {item.score}/{item.max}
                           </span>
@@ -643,10 +767,21 @@ export function VeloProfileTab() {
                       );
                     })}
                     {atsBreakdown.keyword_match?.missing && atsBreakdown.keyword_match.missing.length > 0 && (
-                      <p className="pt-1 text-[11px] text-muted-foreground">
-                        <span className="font-medium text-foreground">Missing: </span>
-                        {atsBreakdown.keyword_match.missing.join(", ")}
-                      </p>
+                      <div className="pt-2">
+                        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Missing keywords
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {atsBreakdown.keyword_match.missing.map((kw) => (
+                            <span
+                              key={kw}
+                              className="rounded-lg border border-dashed border-(--score-critical)/40 bg-(--score-critical)/10 px-2 py-0.5 text-[11px] font-medium text-(--score-critical)"
+                            >
+                              {kw}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
@@ -655,7 +790,7 @@ export function VeloProfileTab() {
 
             {/* Role Fit */}
             {roleMatches.length > 0 && (
-              <div className="border-b border-border/60 p-5">
+              <div className={panelCls}>
                 <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                   Role Fit
                 </p>
@@ -670,10 +805,7 @@ export function VeloProfileTab() {
                           {role.match_score}%
                         </span>
                       </div>
-                      <Progress
-                        value={role.match_score}
-                        className={cn("h-1", scoreBarColor(role.match_score))}
-                      />
+                      <Meter value={role.match_score} height={5} />
                     </div>
                   ))}
                 </div>
@@ -682,7 +814,7 @@ export function VeloProfileTab() {
 
             {/* Actions */}
             {actions.length > 0 && (
-              <div className="border-b border-border/60 p-5">
+              <div className={panelCls}>
                 <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                   Priority Actions
                 </p>
@@ -694,11 +826,11 @@ export function VeloProfileTab() {
                         key={i}
                         className={cn(
                           "relative overflow-hidden rounded-xl border p-3",
-                          isQuickWin && "border-(--status-strong)/40 bg-(--status-strong)/5",
+                          isQuickWin && "border-(--score-good)/40 bg-(--score-good)/5",
                         )}
                       >
                         {isQuickWin && (
-                          <span className="absolute right-0 top-0 rounded-bl-lg bg-(--status-strong) px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
+                          <span className="absolute right-0 top-0 rounded-bl-lg bg-(--score-good) px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
                             Quick win
                           </span>
                         )}
@@ -725,7 +857,7 @@ export function VeloProfileTab() {
 
             {/* Mentor readiness */}
             {mentorSummary && (
-              <div className="p-5">
+              <div className={cn("p-5", !embedded && "rounded-2xl border border-border bg-card shadow-sm")}>
                 <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                   Mentor Readiness
                 </p>
@@ -744,7 +876,7 @@ export function VeloProfileTab() {
                         <span className="w-36 truncate text-[11px] capitalize text-muted-foreground">
                           {dim.name.replace(/_/g, " ")}
                         </span>
-                        <Progress value={dim.score} className={cn("h-1.5 flex-1", scoreBarColor(dim.score))} />
+                        <Meter value={dim.score} className="flex-1" />
                         <span className={cn("w-7 text-right text-[11px] font-semibold", scoreColor(dim.score))}>
                           {dim.score}
                         </span>
@@ -763,12 +895,17 @@ export function VeloProfileTab() {
         </aside>
 
         {/* ── Left column: main content ─────────────────────────────────── */}
-        <div className="order-first min-w-0 divide-y divide-border/60 xl:order-none xl:col-start-1">
+        <div
+          className={cn(
+            "order-first min-w-0 lg:order-none lg:col-start-1",
+            embedded ? "divide-y divide-border/60" : "space-y-5",
+          )}
+        >
 
           {/* Verified Capability — the claim layer reconciled with defended evidence */}
           {verifiedProfile && (verifiedProfile.claimed_project_count > 0 || verifiedProfile.verified_project_count > 0) && (
-            <section className="p-5 sm:p-6">
-              <SectionHead icon={<ShieldCheck className="h-3.5 w-3.5" />} title="Verified Capability" />
+            <section className={sectionCls}>
+              <SectionHead icon={<ShieldCheck className="h-3.5 w-3.5" />} title="Verified Capability" plain={!embedded} />
 
               {/* Synthesized capability statement — grounded in defended evidence */}
               {verifiedProfile.narrative && (
@@ -785,7 +922,15 @@ export function VeloProfileTab() {
               {/* Coverage banner — sample-size honesty */}
               {(() => {
                 const cov = verifiedProfile.coverage;
-                const style =
+                const tint =
+                  cov === "strong"
+                    ? "bg-(--status-strong)/8 text-(--status-strong)"
+                    : cov === "partial"
+                      ? "bg-(--status-solid)/8 text-(--status-solid)"
+                      : cov === "limited"
+                        ? "bg-(--status-developing)/8 text-(--status-developing)"
+                        : "bg-muted/50 text-muted-foreground";
+                const bordered =
                   cov === "strong"
                     ? "border-(--status-strong)/40 bg-(--status-strong)/5 text-(--status-strong)"
                     : cov === "partial"
@@ -793,8 +938,9 @@ export function VeloProfileTab() {
                       : cov === "limited"
                         ? "border-(--status-developing)/40 bg-(--status-developing)/5 text-(--status-developing)"
                         : "border-border bg-muted/40 text-muted-foreground";
+                const style = embedded ? cn("border", bordered) : tint;
                 return (
-                  <div className={cn("mb-4 flex items-center gap-3 rounded-2xl border px-4 py-3", style)}>
+                  <div className={cn("mb-4 flex items-center gap-3 rounded-2xl px-4 py-3", style)}>
                     <span className="flex flex-col items-center">
                       <span className="font-display text-2xl font-bold leading-none tabular-nums">
                         {verifiedProfile.verified_project_count}
@@ -802,7 +948,10 @@ export function VeloProfileTab() {
                       </span>
                       <span className="mt-0.5 text-[9px] uppercase tracking-wide opacity-70">defended</span>
                     </span>
-                    <p className="min-w-0 text-xs leading-relaxed">{verifiedProfile.confidence_note}</p>
+                    <p className="min-w-0 flex-1 text-xs leading-relaxed">{verifiedProfile.confidence_note}</p>
+                    <Badge variant="outline" className={cn("h-6 shrink-0 text-[10px] font-bold uppercase tracking-wide", style)}>
+                      {cov}
+                    </Badge>
                   </div>
                 );
               })()}
@@ -861,8 +1010,8 @@ export function VeloProfileTab() {
 
           {/* Role Readiness */}
           {mirror.role_readiness_narrative && (
-            <section className="p-5 sm:p-6">
-              <SectionHead icon={<Target className="h-3.5 w-3.5" />} title="Role Readiness" />
+            <section className={sectionCls}>
+              <SectionHead icon={<Target className="h-3.5 w-3.5" />} title="Role Readiness" plain={!embedded} />
               <p className="text-sm leading-relaxed text-muted-foreground">
                 {mirror.role_readiness_narrative}
               </p>
@@ -871,12 +1020,23 @@ export function VeloProfileTab() {
 
           {/* Employer's View */}
           {employerPerspective && (
-            <section className="p-5 sm:p-6">
-              <SectionHead icon={<Eye className="h-3.5 w-3.5" />} title="Employer's View" />
+            <section className={sectionCls}>
+              <SectionHead icon={<Eye className="h-3.5 w-3.5" />} title="Employer's View" plain={!embedded} />
 
               {/* Verdict banner */}
               {(() => {
                 const vs = verdictStyle(employerPerspective.shortlist_verdict);
+                if (!embedded) {
+                  return (
+                    <div className={cn("mb-5 flex items-center gap-3 rounded-xl border-l-[3px] bg-muted/40 px-4 py-3", vs.border)}>
+                      <Eye className={cn("h-4 w-4 shrink-0", vs.text)} />
+                      <div className="min-w-0">
+                        <p className={cn("text-[13px] font-bold", vs.text)}>{vs.label}</p>
+                        <p className="text-xs text-muted-foreground">{employerPerspective.shortlist_reason}</p>
+                      </div>
+                    </div>
+                  );
+                }
                 return (
                   <div className={cn("mb-5 flex items-center gap-3 rounded-2xl px-5 py-4", vs.bg)}>
                     <Eye className="h-5 w-5 shrink-0 text-white" />
@@ -893,8 +1053,8 @@ export function VeloProfileTab() {
                   <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     First impression
                   </p>
-                  <p className="text-sm leading-relaxed text-foreground/80">
-                    {employerPerspective.first_impression}
+                  <p className="border-l-[3px] border-primary py-0.5 pl-4 font-editorial text-lg font-medium leading-snug text-balance text-foreground">
+                    {highlightQuotes(employerPerspective.first_impression)}
                   </p>
                 </div>
                 <div>
@@ -908,35 +1068,41 @@ export function VeloProfileTab() {
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   {employerPerspective.what_stands_out.length > 0 && (
-                    <div className="rounded-2xl border border-(--status-strong)/40 bg-(--status-strong)/10 p-4">
-                      <div className="mb-2.5 flex items-center gap-1.5 text-(--status-strong)">
-                        <ThumbsUp className="h-3.5 w-3.5" />
-                        <span className="text-[11px] font-bold uppercase tracking-wide">Stands out</span>
+                    <div className="flex overflow-hidden rounded-2xl border border-(--status-strong)/40">
+                      <div className="w-1 shrink-0 bg-(--status-strong)" />
+                      <div className="flex-1 bg-(--status-strong)/10 p-4">
+                        <div className="mb-2.5 flex items-center gap-1.5 text-(--status-strong)">
+                          <ThumbsUp className="h-3.5 w-3.5" />
+                          <span className="text-[11px] font-bold uppercase tracking-wide">Stands out</span>
+                        </div>
+                        <ul className="space-y-1.5">
+                          {employerPerspective.what_stands_out.map((item, i) => (
+                            <li key={i} className="flex items-start gap-1.5 text-xs text-foreground/80">
+                              <ChevronRight className="mt-0.5 h-3 w-3 shrink-0 text-(--status-strong)" />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                      <ul className="space-y-1.5">
-                        {employerPerspective.what_stands_out.map((item, i) => (
-                          <li key={i} className="flex items-start gap-1.5 text-xs text-foreground/80">
-                            <ChevronRight className="mt-0.5 h-3 w-3 shrink-0 text-(--status-strong)" />
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
                     </div>
                   )}
                   {employerPerspective.what_raises_flags.length > 0 && (
-                    <div className="rounded-2xl border border-(--status-developing)/40 bg-(--status-developing)/10 p-4">
-                      <div className="mb-2.5 flex items-center gap-1.5 text-(--status-developing)">
-                        <AlertTriangle className="h-3.5 w-3.5" />
-                        <span className="text-[11px] font-bold uppercase tracking-wide">Raises flags</span>
+                    <div className="flex overflow-hidden rounded-2xl border border-(--status-developing)/40">
+                      <div className="w-1 shrink-0 bg-(--status-developing)" />
+                      <div className="flex-1 bg-(--status-developing)/10 p-4">
+                        <div className="mb-2.5 flex items-center gap-1.5 text-(--status-developing)">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          <span className="text-[11px] font-bold uppercase tracking-wide">Raises flags</span>
+                        </div>
+                        <ul className="space-y-1.5">
+                          {employerPerspective.what_raises_flags.map((item, i) => (
+                            <li key={i} className="flex items-start gap-1.5 text-xs text-foreground/80">
+                              <ChevronRight className="mt-0.5 h-3 w-3 shrink-0 text-(--status-developing)" />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                      <ul className="space-y-1.5">
-                        {employerPerspective.what_raises_flags.map((item, i) => (
-                          <li key={i} className="flex items-start gap-1.5 text-xs text-foreground/80">
-                            <ChevronRight className="mt-0.5 h-3 w-3 shrink-0 text-(--status-developing)" />
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
                     </div>
                   )}
                 </div>
@@ -975,17 +1141,17 @@ export function VeloProfileTab() {
 
           {/* Skill Mastery */}
           {skillMastery.length > 0 && (
-            <section className="p-5 sm:p-6">
-              <SectionHead icon={<Zap className="h-3.5 w-3.5" />} title="Skill Mastery" />
+            <section className={sectionCls}>
+              <SectionHead icon={<Zap className="h-3.5 w-3.5" />} title="Skill Mastery" plain={!embedded} />
               <div className="grid gap-5 sm:grid-cols-3">
                 {/* Demonstrated */}
                 <div>
                   <div className="mb-3 flex items-center gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-(--status-strong)" />
-                    <span className="text-[11px] font-bold text-(--status-strong)">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-(--score-good)" />
+                    <span className="text-[11px] font-bold text-(--score-good)">
                       Demonstrated
                     </span>
-                    <span className="ml-auto rounded-full bg-(--status-strong)/10 px-1.5 text-[10px] font-medium text-(--status-strong)">
+                    <span className="ml-auto rounded-full bg-(--score-good)/10 px-1.5 text-[10px] font-medium text-(--score-good)">
                       {demonstrated.length}
                     </span>
                   </div>
@@ -1000,7 +1166,7 @@ export function VeloProfileTab() {
                             "inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[12px] font-medium",
                             isVerified
                               ? "border-(--status-strong)/40 bg-(--status-strong)/10 text-(--status-strong)"
-                              : "border-(--status-strong)/40 bg-(--status-strong)/10 text-(--status-strong)",
+                              : "border-(--score-good)/40 bg-(--score-good)/10 text-(--score-good)",
                           )}
                         >
                           {isVerified && <ShieldCheck className="h-3 w-3" />}
@@ -1014,15 +1180,15 @@ export function VeloProfileTab() {
                 {/* Listed only */}
                 <div>
                   <div className="mb-3 flex items-center gap-1.5">
-                    <Circle className="h-3.5 w-3.5 text-(--status-solid)" />
-                    <span className="text-[11px] font-bold text-(--status-solid)">Listed only</span>
-                    <span className="ml-auto rounded-full bg-(--status-solid)/10 px-1.5 text-[10px] font-medium text-(--status-solid)">
+                    <Circle className="h-3.5 w-3.5 text-(--score-warn)" />
+                    <span className="text-[11px] font-bold text-(--score-warn)">Listed only</span>
+                    <span className="ml-auto rounded-full bg-(--score-warn)/10 px-1.5 text-[10px] font-medium text-(--score-warn)">
                       {mentioned.length}
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {mentioned.map((s) => (
-                      <span key={s.skill} className="rounded-lg border border-(--status-solid)/40 bg-(--status-solid)/10 px-2 py-0.5 text-[12px] font-medium text-(--status-solid)">
+                      <span key={s.skill} className="rounded-lg border border-(--score-warn)/40 bg-(--score-warn)/10 px-2 py-0.5 text-[12px] font-medium text-(--score-warn)">
                         {s.skill}
                       </span>
                     ))}
@@ -1032,15 +1198,15 @@ export function VeloProfileTab() {
                 {/* Gaps */}
                 <div>
                   <div className="mb-3 flex items-center gap-1.5">
-                    <XCircle className="h-3.5 w-3.5 text-(--status-developing)" />
-                    <span className="text-[11px] font-bold text-(--status-developing)">Key gaps</span>
-                    <span className="ml-auto rounded-full bg-(--status-developing)/10 px-1.5 text-[10px] font-medium text-(--status-developing)">
+                    <XCircle className="h-3.5 w-3.5 text-(--score-critical)" />
+                    <span className="text-[11px] font-bold text-(--score-critical)">Key gaps</span>
+                    <span className="ml-auto rounded-full bg-(--score-critical)/10 px-1.5 text-[10px] font-medium text-(--score-critical)">
                       {masteryGaps.length}
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {masteryGaps.map((s) => (
-                      <span key={s.skill} className="rounded-lg border border-dashed border-(--status-developing)/40 bg-(--status-developing)/10 px-2 py-0.5 text-[12px] font-medium text-(--status-developing)">
+                      <span key={s.skill} className="rounded-lg border border-dashed border-(--score-critical)/40 bg-(--score-critical)/10 px-2 py-0.5 text-[12px] font-medium text-(--score-critical)">
                         {s.skill}
                       </span>
                     ))}
@@ -1053,11 +1219,12 @@ export function VeloProfileTab() {
 
           {/* Skill Gaps */}
           {(gapDetails.length > 0 || gaps.length > 0) && (
-            <section className="p-5 sm:p-6">
+            <section className={sectionCls}>
               <SectionHead
                 icon={<TrendingUp className="h-3.5 w-3.5" />}
                 title="Skill Gaps"
                 count={gapDetails.length || gaps.length}
+                plain={!embedded}
               />
               {gapDetails.length > 0 ? (
                 <div className="space-y-2">
@@ -1102,25 +1269,26 @@ export function VeloProfileTab() {
 
           {/* Experience */}
           {experience.length > 0 && (
-            <section className="p-5 sm:p-6">
+            <section className={sectionCls}>
               <SectionHead
                 icon={<Building2 className="h-3.5 w-3.5" />}
                 title="Experience"
                 count={experience.length}
+                plain={!embedded}
               />
-              <div className="relative space-y-0">
-                {/* Timeline line */}
-                <div className="absolute left-[11px] top-3 h-[calc(100%-24px)] w-px bg-border/60" />
+              <div className="relative space-y-3">
+                {/* Timeline line — real chronological sequence, so it stays. */}
+                <div className="absolute left-[11px] top-3 h-[calc(100%-24px)] w-px bg-border" />
                 {experience.map((exp, i) => {
                   const analysis = findAnalysis(exp, expAnalysis, i);
                   return (
                     <div key={i} className="relative pl-8">
                       {/* dot */}
-                      <div className="absolute left-0 top-3 flex h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-border ring-1 ring-border">
+                      <div className="absolute left-0 top-4 flex h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-border ring-1 ring-border">
                         <div className="h-1.5 w-1.5 rounded-full bg-[color:var(--brand-indigo)]" />
                       </div>
 
-                      <div className={cn("pb-6", i === experience.length - 1 && "pb-0")}>
+                      <div className="rounded-2xl border border-border bg-background/60 p-4">
                         <div className="mb-2 flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-sm font-semibold">{exp.role || "Role"}</p>
@@ -1136,9 +1304,9 @@ export function VeloProfileTab() {
                                   className={cn(
                                     "h-5 text-[10px]",
                                     analysis.relevance_to_target === "high"
-                                      ? "border-(--status-strong)/40 bg-(--status-strong)/10 text-(--status-strong)"
+                                      ? "border-(--score-good)/40 bg-(--score-good)/10 text-(--score-good)"
                                       : analysis.relevance_to_target === "medium"
-                                        ? "border-(--status-solid)/40 bg-(--status-solid)/10 text-(--status-solid)"
+                                        ? "border-(--score-warn)/40 bg-(--score-warn)/10 text-(--score-warn)"
                                         : "border-border bg-muted/40 text-muted-foreground",
                                   )}
                                 >
@@ -1157,7 +1325,7 @@ export function VeloProfileTab() {
                         {analysis?.impact_score !== undefined && (
                           <div className="mb-2.5 flex items-center gap-2">
                             <span className="w-10 shrink-0 text-[10px] text-muted-foreground">Impact</span>
-                            <Progress value={analysis.impact_score ?? 0} className={cn("h-1 flex-1", scoreBarColor(analysis.impact_score ?? 0))} />
+                            <Meter value={analysis.impact_score ?? 0} height={5} className="flex-1" />
                           </div>
                         )}
 
@@ -1215,8 +1383,8 @@ export function VeloProfileTab() {
 
           {/* Projects */}
           {projects.length > 0 && (
-            <section className="p-5 sm:p-6">
-              <SectionHead icon={<FolderGit2 className="h-3.5 w-3.5" />} title="Projects" count={projects.length} />
+            <section className={sectionCls}>
+              <SectionHead icon={<FolderGit2 className="h-3.5 w-3.5" />} title="Projects" count={projects.length} plain={!embedded} />
               <div className="grid gap-3 sm:grid-cols-2">
                 {projects.map((proj, i) => {
                   const analysis = findAnalysis(proj, projAnalysis, i);
@@ -1284,14 +1452,14 @@ export function VeloProfileTab() {
                         <div className="space-y-1.5">
                           <div className="flex items-center gap-2">
                             <span className="w-16 shrink-0 text-[10px] text-muted-foreground">Relevance</span>
-                            <Progress value={analysis.relevance_score ?? 0} className={cn("h-1 flex-1", scoreBarColor(analysis.relevance_score ?? 0))} />
+                            <Meter value={analysis.relevance_score ?? 0} height={5} className="flex-1" />
                             <span className={cn("w-7 text-right text-[10px] font-bold", scoreColor(analysis.relevance_score ?? 0))}>
                               {analysis.relevance_score}%
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="w-16 shrink-0 text-[10px] text-muted-foreground">Depth</span>
-                            <Progress value={analysis.technical_depth_score ?? 0} className={cn("h-1 flex-1", scoreBarColor(analysis.technical_depth_score ?? 0))} />
+                            <Meter value={analysis.technical_depth_score ?? 0} height={5} className="flex-1" />
                             <span className={cn("w-7 text-right text-[10px] font-bold", scoreColor(analysis.technical_depth_score ?? 0))}>
                               {analysis.technical_depth_score}%
                             </span>
@@ -1337,8 +1505,24 @@ export function VeloProfileTab() {
 
           {/* GitHub unlinked repos */}
           {github.connected && unlinkedRepos.length > 0 && (
-            <section className="p-5 sm:p-6">
-              <SectionHead icon={<Github className="h-3.5 w-3.5" />} title="GitHub — not on resume" count={unlinkedRepos.length} />
+            <section className={sectionCls}>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <SectionHead icon={<Github className="h-3.5 w-3.5" />} title="GitHub — not on resume" count={unlinkedRepos.length} plain={!embedded} />
+                </div>
+                <Button size="sm" disabled={verifyingAllRepos} onClick={handleVerifyAllRepos} className="mb-4 h-7 shrink-0 gap-1.5 text-xs">
+                  {verifyingAllRepos ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" /> Adding…
+                    </>
+                  ) : (
+                    `Verify all ${unlinkedRepos.length} with VELO`
+                  )}
+                </Button>
+              </div>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Or add them to your resume to verify individually.
+              </p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {unlinkedRepos.map((repo) => (
                   <div key={repo.id} className="flex items-start justify-between gap-3 overflow-hidden rounded-xl border border-dashed p-3">
@@ -1348,9 +1532,6 @@ export function VeloProfileTab() {
                       {repo.description && (
                         <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{repo.description}</p>
                       )}
-                      <p className="mt-1.5 text-[10px] italic text-muted-foreground">
-                        Add to resume to verify with VELO
-                      </p>
                     </div>
                     {repo.language && (
                       <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{repo.language}</span>
@@ -1363,8 +1544,8 @@ export function VeloProfileTab() {
 
           {/* Education + Certs + All Skills */}
           {(education.length > 0 || certifications.length > 0 || skills.length > 0) && (
-            <section className="p-5 sm:p-6">
-              <SectionHead icon={<GraduationCap className="h-3.5 w-3.5" />} title="Background" />
+            <section className={sectionCls}>
+              <SectionHead icon={<GraduationCap className="h-3.5 w-3.5" />} title="Background" plain={!embedded} />
               <div className="grid gap-6 sm:grid-cols-2">
                 {education.length > 0 && (
                   <div>

@@ -114,117 +114,117 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [fetchProfile]);
 
+  const syncSupabaseSession = useCallback(
+    async (session: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"]) => {
+      if (!session) return;
+
+      const currentAccess = Cookies.get("accessToken");
+      const isGcalCallback =
+        typeof window !== "undefined" && window.location.search.includes("gcal=connected");
+
+      if (currentAccess && !isGcalCallback) return;
+
+      let activeSession = session;
+      if (!activeSession.access_token) {
+        const {
+          data: { session: refreshedSession },
+        } = await supabase.auth.getSession();
+        if (!refreshedSession?.access_token) {
+          toast.error("Authentication Error", {
+            description: "Could not retrieve a valid secure session.",
+          });
+          await supabase.auth.signOut();
+          return;
+        }
+        activeSession = refreshedSession;
+      }
+
+      setIsLoading(true);
+
+      try {
+        const response = await authApi.loginWithGoogle({
+          access_token: activeSession.access_token,
+          refresh_token: activeSession.refresh_token,
+          provider_token: activeSession.provider_token ?? undefined,
+          provider_refresh_token: activeSession.provider_refresh_token ?? undefined,
+          device_info: {
+            device_type: "web",
+            browser: typeof navigator !== "undefined" ? navigator.userAgent : "unknown",
+          },
+        });
+
+        const access = response.session.access_token ?? response.session.access ?? undefined;
+        const refresh = response.session.refresh_token ?? response.session.refresh ?? undefined;
+
+        setSessionTokens(access, refresh, true);
+        setUser(response.user);
+
+        telemetry.identify(response.user.id ?? response.user.email, {
+          email: response.user.email,
+          name: response.user.full_name,
+          username: response.user.username,
+        });
+
+        telemetry.track("user_signed_in", {
+          login_method: "google",
+        });
+
+        toast.success("Welcome back!", {
+          description: response.user.full_name ?? response.user.email,
+        });
+
+        if (isGcalCallback) {
+          toast.success("Google Calendar connected!", {
+            description: "Your learning plan tasks will now sync automatically.",
+          });
+          router.push("/plans");
+          return;
+        }
+
+        if (response.user.user_type === "student" && !response.user.onboarding_completed) {
+          router.push("/onboarding");
+        } else if (response.user.is_superuser) {
+          router.push("/hq");
+        } else if (
+          response.user.user_type === "admin" ||
+          response.user.user_type === "educator"
+        ) {
+          router.push("/institution/overview");
+        } else {
+          router.push("/dashboard");
+        }
+      } catch {
+        toast.error("Login failed", {
+          description: "Could not synchronize session.",
+        });
+        await supabase.auth.signOut();
+        clearSessionTokens();
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [router],
+  );
+
   // Listen for Supabase auth changes (handling Google Login redirect)
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      logger: console.log("Supabase Auth Event:", event);
-      if (event === 'SIGNED_IN' && session) {
-        // We are signed in with Supabase, now sync with Backend
-        const currentAccess = Cookies.get("accessToken");
-        const isGcalCallback = typeof window !== 'undefined' && window.location.search.includes('gcal=connected');
-
-        if (currentAccess && !isGcalCallback) return; // Already logged in and not a re-auth for Calendar
-        
-        // Defensive check: Ensure we have an access token
-        const token = session.access_token;
-        if (!token) {
-            console.warn("No access token in Supabase session, attempting refresh...");
-            const { data: { session: refreshedSession } } = await supabase.auth.getSession();
-            if (!refreshedSession?.access_token) {
-                console.error("Failed to retrieve valid session with access token.");
-                toast.error("Authentication Error", { description: "Could not retrieve secure session." });
-                await supabase.auth.signOut();
-                return;
-            }
-            // Use refreshed session
-            session = refreshedSession;
-        }
-
-        try {
-          // Sync with backend
-          // We need to pass the Supabase tokens to the backend, 
-          // AND the raw Google provider tokens for Calendar Sync.
-          const payload = {
-             access_token: session.access_token,
-             refresh_token: session.refresh_token,
-             provider_token: session.provider_token ?? undefined,
-             provider_refresh_token: session.provider_refresh_token ?? undefined,
-             device_info: {
-                 device_type: "web",
-                 browser: navigator.userAgent,
-             }
-          };
-          
-          console.log("Syncing with backend, payload:", { 
-              ...payload, 
-              access_token: payload.access_token?.substring(0, 10) + '...',
-              refresh_token: payload.refresh_token?.substring(0, 10) + '...',
-              provider_token: payload.provider_token?.substring(0, 10) + '...'
-          });
-
-          const response = await authApi.loginWithGoogle(payload);
-          
-          console.log("Backend sync response:", response);
-
-          const access = response.session.access_token ?? response.session.access ?? undefined;
-          const refresh = response.session.refresh_token ?? response.session.refresh ?? undefined;
-          
-          setSessionTokens(access, refresh, true); // persistent by default for social login
-          setUser(response.user);
-          telemetry.identify(response.user.id ?? response.user.email, {
-             email: response.user.email,
-             name: response.user.full_name,
-             username: response.user.username,
-          });
-          
-          telemetry.track('user_signed_in', {
-             login_method: 'google',
-          });
-          
-          toast.success("Welcome back!", {
-            description: response.user.full_name ?? response.user.email,
-          });
-          
-          // Redirect: if this was a Google Calendar re-auth, go back to plans
-          if (typeof window !== 'undefined' && window.location.search.includes('gcal=connected')) {
-            toast.success("Google Calendar connected!", {
-              description: "Your learning plan tasks will now sync automatically.",
-            });
-            router.push("/plans");
-            return;
-          }
-
-          if (
-            response.user.user_type === "student" &&
-            !response.user.onboarding_completed
-          ) {
-            router.push("/onboarding");
-          } else if (response.user.is_superuser) {
-            router.push("/hq");
-          } else if (
-            response.user.user_type === "admin" ||
-            response.user.user_type === "educator"
-          ) {
-            router.push("/institution/overview");
-          } else {
-            router.push("/dashboard");
-          }
-          
-        } catch (error) {
-           console.error("Backend sync failed", error);
-           toast.error("Login failed", { description: "Could not synchronize session." });
-           // If backend sync fails, we might want to sign out of Supabase too to keep states clean
-           await supabase.auth.signOut();
-        }
-      } else if (event === 'SIGNED_OUT') {
-         // Optionally handle remote sign out
+      if (event === "SIGNED_IN" && session) {
+        await syncSupabaseSession(session);
       }
     });
-    
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session && pathname?.startsWith("/auth/callback")) {
+        await syncSupabaseSession(session);
+      }
+    });
+
     return () => {
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, [pathname, syncSupabaseSession]);
 
   const handleLogin = useCallback(
     async (payload: LoginPayload) => {

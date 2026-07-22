@@ -7,6 +7,7 @@ import {
   hqApi,
   authApi,
   type HQPlatformStats,
+  type HQVeloStats,
   type HQOrgPerformance,
   type HQRiskRetention,
   type HQEducatorEffectiveness,
@@ -36,6 +37,8 @@ import {
   Lock,
   RotateCcw,
   Gauge,
+  Coins,
+  FileCheck2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -907,6 +910,117 @@ function UsersTab({ selectedOrgId }: { selectedOrgId: string }) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// VELO TAB
+// ══════════════════════════════════════════════════════════════════
+
+const VELO_STATUS_COLORS: Record<string, string> = {
+  verified: "bg-emerald-500/15 text-emerald-500",
+  failed: "bg-red-500/15 text-red-500",
+  suspicious: "bg-amber-500/15 text-amber-500",
+  interrogating: "bg-blue-500/15 text-blue-400",
+  evidence_submitted: "bg-blue-500/15 text-blue-400",
+  unverified: "bg-zinc-500/15 text-zinc-400",
+};
+
+function VeloTab() {
+  const [stats, setStats] = useState<HQVeloStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    hqApi
+      .getVeloStats()
+      .then(setStats)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading || !stats) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const { totals, tokens, recent } = stats;
+  const inProgress = totals.interrogating + totals.evidence_submitted;
+  const flagged = totals.failed + totals.suspicious;
+
+  return (
+    <div className="space-y-6">
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard icon={FileCheck2} label="Total Verifications" value={totals.total.toLocaleString()} sub="All project verifications ever started" accent="bg-indigo-500/10" />
+        <StatCard icon={ShieldCheck} label="Verified" value={totals.verified.toLocaleString()} sub={`${totals.total ? Math.round((totals.verified / totals.total) * 100) : 0}% of total`} accent="bg-emerald-500/10" />
+        <StatCard icon={AlertTriangle} label="Flagged / Not Defended" value={flagged.toLocaleString()} sub={`${totals.suspicious} suspicious · ${totals.failed} failed`} accent={flagged > 0 ? "bg-red-500/10" : "bg-green-500/10"} />
+        <StatCard icon={Activity} label="In Progress" value={inProgress.toLocaleString()} sub={`${totals.evidence_submitted} evidence · ${totals.interrogating} interrogating`} accent="bg-blue-500/10" />
+      </div>
+
+      {/* Token usage */}
+      <div className="rounded-xl border bg-card p-5 space-y-3">
+        <p className="text-sm font-semibold flex items-center gap-2"><Coins className="h-4 w-4" /> LLM Token Usage — VELO Interrogation</p>
+        <p className="text-xs text-muted-foreground">
+          A local ~chars/4 estimate computed at each grading, question-generation, and claim-matching
+          call — not provider-billed accounting (VELO&apos;s structured-output calls don&apos;t currently surface
+          exact usage). Directional, not exact.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-lg bg-muted/50 p-4">
+            <p className="text-xs text-muted-foreground">Total Estimated Tokens</p>
+            <p className="text-2xl font-bold tracking-tight tabular-nums">{tokens.total_estimated.toLocaleString()}</p>
+          </div>
+          <div className="rounded-lg bg-muted/50 p-4">
+            <p className="text-xs text-muted-foreground">Avg per Decided Verification</p>
+            <p className="text-2xl font-bold tracking-tight tabular-nums">{tokens.avg_per_decided_verification.toLocaleString()}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent verifications */}
+      <div className="rounded-xl border bg-card p-5 space-y-4">
+        <p className="text-sm font-semibold flex items-center gap-2"><FileCheck2 className="h-4 w-4" /> Recent Project Verifications</p>
+        {recent.length === 0 ? (
+          <div className="text-sm text-muted-foreground">No project verifications yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-muted/50 border-b">
+                <tr>
+                  <th className="px-4 py-2 font-medium text-muted-foreground">Project</th>
+                  <th className="px-4 py-2 font-medium text-muted-foreground">Candidate</th>
+                  <th className="px-4 py-2 font-medium text-muted-foreground">Status</th>
+                  <th className="px-4 py-2 font-medium text-muted-foreground">Score</th>
+                  <th className="px-4 py-2 font-medium text-muted-foreground">Tokens (est.)</th>
+                  <th className="px-4 py-2 font-medium text-muted-foreground">Updated</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {recent.map((row) => (
+                  <tr key={row.id} className="hover:bg-muted/30">
+                    <td className="px-4 py-2 font-medium truncate max-w-[220px]">{row.project_title}</td>
+                    <td className="px-4 py-2 text-muted-foreground truncate max-w-[200px]">{row.candidate_email ?? "—"}</td>
+                    <td className="px-4 py-2">
+                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium capitalize", VELO_STATUS_COLORS[row.status] ?? "bg-zinc-500/15 text-zinc-400")}>
+                        {row.status.replace("_", " ")}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 tabular-nums">
+                      {row.verification_score != null ? Math.round(row.verification_score * 100) : "—"}
+                    </td>
+                    <td className="px-4 py-2 tabular-nums text-muted-foreground">{row.tokens_estimated.toLocaleString()}</td>
+                    <td className="px-4 py-2 text-muted-foreground text-xs">{new Date(row.updated_at).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 // SUPPORT QUEUE TAB
 // ══════════════════════════════════════════════════════════════════
 
@@ -1083,10 +1197,11 @@ function SupportQueueTab({ selectedOrgId }: { selectedOrgId: string }) {
 // ROOT PAGE
 // ══════════════════════════════════════════════════════════════════
 
-type Tab = "overview" | "users" | "support";
+type Tab = "overview" | "velo" | "users" | "support";
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "velo", label: "VELO", icon: FileCheck2 },
   { id: "users", label: "Users", icon: Users },
   { id: "support", label: "Support Queue", icon: Ticket },
 ];
@@ -1214,6 +1329,7 @@ export default function MasterHQPage() {
             educatorEffectiveness={educatorEffectiveness}
           />
         )}
+        {activeTab === "velo" && <VeloTab />}
         {activeTab === "users" && <UsersTab selectedOrgId={selectedOrgId} />}
         {activeTab === "support" && <SupportQueueTab selectedOrgId={selectedOrgId} />}
       </div>

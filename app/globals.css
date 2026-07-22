@@ -195,6 +195,32 @@
   --dock-item: #5a544a;
   --dock-item-active: #ec5b13;
   --dock-item-hover-bg: #f1e2c2;
+
+  /* Evidence scale — indigo (confident) → tangerine (needs work), never
+     traffic-light red/green. Was only ever defined under .dark; every use of
+     these tokens in light mode (the ATS ring, score meters, Role Fit,
+     Stands Out/Raises Flags, Skill Gaps stripes) silently rendered with no
+     color at all. */
+  --status-strong: #5858cc;
+  --status-solid: #8b6db8;
+  --status-developing: #a06f4b;
+  --status-none: #8a826f;
+
+  /* Scoped traffic-light scale for the resume-analysis surfaces only
+     (velo-profile-tab.tsx) — a deliberate exception to the app-wide "never
+     traffic-light" evidence-scale rule above, requested for that feature
+     specifically (2026-07-21). Do not reuse these outside resume analysis;
+     verdict stamps / dimension meters / public credential pages stay on the
+     indigo→tangerine --status-* scale. */
+  --score-good: #2e8b57;
+  --score-good-ink: #1d5c39;
+  --score-good-tint: #e1f2e8;
+  --score-warn: #c97f1e;
+  --score-warn-ink: #8a5610;
+  --score-warn-tint: #faefd9;
+  --score-critical: #c4452f;
+  --score-critical-ink: #832c1c;
+  --score-critical-tint: #fbe6e1;
 }
 
 .dark {
@@ -253,6 +279,17 @@
   --status-solid: #a9a9e8;
   --status-developing: #ff8a52;
   --status-none: #8a826f;
+
+  /* Scoped traffic-light scale for resume-analysis surfaces only — see :root. */
+  --score-good: #56c288;
+  --score-good-ink: #b7edd0;
+  --score-good-tint: #143324;
+  --score-warn: #e5a94c;
+  --score-warn-ink: #f7dda9;
+  --score-warn-tint: #34260f;
+  --score-critical: #e8735e;
+  --score-critical-ink: #f7c6bb;
+  --score-critical-tint: #3a1d16;
 }
 
 @layer base {
@@ -268,6 +305,13 @@
 @layer utilities {
   .font-display {
     font-family: var(--font-display), "Bricolage Grotesque", sans-serif;
+  }
+
+  /* One deliberate editorial accent — the resume-analysis score gauge, page
+     title, and employer's-view pull-quote — not a replacement for
+     .font-display elsewhere. Keep this scoped to those few moments. */
+  .font-editorial {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   }
 
   .font-body {
@@ -396,8 +440,18 @@
   .rise-in { animation: velo-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
   .rise-in-1 { animation: velo-rise 0.5s 0.06s cubic-bezier(0.22, 1, 0.36, 1) both; }
   .rise-in-2 { animation: velo-rise 0.5s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .rise-in-3 { animation: velo-rise 0.5s 0.18s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+  /* The stamp landing on the record — the verdict's one ceremonial beat. */
+  @keyframes velo-stamp {
+    0% { opacity: 0; transform: scale(1.7) rotate(-4deg); }
+    55% { opacity: 1; transform: scale(0.94) rotate(0.5deg); }
+    100% { opacity: 1; transform: scale(1) rotate(0deg); }
+  }
+  .stamp-in { animation: velo-stamp 0.45s 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
   @media (prefers-reduced-motion: reduce) {
-    .rise-in, .rise-in-1, .rise-in-2 { animation: none; }
+    .rise-in, .rise-in-1, .rise-in-2, .rise-in-3, .stamp-in { animation: none; }
   }
 
   .terminal-bullet {

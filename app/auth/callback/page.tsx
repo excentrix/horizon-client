@@ -2,22 +2,34 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase/client';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // The Supabase client will automatically handle the code exchange
-    // and fire the onAuthStateChange event, which AuthContext listens to.
-    // This page's primary job is to exist so the redirect works,
-    // and potentially handle edge cases or errors.
-    
-    // We can verify if the URL contains error parameters.
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('error')) {
-        console.error('Auth callback error:', params.get('error_description'));
-        router.push('/login?error=' + params.get('error_description'));
-    }
+    const completeAuth = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const error = params.get("error");
+      const errorDescription = params.get("error_description");
+      const code = params.get("code");
+
+      if (error) {
+        router.replace(`/login?error=${encodeURIComponent(errorDescription ?? error)}`);
+        return;
+      }
+
+      if (!code) {
+        return;
+      }
+
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+      if (exchangeError) {
+        router.replace(`/login?error=${encodeURIComponent(exchangeError.message)}`);
+      }
+    };
+
+    void completeAuth();
   }, [router]);
 
   return (

@@ -103,6 +103,8 @@ const INITIAL: ProjectVerificationState = {
   isLoading: false,
 };
 
+const TERMINAL_STATUSES = new Set(["verified", "suspicious", "failed"]);
+
 export function useProjectVerification(snapshotId: string) {
   const [state, setState] = useState<ProjectVerificationState>(INITIAL);
 
@@ -118,8 +120,6 @@ export function useProjectVerification(snapshotId: string) {
   // finalize() itself is now also auto-triggered server-side once grading
   // completes, but this covers reopening the sheet cold, and is idempotent
   // either way.
-  const TERMINAL_STATUSES = new Set(["verified", "suspicious", "failed"]);
-
   const startVerification = useCallback(
     async (projectIndex: number) => {
       setState((s) => ({ ...s, step: "evidence", isLoading: true, error: null }));
@@ -245,7 +245,7 @@ export function useProjectVerification(snapshotId: string) {
   // ── 4. Submit answer (adaptive — backend decides next question) ───────────
   const submitAnswer = useCallback(
     async (answer: string) => {
-      if (!state.sessionId) return;
+      if (!state.sessionId || !state.currentQuestion) return;
       setState((s) => ({
         ...s,
         isLoading: true,
@@ -263,6 +263,8 @@ export function useProjectVerification(snapshotId: string) {
               },
             ]
           : s.answeredTurns,
+        currentQuestion: null,
+        currentQuestionArea: null,
       }));
       try {
         const data = await auditApi.answerInterrogation(state.sessionId, { answer });
@@ -293,7 +295,7 @@ export function useProjectVerification(snapshotId: string) {
         return false;
       }
     },
-    [state.sessionId],
+    [state.currentQuestion, state.sessionId],
   );
 
   // ── 5. Complete + finalize ────────────────────────────────────────────────
