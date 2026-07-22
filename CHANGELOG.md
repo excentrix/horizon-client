@@ -128,6 +128,16 @@ Versioning policy:
 
 ## Unreleased
 
+### Added
+- Pathfinder surfaces for student discovery, institutional program management, and session/report pages.
+
+### Changed
+- Auth, dashboard, HQ, and route-guard surfaces now understand the Pathfinder feature flag and routing model.
+- Shared API/types/routing/store layers were extended to support Pathfinder session state and reporting.
+
+### Commits
+- `9e3c614` feat(pathfinder): add school pathfinder surfaces and routing
+
 ## v0.2.14 (2026-07-22)
 
 ### Added
