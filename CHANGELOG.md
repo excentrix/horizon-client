@@ -128,6 +128,20 @@ Versioning policy:
 
 ## Unreleased
 
+## v0.2.14 (2026-07-22)
+
+### Added
+- Full verification-session route with transcript, improvement guidance, and a dedicated loading state.
+- Public audit credential and profile analysis surfaces, plus OG credential cards for sharing.
+
+### Changed
+- Verification and recruiter-facing pages now route through the new case-file flow instead of the older drawer-centric experience.
+- Studio shell routing and authenticated callbacks were adjusted to support the new VELO surfaces.
+
+### Commits
+- `b3c224a` feat(verify): add verification and public credential surfaces
+- `c1a4de7` feat(studio): align auth and HQ surfaces with VELO flow
+
 ### Added
 - Director playback engine hooks and scene-studio interaction components (speech bubbles, whiteboard, inline quiz, playback scene).
 - Extended simulation and scene surfaces with richer dock/rail choreography and interaction controls.
