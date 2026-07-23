@@ -20,8 +20,14 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
     pathname.includes("/plans/") && pathname.includes("/playground");
   const isVeloSessionRoute = pathname.startsWith("/verify/session");
   const isAnalysisV2Route = pathname.startsWith("/analysis/v2");
+  // Pathfinder is a Horizon mentor mode, not VELO — it shouldn't wear VELO's wordmark/nav.
+  // Its own pages own the full-page experience, same as the VELO session takeover. Only the
+  // conversation view (/pathfinder/[sessionId], not the entry or report pages) needs the
+  // fixed-composer chat layout — the others are normal scrollable pages.
+  const isPathfinderRoute = pathname.startsWith("/pathfinder");
+  const isPathfinderConversationRoute = /^\/pathfinder\/[^/]+$/.test(pathname);
   const isNoPageScrollRoute =
-    pathname === "/chat" || isDashboard || isPlaygroundRoute || isVeloSessionRoute;
+    pathname === "/chat" || isDashboard || isPlaygroundRoute || isVeloSessionRoute || isPathfinderConversationRoute;
   // The VELO interrogation session is a full-page takeover — no dock, no
   // competing navigation while the candidate is on the record. The redesigned
   // analysis page (/analysis/v2) brings its own header/masthead too.
@@ -29,13 +35,14 @@ export default function StudioLayout({ children }: { children: ReactNode }) {
     (pathname.includes("/plans/") && pathname.includes("/playground")) ||
     pathname.startsWith("/onboarding") ||
     isVeloSessionRoute ||
-    isAnalysisV2Route;
+    isAnalysisV2Route ||
+    isPathfinderRoute;
 
   return (
     <GamificationProvider>
       <RouteFeatureGuard />
       <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-background">
-        {isPlaygroundRoute || isVeloSessionRoute || isAnalysisV2Route ? null : (
+        {isPlaygroundRoute || isVeloSessionRoute || isAnalysisV2Route || isPathfinderRoute ? null : (
           <header
             className={cn(
               "sticky top-0 z-30 border-b border-border/80 bg-background/92 backdrop-blur",

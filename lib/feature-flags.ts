@@ -21,7 +21,8 @@ export type FeatureName =
   | "simulations"
   | "gamification"
   | "knowledge_graph"
-  | "semantic_memory";
+  | "semantic_memory"
+  | "pathfinder";
 
 export type FeatureFlags = Record<FeatureName, boolean>;
 
@@ -42,6 +43,7 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   gamification: false,
   knowledge_graph: false,
   semantic_memory: false,
+  pathfinder: false,
 };
 
 function flagsEndpoint(): string {

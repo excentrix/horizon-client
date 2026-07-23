@@ -8,6 +8,7 @@ import {
   BarChart3,
   BookOpen,
   Building2,
+  Compass,
   FilePieChart,
   Settings,
   Users,
@@ -16,6 +17,7 @@ import {
 const ALL_TABS = [
   { href: "/institution/overview",  label: "Institution 360",  icon: BarChart3,   adminOnly: false },
   { href: "/institution/cohorts",   label: "Cohorts",    icon: BookOpen,   adminOnly: false },
+  { href: "/institution/pathfinder", label: "Pathfinder", icon: Compass,    adminOnly: false },
   { href: "/institution/members",   label: "Members",    icon: Users,       adminOnly: true  },
   { href: "/institution/invites",   label: "Invites",    icon: Building2,   adminOnly: true  },
   { href: "/institution/reports",   label: "Reports",    icon: FilePieChart, adminOnly: true  },

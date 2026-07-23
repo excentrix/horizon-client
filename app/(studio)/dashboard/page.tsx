@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
+import { pathfinderApi } from "@/lib/api";
 import { useFlowSuggestion } from "@/hooks/use-flow-suggestion";
 import { useGamificationSummary } from "@/hooks/use-gamification";
 import { useHomeDashboard } from "@/hooks/use-home-dashboard";
@@ -698,6 +699,22 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
+  }, [authLoading, router, user]);
+
+  // Pathfinder-entitled school users land on Pathfinder, not the VELO-first dashboard — covers
+  // anyone reaching /dashboard directly (bookmark, the "/" root redirect) rather than via login.
+  useEffect(() => {
+    if (authLoading || !user || user.is_superuser) return;
+    let cancelled = false;
+    pathfinderApi
+      .getEntitlement()
+      .then(({ pathfinder_enabled }) => {
+        if (!cancelled && pathfinder_enabled) router.replace("/pathfinder");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [authLoading, router, user]);
 
   useEffect(() => {

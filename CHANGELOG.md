@@ -9,6 +9,19 @@ Versioning policy:
 - else `patch` (fix/docs/chore/refactor/perf/test only).
 - Entries are tracked per commit for precise release traceability.
 
+## v0.2.15 (2026-07-23)
+
+### Added
+- A richer PathFinder session entry, conversation, and report browsing experience.
+- Multi-format evidence sharing for PathFinder conversations, including file uploads with progress feedback.
+
+### Changed
+- Pathfinder API/types now support report listing and multipart evidence uploads.
+- The PathFinder report view now presents match scoring, RIASEC radar context, and expandable route details.
+
+### Commits
+- `28ffd77` feat(pathfinder): refresh session and report surfaces
+
 ## v0.2.6 (2026-06-10)
 
 ### Added
@@ -127,6 +140,17 @@ Versioning policy:
 - `1dbe75a` feat(verify): add full verification session and public report surfaces
 
 ## Unreleased
+
+### Added
+- Pathfinder surfaces for student discovery, institutional program management, and session/report pages.
+
+### Changed
+- Auth, dashboard, HQ, and route-guard surfaces now understand the Pathfinder feature flag and routing model.
+- Shared API/types/routing/store layers were extended to support Pathfinder session state and reporting.
+
+### Commits
+- `9e3c614` feat(pathfinder): add school pathfinder surfaces and routing
+- `a9cbd6b` feat(pathfinder): add pathfinder route pages
 
 ## v0.2.14 (2026-07-22)
 
