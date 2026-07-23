@@ -2,19 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { chatApi, pathfinderApi, type PathfinderSession } from "@/lib/api";
 import type { ChatMessage, MentorAction } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Loader2, Send, Paperclip, Sparkles } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { PathfinderHeader } from "../_components/PathfinderHeader";
+import { ChatThread } from "../_components/ChatThread";
+import { EvidenceShareDialog } from "../_components/EvidenceShareDialog";
 
 const POLL_INTERVAL_MS = 2500;
 const POLL_TIMEOUT_MS = 45000;
+const MAX_COMPOSER_HEIGHT = 160;
 
 // Module-level (not a ref/state) so it survives React Strict Mode's dev-only mount → unmount →
 // remount cycle, which resets component state/refs and would otherwise double-fire the auto-start
@@ -36,9 +36,9 @@ export default function PathfinderConversationPage() {
   const [generatingReport, setGeneratingReport] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const [shareTitle, setShareTitle] = useState("");
-  const [shareUrl, setShareUrl] = useState("");
+  const [evidenceCount, setEvidenceCount] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const loadMessages = useCallback(async (conversationId: string) => {
     const list = await chatApi.fetchMessages(conversationId);
@@ -62,7 +62,13 @@ export default function PathfinderConversationPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, waitingForReply]);
+
+  useEffect(() => {
+    if (!textareaRef.current) return;
+    textareaRef.current.style.height = "auto";
+    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, MAX_COMPOSER_HEIGHT)}px`;
+  }, [draft]);
 
   const latestAction: MentorAction | undefined = (() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -167,19 +173,6 @@ export default function PathfinderConversationPage() {
     }
   };
 
-  const handleShare = async () => {
-    if (!shareTitle.trim() || !shareUrl.trim()) return;
-    await pathfinderApi.shareArtifact({
-      title: shareTitle.trim(),
-      artifact_type: "link",
-      url: shareUrl.trim(),
-      pathfinder_session: sessionId,
-    });
-    setShareOpen(false);
-    setShareTitle("");
-    setShareUrl("");
-  };
-
   if (!session) {
     return (
       <>
@@ -192,47 +185,22 @@ export default function PathfinderConversationPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-gradient-to-b from-background to-muted/20">
       <PathfinderHeader />
-      <div className="mx-auto flex w-full max-w-2xl flex-1 min-h-0 flex-col px-4 py-6">
-        <div className="mb-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Pathfinder</p>
-          <h1 className="text-lg font-medium">{session.stated_aspiration}</h1>
+      <div className="mx-auto flex w-full max-w-2xl flex-1 min-h-0 flex-col px-4 py-5">
+        <div className="mb-4 shrink-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-primary">Pathfinder</p>
+          <h1 className="text-lg font-semibold leading-snug">{session.stated_aspiration}</h1>
         </div>
 
-        <div className="flex-1 min-h-0 space-y-4 overflow-y-auto pr-1">
-          {messages.length === 0 && !waitingForReply && (
-            <p className="text-sm text-muted-foreground">Starting your conversation…</p>
-          )}
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={cn("flex", message.sender_type === "user" ? "justify-end" : "justify-start")}
-            >
-              <Card
-                className={cn(
-                  "max-w-[80%] border-0 shadow-none",
-                  message.sender_type === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
-                )}
-              >
-                <CardContent className="whitespace-pre-wrap px-4 py-2.5 text-sm">
-                  {message.content}
-                </CardContent>
-              </Card>
-            </div>
-          ))}
-          {waitingForReply && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Thinking…
-            </div>
-          )}
-          {loadError && <p className="text-sm text-destructive">{loadError}</p>}
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+          <ChatThread messages={messages} waitingForReply={waitingForReply} loadError={loadError} />
           <div ref={bottomRef} />
         </div>
 
         {latestAction && (
           <Button
-            className="mb-3 w-full"
+            className="mb-3 mt-3 w-full shadow-sm"
             variant="secondary"
             onClick={handleGenerateReport}
             disabled={generatingReport}
@@ -246,16 +214,28 @@ export default function PathfinderConversationPage() {
           </Button>
         )}
 
-        <div className="flex items-end gap-2 border-t pt-3">
-          <Button variant="ghost" size="icon" onClick={() => setShareOpen(true)} title="Share something you've made">
+        <div className="mt-3 flex items-end gap-2 rounded-2xl border bg-card p-2 shadow-sm">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative shrink-0 rounded-full"
+            onClick={() => setShareOpen(true)}
+            title="Share something you've made"
+          >
             <Paperclip className="h-4 w-4" />
+            {evidenceCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+                {evidenceCount}
+              </span>
+            )}
           </Button>
           <Textarea
+            ref={textareaRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Tell me what you're thinking..."
-            rows={2}
-            className="flex-1"
+            rows={1}
+            className="max-h-40 flex-1 resize-none border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -263,28 +243,26 @@ export default function PathfinderConversationPage() {
               }
             }}
           />
-          <Button onClick={handleSend} disabled={sending || !draft.trim()} size="icon">
+          <Button
+            onClick={handleSend}
+            disabled={sending || !draft.trim()}
+            size="icon"
+            className="shrink-0 rounded-full"
+          >
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
       </div>
 
-      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Share something you&apos;ve made</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Input placeholder="What is it?" value={shareTitle} onChange={(e) => setShareTitle(e.target.value)} />
-            <Input placeholder="Link (portfolio, drive, website...)" value={shareUrl} onChange={(e) => setShareUrl(e.target.value)} />
-          </div>
-          <DialogFooter>
-            <Button onClick={handleShare} disabled={!shareTitle.trim() || !shareUrl.trim()}>
-              Share
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EvidenceShareDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        sessionId={sessionId}
+        onShared={() => {
+          setEvidenceCount((c) => c + 1);
+          toast.success("Shared — the mentor will factor this in.");
+        }}
+      />
     </div>
   );
 }

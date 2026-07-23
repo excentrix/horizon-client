@@ -1265,6 +1265,11 @@ export const pathfinderApi = {
       http.get("/pathfinder/sessions/")
     ).then(normalizeList),
 
+  listReports: () =>
+    extract<PathwayReport[] | PaginatedResponse<PathwayReport>>(
+      http.get("/pathfinder/reports/")
+    ).then(normalizeList),
+
   createSession: (payload: { stated_aspiration: string }) =>
     extract<PathfinderSession>(http.post("/pathfinder/sessions/", payload)),
 
@@ -1285,14 +1290,36 @@ export const pathfinderApi = {
   getSessionReport: (sessionId: string) =>
     extract<PathwayReport>(http.get(`/pathfinder/sessions/${sessionId}/report/`)),
 
-  shareArtifact: (payload: {
-    title: string;
-    description?: string;
-    artifact_type: "link" | "file" | "text" | "project" | "case_study" | "demo";
-    url?: string;
-    content?: string;
-    pathfinder_session: string;
-  }) => extract<PortfolioArtifact>(http.post("/portfolio/artifacts/", payload)),
+  shareArtifact: (
+    payload: {
+      title: string;
+      description?: string;
+      artifact_type: "link" | "file" | "text" | "project" | "case_study" | "demo";
+      url?: string;
+      content?: string;
+      file?: File;
+      pathfinder_session: string;
+    },
+    onUploadProgress?: (percent: number) => void
+  ) => {
+    if (!payload.file) {
+      return extract<PortfolioArtifact>(http.post("/portfolio/artifacts/", payload));
+    }
+    const formData = new FormData();
+    formData.append("title", payload.title);
+    if (payload.description) formData.append("description", payload.description);
+    formData.append("artifact_type", payload.artifact_type);
+    formData.append("pathfinder_session", payload.pathfinder_session);
+    formData.append("file", payload.file);
+    return extract<PortfolioArtifact>(
+      http.post("/portfolio/artifacts/", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: onUploadProgress
+          ? (event) => onUploadProgress(event.total ? Math.round((event.loaded / event.total) * 100) : 0)
+          : undefined,
+      })
+    );
+  },
 
   // Institution/counselor side
   institutionOverview: (params?: { org?: string }) =>

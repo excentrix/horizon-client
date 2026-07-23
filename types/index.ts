@@ -690,6 +690,7 @@ export interface PortfolioArtifact {
   proof_submission?: UUID | null;
   url?: string;
   content?: string;
+  file?: string | null;
   metadata?: Record<string, unknown>;
   status: "draft" | "needs_review" | "verified";
   verification_status?: "pending" | "verified" | "human_verified" | "rejected" | "needs_revision";
