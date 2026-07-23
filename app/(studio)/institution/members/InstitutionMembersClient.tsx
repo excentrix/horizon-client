@@ -65,9 +65,11 @@ function AddMemberDialog({
             ? `${result.email} was already a Horizon user — added to this school.`
             : `${result.email} is already a member.`
         );
+      } else if (result.invite_sent) {
+        toast.success(`${result.email} added and invited — they'll get an email to set up their login.`);
       } else {
-        toast.success(
-          `${result.email} added. They still need a way to sign in — this creates the school membership, not a login/invite email.`
+        toast.warning(
+          `${result.email} added, but the invite email couldn't be sent. Check Supabase configuration, or share a sign-in path with them directly.`
         );
       }
       onAdded();
@@ -105,9 +107,8 @@ function AddMemberDialog({
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          This creates the school membership immediately. It does not send an invite or set up a
-          login — the person needs their own way to sign in first (existing account, or one you set
-          up separately).
+          If this is a new email, we&apos;ll send them an invite to set up their login. If they
+          already have a Horizon account, they&apos;re just added to this school directly.
         </p>
       </div>
       <DialogFooter>

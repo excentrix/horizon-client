@@ -2,9 +2,18 @@
 
 import { Fragment } from "react";
 import type { ChatMessage } from "@/types";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2, Compass, Paperclip } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Loader2, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function MentorAvatar() {
+  return (
+    <Avatar className="mb-1 size-7 shrink-0 bg-primary/10 p-1">
+      <AvatarImage src="/brand/logo/mark-color.svg" alt="" />
+      <AvatarFallback className="bg-primary/10 text-primary" />
+    </Avatar>
+  );
+}
 
 function formatTime(iso: string) {
   try {
@@ -68,13 +77,7 @@ export function ChatThread({ messages, waitingForReply, loadError }: ChatThreadP
               </div>
             )}
             <div className={cn("flex items-end gap-2", isUser ? "flex-row-reverse" : "flex-row")}>
-              {!isUser && (
-                <Avatar className="mb-1 size-7 shrink-0">
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    <Compass className="size-3.5" />
-                  </AvatarFallback>
-                </Avatar>
-              )}
+              {!isUser && <MentorAvatar />}
               <div className={cn("flex max-w-[78%] flex-col gap-1", isUser ? "items-end" : "items-start")}>
                 {!isUser && gi === 0 && (
                   <span className="px-1 text-xs font-medium text-muted-foreground">Pathfinder Mentor</span>
@@ -115,11 +118,7 @@ export function ChatThread({ messages, waitingForReply, loadError }: ChatThreadP
 
       {waitingForReply && (
         <div className="flex items-end gap-2">
-          <Avatar className="mb-1 size-7 shrink-0">
-            <AvatarFallback className="bg-primary/10 text-primary">
-              <Compass className="size-3.5" />
-            </AvatarFallback>
-          </Avatar>
+          <MentorAvatar />
           <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-muted px-4 py-3">
             <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.3s]" />
             <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.15s]" />
