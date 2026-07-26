@@ -1255,7 +1255,9 @@ export interface PathwayReport {
 
 export const pathfinderApi = {
   listRegions: () =>
-    extract<Array<{ id: string; code: string; name: string }>>(http.get("/pathfinder/regions/")),
+    extract<Array<{ id: string; code: string; name: string; approved_career_count: number; draft_career_count: number }>>(
+      http.get("/pathfinder/regions/")
+    ),
 
   getEntitlement: () =>
     extract<{ pathfinder_enabled: boolean }>(http.get("/pathfinder/entitlement/")),
@@ -1673,7 +1675,10 @@ export const institutionsApi = {
   listOrgUsers: (params?: { role?: string; org?: string }) =>
     extract<OrgUser[]>(http.get("/institutions/users/", { params })),
   addOrgUser: (payload: { email: string; name?: string; role: "student" | "educator" | "admin" }, params?: { org?: string }) =>
-    extract<{ id: string; email: string; name: string; role: string; user_created: boolean; membership_created: boolean }>(
+    extract<{
+      id: string; email: string; name: string; role: string;
+      user_created: boolean; membership_created: boolean; invite_sent: boolean;
+    }>(
       http.post("/institutions/users/", payload, { params })
     ),
   updateOrgUser: (userId: string, payload: { role?: string; is_active?: boolean; org?: string }) =>

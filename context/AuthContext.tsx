@@ -16,6 +16,7 @@ import { telemetry } from "@/lib/telemetry";
 import { captureAcquisitionSource, trackFunnel, FUNNEL } from "@/lib/funnel";
 import { authApi } from "@/lib/api";
 import { supabase } from "@/lib/supabase/client";
+import { resolveHomeRoute } from "@/lib/pathfinder-routing";
 import type {
   LoginPayload,
   RegisterPayload,
@@ -181,18 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        if (response.user.user_type === "student" && !response.user.onboarding_completed) {
-          router.push("/onboarding");
-        } else if (response.user.is_superuser) {
-          router.push("/hq");
-        } else if (
-          response.user.user_type === "admin" ||
-          response.user.user_type === "educator"
-        ) {
-          router.push("/institution/overview");
-        } else {
-          router.push("/dashboard");
-        }
+        router.push(await resolveHomeRoute(response.user));
       } catch {
         toast.error("Login failed", {
           description: "Could not synchronize session.",
@@ -253,19 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         toast.success("Welcome back!", {
           description: response.user.full_name ?? response.user.email,
         });
-        const userType = response.user.user_type;
-        if (
-          response.user.user_type === "student" &&
-          !response.user.onboarding_completed
-        ) {
-          router.push("/onboarding");
-        } else if (response.user.is_superuser) {
-          router.push("/hq");
-        } else if (userType === "admin" || userType === "educator") {
-          router.push("/institution/overview");
-        } else {
-          router.push("/dashboard");
-        }
+        router.push(await resolveHomeRoute(response.user));
       } catch (error) {
         toast.error("Unable to sign in", {
           description:
@@ -330,19 +308,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         trackFunnel(FUNNEL.SIGNED_UP, { method: "password" });
 
         toast.success("Account created.");
-        if (
-          loginResponse.user.user_type === "student" &&
-          !loginResponse.user.onboarding_completed
-        ) {
-          router.push("/onboarding");
-        } else if (
-          loginResponse.user.user_type === "admin" ||
-          loginResponse.user.user_type === "educator"
-        ) {
-          router.push("/institution/overview");
-        } else {
-          router.push("/dashboard");
-        }
+        router.push(await resolveHomeRoute(loginResponse.user));
       } catch (error) {
         toast.error("Registration failed", {
           description:

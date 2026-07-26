@@ -1224,7 +1224,9 @@ function EditOrgDialog({
   onClose: () => void;
   onSaved: (updated: Organization) => void;
 }) {
-  const [regions, setRegions] = useState<Array<{ id: string; code: string; name: string }>>([]);
+  const [regions, setRegions] = useState<
+    Array<{ id: string; code: string; name: string; approved_career_count: number; draft_career_count: number }>
+  >([]);
   const [pathfinderEnabled, setPathfinderEnabled] = useState(org.pathfinder_enabled);
   const [regionId, setRegionId] = useState(org.region ?? "");
   const [saving, setSaving] = useState(false);
@@ -1281,6 +1283,25 @@ function EditOrgDialog({
                 Pathfinder needs a region before students can start a session.
               </p>
             )}
+            {(() => {
+              const selected = regions.find((r) => r.id === regionId);
+              if (!selected) return null;
+              if (selected.approved_career_count === 0) {
+                return (
+                  <p className="text-xs text-amber-500">
+                    0 approved careers in {selected.name} yet — reports will come back empty until
+                    someone reviews career profiles for this region in Django admin
+                    {selected.draft_career_count > 0 ? ` (${selected.draft_career_count} drafted, awaiting review)` : ""}.
+                  </p>
+                );
+              }
+              return (
+                <p className="text-xs text-muted-foreground">
+                  {selected.approved_career_count} career{selected.approved_career_count === 1 ? "" : "s"} approved in {selected.name}
+                  {selected.draft_career_count > 0 ? `, ${selected.draft_career_count} more drafted awaiting review` : ""}.
+                </p>
+              );
+            })()}
           </div>
         </div>
         <DialogFooter>

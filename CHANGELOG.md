@@ -9,6 +9,21 @@ Versioning policy:
 - else `patch` (fix/docs/chore/refactor/perf/test only).
 - Entries are tracked per commit for precise release traceability.
 
+## v0.2.16 (2026-07-23)
+
+### Added
+- Pathfinder login now routes school users by school entitlement instead of the generic dashboard path.
+- Supabase invite callbacks now complete for both PKCE code links and token-hash invite links.
+
+### Changed
+- Route guards now wait for real feature-flag data before enforcing redirects.
+- Pathfinder and institution-facing surfaces now show org-level entitlement, invite, and region-coverage context.
+- Pathfinder mentor branding now uses the shared Horizon mark consistently across the entry and chat surfaces.
+
+### Commits
+- `12ab841` feat(auth): route Pathfinder users by entitlement
+- `79e775c` feat(pathfinder): polish mentor and admin surfaces
+
 ## v0.2.15 (2026-07-23)
 
 ### Added

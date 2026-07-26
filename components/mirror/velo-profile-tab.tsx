@@ -718,7 +718,7 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
       )}
 
       {/* ── Two-column body ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
 
         {/* ── Right column: ATS + Fit + Actions (below on mobile) ────────── */}
         <aside

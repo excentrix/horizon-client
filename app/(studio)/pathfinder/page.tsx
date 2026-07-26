@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Compass, Sparkles, MessageCircle, ArrowRight, FileText } from "lucide-react";
+import { Loader2, Sparkles, MessageCircle, ArrowRight, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PathfinderHeader } from "./_components/PathfinderHeader";
 
@@ -80,7 +80,8 @@ export default function PathfinderEntryPage() {
       <>
         <PathfinderHeader />
         <div className="mx-auto max-w-lg py-16 text-center text-muted-foreground">
-          <Compass className="mx-auto mb-3 h-8 w-8" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/logo/mark-color.svg" alt="" className="mx-auto mb-3 h-8 w-8 opacity-70" />
           <p>Pathfinder isn&apos;t enabled for your school yet.</p>
         </div>
       </>
@@ -95,7 +96,8 @@ export default function PathfinderEntryPage() {
       <div className="mx-auto max-w-2xl space-y-10 px-4 py-10">
         <div className="rise-in text-center sm:text-left">
           <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-primary/10 sm:mx-0">
-            <Compass className="size-6 text-primary" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/logo/mark-color.svg" alt="" className="size-6" />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Pathfinder</h1>
           <p className="mt-1 text-muted-foreground">

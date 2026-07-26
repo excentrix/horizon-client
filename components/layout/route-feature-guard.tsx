@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useFeatureFlags } from "@/hooks/use-features";
+import { useFeatureFlags, useFeatureFlagsQuery } from "@/hooks/use-features";
+import { usePathfinderEntitlementQuery } from "@/hooks/use-pathfinder-entitlement";
 import type { FeatureName } from "@/lib/feature-flags";
 
 // Map studio route prefixes → the feature flag that gates them.
@@ -21,6 +22,12 @@ const ROUTE_FLAGS: Array<[string, FeatureName]> = [
   ["/pathfinder", "pathfinder"],
 ];
 
+// VELO's own product surfaces — stay globally on (the "velo" flag is core-product-true for
+// everyone), but a school whose org has Pathfinder enabled shouldn't land its users in VELO's
+// candidate/HR verification flow. Segmentation the blunt global flags can't express, since it's
+// per-user (org entitlement), not per-deployment.
+const VELO_ONLY_PREFIXES = ["/verify", "/analysis", "/audit"];
+
 /** True if the current route's feature flag is disabled. */
 export function useIsRouteDisabled(): boolean {
   const pathname = usePathname() ?? "";
@@ -38,14 +45,28 @@ export function useIsRouteDisabled(): boolean {
 export function RouteFeatureGuard() {
   const pathname = usePathname() ?? "";
   const router = useRouter();
-  const flags = useFeatureFlags();
+  // Deliberately NOT useFeatureFlags() — that falls back to DEFAULT_FLAGS while the real fetch is
+  // in flight, and DEFAULT_FLAGS has pathfinder (and other dark-by-default flags) as false. Acting
+  // on that placeholder would redirect away from a route that's actually enabled for this
+  // deployment, before the real value ever arrives. Wait for `data` to be defined.
+  const { data: flags } = useFeatureFlagsQuery();
+  const { data: entitlement } = usePathfinderEntitlementQuery();
 
   useEffect(() => {
+    if (!flags) return;
     const match = ROUTE_FLAGS.find(([prefix]) => pathname.startsWith(prefix));
     if (match && !flags[match[1]]) {
       router.replace(flags.dashboard ? "/dashboard" : "/verify");
+      return;
     }
-  }, [pathname, flags, router]);
+    // Same reasoning as above: wait for the real entitlement value before enforcing anything on it.
+    if (
+      entitlement?.pathfinder_enabled &&
+      VELO_ONLY_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+    ) {
+      router.replace("/pathfinder");
+    }
+  }, [pathname, flags, entitlement, router]);
 
   return null;
 }
