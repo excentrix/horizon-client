@@ -9,6 +9,20 @@ Versioning policy:
 - else `patch` (fix/docs/chore/refactor/perf/test only).
 - Entries are tracked per commit for precise release traceability.
 
+## v0.2.17 (2026-09-03)
+
+### Added
+- Realtime voice answers for VELO interrogation sessions, plus a development audio transcription test surface.
+- Institution verification views with defended-evidence cohort reporting, student detail, calibration context, and CSV exports.
+
+### Changed
+- Verification profiles now distinguish claimed skills from skills actually probed and defended.
+- Verification reports can surface deterministic cross-candidate calibration references and embedded resume analysis.
+
+### Commits
+- `6428bdf` feat(velo): add realtime voice transcription surfaces
+- `1f98ead` feat(velo): expand verification reporting surfaces
+
 ## v0.2.16 (2026-07-23)
 
 ### Added
