@@ -45,6 +45,10 @@ import {
   AuditInstitutionOverview,
   AuditInstitutionStudentRow,
   AuditInstitutionStudentDetail,
+  AuditInstitutionVerificationOverview,
+  AuditInstitutionVerificationStudentRow,
+  AuditInstitutionVerificationStudentDetail,
+  AuditInstitutionVerificationCohortReport,
   VeloOnboardingSession,
   VeloMentorReviewResponse,
   VeloOnboardingTrack,
@@ -1996,13 +2000,30 @@ export type VerifiedProfileSummary = {
   knowledge_gaps?: string[];
   recommended_next_steps?: { apply_now: string[]; close_before_senior: string[] } | null;
   examiner_note?: string;
-  verified_skills: Array<{ skill: string; via_projects: string[] }>;
+  verified_skills: Array<{
+    skill: string;
+    via_projects: string[];
+    citations?: Array<{ skill: string; project: string; question_index: number; evidence: string }>;
+  }>;
+  /** Skills a verified project's declared tech stack claims but the
+   *  interrogation never actually probed/substantiated — surfaced honestly
+   *  instead of being folded into `verified_skills`. */
+  claimed_unverified_skills?: Array<{ skill: string; project: string }>;
   contradictions: Array<{
     project_title: string;
     verdict: "suspicious" | "failed";
     claimed_skills: string[];
     note: string;
   }>;
+  /** Deterministic (non-LLM) cross-candidate percentile anchor for
+   *  `seniority_calibration` — null until enough verified profiles exist
+   *  to form a reference distribution. */
+  calibration_reference?: {
+    insufficient_data: boolean;
+    total_samples: number;
+    per_dimension_percentile?: Record<string, number>;
+    note?: string | null;
+  } | null;
 };
 
 export type DefendedProject = {
@@ -2159,6 +2180,38 @@ export const auditApi = {
     }>(
       http.post(`/interrogations/${sessionId}/answer/`, payload)
     ),
+
+  transcribeInterrogationAnswer: (sessionId: string, audio: Blob) => {
+    const form = new FormData();
+    const extension = audio.type.includes("wav") ? "wav" : audio.type.includes("webm") ? "webm" : "ogg";
+    form.append("audio", audio, `answer.${extension}`);
+    form.append("mime_type", audio.type || "audio/webm");
+    return extract<{ transcript: string; model: string }>(
+      http.post(`/interrogations/${sessionId}/transcribe-answer/`, form)
+    );
+  },
+
+  transcribeDevAudio: (audio: Blob) => {
+    const form = new FormData();
+    const extension = audio.type.includes("wav") ? "wav" : audio.type.includes("webm") ? "webm" : "ogg";
+    form.append("audio", audio, `sample.${extension}`);
+    form.append("mime_type", audio.type || "audio/wav");
+    return extract<{
+      transcript: string;
+      model: string;
+      mime_type: string;
+      bytes: number;
+      token_usage?: {
+        total_tokens?: number;
+        total_input_tokens?: number;
+        total_output_tokens?: number;
+        input_tokens_by_modality?: Array<{ modality: string; tokens: number }>;
+        [key: string]: unknown;
+      } | null;
+    }>(
+      http.post("/dev/audio-transcription/", form)
+    );
+  },
 
   completeInterrogation: (sessionId: string) =>
     extract<{
@@ -2447,4 +2500,34 @@ export const auditApi = {
     ),
   getInstitutionStudentDetail: (studentId: string) =>
     extract<AuditInstitutionStudentDetail>(http.get(`/audits/institutions/students/${studentId}/`)),
+
+  // Defended-evidence rollup (dimension scores / seniority / skill evidence)
+  // — the counterpart to getInstitution* above, which is readiness-score
+  // (claim-derived). Each takes an optional `org` — unlike getInstitution*,
+  // which derives org strictly from the caller's own membership — so HQ
+  // superusers can browse any org via ?org=.
+  getVerificationOverview: (params?: { org?: string }) =>
+    extract<AuditInstitutionVerificationOverview>(
+      http.get("/audits/institutions/verification/overview/", { params })
+    ),
+  getVerificationStudents: (params?: { org?: string; page?: number; page_size?: number }) =>
+    extract<{ count: number; page: number; page_size: number; results: AuditInstitutionVerificationStudentRow[] }>(
+      http.get("/audits/institutions/verification/students/", { params })
+    ),
+  getVerificationStudentDetail: (studentId: string, params?: { org?: string }) =>
+    extract<AuditInstitutionVerificationStudentDetail>(
+      http.get(`/audits/institutions/verification/students/${studentId}/`, { params })
+    ),
+
+  // Cohort-level counterpart — same defended-evidence data, scoped to one
+  // cohort (bucketed dimension scores + a deterministic playbook on top).
+  getVerificationCohortReport: (cohortId: string, params?: { org?: string }) =>
+    extract<AuditInstitutionVerificationCohortReport>(
+      http.get(`/audits/institutions/verification/cohorts/${cohortId}/report/`, { params })
+    ),
+  exportVerificationCohortCSV: (cohortId: string, params?: { org?: string }) =>
+    http.get(`/audits/institutions/verification/cohorts/${cohortId}/report/export/`, {
+      params,
+      responseType: "blob",
+    }),
 };

@@ -3,7 +3,7 @@
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, GitBranch, Globe, Loader2 } from "lucide-react";
+import { ArrowLeft, GitBranch, Globe, Loader2, Mic, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,11 @@ import { VeloLoadingScreen } from "@/components/velo/velo-loading-screen";
 import { TranscriptPanel, type TranscriptEntry } from "@/components/velo/transcript-panel";
 import { ShareActions } from "@/components/velo/share-actions";
 import { trackFunnel, FUNNEL } from "@/lib/funnel";
+import {
+  startRealtimeTranscription,
+  type RealtimeTranscriptionEvent,
+  type RealtimeTranscriptionSession,
+} from "@/lib/realtime-audio-transcription";
 
 // The interrogation is VELO's core moment — a full-page session, not a side
 // drawer. Deep-linkable and refresh-safe: startProjectVerification is
@@ -73,7 +78,13 @@ export function VerificationSession({
   const [contextText, setContextText] = useState("");
   const [repoSearch, setRepoSearch] = useState("");
   const [githubConnecting, setGithubConnecting] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const realtimeTranscriptionRef = useRef<RealtimeTranscriptionSession | null>(null);
+  const voiceBaseAnswerRef = useRef("");
+  const voiceFinalPartsRef = useRef<string[]>([]);
 
   // A refresh mid-interview must never eat a half-written answer — the draft
   // persists per verification+question and clears on submit.
@@ -165,6 +176,107 @@ export function VerificationSession({
     if (done) await hook.completeAndFinalize();
   };
 
+  const composeVoiceAnswer = (interim = "") => {
+    const spoken = [...voiceFinalPartsRef.current, interim].filter(Boolean).join(" ");
+    const base = voiceBaseAnswerRef.current.trimEnd();
+    return [base, spoken].filter(Boolean).join(base && spoken ? "\n\n" : "");
+  };
+
+  const handleRealtimeTranscriptionEvent = (event: RealtimeTranscriptionEvent) => {
+    if (event.type === "transcript") {
+      if (event.is_final) {
+        voiceFinalPartsRef.current = [...voiceFinalPartsRef.current, event.transcript];
+        setAnswer(composeVoiceAnswer());
+      } else {
+        setAnswer(composeVoiceAnswer(event.transcript));
+      }
+      return;
+    }
+
+    if (event.type === "complete") {
+      setIsRecording(false);
+      setIsTranscribing(false);
+      return;
+    }
+
+    if (event.type === "error") {
+      setVoiceError(event.error);
+      setIsRecording(false);
+      setIsTranscribing(false);
+      return;
+    }
+
+    if (event.type === "closed" && event.code !== 1000) {
+      setVoiceError(event.reason || `Voice socket closed (${event.code}).`);
+      setIsRecording(false);
+      setIsTranscribing(false);
+    }
+  };
+
+  const startVoiceAnswer = async () => {
+    if (!hook.sessionId || hook.isLoading || !hook.currentQuestion || isTranscribing) return;
+
+    setVoiceError(null);
+    setIsTranscribing(true);
+    voiceBaseAnswerRef.current = answer;
+    voiceFinalPartsRef.current = [];
+    try {
+      realtimeTranscriptionRef.current = await startRealtimeTranscription({
+        onEvent: handleRealtimeTranscriptionEvent,
+      });
+      setIsRecording(true);
+      setIsTranscribing(false);
+    } catch (error) {
+      setVoiceError(error instanceof Error ? error.message : "Could not access microphone.");
+      realtimeTranscriptionRef.current = null;
+      setIsTranscribing(false);
+    }
+  };
+
+  const finishVoiceAnswer = async () => {
+    const session = realtimeTranscriptionRef.current;
+    if (!session) return;
+    realtimeTranscriptionRef.current = null;
+    setIsRecording(false);
+    setIsTranscribing(true);
+    try {
+      await session.stop();
+    } catch (error) {
+      setVoiceError(error instanceof Error ? error.message : "Could not transcribe audio.");
+      setIsTranscribing(false);
+    } finally {
+      window.setTimeout(() => setIsTranscribing(false), 500);
+    }
+  };
+
+  const stopVoiceAnswer = () => {
+    void finishVoiceAnswer();
+  };
+
+  const toggleVoiceAnswer = () => {
+    if (isRecording) stopVoiceAnswer();
+    else void startVoiceAnswer();
+  };
+
+  useEffect(() => {
+    if (hook.step !== "interrogating") return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "m" || (!event.metaKey && !event.ctrlKey)) return;
+      event.preventDefault();
+      toggleVoiceAnswer();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hook.step, hook.sessionId, hook.isLoading, hook.currentQuestion, isRecording, isTranscribing]);
+
+  useEffect(() => {
+    return () => {
+      void realtimeTranscriptionRef.current?.cancel();
+      realtimeTranscriptionRef.current = null;
+    };
+  }, []);
+
   const activeRail = railIndexFor(hook.step);
   const isBusy = hook.isLoading && (hook.step === "idle" || hook.step === "evidence") && !hook.verificationId;
 
@@ -195,12 +307,12 @@ export function VerificationSession({
           <h1 className="font-display text-xl font-semibold leading-snug tracking-tight">
             {projectTitle || <span className="text-muted-foreground">Untitled project</span>}
           </h1>
-          <div className="mt-4 flex items-center gap-2">
+          <div className="mt-4 flex items-center gap-1.5 sm:gap-2">
             {RAIL_STEPS.map((rail, i) => (
-              <div key={rail.key} className="flex flex-1 items-center gap-2 last:flex-none">
+              <div key={rail.key} className="flex min-w-0 flex-1 items-center gap-1.5 last:flex-none sm:gap-2">
                 <span
                   className={cn(
-                    "font-mono-ui text-[10px] font-medium uppercase tracking-wide",
+                    "min-w-0 truncate font-mono-ui text-[9px] font-medium uppercase tracking-wide sm:text-[10px]",
                     i < activeRail && "text-muted-foreground",
                     i === activeRail && "text-primary",
                     i > activeRail && "text-muted-foreground/50",
@@ -466,19 +578,52 @@ export function VerificationSession({
                     Shallow answers go deeper on the same area. Strong answers move to a harder
                     topic. Minimum 5 words. Press Enter to submit, Shift+Enter for a new line.
                   </p>
-                  <Button
-                    onClick={handleSubmitAnswer}
-                    disabled={
-                      hook.isLoading ||
-                      !hook.currentQuestion ||
-                      !answer.trim() ||
-                      answer.trim().split(/\s+/).length < 5
-                    }
-                  >
-                    {hook.isLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
-                    {hook.isLoading ? "Reviewing…" : "Submit answer"}
-                  </Button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      type="button"
+                      variant={isRecording ? "destructive" : "outline"}
+                      size="icon"
+                      onClick={toggleVoiceAnswer}
+                      disabled={hook.isLoading || !hook.currentQuestion || isTranscribing}
+                      title={isRecording ? "Stop voice input" : "Start voice input"}
+                      aria-label={isRecording ? "Stop voice input" : "Start voice input"}
+                    >
+                      {isTranscribing ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : isRecording ? (
+                        <Square className="size-4" />
+                      ) : (
+                        <Mic className="size-4" />
+                      )}
+                    </Button>
+                    <Button
+                      onClick={handleSubmitAnswer}
+                      disabled={
+                        hook.isLoading ||
+                        isRecording ||
+                        isTranscribing ||
+                        !hook.currentQuestion ||
+                        !answer.trim() ||
+                        answer.trim().split(/\s+/).length < 5
+                      }
+                    >
+                      {hook.isLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
+                      {hook.isLoading ? "Reviewing…" : "Submit answer"}
+                    </Button>
+                  </div>
                 </div>
+                {(isRecording || isTranscribing || voiceError) && (
+                  <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+                    {isRecording && <span className="text-destructive">Recording answer…</span>}
+                    {isTranscribing && (
+                      <>
+                        <Loader2 className="size-3 animate-spin text-primary" />
+                        <span>{isRecording ? "Connecting voice input…" : "Finalizing voice input…"}</span>
+                      </>
+                    )}
+                    {voiceError && <span className="text-destructive">{voiceError}</span>}
+                  </div>
+                )}
                 {hook.isLoading && (
                   <div className="mt-2 flex items-center justify-center">
                     <ThinkingMessages
