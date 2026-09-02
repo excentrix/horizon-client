@@ -55,10 +55,10 @@ export default function AuditReportPage() {
 
       {report ? (
         <div className="border-[3px] border-border p-6 space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-            <h2 className="text-lg font-semibold">{report.project_title}</h2>
-            <p className="text-sm text-muted-foreground">Audit Type: {report.audit_type}</p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold break-words">{report.project_title}</h2>
+              <p className="text-sm text-muted-foreground">Audit Type: {report.audit_type}</p>
             </div>
             <Badge variant={report.mentor_context_status === "confirmed" ? "default" : "secondary"}>
               {report.mentor_context_status === "confirmed"
@@ -126,14 +126,14 @@ export default function AuditReportPage() {
 
           <div className="border-[2px] border-border p-4">
             <p className="text-xs uppercase text-muted-foreground">Evidence Summary</p>
-            <pre className="mt-2 whitespace-pre-wrap text-xs text-foreground/90">
+            <pre className="mt-2 whitespace-pre-wrap break-words text-xs text-foreground/90">
               {JSON.stringify(report.evidence_summary ?? {}, null, 2)}
             </pre>
           </div>
           {report.resume_summary ? (
             <div className="border-[2px] border-border p-4">
               <p className="text-xs uppercase text-muted-foreground">Resume Summary</p>
-              <pre className="mt-2 whitespace-pre-wrap text-xs text-foreground/90">
+              <pre className="mt-2 whitespace-pre-wrap break-words text-xs text-foreground/90">
                 {JSON.stringify(report.resume_summary ?? {}, null, 2)}
               </pre>
             </div>

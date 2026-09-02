@@ -88,6 +88,11 @@ export function VerifiedProfileView({
                 )}
               </p>
             )}
+            {/* Deterministic (non-LLM) percentile anchor — only shown once
+                enough verified profiles exist to make it meaningful. */}
+            {vp.calibration_reference && !vp.calibration_reference.insufficient_data && vp.calibration_reference.note && (
+              <p className="caseline mt-1 text-muted-foreground">{vp.calibration_reference.note}</p>
+            )}
           </div>
         </div>
       )}
@@ -168,6 +173,27 @@ export function VerifiedProfileView({
                 className="status-strong inline-flex items-center gap-1.5 rounded-lg border border-(--status-strong)/40 bg-(--status-strong)/5 px-2.5 py-1 text-[13px] font-medium"
               >
                 <ShieldCheck className="size-3" /> <span className="text-foreground/90">{s.skill}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Claimed but never actually probed under interrogation — the honest
+          counterpart to "Backed by defended work" above. */}
+      {(vp.claimed_unverified_skills?.length ?? 0) > 0 && (
+        <div>
+          <p className="eyebrow mb-2 flex items-center gap-2">
+            <span className="eyebrow-dot" /> Claimed, not yet probed
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {vp.claimed_unverified_skills!.map((s) => (
+              <span
+                key={`${s.skill}-${s.project}`}
+                title={`Listed in ${s.project}'s tech stack, but the interrogation never asked about it`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1 text-[13px] font-medium text-muted-foreground"
+              >
+                <span className="text-foreground/70">{s.skill}</span>
               </span>
             ))}
           </div>

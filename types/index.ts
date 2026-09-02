@@ -1970,6 +1970,66 @@ export interface AuditInstitutionStudentDetail {
   };
 }
 
+// ── VELO institution verification rollup (defended-evidence, not claims) ───
+// Counterpart to AuditInstitution{Overview,StudentRow,StudentDetail} above,
+// which are readiness-score (claim-derived) — this is skill-evidence/
+// dimension-score/seniority-calibration (defended-evidence) derived. See
+// backend/apps/audit/services/institution_verification_service.py.
+
+export interface AuditInstitutionVerificationOverview {
+  total_students: number;
+  verified_count: number;
+  coverage_distribution: Record<string, number>;
+  seniority_distribution: { junior: number; mid: number; senior: number; unrated: number };
+  avg_dimension_scores: Record<string, number>;
+  top_verified_skills: Array<{ skill: string; count: number }>;
+  /** Curriculum-gap signal: claimed by students org-wide, never actually
+   *  probed under interrogation for anyone. */
+  top_claimed_unverified_skills: Array<{ skill: string; count: number }>;
+}
+
+export interface AuditInstitutionVerificationStudentRow {
+  student_id: UUID;
+  name: string;
+  email: string;
+  coverage: "none" | "unverified" | "limited" | "partial" | "strong";
+  confidence_note: string;
+  verified_project_count: number;
+  claimed_project_count: number;
+  seniority_calibration: { level: "junior" | "mid" | "senior"; held_to_reason: string } | null;
+  top_verified_skills: string[];
+  top_claimed_unverified_skills: string[];
+  generated_at: string;
+}
+
+export interface AuditInstitutionVerificationStudentDetail {
+  student_id: UUID;
+  name: string;
+  email: string;
+  // Same shape VerifiedProfileView already knows how to render — imported
+  // where used, from lib/api.ts, to avoid a duplicate/drifting definition.
+  verified_profile: import("@/lib/api").VerifiedProfileSummary;
+  generated_at: string;
+}
+
+/** Cohort-level counterpart to AuditInstitutionVerificationOverview — same
+ *  aggregate fields, plus bucketed dimension-score distributions and a
+ *  deterministic (non-LLM) playbook, mirroring the shape convention of the
+ *  existing readiness-score CohortReport. */
+export interface AuditInstitutionVerificationCohortReport {
+  cohort_id: UUID;
+  cohort_name: string;
+  total_students: number;
+  verified_count: number;
+  coverage_distribution: Record<string, number>;
+  seniority_distribution: { junior: number; mid: number; senior: number; unrated: number };
+  avg_dimension_scores: Record<string, number>;
+  top_verified_skills: Array<{ skill: string; count: number }>;
+  top_claimed_unverified_skills: Array<{ skill: string; count: number }>;
+  dimension_score_buckets: Record<string, Array<{ range: string; count: number }>>;
+  playbook: string[];
+}
+
 // ── PBL Types ──────────────────────────────────────────────────────────────
 
 export type ProjectPhase =

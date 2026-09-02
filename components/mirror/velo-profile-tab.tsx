@@ -718,12 +718,17 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
       )}
 
       {/* ── Two-column body ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+      {/* lg:items-start keeps grid items at their own content height instead
+          of stretching to the tallest row — required for the sticky sidebar
+          below to work without a `row-span` hack (a previous `row-span-[999]`
+          here, combined with `gap-5`, multiplied the row-gap across ~999
+          implicit grid rows and produced enormous unbounded height). */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
 
         {/* ── Right column: ATS + Fit + Actions (below on mobile) ────────── */}
         <aside
           className={cn(
-            "order-last lg:order-none lg:col-start-2 lg:row-start-1 lg:row-span-[999]",
+            "order-last lg:order-none lg:col-start-2",
             embedded
               ? "border-t border-border/60 lg:border-l lg:border-t-0 lg:border-border/60"
               : "mt-5 lg:mt-0",
@@ -970,6 +975,28 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
                         className="inline-flex items-center gap-1 rounded-lg border border-(--status-strong)/40 bg-(--status-strong)/10 px-2 py-0.5 text-[12px] font-medium text-(--status-strong)"
                       >
                         <ShieldCheck className="h-3 w-3" /> {s.skill}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Claimed but never actually probed under interrogation — the
+                  honest counterpart to "Backed by defended work": these look
+                  the same on the resume, but only one group was tested. */}
+              {(verifiedProfile.claimed_unverified_skills?.length ?? 0) > 0 && (
+                <div className="mb-4">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Claimed, not yet probed
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {verifiedProfile.claimed_unverified_skills!.map((s) => (
+                      <span
+                        key={`${s.skill}-${s.project}`}
+                        title={`Listed in ${s.project}'s tech stack, but the interrogation never asked about it`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/30 px-2 py-0.5 text-[12px] font-medium text-muted-foreground"
+                      >
+                        <Shield className="h-3 w-3" /> {s.skill}
                       </span>
                     ))}
                   </div>

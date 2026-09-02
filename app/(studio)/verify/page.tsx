@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { VerifiedProfileView } from "@/components/verified/verified-profile-view";
+import { VeloProfileTab } from "@/components/mirror/velo-profile-tab";
 import { RadarChart, type RadarAxis } from "@/components/velo/radar-chart";
 import { ShareActions } from "@/components/velo/share-actions";
 import { VerdictStamp, DECIDED_STATUSES } from "@/components/velo/verdict-stamp";
@@ -348,7 +349,14 @@ export default function VerifyPage() {
               <StatTile
                 value={verifiedProfile.seniority_calibration.level}
                 label="calibrated level"
-                title={verifiedProfile.seniority_calibration.held_to_reason}
+                title={[
+                  verifiedProfile.seniority_calibration.held_to_reason,
+                  verifiedProfile.calibration_reference?.insufficient_data === false
+                    ? verifiedProfile.calibration_reference.note
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" — ")}
               />
             )}
           </div>
@@ -359,6 +367,7 @@ export default function VerifyPage() {
         <TabsList className="mb-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="defend">Defend</TabsTrigger>
+          <TabsTrigger value="analysis">Resume analysis</TabsTrigger>
           <TabsTrigger value="verified">Recruiter view</TabsTrigger>
         </TabsList>
 
@@ -470,6 +479,14 @@ export default function VerifyPage() {
             <GithubReposPicker onPick={handlePickRepo} pickingUrl={pickingUrl} />
             <AddProjectForm onAdd={handleAddProject} />
           </div>
+        </TabsContent>
+
+        {/* ── Resume analysis — the full ATS breakdown / projects / skills /
+            gaps / employer view, embedded directly (was a link out to the
+            standalone /analysis page; also available there for a full-width
+            read). ── */}
+        <TabsContent value="analysis">
+          <VeloProfileTab embedded />
         </TabsContent>
 
         {/* ── Recruiter view — exactly what they see ───────────────────── */}
