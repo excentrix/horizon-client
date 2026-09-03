@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useEffect, useRef } from "react";
 import {
   BarChart3,
+  AudioLines,
   ClipboardList,
   Compass,
   FlaskConical,
@@ -50,6 +51,7 @@ const PlansIcon = ({ className }: IconProps) => <ClipboardList className={classN
 const RoadmapIcon = ({ className }: IconProps) => <Route className={className} />;
 const ProgressIcon = ({ className }: IconProps) => <TrendingUp className={className} />;
 const SimLabIcon = ({ className }: IconProps) => <FlaskConical className={className} />;
+const AudioTestIcon = ({ className }: IconProps) => <AudioLines className={className} />;
 const InboxIcon = ({ className }: IconProps) => <Inbox className={className} />;
 const OverviewIcon = ({ className }: IconProps) => <Compass className={className} />;
 const AuditIcon = ({ className }: IconProps) => <ShieldCheck className={className} />;
@@ -109,10 +111,16 @@ export function StudioDockNav() {
       : isEducator
         ? EDU_ITEMS
         : studentItems;
+  const roleItems: DockItem[] = isDev
+    ? [
+        ...baseItems,
+        { href: "/dev/audio-transcription", title: "Audio", icon: <AudioTestIcon className="h-full w-full" /> },
+      ]
+    : baseItems;
   const items: DockItem[] =
     !isSuperUser && !isAdmin && !isEducator && !isMobile
       ? [
-          ...baseItems,
+          ...roleItems,
           {
             title: "Inbox",
             icon: <InboxIcon className="h-full w-full" />,
@@ -120,7 +128,7 @@ export function StudioDockNav() {
             isActive: inboxOpen,
           },
         ]
-      : baseItems;
+      : roleItems;
 
   const visibleItems = items.filter(
     (item: DockItem) => !item.feature || flags[item.feature],

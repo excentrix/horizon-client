@@ -45,6 +45,10 @@ import {
   AuditInstitutionOverview,
   AuditInstitutionStudentRow,
   AuditInstitutionStudentDetail,
+  AuditInstitutionVerificationOverview,
+  AuditInstitutionVerificationStudentRow,
+  AuditInstitutionVerificationStudentDetail,
+  AuditInstitutionVerificationCohortReport,
   VeloOnboardingSession,
   VeloMentorReviewResponse,
   VeloOnboardingTrack,
@@ -62,9 +66,24 @@ import {
   MentorReviewShape,
   DimensionScores,
   ClaimTested,
+  CitedFile,
+  InspectorEvent,
+  VerificationSourceTree,
+  VerificationSourceFile,
+  SessionIntegrity,
 } from "@/types";
 export { INTERROGATION_DIMENSIONS } from "@/types";
-export type { DimensionScore, DimensionScores, ClaimTested, TranscriptTurn } from "@/types";
+export type {
+  DimensionScore,
+  DimensionScores,
+  ClaimTested,
+  TranscriptTurn,
+  CitedFile,
+  InspectorEvent,
+  VerificationSourceTree,
+  VerificationSourceFile,
+  SessionIntegrity,
+} from "@/types";
 
 const extract = <T>(promise: Promise<AxiosResponse<T>>) =>
   promise.then((response) => response.data);
@@ -143,9 +162,12 @@ export const authApi = {
       http.post("/auth/profile/resume/confirm/", payload)
     ),
 
-  reanalyseResume: () =>
+  reanalyseResume: (targetRole?: string) =>
     extract<{ status: string; job_id: string; is_jd_reanalysis: boolean }>(
-      http.post("/auth/profile/resume/reanalyse/")
+      http.post(
+        "/auth/profile/resume/reanalyse/",
+        targetRole?.trim() ? { target_role: targetRole.trim() } : {}
+      )
     ),
 
   reanalyseWithJD: (jobDescription: string, targetRole?: string) =>
@@ -1996,13 +2018,60 @@ export type VerifiedProfileSummary = {
   knowledge_gaps?: string[];
   recommended_next_steps?: { apply_now: string[]; close_before_senior: string[] } | null;
   examiner_note?: string;
-  verified_skills: Array<{ skill: string; via_projects: string[] }>;
+  verified_skills: Array<{
+    skill: string;
+    via_projects: string[];
+    citations?: Array<{ skill: string; project: string; question_index: number; evidence: string }>;
+  }>;
+  /** Skills a verified project's declared tech stack claims but the
+   *  interrogation never actually probed/substantiated — surfaced honestly
+   *  instead of being folded into `verified_skills`. */
+  claimed_unverified_skills?: Array<{ skill: string; project: string }>;
   contradictions: Array<{
     project_title: string;
     verdict: "suspicious" | "failed";
     claimed_skills: string[];
     note: string;
   }>;
+  /** Evidence-gated skills + claimed-but-unprobed skills + per-project stack
+   *  reconciliation, grouped under the tech-stack areas VELO detected in the
+   *  repos. Replaces the flat `verified_skills` / `claimed_unverified_skills`
+   *  chip lists in the UI. */
+  capability_by_stack?: CapabilityByStackRow[];
+  /** Deterministic (non-LLM) cross-candidate percentile anchor for
+   *  `seniority_calibration` — null until enough verified profiles exist
+   *  to form a reference distribution. */
+  calibration_reference?: {
+    insufficient_data: boolean;
+    total_samples: number;
+    per_dimension_percentile?: Record<string, number>;
+    note?: string | null;
+  } | null;
+};
+
+/** A tech VELO detected by reading the repo's actual source (manifest
+ *  dependency / import / config), not the résumé's claimed list. */
+export type DetectedStackItem = {
+  name: string;
+  category: "language" | "framework" | "library" | "datastore" | "infra" | "testing" | "build" | "other";
+  evidence: string;
+  confidence: "high" | "medium";
+};
+
+/** One résumé-claimed-vs-repo-detected verdict per technology. */
+export type StackReconciliationItem = {
+  tech: string;
+  source: "resume" | "code" | "both";
+  status: "confirmed" | "undisclosed" | "unsubstantiated" | "partial";
+  note: string;
+};
+
+export type CapabilityByStackRow = {
+  area: string;
+  category: DetectedStackItem["category"];
+  status: "verified" | "claimed_unverified" | "undisclosed_in_code" | "unsubstantiated" | "partial";
+  evidence_count: number;
+  via_projects: string[];
 };
 
 export type DefendedProject = {
@@ -2014,14 +2083,28 @@ export type DefendedProject = {
   expertise_estimate: string;
   questions_answered: number;
   repos: Array<{ url: string; label: string; language?: string }>;
+  detected_stack?: DetectedStackItem[] | null;
+  stack_reconciliation?: StackReconciliationItem[] | null;
   verified_at: string | null;
 };
 
 export type PublicVerifiedProfile = {
   candidate: { name: string; username: string };
   claimed_role: string | null;
+  /** True unless a valid HiringProfileAccessRequest token was presented —
+   *  when true, `verified_profile`/`defended_projects` are a trimmed teaser
+   *  (coverage + counts only, no dimension scores/contradictions/examiner
+   *  notes/narrative). See PublicVerifiedProfileAPIView. */
+  is_teaser: boolean;
   verified_profile: VerifiedProfileSummary;
   defended_projects: DefendedProject[];
+};
+
+export type HiringProfileAccessLogEntry = {
+  requester_name: string;
+  requester_company: string;
+  role_hiring_for: string;
+  created_at: string;
 };
 
 export const auditApi = {
@@ -2048,11 +2131,27 @@ export const auditApi = {
   getPublicReport: (auditId: string) =>
     extract<AuditReport>(http.get(`/audits/${auditId}/public/`)),
 
-  // HR-facing "assessment of a person" — only verified facts, no private claim layer.
-  getPublicVerifiedProfile: (username: string) =>
+  // HR-facing "assessment of a person" — only verified facts, no private
+  // claim layer. Without `token`, returns a teaser only (see `is_teaser`) —
+  // the full evidence-grade dossier requires a valid HiringProfileAccessRequest
+  // token, minted by requestHiringProfileAccess below.
+  getPublicVerifiedProfile: (username: string, token?: string) =>
     extract<PublicVerifiedProfile>(
-      http.get(`/verified-profile/${encodeURIComponent(username)}/`)
+      http.get(`/verified-profile/${encodeURIComponent(username)}/`, {
+        params: token ? { token } : undefined,
+      })
     ),
+
+  requestHiringProfileAccess: (
+    username: string,
+    payload: { requester_name: string; requester_email: string; requester_company: string; role_hiring_for?: string }
+  ) =>
+    extract<{ access_token: string; expires_at: string }>(
+      http.post(`/hiring-profile/${encodeURIComponent(username)}/request-access/`, payload)
+    ),
+
+  getHiringProfileAccessLog: () =>
+    extract<{ results: HiringProfileAccessLogEntry[] }>(http.get("/hiring-profile/access-log/")),
 
   submitNarrative: (auditId: string, payload: FormData) =>
     extract<{ status: string }>(
@@ -2142,6 +2241,9 @@ export const auditApi = {
       question: string | null;
       question_index: number;
       area?: string | null;
+      cited_files?: CitedFile[];
+      stack_covered?: number;
+      stack_total?: number;
       total_questions: number | null;  // null for adaptive project verification
       adaptive?: boolean;
       question_generation?: { source: "ai" | "template" | "static"; fallback_reason: string };
@@ -2149,16 +2251,59 @@ export const auditApi = {
       http.post("/interrogations/start/", { audit_id: auditId })
     ),
 
-  answerInterrogation: (sessionId: string, payload: { answer: string; latency_ms?: number }) =>
+  answerInterrogation: (
+    sessionId: string,
+    payload: { answer: string; latency_ms?: number; inspector_events?: InspectorEvent[] },
+  ) =>
     extract<{
       status: string;
       next_question: string | null;
       question_index?: number;
       area?: string | null;
+      cited_files?: CitedFile[];
+      stack_covered?: number;
+      stack_total?: number;
       total_questions?: number;
     }>(
       http.post(`/interrogations/${sessionId}/answer/`, payload)
     ),
+
+  flushInspectorEvents: (sessionId: string, events: InspectorEvent[]) =>
+    extract<{ status: string; stored: number }>(
+      http.post(`/interrogations/${sessionId}/inspector-events/`, { events })
+    ),
+
+  transcribeInterrogationAnswer: (sessionId: string, audio: Blob) => {
+    const form = new FormData();
+    const extension = audio.type.includes("wav") ? "wav" : audio.type.includes("webm") ? "webm" : "ogg";
+    form.append("audio", audio, `answer.${extension}`);
+    form.append("mime_type", audio.type || "audio/webm");
+    return extract<{ transcript: string; model: string }>(
+      http.post(`/interrogations/${sessionId}/transcribe-answer/`, form)
+    );
+  },
+
+  transcribeDevAudio: (audio: Blob) => {
+    const form = new FormData();
+    const extension = audio.type.includes("wav") ? "wav" : audio.type.includes("webm") ? "webm" : "ogg";
+    form.append("audio", audio, `sample.${extension}`);
+    form.append("mime_type", audio.type || "audio/wav");
+    return extract<{
+      transcript: string;
+      model: string;
+      mime_type: string;
+      bytes: number;
+      token_usage?: {
+        total_tokens?: number;
+        total_input_tokens?: number;
+        total_output_tokens?: number;
+        input_tokens_by_modality?: Array<{ modality: string; tokens: number }>;
+        [key: string]: unknown;
+      } | null;
+    }>(
+      http.post("/dev/audio-transcription/", form)
+    );
+  },
 
   completeInterrogation: (sessionId: string) =>
     extract<{
@@ -2216,6 +2361,12 @@ export const auditApi = {
         confidence: Record<string, number>;
         missing_prompts: string[];
         role_readiness_narrative: string;
+        /** The role the deep analysis was scored against (effective role after
+         *  fallback to the résumé's current_role). Empty = role-agnostic. */
+        target_role?: string;
+        target_company?: string;
+        /** True when the analysis was targeted at a pasted job description. */
+        analysed_against_jd?: boolean;
         deep_analysis?: {
           ats_score?: number;
           ats_breakdown?: {
@@ -2339,6 +2490,8 @@ export const auditApi = {
           verdict_summary?: string | null;
           verified_at?: string | null;
           claims_tested?: ClaimTested[] | null;
+          detected_stack?: DetectedStackItem[] | null;
+          stack_reconciliation?: StackReconciliationItem[] | null;
         }>;
         verified_profile?: VerifiedProfileSummary;
         created_at: string;
@@ -2356,8 +2509,34 @@ export const auditApi = {
       project: { index: number; title: string; technologies: string[]; description: string };
       status: string;
       github_check_status: string;
+      checked_repos: Array<{
+        url: string;
+        label?: string;
+        check_status?: "passed" | "failed" | "skipped";
+        language?: string;
+        description?: string;
+        reason?: string;
+      }>;
+      has_session: boolean;
     }>(
       http.post("/project-verifications/", { snapshot_id: snapshotId, project_index: projectIndex })
+    ),
+
+  /** Resume flow: throw away the in-progress interrogation and re-run it from
+   *  question one. `changeRepo` also drops the repos + code digest so the
+   *  caller can pick a different repo. */
+  restartInterrogation: (verificationId: string, changeRepo = false) =>
+    extract<{
+      verification_id: string;
+      audit_id: string | null;
+      status: string;
+      checked_repos: Array<{ url: string; label?: string; check_status?: string }>;
+      github_check_status: string;
+      change_repo: boolean;
+    }>(
+      http.post(`/project-verifications/${verificationId}/restart-interrogation/`, {
+        change_repo: changeRepo,
+      })
     ),
 
   checkRepos: (
@@ -2421,6 +2600,7 @@ export const auditApi = {
       verdict_summary: string;
       badge: boolean;
       verified_at: string | null;
+      session_integrity?: SessionIntegrity | null;
     }>(
       http.post(`/project-verifications/${verificationId}/finalize/`)
     ),
@@ -2431,6 +2611,19 @@ export const auditApi = {
       status: string;
       audit_id: string;
     }>(http.post(`/project-verifications/${verificationId}/reset/`)),
+
+  // ── Read-only code inspector (pinned to the analysed commit) ──────────────
+  getVerificationSource: (verificationId: string, opts?: { rebuild?: boolean }) =>
+    extract<VerificationSourceTree>(
+      http.get(
+        `/project-verifications/${verificationId}/source/${opts?.rebuild ? "?rebuild=1" : ""}`,
+      )
+    ),
+
+  getVerificationSourceFile: (verificationId: string, path: string) =>
+    extract<VerificationSourceFile>(
+      http.get(`/project-verifications/${verificationId}/source/file/`, { params: { path } })
+    ),
 
   reviewVeloMentorIntake: (auditId: string) =>
     extract<VeloMentorReviewResponse>(http.post(`/audits/${auditId}/mentor-intake/review/`)),
@@ -2447,4 +2640,41 @@ export const auditApi = {
     ),
   getInstitutionStudentDetail: (studentId: string) =>
     extract<AuditInstitutionStudentDetail>(http.get(`/audits/institutions/students/${studentId}/`)),
+
+  // Defended-evidence rollup (dimension scores / seniority / skill evidence)
+  // — the counterpart to getInstitution* above, which is readiness-score
+  // (claim-derived). Each takes an optional `org` — unlike getInstitution*,
+  // which derives org strictly from the caller's own membership — so HQ
+  // superusers can browse any org via ?org=.
+  getVerificationOverview: (params?: { org?: string }) =>
+    extract<AuditInstitutionVerificationOverview>(
+      http.get("/audits/institutions/verification/overview/", { params })
+    ),
+  getVerificationStudents: (params?: { org?: string; page?: number; page_size?: number }) =>
+    extract<{ count: number; page: number; page_size: number; results: AuditInstitutionVerificationStudentRow[] }>(
+      http.get("/audits/institutions/verification/students/", { params })
+    ),
+  getVerificationStudentDetail: (studentId: string, params?: { org?: string }) =>
+    extract<AuditInstitutionVerificationStudentDetail>(
+      http.get(`/audits/institutions/verification/students/${studentId}/`, { params })
+    ),
+
+  // Cohort-level counterpart — same defended-evidence data, scoped to one
+  // cohort (bucketed dimension scores + a deterministic playbook on top).
+  getVerificationCohortReport: (cohortId: string, params?: { org?: string }) =>
+    extract<AuditInstitutionVerificationCohortReport>(
+      http.get(`/audits/institutions/verification/cohorts/${cohortId}/report/`, { params })
+    ),
+  exportVerificationCohortCSV: (cohortId: string, params?: { org?: string }) =>
+    http.get(`/audits/institutions/verification/cohorts/${cohortId}/report/export/`, {
+      params,
+      responseType: "blob",
+    }),
+  // Server-rendered PDF of the cohort report — a standalone document, not a
+  // browser-print of the dashboard.
+  exportVerificationCohortPDF: (cohortId: string, params?: { org?: string }) =>
+    http.get(`/audits/institutions/verification/cohorts/${cohortId}/report/pdf/`, {
+      params,
+      responseType: "blob",
+    }),
 };

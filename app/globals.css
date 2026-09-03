@@ -300,6 +300,20 @@
     @apply bg-background text-foreground;
     font-family: var(--font-body), "Instrument Sans", system-ui, sans-serif;
   }
+
+  /* Chrome's print/"Save as PDF" path drops background-color, background-
+     image and box-shadow by default (the "Background graphics" checkbox is
+     off unless the user opts in) — every card fill, status-badge tint, and
+     the grain texture on the printable reports (candidate report, cohort
+     PDF) would otherwise vanish, leaving flat black-on-white text with only
+     thin borders. Force the design system's fills to print regardless of
+     that checkbox, on every printable surface, not just one page. */
+  @media print {
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+  }
 }
 
 @layer utilities {
@@ -358,6 +372,17 @@
 
   .rule {
     @apply h-px w-full bg-border;
+  }
+
+  /* Code-inspector: the line(s) an interrogation question cites. */
+  .velo-cite-line {
+    background: color-mix(in oklch, var(--primary) 14%, transparent);
+    box-shadow: inset 2px 0 0 var(--primary);
+    animation: velo-cite-pulse 1.6s ease-out 1;
+  }
+  @keyframes velo-cite-pulse {
+    0% { background: color-mix(in oklch, var(--primary) 38%, transparent); }
+    100% { background: color-mix(in oklch, var(--primary) 14%, transparent); }
   }
 
   /* Signature "warm print" grain — put on a `relative` element. */
@@ -451,7 +476,7 @@
   .stamp-in { animation: velo-stamp 0.45s 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
   @media (prefers-reduced-motion: reduce) {
-    .rise-in, .rise-in-1, .rise-in-2, .rise-in-3, .stamp-in { animation: none; }
+    .rise-in, .rise-in-1, .rise-in-2, .rise-in-3, .stamp-in, .velo-cite-line { animation: none; }
   }
 
   .terminal-bullet {

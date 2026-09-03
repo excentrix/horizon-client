@@ -74,13 +74,22 @@ export function usePortfolioArtifacts() {
 // HR-facing verified profile (evidence-only). Independent of portfolio setup —
 // works off the user's verification record, so it can render even when no
 // public portfolio exists. 404 when the user has no defended work.
-export function usePublicVerifiedProfile(username: string) {
+export function usePublicVerifiedProfile(username: string, token?: string) {
   return useQuery({
-    queryKey: ["public-verified-profile", username],
-    queryFn: () => auditApi.getPublicVerifiedProfile(username),
+    queryKey: ["public-verified-profile", username, token ?? null],
+    queryFn: () => auditApi.getPublicVerifiedProfile(username, token),
     enabled: Boolean(username),
     retry: false,
     staleTime: 300_000,
+  });
+}
+
+export function useHiringProfileAccessLog(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ["hiring-profile-access-log"],
+    queryFn: () => auditApi.getHiringProfileAccessLog(),
+    enabled,
+    staleTime: 60_000,
   });
 }
 

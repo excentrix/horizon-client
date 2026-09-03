@@ -15,6 +15,11 @@ import { toast } from "sonner";
 import { telemetry } from "@/lib/telemetry";
 import { captureAcquisitionSource, trackFunnel, FUNNEL } from "@/lib/funnel";
 import { authApi } from "@/lib/api";
+import {
+  clearSessionTokens,
+  refreshSessionTokens,
+  setClientSessionTokens,
+} from "@/lib/http-client";
 import { supabase } from "@/lib/supabase/client";
 import { resolveHomeRoute } from "@/lib/pathfinder-routing";
 import type {
@@ -34,30 +39,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-function setSessionTokens(
-  access?: string,
-  refresh?: string,
-  remember = false
-) {
-  const cookieOptions = {
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    ...(remember ? { expires: 14 } : {}),
-  };
-
-  if (access) {
-    Cookies.set("accessToken", access, cookieOptions);
-  }
-  if (refresh) {
-    Cookies.set("refreshToken", refresh, cookieOptions);
-  }
-}
-
-function clearSessionTokens() {
-  Cookies.remove("accessToken");
-  Cookies.remove("refreshToken");
-}
 
 // Routes viewable without a session — auth pages, OAuth callback, and the
 // public shareable surfaces (VELO credentials, public portfolios). A logged-out
@@ -104,16 +85,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // First-touch acquisition source (UTM / ref / referrer), captured once.
     captureAcquisitionSource();
-    const accessToken = Cookies.get("accessToken");
-    if (!accessToken) {
-      setIsLoading(false);
-      return;
-    }
 
-    fetchProfile().catch(() => {
-      // handled in fetchProfile
-    });
-  }, [fetchProfile]);
+    let cancelled = false;
+
+    const bootstrapSession = async () => {
+      const accessToken = Cookies.get("accessToken");
+      const refreshToken = Cookies.get("refreshToken") ?? Cookies.get("refresh");
+
+      if (!accessToken && !refreshToken) {
+        if (!cancelled) setIsLoading(false);
+        return;
+      }
+
+      try {
+        if (!accessToken) {
+          const refreshedSession = await refreshSessionTokens();
+          if (!refreshedSession?.accessToken) {
+            throw new Error("No refreshable session");
+          }
+        }
+
+        if (!cancelled) {
+          await fetchProfile();
+        }
+      } catch {
+        if (!cancelled) {
+          clearSessionTokens();
+          setUser(null);
+          setIsLoading(false);
+          if (!isPublicPath(pathname)) {
+            router.replace("/login");
+          }
+        }
+      }
+    };
+
+    bootstrapSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchProfile, pathname, router]);
 
   const syncSupabaseSession = useCallback(
     async (session: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"]) => {
@@ -157,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const access = response.session.access_token ?? response.session.access ?? undefined;
         const refresh = response.session.refresh_token ?? response.session.refresh ?? undefined;
 
-        setSessionTokens(access, refresh, true);
+        setClientSessionTokens(access, refresh, true);
         setUser(response.user);
 
         telemetry.identify(response.user.id ?? response.user.email, {
@@ -225,7 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           response.session.access_token ?? response.session.access ?? undefined;
         const refresh =
           response.session.refresh_token ?? response.session.refresh ?? undefined;
-        setSessionTokens(access, refresh, Boolean(payload.remember_me));
+        setClientSessionTokens(access, refresh, Boolean(payload.remember_me));
         setUser(response.user);
         // Identify user in PostHog
         telemetry.identify(response.user.id ?? response.user.email, {
@@ -298,7 +310,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           loginResponse.session.refresh_token ??
           loginResponse.session.refresh ??
           undefined;
-        setSessionTokens(access, refresh, true);
+        setClientSessionTokens(access, refresh, true);
         setUser(loginResponse.user);
         // Capture signup event
         telemetry.track('user_signed_up', {

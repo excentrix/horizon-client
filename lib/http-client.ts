@@ -26,7 +26,9 @@ const resolveDevApiBaseUrl = () => {
 };
 
 const API_BASE_URL = resolveDevApiBaseUrl();
-const REFRESH_ENDPOINT = process.env.NEXT_PUBLIC_AUTH_REFRESH_ENDPOINT;
+const REFRESH_ENDPOINT =
+  process.env.NEXT_PUBLIC_AUTH_REFRESH_ENDPOINT ?? "/auth/token/refresh/";
+const REMEMBER_SESSION_COOKIE = "authRemember";
 
 type RefreshResponse = {
   access_token?: string;
@@ -35,9 +37,86 @@ type RefreshResponse = {
   refresh?: string;
 };
 
-const clearSessionTokens = () => {
+const isRememberedSession = () => Cookies.get(REMEMBER_SESSION_COOKIE) === "1";
+
+const getSessionCookieOptions = (remember = isRememberedSession()) => ({
+  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production",
+  ...(remember ? { expires: 14 } : {}),
+});
+
+export const setClientSessionTokens = (
+  access?: string,
+  refresh?: string,
+  remember = isRememberedSession(),
+) => {
+  const cookieOptions = getSessionCookieOptions(remember);
+
+  if (remember) {
+    Cookies.set(REMEMBER_SESSION_COOKIE, "1", cookieOptions);
+  } else {
+    Cookies.remove(REMEMBER_SESSION_COOKIE);
+  }
+
+  if (access) {
+    Cookies.set("accessToken", access, cookieOptions);
+  }
+  if (refresh) {
+    Cookies.set("refreshToken", refresh, cookieOptions);
+  }
+};
+
+export const clearSessionTokens = () => {
   Cookies.remove("accessToken");
   Cookies.remove("refreshToken");
+  Cookies.remove(REMEMBER_SESSION_COOKIE);
+};
+
+const resolveRefreshUrl = () => {
+  if (/^https?:\/\//i.test(REFRESH_ENDPOINT)) {
+    return REFRESH_ENDPOINT;
+  }
+
+  if (!API_BASE_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL must be configured in non-development environments");
+  }
+
+  const endpoint = REFRESH_ENDPOINT.startsWith("/")
+    ? REFRESH_ENDPOINT
+    : `/${REFRESH_ENDPOINT}`;
+  return `${API_BASE_URL}${endpoint}`;
+};
+
+export const refreshSessionTokens = async () => {
+  const hadAccessToken = Boolean(Cookies.get("accessToken"));
+  const refreshToken = Cookies.get("refreshToken") ?? Cookies.get("refresh");
+
+  if (!refreshToken) {
+    return null;
+  }
+
+  const { data } = await axios.post<RefreshResponse>(
+    resolveRefreshUrl(),
+    { refresh: refreshToken },
+  );
+
+  const accessToken = data.access_token ?? data.access;
+  const nextRefreshToken = data.refresh_token ?? data.refresh;
+
+  if (!accessToken) {
+    return null;
+  }
+
+  setClientSessionTokens(
+    accessToken,
+    nextRefreshToken,
+    isRememberedSession() || !hadAccessToken,
+  );
+
+  return {
+    accessToken,
+    refreshToken: nextRefreshToken ?? refreshToken,
+  };
 };
 
 interface FailedRequest {
@@ -120,9 +199,6 @@ http.interceptors.response.use(
       (status === 403 && /not_authenticated|credentials were not provided|not valid|token/i.test(detail));
 
     if (isAuthFailure && !originalRequest._retry) {
-      if (!REFRESH_ENDPOINT) {
-        return Promise.reject(error);
-      }
       if (isRefreshing) {
         return queueRequest(originalRequest);
       }
@@ -131,39 +207,16 @@ http.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        if (!API_BASE_URL) {
+        const refreshedSession = await refreshSessionTokens();
+        if (!refreshedSession?.accessToken) {
           throw error;
-        }
-        const refreshToken =
-          Cookies.get("refreshToken") ?? Cookies.get("refresh");
-
-        if (!refreshToken) {
-          throw error;
-        }
-
-        const { data } = await axios.post<RefreshResponse>(
-          `${API_BASE_URL}${REFRESH_ENDPOINT}`,
-          { refresh: refreshToken },
-        );
-
-        const newAccessToken =
-          data.access_token ?? data.access ?? Cookies.get("accessToken");
-
-        if (!newAccessToken) {
-          throw error;
-        }
-
-        Cookies.set("accessToken", newAccessToken);
-        const nextRefreshToken = data.refresh_token ?? data.refresh;
-        if (nextRefreshToken) {
-          Cookies.set("refreshToken", nextRefreshToken);
         }
 
         if (originalRequest.headers) {
-          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+          originalRequest.headers.Authorization = `Bearer ${refreshedSession.accessToken}`;
         }
 
-        processQueue(null, newAccessToken, http);
+        processQueue(null, refreshedSession.accessToken, http);
 
         return http(originalRequest);
       } catch (refreshError) {

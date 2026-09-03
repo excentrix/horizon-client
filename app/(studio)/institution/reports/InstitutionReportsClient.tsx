@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { institutionsApi, CohortReport } from "@/lib/api";
+import { FileText } from "lucide-react";
+import { institutionsApi, auditApi, CohortReport } from "@/lib/api";
+import type { AuditInstitutionVerificationCohortReport } from "@/types";
 import { telemetry } from "@/lib/telemetry";
 import { useInstitutionCohort } from "../_lib/useInstitutionCohort";
 import { useInstitutionScope } from "../_lib/useInstitutionScope";
@@ -18,6 +20,8 @@ export default function InstitutionReportsClient() {
   const { cohorts, selectedCohort, setSelectedCohort } = useInstitutionCohort({ withDashboard: false });
   const [report, setReport] = useState<CohortReport | null>(null);
   const [loading, setLoading] = useState(false);
+  const [veloReport, setVeloReport] = useState<AuditInstitutionVerificationCohortReport | null>(null);
+  const [veloLoading, setVeloLoading] = useState(false);
 
   useEffect(() => {
     if (!selectedCohort) return;
@@ -27,6 +31,16 @@ export default function InstitutionReportsClient() {
       .then((data) => setReport(data))
       .catch((err) => telemetry.error("Failed to load cohort report", { err }))
       .finally(() => setLoading(false));
+  }, [selectedCohort, selectedOrgId]);
+
+  useEffect(() => {
+    if (!selectedCohort) return;
+    setVeloLoading(true);
+    auditApi
+      .getVerificationCohortReport(selectedCohort, { org: selectedOrgId || undefined })
+      .then((data) => setVeloReport(data))
+      .catch((err) => telemetry.error("Failed to load VELO verification cohort report", { err }))
+      .finally(() => setVeloLoading(false));
   }, [selectedCohort, selectedOrgId]);
 
   const riskPie = useMemo(() => {
@@ -90,6 +104,66 @@ export default function InstitutionReportsClient() {
     const link = document.createElement("a");
     link.href = url;
     link.download = `cohort_${report.cohort_id}_report.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportVeloStudents = async () => {
+    if (!selectedCohort) return;
+    try {
+      const response = await auditApi.exportVerificationCohortCSV(selectedCohort, {
+        org: selectedOrgId || undefined,
+      });
+      const blob = new Blob([response.data], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `cohort_${selectedCohort}_verification_export.csv`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      telemetry.error("Failed to export VELO verification cohort CSV", { err });
+    }
+  };
+
+  const handleExportVeloReportPDF = async () => {
+    if (!selectedCohort) return;
+    try {
+      const response = await auditApi.exportVerificationCohortPDF(selectedCohort, {
+        org: selectedOrgId || undefined,
+      });
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `velo-cohort-report-${selectedCohort}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      telemetry.error("Failed to export VELO verification cohort PDF", { err });
+    }
+  };
+
+  const handleExportVeloReport = () => {
+    if (!veloReport) return;
+    const lines: string[][] = [
+      ["metric", "value"],
+      ["total_students", String(veloReport.total_students)],
+      ["verified_count", String(veloReport.verified_count)],
+    ];
+    Object.entries(veloReport.coverage_distribution).forEach(([k, v]) => lines.push([`coverage_${k}`, String(v)]));
+    Object.entries(veloReport.seniority_distribution).forEach(([k, v]) => lines.push([`seniority_${k}`, String(v)]));
+    Object.entries(veloReport.avg_dimension_scores).forEach(([k, v]) => lines.push([`avg_${k}`, String(v)]));
+    veloReport.top_verified_skills.forEach((s) => lines.push([`verified_skill_${s.skill}`, String(s.count)]));
+    veloReport.top_claimed_unverified_skills.forEach((s) =>
+      lines.push([`claimed_unverified_skill_${s.skill}`, String(s.count)])
+    );
+    const csv = lines.map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `cohort_${veloReport.cohort_id}_verification_report.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -363,6 +437,149 @@ export default function InstitutionReportsClient() {
             </Card>
           </div>
         </>
+      )}
+
+      {/* ── VELO Verification — defended-evidence report, distinct from the
+          readiness-score report above (claim-derived). See
+          institution_verification_service.py for why these stay separate. ── */}
+      {selectedCohort && (
+        <div className="space-y-6 border-t pt-6">
+          <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight">VELO Verification</h2>
+              <p className="text-muted-foreground mt-1">
+                Defended-evidence report — what this cohort actually held up under interrogation.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={handleExportVeloStudents} disabled={!selectedCohort}>Export Student CSV</Button>
+              <Button variant="outline" onClick={handleExportVeloReport} disabled={!veloReport}>
+                Export Report CSV
+              </Button>
+              <Button variant="outline" onClick={handleExportVeloReportPDF} disabled={!selectedCohort}>
+                <FileText className="mr-1.5 size-4" /> Download PDF report
+              </Button>
+            </div>
+          </div>
+
+          {veloLoading || !veloReport ? (
+            <div className="h-32 flex items-center justify-center text-muted-foreground animate-pulse">
+              Loading verification report...
+            </div>
+          ) : veloReport.total_students === 0 ? (
+            <p className="text-sm text-muted-foreground">No verified students in this cohort yet.</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Students</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{veloReport.total_students}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Defended ≥1 project</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{veloReport.verified_count}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Seniority (j / m / s)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {veloReport.seniority_distribution.junior} / {veloReport.seniority_distribution.mid} /{" "}
+                      {veloReport.seniority_distribution.senior}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Avg Ownership</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {veloReport.avg_dimension_scores.ownership != null
+                        ? Math.round(veloReport.avg_dimension_scores.ownership * 100)
+                        : "—"}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {veloReport.dimension_score_buckets.ownership && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Ownership Score Distribution</CardTitle>
+                    <CardDescription>How defended projects&apos; ownership scores spread across this cohort.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="h-[280px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={veloReport.dimension_score_buckets.ownership}>
+                        <XAxis dataKey="range" fontSize={11} tickLine={false} axisLine={false} />
+                        <YAxis fontSize={11} tickLine={false} axisLine={false} />
+                        <Tooltip />
+                        <Bar dataKey="count" fill="#EC5B13" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Backed by defended work</CardTitle>
+                    <CardDescription>Skills that actually held up under interrogation, cohort-wide.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-wrap gap-2">
+                    {veloReport.top_verified_skills.length === 0 ? (
+                      <Badge variant="outline">None yet</Badge>
+                    ) : (
+                      veloReport.top_verified_skills.map((s) => (
+                        <Badge key={s.skill} variant="default">{s.skill} · {s.count}</Badge>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Claimed, never probed</CardTitle>
+                    <CardDescription>Curriculum/remediation-targeting signal, not a red flag on any one student.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-wrap gap-2">
+                    {veloReport.top_claimed_unverified_skills.length === 0 ? (
+                      <Badge variant="outline">None</Badge>
+                    ) : (
+                      veloReport.top_claimed_unverified_skills.map((s) => (
+                        <Badge key={s.skill} variant="secondary">{s.skill} · {s.count}</Badge>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Playbook</CardTitle>
+                  <CardDescription>Deterministic recommendations from this cohort&apos;s defended evidence.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {veloReport.playbook.map((action) => (
+                    <div key={action} className="rounded-md border p-3 text-sm">
+                      {action}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
