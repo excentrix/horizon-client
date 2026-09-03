@@ -300,6 +300,20 @@
     @apply bg-background text-foreground;
     font-family: var(--font-body), "Instrument Sans", system-ui, sans-serif;
   }
+
+  /* Chrome's print/"Save as PDF" path drops background-color, background-
+     image and box-shadow by default (the "Background graphics" checkbox is
+     off unless the user opts in) — every card fill, status-badge tint, and
+     the grain texture on the printable reports (candidate report, cohort
+     PDF) would otherwise vanish, leaving flat black-on-white text with only
+     thin borders. Force the design system's fills to print regardless of
+     that checkbox, on every printable surface, not just one page. */
+  @media print {
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+  }
 }
 
 @layer utilities {
