@@ -12,6 +12,7 @@ import type { PublicVerifiedProfile } from "@/lib/api";
 import { INTERROGATION_DIMENSIONS, type DimensionScores } from "@/types";
 import { ShareActions } from "@/components/velo/share-actions";
 import { isNotAssessed, DIMENSION_LABELS, statusClassForScore } from "@/components/velo/dimension-meters";
+import { CapabilityByStack } from "@/components/verified/capability-by-stack";
 
 /** Lowest-density read of a project's dimension breakdown — a row of tiny
  *  status ticks. The full breakdown (bars + evidence citations) lives one
@@ -66,6 +67,45 @@ export function VerifiedProfileView({
 }) {
   const { verified_profile: vp, defended_projects } = data;
   const covStrong = vp.coverage === "strong" || vp.coverage === "partial";
+
+  // Bare/no-token view — the fix for the enumerable-public-profile gap. This
+  // is enough to know a verified profile exists; the evidence-grade dossier
+  // (dimension scores, contradictions, examiner notes) requires a Hiring
+  // Profile access request. See PublicVerifiedProfileAPIView.
+  if (data.is_teaser) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4 rounded-xl border border-border bg-card px-4 py-3">
+          <span className="flex flex-col items-center rounded-lg border border-border bg-muted/40 px-3 py-1.5">
+            <span className="font-display text-xl font-bold leading-none tabular-nums">
+              {vp.verified_project_count}
+              <span className="text-xs opacity-60">/{vp.claimed_project_count}</span>
+            </span>
+            <span className="caseline mt-0.5 text-[8px]">defended</span>
+          </span>
+          <div className="min-w-0">
+            <p className={cn("text-sm font-semibold", covStrong ? "status-strong" : "status-developing")}>
+              {COVERAGE_LABEL[vp.coverage] ?? vp.coverage}
+            </p>
+            <p className="text-xs leading-relaxed text-muted-foreground">{vp.confidence_note}</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-dashed border-border bg-card/60 p-5 text-center">
+          <p className="text-sm font-medium">The full dossier — dimension scores, examiner notes,
+            and claim-vs-evidence honesty — is only shown to hiring teams.</p>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+            Request access with your work email and the reason is logged for {data.candidate.name}.
+          </p>
+          <a
+            href={`/hire/${encodeURIComponent(data.candidate.username)}`}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            Request Hiring Profile →
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -159,45 +199,55 @@ export function VerifiedProfileView({
         </div>
       )}
 
-      {/* Skills backed by defended work */}
-      {vp.verified_skills.length > 0 && (
+      {/* Capability grouped by the tech-stack areas VELO detected in the repos:
+          defended vs. claimed-but-unprobed vs. claimed-but-absent-from-code.
+          Falls back to the flat chip lists for profiles built before this. */}
+      {(vp.capability_by_stack?.length ?? 0) > 0 ? (
         <div>
           <p className="eyebrow mb-2 flex items-center gap-2">
-            <span className="eyebrow-dot" /> Backed by defended work
+            <span className="eyebrow-dot" /> Capability by stack
           </p>
-          <div className="flex flex-wrap gap-1.5">
-            {vp.verified_skills.map((s) => (
-              <span
-                key={s.skill}
-                title={`Defended in: ${s.via_projects.join(", ")}`}
-                className="status-strong inline-flex items-center gap-1.5 rounded-lg border border-(--status-strong)/40 bg-(--status-strong)/5 px-2.5 py-1 text-[13px] font-medium"
-              >
-                <ShieldCheck className="size-3" /> <span className="text-foreground/90">{s.skill}</span>
-              </span>
-            ))}
-          </div>
+          <CapabilityByStack rows={vp.capability_by_stack!} />
         </div>
-      )}
-
-      {/* Claimed but never actually probed under interrogation — the honest
-          counterpart to "Backed by defended work" above. */}
-      {(vp.claimed_unverified_skills?.length ?? 0) > 0 && (
-        <div>
-          <p className="eyebrow mb-2 flex items-center gap-2">
-            <span className="eyebrow-dot" /> Claimed, not yet probed
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {vp.claimed_unverified_skills!.map((s) => (
-              <span
-                key={`${s.skill}-${s.project}`}
-                title={`Listed in ${s.project}'s tech stack, but the interrogation never asked about it`}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1 text-[13px] font-medium text-muted-foreground"
-              >
-                <span className="text-foreground/70">{s.skill}</span>
-              </span>
-            ))}
-          </div>
-        </div>
+      ) : (
+        <>
+          {vp.verified_skills.length > 0 && (
+            <div>
+              <p className="eyebrow mb-2 flex items-center gap-2">
+                <span className="eyebrow-dot" /> Backed by defended work
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {vp.verified_skills.map((s) => (
+                  <span
+                    key={s.skill}
+                    title={`Defended in: ${s.via_projects.join(", ")}`}
+                    className="status-strong inline-flex items-center gap-1.5 rounded-lg border border-(--status-strong)/40 bg-(--status-strong)/5 px-2.5 py-1 text-[13px] font-medium"
+                  >
+                    <ShieldCheck className="size-3" /> <span className="text-foreground/90">{s.skill}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(vp.claimed_unverified_skills?.length ?? 0) > 0 && (
+            <div>
+              <p className="eyebrow mb-2 flex items-center gap-2">
+                <span className="eyebrow-dot" /> Claimed, not yet probed
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {vp.claimed_unverified_skills!.map((s) => (
+                  <span
+                    key={`${s.skill}-${s.project}`}
+                    title={`Listed in ${s.project}'s tech stack, but the interrogation never asked about it`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1 text-[13px] font-medium text-muted-foreground"
+                  >
+                    <span className="text-foreground/70">{s.skill}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Defended projects — the evidence */}

@@ -6,6 +6,8 @@ import { LiveAnalysisPanel } from "@/components/mirror/live-analysis-panel";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { CapabilityByStack } from "@/components/verified/capability-by-stack";
 import { useMirrorSnapshot } from "@/hooks/use-mirror-snapshot";
 import { useGithubRepos } from "@/hooks/use-github-repos";
 import { authApi, auditApi } from "@/lib/api";
@@ -123,12 +125,27 @@ interface EducationEntry {
 
 interface AtsBreakdownItem { score: number; max: number; }
 interface AtsBreakdown {
-  keyword_match?: AtsBreakdownItem & { missing?: string[] };
-  impact_statements?: AtsBreakdownItem;
-  summary_quality?: AtsBreakdownItem;
+  keyword_match?: AtsBreakdownItem & { missing?: string[]; present?: string[] };
+  impact_statements?: AtsBreakdownItem & { quantified_count?: number; total_bullets?: number };
+  summary_quality?: AtsBreakdownItem & { has_summary?: boolean };
   skills_coverage?: AtsBreakdownItem;
-  format_signals?: AtsBreakdownItem;
-  [key: string]: AtsBreakdownItem | (AtsBreakdownItem & { missing?: string[] }) | undefined;
+  format_signals?: AtsBreakdownItem & { issues?: string[] };
+  [key: string]:
+    | (AtsBreakdownItem & {
+        missing?: string[];
+        present?: string[];
+        issues?: string[];
+        quantified_count?: number;
+        total_bullets?: number;
+        has_summary?: boolean;
+      })
+    | undefined;
+}
+interface KeywordOptimization {
+  target_role?: string;
+  present_keywords?: string[];
+  missing_high_value?: string[];
+  density_score?: number;
 }
 
 interface ExperienceAnalysis {
@@ -147,6 +164,7 @@ interface ProjectAnalysis {
   relevance_score?: number;
   technical_depth_score?: number;
   commentary?: string;
+  highlighted_skills?: string[];
   improvement_suggestions?: string[];
 }
 
@@ -381,6 +399,8 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
   const [resettingVerificationId, setResettingVerificationId] = useState<string | null>(null);
   const [verifyingAllRepos, setVerifyingAllRepos] = useState(false);
   const [reanalysisBlocked, setReanalysisBlocked] = useState<{ next_reset: string | null; limit: number } | null>(null);
+  const [rolePromptOpen, setRolePromptOpen] = useState(false);
+  const [reanalyseRole, setReanalyseRole] = useState("");
   const [jdSheetOpen, setJdSheetOpen] = useState(false);
   const [jdText, setJdText] = useState("");
   const [jdReanalysing, setJdReanalysing] = useState(false);
@@ -400,12 +420,26 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleReanalyse = async () => {
+  // Open the target-role prompt first — analysing against a role is what makes
+  // the ATS score, role fit, employer view and skill-gap sections meaningful.
+  // The user can still skip and get the role-agnostic pass.
+  const handleReanalyse = () => {
+    if (reanalysing) return;
+    setReanalyseRole((data?.mirror?.target_role ?? "").trim());
+    setRolePromptOpen(true);
+  };
+
+  const runReanalyse = async (targetRole?: string) => {
+    setRolePromptOpen(false);
     setReanalysing(true);
     try {
-      await authApi.reanalyseResume();
+      await authApi.reanalyseResume(targetRole);
       await queryClient.invalidateQueries({ queryKey: ["mirror-snapshot"] });
-      toast.success("Re-analysis queued — VELO will update in a moment.");
+      toast.success(
+        targetRole?.trim()
+          ? `Re-analysis queued for "${targetRole.trim()}" — VELO will update in a moment.`
+          : "Re-analysis queued — VELO will update in a moment.",
+      );
     } catch (err: unknown) {
       const d = (err as { response?: { data?: Record<string, unknown> } })?.response?.data;
       if (d?.quota_status === "exceeded") {
@@ -561,6 +595,83 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
     />
   );
 
+  // Target-role prompt shown before a plain re-analysis. A role is what makes
+  // the ATS score, role fit, employer view and skill-gap sections meaningful;
+  // skipping runs the role-agnostic pass. Rendered in every return branch so
+  // the "Re-queue"/"Retry" buttons in the running/failed states open it too.
+  const rolePromptModal = rolePromptOpen && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+      onClick={() => setRolePromptOpen(false)}>
+      <div className="w-full max-w-sm overflow-hidden rounded-2xl border bg-card shadow-2xl"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="bg-[color:var(--brand-indigo)]/8 px-6 pb-5 pt-6">
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[color:var(--brand-indigo)]/15 text-[color:var(--brand-indigo)]">
+            <Target className="h-5 w-5 text-[color:var(--brand-indigo)]" />
+          </div>
+          <h2 className="text-base font-semibold">Analyse against a target role?</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            VELO scores your resume, role fit, employer view and skill gaps against a specific
+            role. Add one for a sharper analysis, or skip for a role-agnostic pass.
+          </p>
+        </div>
+        <div className="px-6 py-4">
+          <Input
+            autoFocus
+            value={reanalyseRole}
+            onChange={(e) => setReanalyseRole(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && reanalyseRole.trim()) runReanalyse(reanalyseRole);
+            }}
+            placeholder={`e.g. ${
+              (normalized.current_role as string | undefined)?.trim() || "Backend Engineer"
+            }`}
+          />
+        </div>
+        <div className="flex justify-end gap-2 border-t px-6 py-4">
+          <Button size="sm" variant="ghost" onClick={() => runReanalyse()}>
+            Skip
+          </Button>
+          <Button
+            size="sm"
+            disabled={!reanalyseRole.trim()}
+            onClick={() => runReanalyse(reanalyseRole)}
+          >
+            Re-analyse
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Tells the user what the analysis was scored against. Clicking re-targets it
+  // (opens the same prompt, prefilled). Only meaningful in the ready state.
+  const analysedRole = (data?.mirror?.target_role ?? "").trim();
+  const analysedAgainstJd = Boolean(data?.mirror?.analysed_against_jd);
+  const targetRoleIndicator = (
+    <button
+      type="button"
+      onClick={() => {
+        setReanalyseRole(analysedRole);
+        setRolePromptOpen(true);
+      }}
+      title="Re-analyse against a different target role"
+      className="group inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[color:var(--brand-indigo)]/40 hover:text-foreground"
+    >
+      <Target className="h-3 w-3 shrink-0" />
+      {analysedAgainstJd ? (
+        "Analysed against a job description"
+      ) : analysedRole ? (
+        <>
+          Analysed for <span className="font-semibold text-foreground">{analysedRole}</span>
+        </>
+      ) : (
+        "No target role — add one for a sharper analysis"
+      )}
+      <RefreshCw className="h-2.5 w-2.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
+    </button>
+  );
+
   if (isRunning) {
     return (
       <div className="p-5 sm:p-6">
@@ -576,6 +687,7 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
             {uploadingResume ? "Uploading…" : "Upload new resume"}
           </Button>
         </div>
+        {rolePromptModal}
       </div>
     );
   }
@@ -606,6 +718,7 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
             </Button>
           </div>
         </div>
+        {rolePromptModal}
       </div>
     );
   }
@@ -636,6 +749,20 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
   const skillMastery = (deep.skill_mastery     ?? []) as SkillMastery[];
   const atsScore     = deep.ats_score as number | undefined;
   const atsBreakdown = deep.ats_breakdown as AtsBreakdown | undefined;
+  const keywordOpt   = deep.keyword_optimization as KeywordOptimization | undefined;
+  const matchedKeywords = Array.from(
+    new Set([
+      ...(atsBreakdown?.keyword_match?.present ?? []),
+      ...(keywordOpt?.present_keywords ?? []),
+    ]),
+  );
+  const missingKeywords = Array.from(
+    new Set([
+      ...(atsBreakdown?.keyword_match?.missing ?? []),
+      ...(keywordOpt?.missing_high_value ?? []),
+    ]),
+  );
+  const formatIssues = atsBreakdown?.format_signals?.issues ?? [];
   const gapDetails   = (deep.skill_gap_details ?? []) as SkillGapDetail[];
   const expAnalysis  = (deep.experience_analysis ?? []) as ExperienceAnalysis[];
   const projAnalysis = (deep.project_analysis  ?? []) as ProjectAnalysis[];
@@ -701,6 +828,7 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
           <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             Analysis
           </span>
+          {targetRoleIndicator}
           {actionButtons}
         </div>
       ) : (
@@ -712,23 +840,27 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
             <h1 className="mt-1 font-editorial text-2xl font-semibold tracking-tight md:text-3xl">
               Resume Analysis
             </h1>
+            <div className="mt-2">{targetRoleIndicator}</div>
           </div>
           {actionButtons}
         </div>
       )}
 
       {/* ── Two-column body ──────────────────────────────────────────────── */}
-      {/* lg:items-start keeps grid items at their own content height instead
-          of stretching to the tallest row — required for the sticky sidebar
-          below to work without a `row-span` hack (a previous `row-span-[999]`
-          here, combined with `gap-5`, multiplied the row-gap across ~999
-          implicit grid rows and produced enormous unbounded height). */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+      {/* Both children are pinned to `lg:row-start-1` so the main column and the
+          sidebar share grid row 1 and start at the same y. Without it, grid
+          sparse auto-placement bumps the second-in-DOM child (the main column,
+          `col-start-1`) to row 2 — leaving a full sidebar's height of empty
+          space above it. Default `items-stretch` is kept on purpose so the
+          sidebar cell stretches to the row height and its inner `lg:sticky`
+          panel has room to travel. (Superseded an older `row-span-[999]` hack
+          that multiplied `gap-5` into a runaway height.) */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
 
         {/* ── Right column: ATS + Fit + Actions (below on mobile) ────────── */}
         <aside
           className={cn(
-            "order-last lg:order-none lg:col-start-2",
+            "order-last lg:order-none lg:col-start-2 lg:row-start-1",
             embedded
               ? "border-t border-border/60 lg:border-l lg:border-t-0 lg:border-border/60"
               : "mt-5 lg:mt-0",
@@ -771,13 +903,52 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
                         </div>
                       );
                     })}
-                    {atsBreakdown.keyword_match?.missing && atsBreakdown.keyword_match.missing.length > 0 && (
+                    {atsBreakdown.impact_statements?.quantified_count !== undefined &&
+                      atsBreakdown.impact_statements?.total_bullets !== undefined && (
+                        <p className="text-[11px] text-muted-foreground">
+                          <span className="font-medium text-foreground">
+                            {atsBreakdown.impact_statements.quantified_count}
+                          </span>{" "}
+                          of {atsBreakdown.impact_statements.total_bullets} bullets across the resume
+                          carry a quantified outcome.
+                        </p>
+                      )}
+
+                    {keywordOpt?.density_score !== undefined && (
+                      <div className="flex items-center gap-2">
+                        <span className="w-16 shrink-0 text-[11px] text-muted-foreground">Density</span>
+                        <Meter value={keywordOpt.density_score} className="flex-1" />
+                        <span className="w-9 shrink-0 text-right font-mono text-[11px] text-muted-foreground">
+                          {keywordOpt.density_score}
+                        </span>
+                      </div>
+                    )}
+
+                    {matchedKeywords.length > 0 && (
+                      <div className="pt-2">
+                        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Matched keywords
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {matchedKeywords.map((kw) => (
+                            <span
+                              key={kw}
+                              className="rounded-lg border border-(--score-good)/40 bg-(--score-good)/10 px-2 py-0.5 text-[11px] font-medium text-(--score-good)"
+                            >
+                              {kw}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {missingKeywords.length > 0 && (
                       <div className="pt-2">
                         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                           Missing keywords
                         </p>
                         <div className="flex flex-wrap gap-1.5">
-                          {atsBreakdown.keyword_match.missing.map((kw) => (
+                          {missingKeywords.map((kw) => (
                             <span
                               key={kw}
                               className="rounded-lg border border-dashed border-(--score-critical)/40 bg-(--score-critical)/10 px-2 py-0.5 text-[11px] font-medium text-(--score-critical)"
@@ -786,6 +957,25 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
                             </span>
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {formatIssues.length > 0 && (
+                      <div className="pt-2">
+                        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Format issues
+                        </p>
+                        <ul className="space-y-1">
+                          {formatIssues.map((issue, i) => (
+                            <li
+                              key={i}
+                              className="flex items-start gap-1.5 text-[11px] text-muted-foreground"
+                            >
+                              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-(--score-warn)" />
+                              {issue}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
                   </div>
@@ -799,21 +989,99 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
                 <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                   Role Fit
                 </p>
-                <div className="space-y-3">
-                  {roleMatches.slice(0, 4).map((role, i) => (
-                    <div key={i} className="space-y-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
-                          {role.title}
-                        </span>
-                        <span className={cn("shrink-0 text-sm font-bold tabular-nums", scoreColor(role.match_score))}>
-                          {role.match_score}%
-                        </span>
+                <Accordion type="single" collapsible className="space-y-3">
+                  {roleMatches.map((role, i) => {
+                    const hasDetail = Boolean(
+                      role.match_reason ||
+                        role.present_skills?.length ||
+                        role.missing_skills?.length,
+                    );
+                    const head = (
+                      <div className="w-full space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                            <span className="truncate text-[13px] font-medium">{role.title}</span>
+                            {role.seniority && (
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "h-4 shrink-0 px-1 text-[9px] capitalize",
+                                  seniorityStyle(role.seniority),
+                                )}
+                              >
+                                {role.seniority}
+                              </Badge>
+                            )}
+                          </span>
+                          <span
+                            className={cn(
+                              "shrink-0 text-sm font-bold tabular-nums",
+                              scoreColor(role.match_score),
+                            )}
+                          >
+                            {role.match_score}%
+                          </span>
+                        </div>
+                        <Meter value={role.match_score} height={5} />
                       </div>
-                      <Meter value={role.match_score} height={5} />
-                    </div>
-                  ))}
-                </div>
+                    );
+                    if (!hasDetail) {
+                      return (
+                        <div key={i} className="px-0">
+                          {head}
+                        </div>
+                      );
+                    }
+                    return (
+                      <AccordionItem key={i} value={`role-${i}`} className="border-0">
+                        <AccordionTrigger className="gap-2 py-0 hover:no-underline [&>svg]:mt-1 [&>svg]:shrink-0">
+                          {head}
+                        </AccordionTrigger>
+                        <AccordionContent className="pb-1 pt-2">
+                          {role.match_reason && (
+                            <p className="mb-2 text-[11px] leading-relaxed text-muted-foreground">
+                              {role.match_reason}
+                            </p>
+                          )}
+                          {(role.present_skills?.length ?? 0) > 0 && (
+                            <div className="mb-1.5">
+                              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Have
+                              </p>
+                              <div className="flex flex-wrap gap-1">
+                                {role.present_skills!.map((s) => (
+                                  <span
+                                    key={s}
+                                    className="rounded-md border border-(--score-good)/40 bg-(--score-good)/10 px-1.5 py-0.5 text-[10px] text-(--score-good)"
+                                  >
+                                    {s}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {(role.missing_skills?.length ?? 0) > 0 && (
+                            <div>
+                              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Missing
+                              </p>
+                              <div className="flex flex-wrap gap-1">
+                                {role.missing_skills!.map((s) => (
+                                  <span
+                                    key={s}
+                                    className="rounded-md border border-dashed border-(--score-critical)/40 bg-(--score-critical)/10 px-1.5 py-0.5 text-[10px] text-(--score-critical)"
+                                  >
+                                    {s}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
               </div>
             )}
 
@@ -902,7 +1170,7 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
         {/* ── Left column: main content ─────────────────────────────────── */}
         <div
           className={cn(
-            "order-first min-w-0 lg:order-none lg:col-start-1",
+            "order-first min-w-0 lg:order-none lg:col-start-1 lg:row-start-1",
             embedded ? "divide-y divide-border/60" : "space-y-5",
           )}
         >
@@ -961,46 +1229,54 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
                 );
               })()}
 
-              {/* Skills backed by a defended project */}
-              {verifiedProfile.verified_skills.length > 0 && (
+              {/* Capability grouped by detected stack area, with a flat-chip
+                  fallback for profiles built before stack detection existed. */}
+              {(verifiedProfile.capability_by_stack?.length ?? 0) > 0 ? (
                 <div className="mb-4">
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Backed by defended work
+                    Capability by stack
                   </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {verifiedProfile.verified_skills.map((s) => (
-                      <span
-                        key={s.skill}
-                        title={`Defended in: ${s.via_projects.join(", ")}`}
-                        className="inline-flex items-center gap-1 rounded-lg border border-(--status-strong)/40 bg-(--status-strong)/10 px-2 py-0.5 text-[12px] font-medium text-(--status-strong)"
-                      >
-                        <ShieldCheck className="h-3 w-3" /> {s.skill}
-                      </span>
-                    ))}
-                  </div>
+                  <CapabilityByStack rows={verifiedProfile.capability_by_stack!} />
                 </div>
-              )}
-
-              {/* Claimed but never actually probed under interrogation — the
-                  honest counterpart to "Backed by defended work": these look
-                  the same on the resume, but only one group was tested. */}
-              {(verifiedProfile.claimed_unverified_skills?.length ?? 0) > 0 && (
-                <div className="mb-4">
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Claimed, not yet probed
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {verifiedProfile.claimed_unverified_skills!.map((s) => (
-                      <span
-                        key={`${s.skill}-${s.project}`}
-                        title={`Listed in ${s.project}'s tech stack, but the interrogation never asked about it`}
-                        className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/30 px-2 py-0.5 text-[12px] font-medium text-muted-foreground"
-                      >
-                        <Shield className="h-3 w-3" /> {s.skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+              ) : (
+                <>
+                  {verifiedProfile.verified_skills.length > 0 && (
+                    <div className="mb-4">
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Backed by defended work
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {verifiedProfile.verified_skills.map((s) => (
+                          <span
+                            key={s.skill}
+                            title={`Defended in: ${s.via_projects.join(", ")}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-(--status-strong)/40 bg-(--status-strong)/10 px-2 py-0.5 text-[12px] font-medium text-(--status-strong)"
+                          >
+                            <ShieldCheck className="h-3 w-3" /> {s.skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(verifiedProfile.claimed_unverified_skills?.length ?? 0) > 0 && (
+                    <div className="mb-4">
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Claimed, not yet probed
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {verifiedProfile.claimed_unverified_skills!.map((s) => (
+                          <span
+                            key={`${s.skill}-${s.project}`}
+                            title={`Listed in ${s.project}'s tech stack, but the interrogation never asked about it`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/30 px-2 py-0.5 text-[12px] font-medium text-muted-foreground"
+                          >
+                            <Shield className="h-3 w-3" /> {s.skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Contradictions — claim says demonstrated, evidence disagrees */}
@@ -1241,6 +1517,34 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
                   </div>
                 </div>
               </div>
+
+              {/* Where each demonstrated skill actually shows up — the evidence
+                  the LLM attached to the mastery call. */}
+              {demonstrated.some((s) => s.evidence || s.used_in_projects || s.used_in_experience) && (
+                <div className="mt-5 border-t pt-4">
+                  <p className="mb-2.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                    Where it shows up
+                  </p>
+                  <div className="space-y-1.5">
+                    {demonstrated
+                      .filter((s) => s.evidence || s.used_in_projects || s.used_in_experience)
+                      .map((s) => (
+                        <div
+                          key={s.skill}
+                          className="flex items-baseline justify-between gap-3 text-xs"
+                        >
+                          <span className="shrink-0 font-medium">{s.skill}</span>
+                          <span className="min-w-0 flex-1 truncate text-right text-muted-foreground">
+                            {s.evidence || "—"}
+                            {s.used_in_projects || s.used_in_experience
+                              ? ` · ${s.used_in_projects} proj / ${s.used_in_experience} role`
+                              : ""}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
             </section>
           )}
 
@@ -1510,6 +1814,18 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
                             </AccordionTrigger>
                             <AccordionContent className="pb-1">
                               <p className="mb-2 text-xs leading-relaxed text-muted-foreground">{analysis.commentary}</p>
+                              {(analysis.highlighted_skills?.length ?? 0) > 0 && (
+                                <div className="mb-2 flex flex-wrap gap-1">
+                                  {analysis.highlighted_skills?.map((s: string) => (
+                                    <span
+                                      key={s}
+                                      className="rounded-md bg-[color:var(--brand-indigo)]/10 px-1.5 py-0.5 text-[10px] font-medium text-[color:var(--brand-indigo)]"
+                                    >
+                                      {s}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                               {(analysis.improvement_suggestions?.length ?? 0) > 0 && (
                                 <div className="space-y-1">
                                   {analysis.improvement_suggestions?.map((s: string, k: number) => (
@@ -1713,6 +2029,8 @@ export function VeloProfileTab({ embedded = true }: { embedded?: boolean }) {
           </div>
         </div>
       )}
+
+      {rolePromptModal}
     </div>
   );
 }

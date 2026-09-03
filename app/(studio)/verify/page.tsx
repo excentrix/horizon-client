@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useMirrorSnapshot } from "@/hooks/use-mirror-snapshot";
 import { useGithubRepos } from "@/hooks/use-github-repos";
-import { usePublicVerifiedProfile } from "@/hooks/use-portfolio";
+import { usePublicVerifiedProfile, useHiringProfileAccessLog } from "@/hooks/use-portfolio";
 import { useAuth } from "@/context/AuthContext";
 import { authApi, auditApi, type ClaimTested, type VerifiedProfileSummary } from "@/lib/api";
 import { INTERROGATION_DIMENSIONS, type DimensionScores } from "@/types";
@@ -88,6 +88,7 @@ export default function VerifyPage() {
   const verifiedProfile = mirror?.verified_profile;
 
   const publicVerified = usePublicVerifiedProfile(verifiedCount > 0 ? (user?.username ?? "") : "");
+  const accessLog = useHiringProfileAccessLog(verifiedCount > 0);
 
   // Aggregate radar — everything VELO has graded about this person, averaged
   // per dimension across every decided interrogation (the private view sees
@@ -162,9 +163,11 @@ export default function VerifyPage() {
     }
   };
 
+  // The link to hand out when applying — gated (see /hire/<username>), not
+  // the bare /p/<username> URL a stranger could otherwise guess/scrape.
   const verifiedProfileUrl =
     user?.username && typeof window !== "undefined"
-      ? `${window.location.origin}/p/${encodeURIComponent(user.username)}?tab=verified`
+      ? `${window.location.origin}/hire/${encodeURIComponent(user.username)}`
       : "";
 
   // The one thing to do next — computed, always present, always tangerine.
@@ -438,6 +441,24 @@ export default function VerifyPage() {
                     >
                       <FileText className="size-3.5" /> Open the full printable report
                     </a>
+                  )}
+                  {!!accessLog.data?.results?.length && (
+                    <div className="mt-4 border-t border-border pt-3">
+                      <p className="caseline mb-2">
+                        {accessLog.data.results.length} hiring team
+                        {accessLog.data.results.length > 1 ? "s have" : " has"} requested this
+                      </p>
+                      <ul className="space-y-1.5">
+                        {accessLog.data.results.slice(0, 5).map((entry, i) => (
+                          <li key={i} className="text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground">{entry.requester_company}</span>
+                            {entry.role_hiring_for ? ` · hiring for ${entry.role_hiring_for}` : ""}
+                            {" · "}
+                            {new Date(entry.created_at).toLocaleDateString()}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               )}

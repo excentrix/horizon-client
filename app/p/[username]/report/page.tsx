@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { Printer, GitBranch, ShieldAlert } from "lucide-react";
 import { auditApi, type PublicVerifiedProfile } from "@/lib/api";
 import { trackFunnel, FUNNEL } from "@/lib/funnel";
@@ -10,8 +10,11 @@ import { useLocalQrCode } from "@/hooks/use-local-qr";
 import { cn } from "@/lib/utils";
 
 // The candidate report — the same document colleges receive for cohorts,
-// issued for one person. Public (only verified facts), print-ready: File →
-// Print gives HR a clean PDF with no app chrome.
+// issued for one person. Print-ready (File → Print gives HR a clean PDF
+// with no app chrome). Without a valid ?token= (minted by requesting the
+// Hiring Profile — see /hire/<username>) this is a teaser only, same gate
+// as the /p/<username>?tab=verified view — the evidence-grade dossier isn't
+// open at a guessable URL anymore.
 
 const COVERAGE_LABEL: Record<string, string> = {
   strong: "Strong sample",
@@ -23,7 +26,9 @@ const COVERAGE_LABEL: Record<string, string> = {
 
 export default function CandidateReportPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const username = (params?.username ?? "") as string;
+  const token = searchParams?.get("token") ?? undefined;
   const [data, setData] = useState<PublicVerifiedProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   // On paper the QR is the verification path — it points at the live profile,
@@ -37,13 +42,13 @@ export default function CandidateReportPage() {
   useEffect(() => {
     if (!username) return;
     auditApi
-      .getPublicVerifiedProfile(username)
+      .getPublicVerifiedProfile(username, token)
       .then((d) => {
         setData(d);
         trackFunnel(FUNNEL.CREDENTIAL_VIEWED, { username, surface: "report" });
       })
       .catch(() => setError("No verified report exists for this profile yet."));
-  }, [username]);
+  }, [username, token]);
 
   if (error) {
     return (
@@ -62,6 +67,29 @@ export default function CandidateReportPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="size-7 animate-spin rounded-full border-2 border-border border-t-primary" />
+      </div>
+    );
+  }
+
+  if (data.is_teaser) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-6 text-center">
+        <div className="max-w-sm">
+          <p className="text-sm font-medium">
+            {data.candidate.name} has a VELO-verified profile — {data.verified_profile.verified_project_count}/
+            {data.verified_profile.claimed_project_count} projects defended.
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            The full report (dimension scores, examiner notes) is only issued to hiring teams —
+            request it with your work email.
+          </p>
+          <a
+            href={`/hire/${encodeURIComponent(username)}`}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            Request Hiring Profile →
+          </a>
+        </div>
       </div>
     );
   }

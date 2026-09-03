@@ -1,16 +1,29 @@
 "use client";
 
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, GitBranch, Globe, Loader2, Mic, Square } from "lucide-react";
+import { ArrowLeft, Code2, GitBranch, Globe, Loader2, Mic, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 import { cn } from "@/lib/utils";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { useProjectVerification, type RepoEntry, type Verdict } from "@/hooks/use-project-verification";
 import { useGithubRepos } from "@/hooks/use-github-repos";
-import { auditApi, type ClaimTested, type TranscriptTurn } from "@/lib/api";
+import { auditApi, type ClaimTested, type InspectorEvent, type TranscriptTurn } from "@/lib/api";
+
+const CodeInspector = dynamic(
+  () => import("@/components/velo/code-inspector").then((m) => m.CodeInspector),
+  { ssr: false, loading: () => <InspectorLoading /> },
+);
 import type { ImprovementNote } from "@/types";
 import { ImprovementNoteCard } from "@/components/velo/improvement-note";
 import { RepoPicker, RepoResultRow } from "@/components/velo/repo-picker";
@@ -38,6 +51,19 @@ const RAIL_STEPS = [
   { key: "interrogation", label: "Interrogation" },
   { key: "verdict", label: "Verdict" },
 ] as const;
+
+// Lightweight identity-binding flags (see project_verification_service.py's
+// _compute_session_integrity) — human-readable, never implies the verdict
+// itself is wrong; a signal for a human to weigh alongside the evidence.
+export const SESSION_INTEGRITY_LABELS: Record<string, string> = {
+  multiple_ip_addresses: "answered from more than one IP address",
+  multiple_devices: "answered from more than one device/browser",
+  github_owner_mismatch: "the defended repo's GitHub owner doesn't match the connected account",
+};
+
+export function describeSessionIntegrityFlags(flags: string[]): string {
+  return flags.map((f) => SESSION_INTEGRITY_LABELS[f] ?? f).join("; ");
+}
 
 function railIndexFor(step: string): number {
   switch (step) {
@@ -81,7 +107,21 @@ export function VerificationSession({
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
+
+  // Code-inspector telemetry — buffered here, flushed on each answer submit
+  // (piggybacked on that request) and once more on unmount for the trailing
+  // turn. Captured as evidence, not scored in v1.
+  const inspectorEventsRef = useRef<InspectorEvent[]>([]);
+  const bufferInspectorEvent = useCallback((e: InspectorEvent) => {
+    inspectorEventsRef.current.push(e);
+  }, []);
+  const takeInspectorEvents = useCallback(() => {
+    const events = inspectorEventsRef.current;
+    inspectorEventsRef.current = [];
+    return events;
+  }, []);
   const realtimeTranscriptionRef = useRef<RealtimeTranscriptionSession | null>(null);
   const voiceBaseAnswerRef = useRef("");
   const voiceFinalPartsRef = useRef<string[]>([]);
@@ -172,9 +212,28 @@ export function VerificationSession({
     const current = answer;
     setAnswer("");
     if (draftKey) window.localStorage.removeItem(draftKey);
-    const done = await hook.submitAnswer(current);
-    if (done) await hook.completeAndFinalize();
+    const done = await hook.submitAnswer(current, takeInspectorEvents());
+    if (done) {
+      const trailing = takeInspectorEvents();
+      if (trailing.length && hook.sessionId) {
+        void auditApi.flushInspectorEvents(hook.sessionId, trailing).catch(() => {});
+      }
+      await hook.completeAndFinalize();
+    }
   };
+
+  // Flush any inspector events left in the buffer when the session unmounts.
+  const sessionIdRef = useRef<string | null>(null);
+  sessionIdRef.current = hook.sessionId;
+  useEffect(() => {
+    return () => {
+      const events = inspectorEventsRef.current;
+      const sid = sessionIdRef.current;
+      if (events.length && sid) {
+        void auditApi.flushInspectorEvents(sid, events).catch(() => {});
+      }
+    };
+  }, []);
 
   const composeVoiceAnswer = (interim = "") => {
     const spoken = [...voiceFinalPartsRef.current, interim].filter(Boolean).join(" ");
@@ -280,6 +339,36 @@ export function VerificationSession({
   const activeRail = railIndexFor(hook.step);
   const isBusy = hook.isLoading && (hook.step === "idle" || hook.step === "evidence") && !hook.verificationId;
 
+  // The split view is resizable on wide viewports and a slide-over below
+  // `lg` — react-resizable-panels needs its group actually mounted to
+  // measure, so branch on a media query rather than CSS show/hide.
+  const isWide = useMediaQuery("(min-width: 1024px)");
+
+  const interrogationPane = (
+    <InterrogationPane
+      hook={hook}
+      answer={answer}
+      setAnswer={setAnswer}
+      onSubmit={handleSubmitAnswer}
+      submitOnEnter={submitOnEnter}
+      onToggleVoice={toggleVoiceAnswer}
+      isRecording={isRecording}
+      isTranscribing={isTranscribing}
+      voiceError={voiceError}
+      elapsedLabel={elapsedLabel}
+      transcriptEndRef={transcriptEndRef}
+      onOpenInspector={() => setInspectorOpen(true)}
+    />
+  );
+  const codeInspector = (
+    <CodeInspector
+      verificationId={hook.verificationId}
+      citedFiles={hook.currentCitedFiles}
+      questionIndex={hook.questionCount}
+      onEvent={bufferInspectorEvent}
+    />
+  );
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-background">
       {/* ── Session header + progress rail ─────────────────────────────── */}
@@ -332,13 +421,106 @@ export function VerificationSession({
       {/* ── Flow body ────────────────────────────────────────────────────── */}
       {isBusy ? (
         <VeloLoadingScreen />
-      ) : (
-        <div
-          className={cn(
-            "mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col",
-            hook.step === "interrogating" ? "" : "overflow-y-auto px-6 py-6",
+      ) : hook.step === "interrogating" ? (
+        /* Split view: the interrogation on the left, the candidate's own
+           source (pinned to the analysed commit) on the right. On wide
+           viewports the divider drags (sizing persists via autoSaveId);
+           below `lg` the inspector is a slide-over. Every other step stays
+           single-column — see the else branch below. */
+        <div className="flex min-h-0 w-full flex-1">
+          {isWide ? (
+            <ResizablePanelGroup
+              direction="horizontal"
+              autoSaveId="velo-session-split"
+              className="min-h-0 flex-1"
+            >
+              <ResizablePanel defaultSize={48} minSize={32} className="flex min-h-0 flex-col">
+                {interrogationPane}
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={52} minSize={26} className="flex min-h-0 flex-col">
+                {codeInspector}
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          ) : (
+            <>
+              <div className="flex min-h-0 flex-1 flex-col">{interrogationPane}</div>
+              <Sheet open={inspectorOpen} onOpenChange={setInspectorOpen}>
+                <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
+                  <SheetTitle className="sr-only">Your source code</SheetTitle>
+                  {codeInspector}
+                </SheetContent>
+              </Sheet>
+            </>
           )}
-        >
+        </div>
+      ) : (
+        <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 py-6">
+          {/* ── Resume ──────────────────────────────────────────────────────
+                An interrogation already exists for this project. Don't send
+                the user back through the repo picker — restart from Q1 on the
+                same repo, or explicitly switch repos. */}
+          {hook.step === "resume" && (
+            <div className="rise-in flex flex-col gap-6">
+              <div className="space-y-1.5">
+                <span className="eyebrow flex items-center gap-2">
+                  <span className="eyebrow-dot" /> Interrogation in progress
+                </span>
+                <p className="font-display text-lg font-semibold leading-snug tracking-tight">
+                  Pick up where this leaves off
+                </p>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Restarting runs the interrogation again from the first question — the record so
+                  far is cleared. It stays on the same repository unless you change it.
+                </p>
+              </div>
+
+              {hook.checkedRepos.length > 0 && (
+                <div className="space-y-2">
+                  <span className="eyebrow flex items-center gap-2">
+                    <GitBranch className="size-3.5" /> Current repository
+                  </span>
+                  <div className="space-y-1.5">
+                    {hook.checkedRepos.map((repo, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs"
+                      >
+                        <span className="truncate font-mono-ui">
+                          {repo.url.replace(/^https?:\/\//, "")}
+                        </span>
+                        {repo.label && (
+                          <span className="caseline shrink-0 text-muted-foreground">{repo.label}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  onClick={() => void hook.restartInterrogation(false)}
+                  disabled={hook.isLoading}
+                  size="lg"
+                >
+                  {hook.isLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
+                  Restart interrogation
+                </Button>
+                <Button
+                  onClick={() => void hook.restartInterrogation(true)}
+                  disabled={hook.isLoading}
+                  variant="outline"
+                  size="lg"
+                >
+                  <GitBranch className="mr-2 size-4" />
+                  Change repository
+                </Button>
+              </div>
+              <FlowError error={hook.error} />
+            </div>
+          )}
+
           {/* ── Evidence ─────────────────────────────────────────────────── */}
           {hook.step === "evidence" && (
             <div className="rise-in flex flex-col gap-6">
@@ -511,135 +693,8 @@ export function VerificationSession({
             </div>
           )}
 
-          {/* ── Interrogation — the growing case record ──────────────────── */}
-          {hook.step === "interrogating" && (
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="flex items-center justify-between border-b border-border bg-muted/20 px-6 py-2.5">
-                <span className="eyebrow flex items-center gap-2">
-                  <span className="relative inline-flex size-1.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
-                    <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
-                  </span>
-                  On the record
-                </span>
-                <span className="caseline tabular-nums">
-                  {hook.answeredTurns.length} answered · {elapsedLabel}
-                </span>
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-                {hook.answeredTurns.map((turn) => (
-                  <div key={turn.questionIndex} className="py-3">
-                    <p className="caseline">
-                      Q{String(turn.questionIndex + 1).padStart(2, "0")}
-                      {turn.area ? ` · ${turn.area.toUpperCase()}` : ""} · VELO — Examiner
-                    </p>
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{turn.question}</p>
-                    <p className="caseline mt-2.5">Candidate</p>
-                    <p className="mt-1 text-[13px] leading-relaxed text-foreground">{turn.answer}</p>
-                    <div className="rule mt-3" />
-                  </div>
-                ))}
-
-                <div className="py-3">
-                  {hook.currentQuestion ? (
-                    <div className="rounded-lg border-l-2 border-primary bg-muted/30 py-3 pl-4 pr-3">
-                      <p className="caseline">
-                        Q{String(hook.questionCount + 1).padStart(2, "0")}
-                        {hook.currentQuestionArea ? ` · ${hook.currentQuestionArea.toUpperCase()}` : ""} ·
-                        VELO — Examiner
-                      </p>
-                      <p className="mt-1.5 text-sm leading-relaxed">{hook.currentQuestion}</p>
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-4">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="size-4 animate-spin text-primary" />
-                        Generating the next question…
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div ref={transcriptEndRef} />
-              </div>
-
-              <div className="border-t border-border bg-card px-6 py-4">
-                <Textarea
-                  placeholder="Be specific — reference your actual code, the decisions you made, the problems you hit, and why you chose one approach over another."
-                  value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
-                  onKeyDown={(e) => submitOnEnter(e, () => void handleSubmitAnswer())}
-                  disabled={hook.isLoading || !hook.currentQuestion}
-                  className="min-h-[110px] max-h-[220px] resize-none overflow-y-auto text-sm"
-                  autoFocus
-                />
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <p className="text-[10px] text-muted-foreground">
-                    Shallow answers go deeper on the same area. Strong answers move to a harder
-                    topic. Minimum 5 words. Press Enter to submit, Shift+Enter for a new line.
-                  </p>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Button
-                      type="button"
-                      variant={isRecording ? "destructive" : "outline"}
-                      size="icon"
-                      onClick={toggleVoiceAnswer}
-                      disabled={hook.isLoading || !hook.currentQuestion || isTranscribing}
-                      title={isRecording ? "Stop voice input" : "Start voice input"}
-                      aria-label={isRecording ? "Stop voice input" : "Start voice input"}
-                    >
-                      {isTranscribing ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : isRecording ? (
-                        <Square className="size-4" />
-                      ) : (
-                        <Mic className="size-4" />
-                      )}
-                    </Button>
-                    <Button
-                      onClick={handleSubmitAnswer}
-                      disabled={
-                        hook.isLoading ||
-                        isRecording ||
-                        isTranscribing ||
-                        !hook.currentQuestion ||
-                        !answer.trim() ||
-                        answer.trim().split(/\s+/).length < 5
-                      }
-                    >
-                      {hook.isLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
-                      {hook.isLoading ? "Reviewing…" : "Submit answer"}
-                    </Button>
-                  </div>
-                </div>
-                {(isRecording || isTranscribing || voiceError) && (
-                  <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
-                    {isRecording && <span className="text-destructive">Recording answer…</span>}
-                    {isTranscribing && (
-                      <>
-                        <Loader2 className="size-3 animate-spin text-primary" />
-                        <span>{isRecording ? "Connecting voice input…" : "Finalizing voice input…"}</span>
-                      </>
-                    )}
-                    {voiceError && <span className="text-destructive">{voiceError}</span>}
-                  </div>
-                )}
-                {hook.isLoading && (
-                  <div className="mt-2 flex items-center justify-center">
-                    <ThinkingMessages
-                      small
-                      messages={[
-                        "Weighing your answer against the code…",
-                        "Deciding where to probe next…",
-                        "Writing the next question…",
-                      ]}
-                    />
-                  </div>
-                )}
-                <FlowError error={hook.error} className="mt-2" />
-              </div>
-            </div>
-          )}
+          {/* ── Interrogation — rendered in the split-view branch above
+                 (InterrogationPane + CodeInspector) ─────────────────────── */}
 
           {/* ── Completing ───────────────────────────────────────────────── */}
           {hook.step === "completing" && <WaitBlock label="Grading the interrogation…" />}
@@ -794,6 +849,12 @@ function VerdictPanel({
         <p className="relative mt-4 max-w-xl text-sm leading-relaxed text-foreground/85">
           {verdict.verdict_summary}
         </p>
+        {!!verdict.session_integrity?.flags?.length && (
+          <p className="status-developing caseline relative mt-2 flex items-start gap-1.5">
+            <span className="status-dot mt-1" />
+            Session flag: {describeSessionIntegrityFlags(verdict.session_integrity.flags)}
+          </p>
+        )}
         {isVerified && credentialUrl && (
           <div className="rise-in-3 relative mt-5">
             <p className="caseline mb-2">This credential is public and auditable — share it:</p>
@@ -827,6 +888,56 @@ function VerdictPanel({
         </div>
       )}
 
+      {/* Tech stack VELO read out of the actual repo, + claimed-vs-detected. */}
+      {!!verdict.detected_stack?.length && (
+        <div className="rise-in-2 rounded-2xl border border-border bg-card p-6">
+          <p className="eyebrow mb-3 flex items-center gap-2">
+            <span className="eyebrow-dot" /> Detected stack
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {verdict.detected_stack.map((s) => (
+              <span
+                key={s.name}
+                title={`${s.category} · ${s.evidence}`}
+                className={cn(
+                  "rounded border px-1.5 py-0.5 font-mono text-[11px]",
+                  s.confidence === "high"
+                    ? "border-border text-foreground/80"
+                    : "border-dashed border-border text-muted-foreground",
+                )}
+              >
+                {s.name}
+              </span>
+            ))}
+          </div>
+          {(() => {
+            const rec = verdict.stack_reconciliation ?? [];
+            const flagged = rec.filter(
+              (r) => r.status === "unsubstantiated" || r.status === "partial",
+            );
+            if (!flagged.length) return null;
+            return (
+              <p className="caseline mt-3 text-muted-foreground">
+                Stack check:{" "}
+                {flagged.map((r, i) => (
+                  <span key={r.tech} title={r.note}>
+                    {i > 0 && ", "}
+                    <span
+                      className={
+                        r.status === "unsubstantiated" ? "text-destructive" : "text-foreground/70"
+                      }
+                    >
+                      {r.tech}
+                    </span>{" "}
+                    {r.status === "unsubstantiated" ? "not found in the repo" : "only partly evidenced"}
+                  </span>
+                ))}
+              </p>
+            );
+          })()}
+        </div>
+      )}
+
       {/* What would have changed the outcome for this project specifically. */}
       {improvementNote && (
         <div className="rise-in-2 rounded-2xl border border-border bg-card p-6">
@@ -843,6 +954,210 @@ function VerdictPanel({
       <Button onClick={onDone} size="lg" className="rise-in-3 self-start">
         Back to your case file
       </Button>
+    </div>
+  );
+}
+
+// ─── Interrogation pane (left half of the split view) ────────────────────────
+
+function InspectorLoading() {
+  return (
+    <div className="flex h-full min-h-0 items-center justify-center bg-muted/10">
+      <Loader2 className="size-5 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
+
+type InterrogationPaneProps = {
+  hook: ReturnType<typeof useProjectVerification>;
+  answer: string;
+  setAnswer: (v: string) => void;
+  onSubmit: () => void | Promise<void>;
+  submitOnEnter: (e: KeyboardEvent<HTMLTextAreaElement>, action: () => void) => void;
+  onToggleVoice: () => void;
+  isRecording: boolean;
+  isTranscribing: boolean;
+  voiceError: string | null;
+  elapsedLabel: string;
+  transcriptEndRef: RefObject<HTMLDivElement | null>;
+  onOpenInspector: () => void;
+};
+
+function InterrogationPane({
+  hook,
+  answer,
+  setAnswer,
+  onSubmit,
+  submitOnEnter,
+  onToggleVoice,
+  isRecording,
+  isTranscribing,
+  voiceError,
+  elapsedLabel,
+  transcriptEndRef,
+  onOpenInspector,
+}: InterrogationPaneProps) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-center justify-between border-b border-border bg-muted/20 px-6 py-2.5">
+        <span className="eyebrow flex items-center gap-2">
+          <span className="relative inline-flex size-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
+            <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
+          </span>
+          On the record
+        </span>
+        <div className="flex items-center gap-3">
+          <span className="caseline tabular-nums">
+            {hook.answeredTurns.length} answered · {elapsedLabel}
+            {hook.stackTotal > 0 && (
+              <>
+                {" · "}
+                <span
+                  className={cn(
+                    hook.stackCovered >= hook.stackTotal ? "text-primary" : "text-muted-foreground",
+                  )}
+                  title="Significant stack areas probed so far"
+                >
+                  stack {hook.stackCovered}/{hook.stackTotal}
+                </span>
+              </>
+            )}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 gap-1.5 px-2 text-[11px] lg:hidden"
+            onClick={onOpenInspector}
+          >
+            <Code2 className="size-3.5" /> Source
+          </Button>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        {hook.answeredTurns.map((turn) => (
+          <div key={turn.questionIndex} className="py-3">
+            <p className="caseline">
+              Q{String(turn.questionIndex + 1).padStart(2, "0")}
+              {turn.area ? ` · ${turn.area.toUpperCase()}` : ""} · VELO — Examiner
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{turn.question}</p>
+            {turn.citedFiles.length > 0 && (
+              <p className="caseline mt-1 text-muted-foreground/70">
+                ref: {turn.citedFiles.map((f) => f.path.split("/").pop()).join(", ")}
+              </p>
+            )}
+            <p className="caseline mt-2.5">Candidate</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-foreground">{turn.answer}</p>
+            <div className="rule mt-3" />
+          </div>
+        ))}
+
+        <div className="py-3">
+          {hook.currentQuestion ? (
+            <div className="rounded-lg border-l-2 border-primary bg-muted/30 py-3 pl-4 pr-3">
+              <p className="caseline">
+                Q{String(hook.questionCount + 1).padStart(2, "0")}
+                {hook.currentQuestionArea ? ` · ${hook.currentQuestionArea.toUpperCase()}` : ""} ·
+                VELO — Examiner
+              </p>
+              <p className="mt-1.5 text-sm leading-relaxed">{hook.currentQuestion}</p>
+              {hook.currentCitedFiles.length > 0 && (
+                <p className="caseline mt-2 text-muted-foreground">
+                  Open in the inspector:{" "}
+                  {hook.currentCitedFiles.map((f) => f.path.split("/").pop()).join(", ")}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin text-primary" />
+                Generating the next question…
+              </div>
+            </div>
+          )}
+        </div>
+        <div ref={transcriptEndRef} />
+      </div>
+
+      <div className="border-t border-border bg-card px-6 py-4">
+        <Textarea
+          placeholder="Be specific — reference your actual code, the decisions you made, the problems you hit, and why you chose one approach over another."
+          value={answer}
+          onChange={(e) => setAnswer(e.target.value)}
+          onKeyDown={(e) => submitOnEnter(e, () => void onSubmit())}
+          disabled={hook.isLoading || !hook.currentQuestion}
+          className="min-h-[110px] max-h-[220px] resize-none overflow-y-auto text-sm"
+          autoFocus
+        />
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <p className="text-[10px] text-muted-foreground">
+            Shallow answers go deeper on the same area. Strong answers move to a harder
+            topic. Minimum 5 words. Press Enter to submit, Shift+Enter for a new line.
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              variant={isRecording ? "destructive" : "outline"}
+              size="icon"
+              onClick={onToggleVoice}
+              disabled={hook.isLoading || !hook.currentQuestion || isTranscribing}
+              title={isRecording ? "Stop voice input" : "Start voice input"}
+              aria-label={isRecording ? "Stop voice input" : "Start voice input"}
+            >
+              {isTranscribing ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : isRecording ? (
+                <Square className="size-4" />
+              ) : (
+                <Mic className="size-4" />
+              )}
+            </Button>
+            <Button
+              onClick={onSubmit}
+              disabled={
+                hook.isLoading ||
+                isRecording ||
+                isTranscribing ||
+                !hook.currentQuestion ||
+                !answer.trim() ||
+                answer.trim().split(/\s+/).length < 5
+              }
+            >
+              {hook.isLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
+              {hook.isLoading ? "Reviewing…" : "Submit answer"}
+            </Button>
+          </div>
+        </div>
+        {(isRecording || isTranscribing || voiceError) && (
+          <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+            {isRecording && <span className="text-destructive">Recording answer…</span>}
+            {isTranscribing && (
+              <>
+                <Loader2 className="size-3 animate-spin text-primary" />
+                <span>{isRecording ? "Connecting voice input…" : "Finalizing voice input…"}</span>
+              </>
+            )}
+            {voiceError && <span className="text-destructive">{voiceError}</span>}
+          </div>
+        )}
+        {hook.isLoading && (
+          <div className="mt-2 flex items-center justify-center">
+            <ThinkingMessages
+              small
+              messages={[
+                "Weighing your answer against the code…",
+                "Deciding where to probe next…",
+                "Writing the next question…",
+              ]}
+            />
+          </div>
+        )}
+        <FlowError error={hook.error} className="mt-2" />
+      </div>
     </div>
   );
 }

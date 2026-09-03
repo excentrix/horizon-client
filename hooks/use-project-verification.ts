@@ -1,10 +1,19 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { auditApi, type DimensionScores } from "@/lib/api";
+import {
+  auditApi,
+  type DimensionScores,
+  type CitedFile,
+  type InspectorEvent,
+  type SessionIntegrity,
+  type DetectedStackItem,
+  type StackReconciliationItem,
+} from "@/lib/api";
 
 export type VerificationStep =
   | "idle"
+  | "resume"                 // an interrogation is already in progress — restart / change repo
   | "evidence"               // multi-repo + demo URL entry
   | "checking"               // github + audit doc check running
   | "check_result"           // show combined github + audit doc results
@@ -47,6 +56,10 @@ export type Verdict = {
   verdict_summary: string;
   badge: boolean;
   verified_at: string | null;
+  session_integrity?: SessionIntegrity | null;
+  detected_stack?: DetectedStackItem[] | null;
+  stack_reconciliation?: StackReconciliationItem[] | null;
+  stack_reconciliation_status?: "not_run" | "scored" | "failed";
 };
 
 // One logged turn in the growing interrogation transcript — the "case
@@ -57,6 +70,7 @@ export type AnsweredTurn = {
   question: string;
   answer: string;
   area: string | null;
+  citedFiles: CitedFile[];
 };
 
 export interface ProjectVerificationState {
@@ -77,8 +91,11 @@ export interface ProjectVerificationState {
   // Interrogation (adaptive)
   currentQuestion: string | null;
   currentQuestionArea: string | null;
+  currentCitedFiles: CitedFile[];   // files the current question points at
   questionCount: number;   // how many answered so far
   answeredTurns: AnsweredTurn[];
+  stackCovered: number;    // significant stack areas probed so far
+  stackTotal: number;      // significant stack areas to cover
 
   verdict: Verdict | null;
   error: string | null;
@@ -96,8 +113,11 @@ const INITIAL: ProjectVerificationState = {
   declaredContext: "",
   currentQuestion: null,
   currentQuestionArea: null,
+  currentCitedFiles: [],
   questionCount: 0,
   answeredTurns: [],
+  stackCovered: 0,
+  stackTotal: 0,
   verdict: null,
   error: null,
   isLoading: false,
@@ -139,11 +159,27 @@ export function useProjectVerification(snapshotId: string) {
           return;
         }
 
+        // An interrogation already exists (or evidence was already submitted) —
+        // don't walk the user back through the repo picker. Offer to resume:
+        // restart from Q1 on the same repo, or explicitly change the repo.
+        const hasEvidence =
+          data.has_session ||
+          data.status === "interrogating" ||
+          (data.checked_repos?.length ?? 0) > 0;
+
         setState((s) => ({
           ...s,
-          step: "evidence",
+          step: hasEvidence ? "resume" : "evidence",
           verificationId: data.verification_id,
           auditId: data.audit_id,
+          checkedRepos: (data.checked_repos ?? []).map((r) => ({
+            url: r.url,
+            label: r.label ?? "Repository",
+            check_status: r.check_status,
+            language: r.language,
+            description: r.description,
+            reason: r.reason,
+          })),
           isLoading: false,
         }));
       } catch (e: unknown) {
@@ -151,6 +187,42 @@ export function useProjectVerification(snapshotId: string) {
       }
     },
     [snapshotId],
+  );
+
+  // ── Resume: restart the interrogation from question one ───────────────────
+  // change_repo=false keeps the submitted repos + code digest (skip straight
+  // to the context step); change_repo=true drops them so the user re-picks.
+  const restartInterrogation = useCallback(
+    async (changeRepo: boolean) => {
+      if (!state.verificationId) return;
+      setState((s) => ({ ...s, isLoading: true, error: null }));
+      try {
+        const data = await auditApi.restartInterrogation(state.verificationId, changeRepo);
+        setState((s) => ({
+          ...s,
+          step: changeRepo ? "evidence" : "context",
+          auditId: data.audit_id ?? s.auditId,
+          checkedRepos: changeRepo
+            ? []
+            : (data.checked_repos ?? s.checkedRepos).map((r) => ({
+                url: r.url,
+                label: r.label ?? "Repository",
+              })),
+          // wipe any stale interrogation state carried in memory
+          currentQuestion: null,
+          currentQuestionArea: null,
+          currentCitedFiles: [],
+          questionCount: 0,
+          answeredTurns: [],
+          sessionId: null,
+          verdict: null,
+          isLoading: false,
+        }));
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Failed to restart the interrogation");
+      }
+    },
+    [state.verificationId],
   );
 
   // ── 2. Submit repos + run check ───────────────────────────────────────────
@@ -212,8 +284,11 @@ export function useProjectVerification(snapshotId: string) {
         sessionId: data.session_id,
         currentQuestion: data.question,
         currentQuestionArea: data.area ?? null,
+        currentCitedFiles: data.cited_files ?? [],
         questionCount: 0,
         answeredTurns: [],
+        stackCovered: data.stack_covered ?? 0,
+        stackTotal: data.stack_total ?? 0,
         isLoading: false,
       }));
     } catch (e: unknown) {
@@ -244,7 +319,7 @@ export function useProjectVerification(snapshotId: string) {
 
   // ── 4. Submit answer (adaptive — backend decides next question) ───────────
   const submitAnswer = useCallback(
-    async (answer: string) => {
+    async (answer: string, inspectorEvents?: InspectorEvent[]) => {
       if (!state.sessionId || !state.currentQuestion) return;
       setState((s) => ({
         ...s,
@@ -260,14 +335,21 @@ export function useProjectVerification(snapshotId: string) {
                 question: s.currentQuestion,
                 answer,
                 area: s.currentQuestionArea,
+                citedFiles: s.currentCitedFiles,
               },
             ]
           : s.answeredTurns,
         currentQuestion: null,
         currentQuestionArea: null,
+        currentCitedFiles: [],
       }));
       try {
-        const data = await auditApi.answerInterrogation(state.sessionId, { answer });
+        const data = await auditApi.answerInterrogation(state.sessionId, {
+          answer,
+          ...(inspectorEvents && inspectorEvents.length
+            ? { inspector_events: inspectorEvents }
+            : {}),
+        });
         const done = data.next_question === null || data.status === "complete";
         if (done) {
           // Move to completing — no more questions
@@ -276,6 +358,7 @@ export function useProjectVerification(snapshotId: string) {
             step: "completing",
             currentQuestion: null,
             currentQuestionArea: null,
+            currentCitedFiles: [],
             questionCount: s.questionCount + 1,
             isLoading: false,
           }));
@@ -285,7 +368,10 @@ export function useProjectVerification(snapshotId: string) {
             ...s,
             currentQuestion: data.next_question!,
             currentQuestionArea: data.area ?? null,
+            currentCitedFiles: data.cited_files ?? [],
             questionCount: s.questionCount + 1,
+            stackCovered: data.stack_covered ?? s.stackCovered,
+            stackTotal: data.stack_total ?? s.stackTotal,
             isLoading: false,
           }));
         }
@@ -342,6 +428,7 @@ export function useProjectVerification(snapshotId: string) {
   return {
     ...state,
     startVerification,
+    restartInterrogation,
     submitRepos,
     recheckAuditDoc,
     proceedToContext,

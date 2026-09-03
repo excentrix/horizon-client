@@ -1733,6 +1733,17 @@ export type ClaimTested = {
   note?: string;
 };
 
+/** Lightweight, session-based identity-binding signal (device/IP
+ *  discontinuity + GitHub repo-owner cross-check) — never changes the
+ *  verdict/score itself, a supplementary flag for a human to weigh. `null`
+ *  until finalize() has run. */
+export type SessionIntegrity = {
+  flags: string[];
+  distinct_ips: number;
+  distinct_devices: number;
+  github_owner_match: boolean | null;
+};
+
 /** Why one answer was graded the way it was — computed per-answer during
  * interrogation, surfaced here so the reader can re-judge it themselves. */
 export type TurnReasoning = {
@@ -1745,6 +1756,14 @@ export type TurnReasoning = {
   } | null;
 };
 
+/** A repo file an interrogation question points at, so the candidate can
+ * open it in the read-only code inspector. `path` is a canonical
+ * "owner/repo/path" key that exists in the pinned source tree. */
+export type CitedFile = {
+  path: string;
+  lines?: string | null;
+};
+
 /** One Q/A turn of the interrogation, as served on the public credential. */
 export type TranscriptTurn = {
   question: string;
@@ -1752,6 +1771,56 @@ export type TranscriptTurn = {
   area?: string | null;
   grading_status?: "scored" | "pending" | "failed" | "not_graded";
   reasoning?: TurnReasoning | null;
+  cited_files?: CitedFile[];
+};
+
+/** One read-only code-inspector interaction during the interrogation.
+ * Captured as evidence (time-to-locate, what was open while answering a code
+ * question); not scored in v1. */
+export type InspectorEvent = {
+  type: "file_open" | "search" | "cite_jump" | "copy" | "scroll";
+  path?: string | null;
+  query?: string | null;
+  q_index: number;
+  ts: string;
+  dwell_ms?: number | null;
+};
+
+/** The pinned source tree for a verification's code inspector. */
+export type VerificationSourceRepo = {
+  full_name: string;
+  commit_sha: string;
+  html_url: string;
+  default_branch: string;
+  unavailable: boolean;
+  error: string;
+};
+
+export type VerificationSourceFileMeta = {
+  repo: string;
+  path: string;
+  lang: string;
+  size: number;
+  cached: boolean;
+};
+
+export type VerificationSourceTree = {
+  verification_id: string;
+  built_at?: string | null;
+  state: "ready" | "rebuilding" | "unavailable";
+  hint?: string;
+  repos: VerificationSourceRepo[];
+  files: VerificationSourceFileMeta[];
+};
+
+export type VerificationSourceFile = {
+  path: string;
+  repo: string;
+  commit_sha: string;
+  content: string;
+  truncated: boolean;
+  lang: string;
+  size: number;
 };
 
 /** Project-scoped "how to improve" guidance, generated once at finalize()
@@ -1816,6 +1885,7 @@ export interface AuditReport {
     transcript?: TranscriptTurn[];
     improvement_note?: ImprovementNote | null;
     improvement_note_status?: "not_run" | "scored" | "failed";
+    session_integrity?: SessionIntegrity | null;
   };
 }
 
@@ -1868,6 +1938,12 @@ export interface MirrorSnapshot {
   confidence: Record<string, number>;
   missing_prompts: string[];
   role_readiness_narrative: string;
+  /** The role the deep analysis was actually run against (effective role after
+   *  fallback to the résumé's own current_role). Empty = role-agnostic pass. */
+  target_role?: string;
+  target_company?: string;
+  /** True when the analysis was targeted at a pasted job description. */
+  analysed_against_jd?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -2019,6 +2095,7 @@ export interface AuditInstitutionVerificationStudentDetail {
 export interface AuditInstitutionVerificationCohortReport {
   cohort_id: UUID;
   cohort_name: string;
+  organization_name: string;
   total_students: number;
   verified_count: number;
   coverage_distribution: Record<string, number>;
@@ -2027,7 +2104,22 @@ export interface AuditInstitutionVerificationCohortReport {
   top_verified_skills: Array<{ skill: string; count: number }>;
   top_claimed_unverified_skills: Array<{ skill: string; count: number }>;
   dimension_score_buckets: Record<string, Array<{ range: string; count: number }>>;
+  /** Part 3 dashboard field — one merged list. Kept as-is; the print report
+   *  (Part 4) uses `recommendations` below instead. */
   playbook: string[];
+  /** Part 4 — printable/PDF cohort report fields, additive. */
+  headline: string;
+  placement_ready_count: number;
+  placement_ready_rate: number;
+  showcase_shortlist: Array<{
+    student_id: UUID;
+    name: string;
+    username: string;
+    seniority: "junior" | "mid" | "senior" | null;
+    top_verified_skills: string[];
+    verified_project_count: number;
+  }>;
+  recommendations: { train_on: string[]; showcase_now: string[] };
 }
 
 // ── PBL Types ──────────────────────────────────────────────────────────────

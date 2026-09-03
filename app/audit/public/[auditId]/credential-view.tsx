@@ -20,6 +20,7 @@ import { DimensionMeters } from "@/components/velo/dimension-meters";
 import { ClaimsTested } from "@/components/velo/claim-chips";
 import { TranscriptPanel } from "@/components/velo/transcript-panel";
 import { ImprovementNoteCard } from "@/components/velo/improvement-note";
+import { describeSessionIntegrityFlags } from "@/components/velo/verification-session";
 
 // VELO's marketing origin — where a recruiter/peer goes to get their own credential.
 const VELO_URL = "https://excentrix.tech";
@@ -182,6 +183,12 @@ export function CredentialView() {
               {v?.verdict_summary && (
                 <p className="mt-4 max-w-lg text-balance text-[15px] leading-relaxed text-muted-foreground">
                   {v.verdict_summary}
+                </p>
+              )}
+              {!!v?.session_integrity?.flags?.length && (
+                <p className="status-developing caseline mt-2 flex max-w-lg items-start gap-1.5">
+                  <span className="status-dot mt-1" />
+                  Session flag: {describeSessionIntegrityFlags(v.session_integrity.flags)}
                 </p>
               )}
             </motion.div>

@@ -360,6 +360,17 @@
     @apply h-px w-full bg-border;
   }
 
+  /* Code-inspector: the line(s) an interrogation question cites. */
+  .velo-cite-line {
+    background: color-mix(in oklch, var(--primary) 14%, transparent);
+    box-shadow: inset 2px 0 0 var(--primary);
+    animation: velo-cite-pulse 1.6s ease-out 1;
+  }
+  @keyframes velo-cite-pulse {
+    0% { background: color-mix(in oklch, var(--primary) 38%, transparent); }
+    100% { background: color-mix(in oklch, var(--primary) 14%, transparent); }
+  }
+
   /* Signature "warm print" grain — put on a `relative` element. */
   .grain {
     isolation: isolate;
@@ -451,7 +462,7 @@
   .stamp-in { animation: velo-stamp 0.45s 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
   @media (prefers-reduced-motion: reduce) {
-    .rise-in, .rise-in-1, .rise-in-2, .rise-in-3, .stamp-in { animation: none; }
+    .rise-in, .rise-in-1, .rise-in-2, .rise-in-3, .stamp-in, .velo-cite-line { animation: none; }
   }
 
   .terminal-bullet {
