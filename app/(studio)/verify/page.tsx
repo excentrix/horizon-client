@@ -17,7 +17,13 @@ import { useMirrorSnapshot } from "@/hooks/use-mirror-snapshot";
 import { useGithubRepos } from "@/hooks/use-github-repos";
 import { usePublicVerifiedProfile, useHiringProfileAccessLog } from "@/hooks/use-portfolio";
 import { useAuth } from "@/context/AuthContext";
-import { authApi, auditApi, type ClaimTested, type VerifiedProfileSummary } from "@/lib/api";
+import {
+  authApi,
+  auditApi,
+  type ClaimTested,
+  type CapabilityByStackRow,
+  type VerifiedProfileSummary,
+} from "@/lib/api";
 import { INTERROGATION_DIMENSIONS, type DimensionScores } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +31,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { VerifiedProfileView } from "@/components/verified/verified-profile-view";
 import { VeloProfileTab } from "@/components/mirror/velo-profile-tab";
 import { RadarChart, type RadarAxis } from "@/components/velo/radar-chart";
+import { CapabilityByStack } from "@/components/verified/capability-by-stack";
 import { ShareActions } from "@/components/velo/share-actions";
 import { VerdictStamp, DECIDED_STATUSES } from "@/components/velo/verdict-stamp";
 import {
@@ -107,6 +114,21 @@ export default function VerifyPage() {
     });
   }, [verifications]);
   const hasRadarData = radarAxes.some((a) => a.score != null);
+
+  // Résumé claims tested across every decided interrogation — the honesty rollup.
+  const claimsRollup = useMemo(() => {
+    const tally = { verified: 0, partially_verified: 0, contradicted: 0, not_demonstrated: 0 };
+    for (const v of verifications) {
+      if (!DECIDED_STATUSES.has(v.status) || !v.claims_tested) continue;
+      for (const c of v.claims_tested) tally[c.status] += 1;
+    }
+    const total =
+      tally.verified + tally.partially_verified + tally.contradicted + tally.not_demonstrated;
+    return { ...tally, total };
+  }, [verifications]);
+
+  // Proven-vs-claimed tech stack — computed backend-side on the verified profile.
+  const stackRows: CapabilityByStackRow[] = verifiedProfile?.capability_by_stack ?? [];
 
   const analysisReadyFired = useRef(false);
   useEffect(() => {
@@ -376,18 +398,22 @@ export default function VerifyPage() {
 
         {/* ── Overview ─────────────────────────────────────────────────── */}
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+          {/* Résumé claims, cross-examined — the honesty rollup */}
+          <ClaimsRollup rollup={claimsRollup} />
+
+          {/* The capability picture — two lenses on the same question */}
+          <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-border bg-card p-6">
               <p className="eyebrow mb-1 flex items-center gap-2">
                 <span className="eyebrow-dot" /> Capability fingerprint
               </p>
               <p className="caseline mb-3">
                 {decidedCount > 0
-                  ? `averaged across ${decidedCount} graded interrogation${decidedCount > 1 ? "s" : ""}`
+                  ? `six dimensions, averaged across ${decidedCount} graded interrogation${decidedCount > 1 ? "s" : ""}`
                   : "no graded interrogations yet"}
               </p>
               {hasRadarData ? (
-                <div className="mx-auto w-full max-w-[430px]">
+                <div className="mx-auto w-full max-w-[420px]">
                   <RadarChart axes={radarAxes} />
                 </div>
               ) : (
@@ -404,66 +430,72 @@ export default function VerifyPage() {
               )}
             </div>
 
-            <div className="space-y-4">
-              {typeof deep.ats_score === "number" && (
-                <Link
-                  href="/analysis"
-                  className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-5 transition-colors hover:border-primary/40"
-                >
-                  <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 font-display text-lg font-bold tabular-nums text-primary">
-                    {deep.ats_score}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">Full resume analysis</p>
-                    <p className="caseline mt-0.5">ATS breakdown · role fit · skill gaps · employer&apos;s view</p>
-                  </div>
-                  <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-                </Link>
-              )}
-              <SynthesisBlocks profile={verifiedProfile} />
-              {verifiedCount > 0 && verifiedProfileUrl && (
-                <div className="rounded-2xl border border-border bg-card p-5">
-                  <p className="eyebrow mb-3 flex items-center gap-2">
-                    <span className="eyebrow-dot" /> Share the proof
-                  </p>
-                  <ShareActions
-                    url={verifiedProfileUrl}
-                    label="VELO-verified profile"
-                    shareText="My VELO-verified proof of work"
-                    trackId={user?.username}
-                  />
-                  {user?.username && (
-                    <a
-                      href={`/p/${encodeURIComponent(user.username)}/report`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-                    >
-                      <FileText className="size-3.5" /> Open the full printable report
-                    </a>
-                  )}
-                  {!!accessLog.data?.results?.length && (
-                    <div className="mt-4 border-t border-border pt-3">
-                      <p className="caseline mb-2">
-                        {accessLog.data.results.length} hiring team
-                        {accessLog.data.results.length > 1 ? "s have" : " has"} requested this
-                      </p>
-                      <ul className="space-y-1.5">
-                        {accessLog.data.results.slice(0, 5).map((entry, i) => (
-                          <li key={i} className="text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground">{entry.requester_company}</span>
-                            {entry.role_hiring_for ? ` · hiring for ${entry.role_hiring_for}` : ""}
-                            {" · "}
-                            {new Date(entry.created_at).toLocaleDateString()}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <p className="eyebrow mb-1 flex items-center gap-2">
+                <span className="eyebrow-dot" /> Proven vs claimed stack
+              </p>
+              <p className="caseline mb-3">
+                every technology VELO read in your repos, against what your résumé claims
+              </p>
+              {stackRows.length > 0 ? (
+                <>
+                  <CapabilityByStack rows={stackRows} />
+                  <StackLegend rows={stackRows} />
+                </>
+              ) : (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  Defend a project and VELO maps its real tech stack here — what it
+                  confirmed, what your résumé overshoots, what it never got to.
+                </p>
               )}
             </div>
           </div>
+
+          {/* The examiner's read on the person */}
+          <SynthesisBlocks profile={verifiedProfile} nextAction={nextAction} />
+
+          {/* Share the proof */}
+          {verifiedCount > 0 && verifiedProfileUrl && (
+            <div className="rounded-2xl border border-border bg-card p-5">
+              <p className="eyebrow mb-3 flex items-center gap-2">
+                <span className="eyebrow-dot" /> Share the proof
+              </p>
+              <ShareActions
+                url={verifiedProfileUrl}
+                label="VELO-verified profile"
+                shareText="My VELO-verified proof of work"
+                trackId={user?.username}
+              />
+              {user?.username && (
+                <a
+                  href={`/p/${encodeURIComponent(user.username)}/report`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                >
+                  <FileText className="size-3.5" /> Open the full printable report
+                </a>
+              )}
+              {!!accessLog.data?.results?.length && (
+                <div className="mt-4 border-t border-border pt-3">
+                  <p className="caseline mb-2">
+                    {accessLog.data.results.length} hiring team
+                    {accessLog.data.results.length > 1 ? "s have" : " has"} requested this
+                  </p>
+                  <ul className="space-y-1.5">
+                    {accessLog.data.results.slice(0, 5).map((entry, i) => (
+                      <li key={i} className="text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">{entry.requester_company}</span>
+                        {entry.role_hiring_for ? ` · hiring for ${entry.role_hiring_for}` : ""}
+                        {" · "}
+                        {new Date(entry.created_at).toLocaleDateString()}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </TabsContent>
 
         {/* ── Defend — the exhibits ────────────────────────────────────── */}
@@ -590,45 +622,122 @@ function StatTile({
   );
 }
 
-/** Case synthesis — what the examiner concluded about the person. */
-function SynthesisBlocks({ profile }: { profile?: VerifiedProfileSummary }) {
-  if (!profile?.narrative && !profile?.capability_verified?.length) {
+/** The examiner's read on the person — one sectioned dossier card: the note
+ *  + calibration line, then verified capability / gaps, then what to do about
+ *  it. Replaces the old stack of five sibling cards. */
+function SynthesisBlocks({
+  profile,
+  nextAction,
+}: {
+  profile?: VerifiedProfileSummary;
+  nextAction?: { label: string; run: () => void | Promise<void> } | null;
+}) {
+  const cap = profile?.capability_verified ?? [];
+  const gaps = profile?.knowledge_gaps ?? [];
+  const applyNow = profile?.recommended_next_steps?.apply_now ?? [];
+  const closeFirst = profile?.recommended_next_steps?.close_before_senior ?? [];
+  const unprobed = profile?.claimed_unverified_skills ?? [];
+  const level = profile?.seniority_calibration?.level;
+  const heldTo = profile?.seniority_calibration?.held_to_reason;
+
+  const hasAnything =
+    profile?.examiner_note ||
+    cap.length ||
+    gaps.length ||
+    applyNow.length ||
+    closeFirst.length ||
+    unprobed.length;
+  if (!hasAnything) {
     return (
-      <div className="flex h-full min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-card/50 p-6 text-center text-sm text-muted-foreground">
-        Defend your first project to unlock the examiner&apos;s capability summary here.
+      <div className="flex min-h-32 items-center justify-center rounded-2xl border border-dashed border-border bg-card/50 p-6 text-center text-sm text-muted-foreground">
+        Defend your first project to unlock the examiner&apos;s read on you — verified
+        capability, gaps, and what you&apos;re ready to apply for.
       </div>
     );
   }
+
   return (
-    <>
-      {!!profile.capability_verified?.length && (
-        <ListBlock title="Verified capability" items={profile.capability_verified} cls="status-strong" />
-      )}
-      {!!profile.knowledge_gaps?.length && (
-        <ListBlock title="Gaps to close" items={profile.knowledge_gaps} cls="status-developing" />
-      )}
-      {!!profile.recommended_next_steps?.apply_now?.length && (
-        <ListBlock
-          title="Ready to apply for"
-          items={profile.recommended_next_steps.apply_now}
-          cls="status-solid"
-        />
-      )}
-      {profile.examiner_note && (
-        <div className="rounded-2xl border border-dashed border-border bg-card/50 p-5">
+    <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+      {(profile?.examiner_note || level) && (
+        <div className="p-6">
           <p className="eyebrow mb-2 flex items-center gap-2">
-            <span className="eyebrow-dot" /> Examiner&apos;s note
+            <span className="eyebrow-dot" /> The examiner&apos;s read
           </p>
-          <p className="text-sm leading-relaxed text-foreground/85">{profile.examiner_note}</p>
+          {profile?.examiner_note && (
+            <p className="text-sm leading-relaxed text-foreground/85">{profile.examiner_note}</p>
+          )}
+          {level && (
+            <p className="caseline mt-3">
+              Calibrated at <span className="capitalize text-foreground/80">{level}</span>
+              {heldTo ? ` — ${heldTo}` : ""}
+            </p>
+          )}
         </div>
       )}
-    </>
+
+      {cap.length > 0 && gaps.length > 0 ? (
+        <div className="grid divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+          <FindingList title="Verified capability" items={cap} cls="status-strong" />
+          <FindingList title="Gaps to close" items={gaps} cls="status-developing" />
+        </div>
+      ) : cap.length > 0 ? (
+        <FindingList title="Verified capability" items={cap} cls="status-strong" />
+      ) : gaps.length > 0 ? (
+        <FindingList title="Gaps to close" items={gaps} cls="status-developing" />
+      ) : null}
+
+      {(applyNow.length > 0 || closeFirst.length > 0 || unprobed.length > 0) && (
+        <div className="grid divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+          {applyNow.length > 0 ? (
+            <FindingList title="Ready to apply for" items={applyNow} cls="status-solid" />
+          ) : (
+            <div className="hidden sm:block" />
+          )}
+          {closeFirst.length > 0 || unprobed.length > 0 ? (
+            <div className="p-5">
+              <p className="eyebrow mb-3 flex items-center gap-2">
+                <span className="eyebrow-dot" /> Shore up before you&apos;re asked
+              </p>
+              <ul className="space-y-2">
+                {closeFirst.map((item, i) => (
+                  <li key={`c${i}`} className="status-developing flex items-start gap-2.5 text-sm">
+                    <span className="status-dot mt-1.5" />
+                    <span className="leading-relaxed text-foreground/85">{item}</span>
+                  </li>
+                ))}
+                {unprobed.slice(0, 6).map((s, i) => (
+                  <li key={`u${i}`} className="status-none flex items-start gap-2.5 text-sm">
+                    <span className="status-dot mt-1.5" />
+                    <span className="leading-relaxed text-foreground/85">
+                      <span className="font-medium text-foreground/90">{s.skill}</span> — claimed on{" "}
+                      {s.project}, never probed
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {nextAction && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => nextAction.run()}
+                >
+                  {nextAction.label}
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="hidden sm:block" />
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
-function ListBlock({ title, items, cls }: { title: string; items: string[]; cls: string }) {
+function FindingList({ title, items, cls }: { title: string; items: string[]; cls: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="p-5">
       <p className="eyebrow mb-3 flex items-center gap-2">
         <span className="eyebrow-dot" /> {title}
       </p>
@@ -640,6 +749,91 @@ function ListBlock({ title, items, cls }: { title: string; items: string[]; cls:
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** Résumé claims tested against transcript + real code, tallied across every
+ *  decided interrogation — a single pass-rate with a segmented bar. */
+function ClaimsRollup({
+  rollup,
+}: {
+  rollup: {
+    verified: number;
+    partially_verified: number;
+    contradicted: number;
+    not_demonstrated: number;
+    total: number;
+  };
+}) {
+  if (rollup.total === 0) return null;
+  const segs = [
+    { key: "verified", label: "Confirmed", n: rollup.verified, cls: "bg-(--status-strong)" },
+    { key: "partial", label: "Partially", n: rollup.partially_verified, cls: "bg-(--status-solid)" },
+    { key: "contra", label: "Contradicted", n: rollup.contradicted, cls: "bg-(--status-developing)" },
+    { key: "none", label: "Not demonstrated", n: rollup.not_demonstrated, cls: "bg-(--status-none)" },
+  ].filter((s) => s.n > 0);
+  const confirmedPct = Math.round((rollup.verified / rollup.total) * 100);
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-6">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="eyebrow flex items-center gap-2">
+          <span className="eyebrow-dot" /> Résumé claims, cross-examined
+        </p>
+        <p className="caseline">
+          {rollup.total} claim{rollup.total > 1 ? "s" : ""} tested against your transcript + real
+          code
+        </p>
+      </div>
+      <div className="mt-4 flex items-center gap-4">
+        <p className="font-display text-3xl font-semibold leading-none tabular-nums">
+          {confirmedPct}
+          <span className="text-lg opacity-60">%</span>
+        </p>
+        <div className="min-w-0 flex-1">
+          <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
+            {segs.map((s) => (
+              <div
+                key={s.key}
+                className={s.cls}
+                style={{ width: `${(s.n / rollup.total) * 100}%` }}
+                title={`${s.label}: ${s.n}`}
+              />
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            {segs.map((s) => (
+              <span key={s.key} className="caseline inline-flex items-center gap-1.5">
+                <span className={cn("size-2 rounded-full", s.cls)} /> {s.label} {s.n}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Compact meaning key for the proven-vs-claimed stack chips — only the
+ *  states actually present. */
+function StackLegend({ rows }: { rows: CapabilityByStackRow[] }) {
+  const present = new Set(rows.map((r) => r.status));
+  const items = [
+    { k: "verified", label: "defended", cls: "status-strong" },
+    { k: "partial", label: "claim overshoots code", cls: "status-developing" },
+    { k: "unsubstantiated", label: "not in repo", cls: "status-none" },
+    { k: "claimed_unverified", label: "never probed", cls: "text-muted-foreground" },
+    { k: "undisclosed_in_code", label: "in repo, not on résumé", cls: "text-muted-foreground" },
+  ].filter((i) => present.has(i.k as CapabilityByStackRow["status"]));
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1 border-t border-border pt-3">
+      {items.map((i) => (
+        <span key={i.k} className={cn("caseline inline-flex items-center gap-1.5", i.cls)}>
+          <span className="size-1.5 rounded-full bg-current" /> {i.label}
+        </span>
+      ))}
     </div>
   );
 }
