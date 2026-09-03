@@ -9,6 +9,21 @@ Versioning policy:
 - else `patch` (fix/docs/chore/refactor/perf/test only).
 - Entries are tracked per commit for precise release traceability.
 
+## v0.2.18 (2026-09-04)
+
+### Added
+- Candidate-facing pinned-source code inspection, session-integrity context, and capability-by-stack evidence views.
+- Hiring-profile request access flow and expanded public candidate evidence reports.
+- Institution cohort verification report delivery with PDF download support.
+
+### Changed
+- Verification and resume-analysis surfaces now expose richer defended evidence, stack reconciliation, and role-fit detail.
+- Cohort reporting now uses the server-rendered PDF endpoint instead of browser-print output.
+
+### Commits
+- `b8817b2` feat(velo): expand candidate evidence and hiring access
+- `a82b3a7` feat(velo): add cohort verification report delivery
+
 ## v0.2.17 (2026-09-03)
 
 ### Added
