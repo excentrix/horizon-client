@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { FileText } from "lucide-react";
 import { institutionsApi, auditApi, CohortReport } from "@/lib/api";
 import type { AuditInstitutionVerificationCohortReport } from "@/types";
 import { telemetry } from "@/lib/telemetry";
@@ -122,6 +123,24 @@ export default function InstitutionReportsClient() {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       telemetry.error("Failed to export VELO verification cohort CSV", { err });
+    }
+  };
+
+  const handleExportVeloReportPDF = async () => {
+    if (!selectedCohort) return;
+    try {
+      const response = await auditApi.exportVerificationCohortPDF(selectedCohort, {
+        org: selectedOrgId || undefined,
+      });
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `velo-cohort-report-${selectedCohort}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      telemetry.error("Failed to export VELO verification cohort PDF", { err });
     }
   };
 
@@ -436,6 +455,9 @@ export default function InstitutionReportsClient() {
               <Button onClick={handleExportVeloStudents} disabled={!selectedCohort}>Export Student CSV</Button>
               <Button variant="outline" onClick={handleExportVeloReport} disabled={!veloReport}>
                 Export Report CSV
+              </Button>
+              <Button variant="outline" onClick={handleExportVeloReportPDF} disabled={!selectedCohort}>
+                <FileText className="mr-1.5 size-4" /> Download PDF report
               </Button>
             </div>
           </div>
