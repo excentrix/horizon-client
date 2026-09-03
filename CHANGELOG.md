@@ -9,6 +9,18 @@ Versioning policy:
 - else `patch` (fix/docs/chore/refactor/perf/test only).
 - Entries are tracked per commit for precise release traceability.
 
+## v0.2.19 (2026-09-04)
+
+### Added
+- Printable candidate reports with aggregate capability metrics, project ranking, and dimension-ring visuals.
+
+### Changed
+- Candidate verification and authenticated API requests now use more resilient session refresh and token handling.
+
+### Commits
+- `c169063` feat: enhance candidate report with print styles and aggregate capabilities
+- `ca5da21` feat(auth): enhance session management with improved token handling and refresh logic
+
 ## v0.2.18 (2026-09-04)
 
 ### Added
